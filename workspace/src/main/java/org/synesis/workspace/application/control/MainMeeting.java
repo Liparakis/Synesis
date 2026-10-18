@@ -175,8 +175,8 @@ public final class MainMeeting {
      * history is followed back advance by advance, each named by an entry, until a commit this copy holds; every
      * advance on the way must name snapshots this computer has seen, each made on the advancing computer's own lane,
      * and each accepted by a reviewer who is not its author where review is required. The cherry-picked commits
-     * inside one advance are that advance's; the validation command passed before its entry was written. A re-merge's
-     * advance also brings in the old head of the computer that made it, which is followed back the same way.
+     * inside one advance are that advance's; the validation command passed before its entry was written. Every other
+     * history a merge commit inside an advance brings in, a re-merge's old head above all, is followed back the same way.
      *
      * @param repository the control checkout
      * @param store      this computer's logs
@@ -206,7 +206,7 @@ public final class MainMeeting {
                 return problems;
             }
             if (!seen.add(commit)) {
-                // Reached again through a re-merge's old head: checked already.
+                // Reached again through another merged history: checked already.
                 continue;
             }
             for (String snapshotId : advance.snapshotIds()) {
@@ -216,18 +216,18 @@ public final class MainMeeting {
                     continue;
                 }
                 String producer = snapshot.get().provenance().participant();
+                // A lane whose introduction has not arrived yet is not proven to be the writer's: the head waits.
                 boolean ownLane = store.collaborationProjection().introducingNode(snapshot.get().provenance().participantIdentity())
-                        .map(advance.writer()::equals).orElse(true);
+                        .map(advance.writer()::equals).orElse(false);
                 if (!ownLane) {
                     problems.add("NOT_THE_LANES_COMPUTER:" + snapshotId);
                 }
-                if (snapshot.get().reviewRequired() && store.taskCompletionProjection()
-                        .verdicts(snapshot.get().snapshotIdentity()).entrySet().stream()
-                        .noneMatch(verdict -> "ACCEPTED".equals(verdict.getValue()) && !verdict.getKey().equals(producer))) {
+                // Accepted by every reviewer, one of them not its author: a disputed snapshot is not accepted.
+                Map<String, String> verdicts = store.taskCompletionProjection().verdicts(snapshot.get().snapshotIdentity());
+                if (snapshot.get().reviewRequired() && (verdicts.isEmpty() || !verdicts.values().stream().allMatch("ACCEPTED"::equals)
+                        || verdicts.keySet().stream().allMatch(producer::equals))) {
                     problems.add("REVIEW_MISSING:" + snapshotId);
                 }
-                store.taskCompletionProjection().remergeOf(snapshot.get().snapshotIdentity())
-                        .filter(remerge -> remerge.result().equals(commit)).ifPresent(remerge -> heads.push(remerge.ownHead()));
             }
             // An advance moves to a descendant of where it started, so the walk only goes back and ends; an entry that
             // names anything else describes no history.
@@ -237,6 +237,15 @@ public final class MainMeeting {
                 return problems;
             }
             heads.push(advance.from());
+            // A merge commit inside an advance brings in another history: a re-merge's own advances and its old head.
+            // Each is followed back the same way, whether or not the re-merge needed a review.
+            for (String line : GitProcessRunner.run(repository, "rev-list", "--merges", "--parents", advance.from() + ".." + commit)
+                    .lines().toList()) {
+                String[] ids = line.trim().split("\\s+");
+                for (int parent = 2; parent < ids.length; parent++) {
+                    heads.push(ids[parent]);
+                }
+            }
         }
         return problems;
     }

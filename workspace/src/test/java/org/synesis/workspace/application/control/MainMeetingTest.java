@@ -1,6 +1,7 @@
 package org.synesis.workspace.application.control;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -24,6 +25,7 @@ import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
+import org.synesis.coordination.exception.MissingReferenceException;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
 
@@ -121,6 +123,8 @@ class MainMeetingTest {
 
     @Test
     void theAdvancesAndLastHeadsAreWhatTheEntriesName() throws Exception {
+        snapshot("snap_1", "agt-a", "src/a.txt");
+        snapshot("snap_2", "agt-b", "src/b.txt");
         String first = commitOn(base, "first");
         String second = commitOn(first, "second");
         advance(base, first, "snap_1");
@@ -160,11 +164,13 @@ class MainMeetingTest {
     }
 
     @Test
-    void aSnapshotThisComputerHasNotSeenIsReported() throws Exception {
+    void anAdvanceNamingASnapshotThisComputerHasNotSeenIsNotWritten() throws Exception {
         String first = commitOn(base, "first");
-        advance(base, first, "snap_unknown");
 
-        assertEquals(List.of("SNAPSHOT_NOT_SEEN:snap_unknown"), MainMeeting.audit(repo, store, base, first));
+        // An integration entry acts for the producers of the snapshots it names, so one naming a snapshot no one has
+        // seen waits for it (ParticipantAttribution): never written here, and held back on arrival elsewhere.
+        assertThrows(MissingReferenceException.class, () -> advance(base, first, "snap_unknown"));
+        assertEquals(List.of("UNNAMED_COMMIT:" + first), MainMeeting.audit(repo, store, base, first));
     }
 
     @Test
@@ -190,17 +196,15 @@ class MainMeetingTest {
     void anAdvanceCopiedFromAComputerThatDidNotIntroduceTheLaneIsNotTaken() throws Exception {
         Snapshot a = snapshot("snap_a", "agt-a", "src/a.txt");
         review(a, "agt-reviewer", "ACCEPTED");
-        // Another computer's log names the snapshot, which it never introduced. Its own log cannot tell (it does not
-        // hold the lane); the computer that holds the lane receives the copy.
+        // Another computer holds this computer's log and tries to advance onto a lane it never introduced: its own
+        // append is refused (ParticipantAttribution), so no such advance reaches the computer that holds the lane.
         NodeIdentity stranger = NodeIdentity.generate();
         PredictionEventStore strangerStore = new PredictionEventStore(temp.resolve("stranger"), project);
+        strangerStore.placeCopies(identity.nodeId(), store.entriesAfter(0, 10_000, Integer.MAX_VALUE));
         String first = commitOn(base, "first");
-        advance(strangerStore, stranger, project, base, first, a.id());
+        IOException refused = assertThrows(IOException.class, () -> advance(strangerStore, stranger, project, base, first, a.id()));
+        assertEquals("PARTICIPANT_NOT_OWNED_BY_SIGNER", refused.getMessage());
 
-        store.placeCopies(stranger.nodeId(), strangerStore.entriesAfter(0, 10_000, Integer.MAX_VALUE));
-
-        // The arriving entry is refused by the lane's introducer rule before the audit sees it (ParticipantAttribution),
-        // so the head is named by no advance here, and the audit stops there.
         assertEquals(List.of("UNNAMED_COMMIT:" + first), MainMeeting.audit(repo, store, base, first));
     }
 
@@ -227,5 +231,71 @@ class MainMeetingTest {
         List<String> problems = MainMeeting.audit(repo, store, base, second);
 
         assertTrue(problems.stream().anyMatch(problem -> problem.startsWith("ADVANCE_CHAIN_INVALID:")), problems.toString());
+    }
+
+    /** A commit with {@code first} as first parent and {@code second} as the merged-in history. */
+    private String mergeOf(String first, String second, String message) throws IOException {
+        return TestGit.output(repo, "commit-tree", base + "^{tree}", "-p", first, "-p", second, "-m", message);
+    }
+
+    @Test
+    void aMergeBringingInACommitNoAdvanceNamesFailsTheAudit() throws Exception {
+        Snapshot a = snapshot("snap_a", "agt-a", "src/a.txt");
+        review(a, "agt-reviewer", "ACCEPTED");
+        String otherHead = commitOn(base, "other computer's head");
+        String persons = commitOn(base, "a person's commit");
+        String merge = mergeOf(otherHead, persons, "re-merge shaped");
+        advance(base, otherHead, "snap_a");
+        advance(otherHead, merge, "snap_a");
+
+        assertEquals(List.of("UNNAMED_COMMIT:" + persons), MainMeeting.audit(repo, store, base, merge));
+    }
+
+    @Test
+    void aMergeBringingInANamedReviewedAdvancePassesTheAudit() throws Exception {
+        Snapshot a = snapshot("snap_a", "agt-a", "src/a.txt");
+        Snapshot b = snapshot("snap_b", "agt-b", "src/b.txt");
+        review(a, "agt-reviewer", "ACCEPTED");
+        review(b, "agt-reviewer", "ACCEPTED");
+        String otherHead = commitOn(base, "other computer's head");
+        String lane = commitOn(base, "a lane's advance");
+        String merge = mergeOf(otherHead, lane, "re-merge shaped");
+        advance(base, otherHead, "snap_a");
+        advance(base, lane, "snap_b");
+        advance(otherHead, merge, "snap_a");
+
+        assertEquals(List.of(), MainMeeting.audit(repo, store, base, merge));
+    }
+
+    /**
+     * Two reviewers who differ can only meet on one log by arrival: a computer refuses a second verdict on a snapshot
+     * it has accepted, so the second reviewer's computer writes its own verdict and the entry reaches this one by copy.
+     */
+    @Test
+    void aDisputedSnapshotIsMissingItsReview() throws Exception {
+        Snapshot a = snapshot("snap_a", "agt-a", "src/a.txt");
+        LaneGrant grant = new LaneGrant(UUID.randomUUID(), a.group(), a.lane(), "agt-reviewer-2", 1, true);
+        for (PredictionEventType type : List.of(PredictionEventType.LANE_GRANT_ISSUED, PredictionEventType.LANE_GRANT_CONSUMED)) {
+            store.append(grant.grantId(), type, identity.nodeId(), CollaborationCodec.encodeLaneGrant(grant), identity);
+        }
+        NodeIdentity second = NodeIdentity.generate();
+        PredictionEventStore theirs = new PredictionEventStore(temp.resolve("second-reviewer"), project);
+        theirs.placeCopies(identity.nodeId(), store.entriesAfter(0, 10_000, Integer.MAX_VALUE));
+        UUID reviewerLane = UUID.randomUUID();
+        WorkIntent introduced = new WorkIntent(reviewerLane, project, "agt-reviewer-2", "codex", UUID.randomUUID(), "review", "acceptance", base,
+                List.of(ResourceSelector.pathExact("src/other.txt")), 1, UUID.randomUUID(), WorkIntent.defaultAuthorityLineage(reviewerLane),
+                WorkIntent.Status.ANNOUNCED);
+        assertTrue(new WorkIntentService(theirs, second).announce(introduced).acquired());
+        theirs.append(UUID.randomUUID(), PredictionEventType.REVIEW_VALIDATION_RECORDED, second.nodeId(),
+                new ReviewValidationPayload(grant.grantId(), a.group(), a.lane(), "agt-reviewer-2", 1, a.task(), a.id(), "REJECTED",
+                        "not good enough", a.participant()).encode(), second);
+        review(a, "agt-reviewer-1", "ACCEPTED");
+        store.placeCopies(second.nodeId(), theirs.entriesAfter(0, 10_000, Integer.MAX_VALUE));
+        assertEquals(2, store.taskCompletionProjection().verdicts(store.taskCompletionProjection().findSnapshotById("snap_a").orElseThrow()
+                .snapshotIdentity()).size());
+        String first = commitOn(base, "first");
+        advance(base, first, a.id());
+
+        assertEquals(List.of("REVIEW_MISSING:snap_a"), MainMeeting.audit(repo, store, base, first));
     }
 }

@@ -69,10 +69,15 @@ final class ParticipantAttribution {
     }
 
     /** The producers of the snapshots an integration entry names, as the log knows them. */
-    private static List<ParticipantId> producers(ProjectionView view, List<String> snapshotIds) {
-        return snapshotIds.stream().map(id -> view.taskCompletionProjection().findSnapshotById(id))
-                .flatMap(java.util.Optional::stream).map(snapshot -> snapshot.provenance().participantIdentity())
-                .distinct().toList();
+    private static List<ParticipantId> producers(ProjectionView view, List<String> snapshotIds) throws IOException {
+        java.util.Set<ParticipantId> producers = new java.util.LinkedHashSet<>();
+        for (String id : snapshotIds) {
+            // Not acting for nobody: the entry waits until the snapshot it names arrives.
+            producers.add(view.taskCompletionProjection().findSnapshotById(id)
+                    .orElseThrow(() -> new org.synesis.coordination.exception.MissingReferenceException("SNAPSHOT_NOT_FOUND"))
+                    .provenance().participantIdentity());
+        }
+        return List.copyOf(producers);
     }
 
     private static List<ParticipantId> actingFor(PredictionEvent event, ProjectionView view) throws IOException {

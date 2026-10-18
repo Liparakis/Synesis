@@ -27,11 +27,9 @@ import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 final class LogNamedCommits {
 
     private final Map<String, Naming> byCommit;
-    private final String lastAdvancedHead;
 
-    private LogNamedCommits(Map<String, Naming> byCommit, String lastAdvancedHead) {
+    private LogNamedCommits(Map<String, Naming> byCommit) {
         this.byCommit = byCommit;
-        this.lastAdvancedHead = lastAdvancedHead;
     }
 
     /** Who named one commit, and under which refs. */
@@ -46,7 +44,6 @@ final class LogNamedCommits {
      */
     static LogNamedCommits of(List<PredictionEvent> events) {
         Map<String, Naming> byCommit = new HashMap<>();
-        String lastAdvanced = null;
         Map<List<Object>, String> preparedRefs = new HashMap<>();
         for (PredictionEvent event : events) {
             try {
@@ -74,8 +71,7 @@ final class LogNamedCommits {
                     case INTEGRATION_COMMIT_CREATED ->
                             name(byCommit, IntegrationAttemptPayload.decode(event.payload()).integrationCommitSha(), event.actorNodeId());
                     case CONTROL_BRANCH_ADVANCED -> {
-                        lastAdvanced = IntegrationAttemptPayload.decode(event.payload()).integrationCommitSha();
-                        name(byCommit, lastAdvanced, event.actorNodeId());
+                        name(byCommit, IntegrationAttemptPayload.decode(event.payload()).integrationCommitSha(), event.actorNodeId());
                     }
                     default -> {
                     }
@@ -84,22 +80,13 @@ final class LogNamedCommits {
                 // Names nothing; see the class comment.
             }
         }
-        return new LogNamedCommits(byCommit, lastAdvanced);
+        return new LogNamedCommits(byCommit);
     }
 
     private static Naming name(Map<String, Naming> byCommit, String commit, String writer) {
         Naming naming = byCommit.computeIfAbsent(commit, ignored -> new Naming(new LinkedHashSet<>(), new LinkedHashSet<>()));
         naming.writers().add(writer);
         return naming;
-    }
-
-    /**
-     * The head the last {@code CONTROL_BRANCH_ADVANCED} entry names: where {@code main} is on the leader.
-     *
-     * @return the head, or null before any
-     */
-    String lastAdvancedHead() {
-        return lastAdvancedHead;
     }
 
     /**

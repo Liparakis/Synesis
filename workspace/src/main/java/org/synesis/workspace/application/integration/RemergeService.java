@@ -141,6 +141,12 @@ final class RemergeService {
         }
     }
 
+    /**
+     * Builds the re-merge once, then on every pass records what is not on the log yet and lands it when its reviews
+     * allow. Each step can be repeated after a crash: the result is kept under its ref before anything is written, the
+     * lanes are read back from the result's merge commits, an entry is written only when it is missing, and the
+     * advance is written before the branch moves.
+     */
     private void remerge(Path controlRoot, PredictionEventStore store, NodeIdentity identity, List<PredictionEvent> events,
             String remergeId, String own, String other) throws IOException, GeneralSecurityException {
         List<MainMeeting.Advance> missing = new ArrayList<>();
@@ -149,16 +155,34 @@ final class RemergeService {
                 missing.add(advance);
             }
         }
-        List<RemergeSnapshotPayload> built = store.taskCompletionProjection().remerge(remergeId);
-        if (built.isEmpty()) {
-            build(controlRoot, store, identity, remergeId, own, other, missing);
-        } else {
-            land(controlRoot, store, identity, remergeId, built, other, missing);
+        String result = GitProcessRunner.runOptional(controlRoot, "rev-parse", "--verify", "-q", RESULT_PREFIX + remergeId + "^{commit}");
+        if (result.isEmpty()) {
+            result = build(controlRoot, remergeId, own, other, missing);
+            if (result == null) {
+                return;
+            }
+        }
+        List<Lane> lanes = lanes(controlRoot, store, remergeId, other, result, missing);
+        if (lanes == null) {
+            return;
+        }
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) {
+                throw new IOException("the append lock is not held");
+            }
+            PredictionEventStore current = new PredictionEventStore(store.rootDirectory(), store.projectId());
+            record(controlRoot, current, identity, remergeId, own, other, result, lanes);
+            land(controlRoot, current, identity, remergeId, other, result, lanes);
         }
     }
 
-    private void build(Path controlRoot, PredictionEventStore store, NodeIdentity identity, String remergeId, String own,
-            String other, List<MainMeeting.Advance> missing) throws IOException, GeneralSecurityException {
+    /**
+     * Makes the re-merge's commits in a worktree at the other head and keeps the result under its ref.
+     *
+     * @return the result, or {@code null} when Git could not merge or the validation failed
+     */
+    private String build(Path controlRoot, String remergeId, String own, String other, List<MainMeeting.Advance> missing)
+            throws IOException {
         Path worktree = ExternalWorktrees.root(controlRoot, "remerge").resolve(remergeId).toAbsolutePath().normalize();
         // Left by a pass that died while building: its commits are named by nothing, so it is built again.
         ExternalWorktrees.removeBestEffort(worktree);
@@ -167,38 +191,58 @@ final class RemergeService {
         try {
             GitProcessRunner.run(worktree, "config", "user.name", "Synesis Integrator");
             GitProcessRunner.run(worktree, "config", "user.email", "integrator@synesis.org");
-            List<Lane> lanes = new ArrayList<>();
-            String base = other;
             for (MainMeeting.Advance advance : missing) {
-                if (GitProcessRunner.isAncestor(worktree, advance.to(), "HEAD")) {
-                    continue;
+                if (!GitProcessRunner.isAncestor(worktree, advance.to(), "HEAD")
+                        && !merge(worktree, advance.to(), "Synesis re-merge of " + String.join(", ", advance.snapshotIds()), remergeId)) {
+                    return null;
                 }
-                if (!merge(worktree, advance.to(), "Synesis re-merge of " + String.join(", ", advance.snapshotIds()), remergeId)) {
-                    return;
-                }
-                String merged = GitProcessRunner.run(worktree, "rev-parse", "HEAD");
-                for (String snapshotId : advance.snapshotIds()) {
-                    Optional<TaskSnapshotRecord> original = store.taskCompletionProjection().findSnapshotById(snapshotId);
-                    if (original.isEmpty()) {
-                        stop(remergeId, "its advance names snapshot " + snapshotId + ", which this computer has not seen");
-                        return;
-                    }
-                    lanes.add(new Lane(original.get(), base, merged));
-                }
-                base = merged;
             }
             if (!GitProcessRunner.isAncestor(worktree, own, "HEAD")
                     && !merge(worktree, own, "Synesis re-merge of this copy of main", remergeId)) {
-                return;
+                return null;
             }
             String result = GitProcessRunner.run(worktree, "rev-parse", "HEAD");
             if (!validates(controlRoot, worktree, remergeId)) {
-                return;
+                return null;
             }
-            record(controlRoot, store, identity, remergeId, own, other, result, lanes);
+            GitProcessRunner.run(controlRoot, "update-ref", RESULT_PREFIX + remergeId, result);
+            return result;
         } finally {
             ExternalWorktrees.removeBestEffort(worktree);
         }
+    }
+
+    /**
+     * Reads the re-merge's lanes back from its result: the merge commit on the result's first-parent line whose other
+     * parent is an advance's head carries that advance's lanes.
+     *
+     * @return the lanes, or {@code null} when an advance names a snapshot this computer has not seen
+     */
+    private static List<Lane> lanes(Path controlRoot, PredictionEventStore store, String remergeId, String other, String result,
+            List<MainMeeting.Advance> missing) throws IOException {
+        Map<String, String[]> mergeOf = new java.util.HashMap<>();
+        for (String line : GitProcessRunner.run(controlRoot, "rev-list", "--first-parent", "--merges", "--parents", other + ".." + result).lines().toList()) {
+            String[] ids = line.trim().split("\\s+");
+            if (ids.length >= 3) {
+                mergeOf.put(ids[2], ids);
+            }
+        }
+        List<Lane> lanes = new ArrayList<>();
+        for (MainMeeting.Advance advance : missing) {
+            String[] merge = mergeOf.get(advance.to());
+            if (merge == null) {
+                continue;
+            }
+            for (String snapshotId : advance.snapshotIds()) {
+                Optional<TaskSnapshotRecord> original = store.taskCompletionProjection().findSnapshotById(snapshotId);
+                if (original.isEmpty()) {
+                    stop(remergeId, "its advance names snapshot " + snapshotId + ", which this computer has not seen");
+                    return null;
+                }
+                lanes.add(new Lane(original.get(), merge[1], merge[0]));
+            }
+        }
+        return lanes;
     }
 
     /** One merge commit; a merge Git cannot make stops the re-merge (the combine lane is NOT BUILT). */
@@ -233,40 +277,25 @@ final class RemergeService {
     }
 
     /**
-     * Writes the re-merge: a snapshot and a grant to its original reviewer for each lane that needed review. One that
-     * needed none lands at once.
+     * Writes what the log does not hold yet of the re-merge: a snapshot for each lane that needed review, and a grant
+     * on it to its original reviewer. The caller holds the append lock. A lane that needed no review gets neither.
      */
     private static void record(Path controlRoot, PredictionEventStore store, NodeIdentity identity, String remergeId,
             String own, String other, String result, List<Lane> lanes) throws IOException, GeneralSecurityException {
-        GitProcessRunner.run(controlRoot, "update-ref", RESULT_PREFIX + remergeId, result);
-        List<RemergeSnapshotPayload> reviewed = new ArrayList<>();
         for (Lane lane : lanes) {
-            if (lane.original().reviewRequired()) {
-                reviewed.add(remergeSnapshot(remergeId, own, other, result, lane));
+            if (!lane.original().reviewRequired()) {
+                continue;
             }
-        }
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new IOException("the append lock is not held");
-            }
-            PredictionEventStore current = new PredictionEventStore(store.rootDirectory(), store.projectId());
-            if (reviewed.isEmpty()) {
-                advance(controlRoot, current, identity, remergeId, other, result,
-                        lanes.stream().map(lane -> lane.original().snapshotId()).distinct().toList());
-                return;
-            }
-            for (RemergeSnapshotPayload remerge : reviewed) {
-                String snapshotId = remerge.snapshot().snapshotId();
+            RemergeSnapshotPayload remerge = remergeSnapshot(remergeId, own, other, result, lane);
+            String snapshotId = remerge.snapshot().snapshotId();
+            if (store.taskCompletionProjection().findSnapshotById(snapshotId).isEmpty()) {
                 GitProcessRunner.run(controlRoot, "update-ref", SnapshotRefs.snapshotRef(snapshotId), remerge.snapshot().commitSha());
-                current.append(nameUuid("remerge:" + snapshotId), PredictionEventType.REMERGE_SNAPSHOT_CREATED, identity.nodeId(),
+                store.append(nameUuid("remerge:" + snapshotId), PredictionEventType.REMERGE_SNAPSHOT_CREATED, identity.nodeId(),
                         remerge.encode(), identity);
+                LOG.log(System.Logger.Level.INFO, "Re-merge {0} onto {1}: snapshot {2} waits for its review.", remergeId, other, snapshotId);
             }
-            for (RemergeSnapshotPayload remerge : reviewed) {
-                offerReview(current, identity, remerge);
-            }
+            offerReview(store, identity, remerge);
         }
-        LOG.log(System.Logger.Level.INFO, "Re-merge {0} built onto {1}; it lands once its {2} re-merge snapshot(s) are accepted.",
-                remergeId, other, reviewed.size());
     }
 
     private static RemergeSnapshotPayload remergeSnapshot(String remergeId, String own, String other, String result, Lane lane) {
@@ -283,11 +312,15 @@ final class RemergeService {
     }
 
     /**
-     * Offers the re-merge snapshot to the reviewer who accepted the original one, with a grant bound to it. Another
-     * reviewer when that one cannot be reached (designer item 2) is NOT BUILT.
+     * Offers the re-merge snapshot to the reviewer who accepted the original one, with a grant bound to it, unless the
+     * grant is on the log already. Another reviewer when that one cannot be reached (designer item 2) is NOT BUILT.
      */
     private static void offerReview(PredictionEventStore store, NodeIdentity identity, RemergeSnapshotPayload remerge)
             throws IOException, GeneralSecurityException {
+        UUID grantId = nameUuid("remerge-grant:" + remerge.snapshot().snapshotId());
+        if (store.workGroupProjection().grants().stream().anyMatch(grant -> grant.grantId().equals(grantId))) {
+            return;
+        }
         TaskSnapshotRecord original = store.taskCompletionProjection().findSnapshotById(remerge.originalSnapshotId()).orElseThrow();
         String producer = original.provenance().participant();
         Optional<String> reviewer = store.taskCompletionProjection().verdicts(original.snapshotIdentity()).entrySet().stream()
@@ -299,54 +332,44 @@ final class RemergeService {
             return;
         }
         SnapshotProvenance provenance = remerge.snapshot().provenance();
-        LaneGrant grant = new LaneGrant(nameUuid("remerge-grant:" + remerge.snapshot().snapshotId()), provenance.workGroupId(),
-                provenance.laneId(), reviewer.get(), provenance.claimEpoch(), true, remerge.snapshot().snapshotId());
+        LaneGrant grant = new LaneGrant(grantId, provenance.workGroupId(), provenance.laneId(), reviewer.get(), provenance.claimEpoch(), true,
+                remerge.snapshot().snapshotId());
         store.append(grant.grantId(), PredictionEventType.LANE_GRANT_ISSUED, identity.nodeId(), CollaborationCodec.encodeLaneGrant(grant), identity);
     }
 
     /**
-     * Lands a built re-merge once every one of its snapshots is accepted. Its ID binds it to this copy's head and the
-     * other head, so a re-merge reached here was built on the basis that holds now.
+     * Lands the re-merge once every one of its re-merge snapshots is accepted. Its ID binds it to this copy's head and
+     * the other head, so a re-merge reached here was built on the basis that holds now. The caller holds the append
+     * lock.
      */
-    private static void land(Path controlRoot, PredictionEventStore store, NodeIdentity identity, String remergeId,
-            List<RemergeSnapshotPayload> built, String other, List<MainMeeting.Advance> missing)
-            throws IOException, GeneralSecurityException {
+    private static void land(Path controlRoot, PredictionEventStore store, NodeIdentity identity, String remergeId, String other,
+            String result, List<Lane> lanes) throws IOException, GeneralSecurityException {
         var completion = store.taskCompletionProjection();
-        for (RemergeSnapshotPayload remerge : built) {
-            TaskCompletionState state = completion.snapshotState(remerge.snapshot().snapshotId()).orElse(TaskCompletionState.REVIEW_PENDING);
+        // Every lane of the re-merged advances: its re-merge snapshot where review was required, its original otherwise.
+        List<String> named = new ArrayList<>();
+        for (Lane lane : lanes) {
+            if (!lane.original().reviewRequired()) {
+                named.add(lane.original().snapshotId());
+                continue;
+            }
+            String snapshotId = "rms-" + digest(remergeId + "\n" + lane.original().snapshotId());
+            TaskCompletionState state = completion.snapshotState(snapshotId).orElse(TaskCompletionState.REVIEW_PENDING);
             if (state == TaskCompletionState.REVIEW_REJECTED || state == TaskCompletionState.REVIEW_DISPUTED) {
-                stop(remergeId, "re-merge snapshot " + remerge.snapshot().snapshotId() + " was " + state.name());
+                stop(remergeId, "re-merge snapshot " + snapshotId + " was " + state.name());
                 return;
             }
             if (state != TaskCompletionState.REVIEW_ACCEPTED) {
                 return;
             }
+            named.add(snapshotId);
         }
-        // Every lane of the re-merged advances: its re-merge snapshot where review was required, its original otherwise.
-        List<String> named = new ArrayList<>();
-        for (MainMeeting.Advance advance : missing) {
-            for (String snapshotId : advance.snapshotIds()) {
-                Optional<RemergeSnapshotPayload> remerge = built.stream().filter(value -> value.originalSnapshotId().equals(snapshotId)).findFirst();
-                boolean reviewRequired = completion.findSnapshotById(snapshotId).map(TaskSnapshotRecord::reviewRequired).orElse(true);
-                if (remerge.isEmpty() && reviewRequired) {
-                    stop(remergeId, "no re-merge snapshot was recorded for " + snapshotId + "; the build was interrupted");
-                    return;
-                }
-                named.add(remerge.map(value -> value.snapshot().snapshotId()).orElse(snapshotId));
-            }
-        }
-        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
-            if (!lock.isHeld()) {
-                throw new IOException("the append lock is not held");
-            }
-            advance(controlRoot, new PredictionEventStore(store.rootDirectory(), store.projectId()), identity, remergeId, other,
-                    built.getFirst().result(), named.stream().distinct().toList());
-        }
+        advance(controlRoot, store, identity, remergeId, other, result, named.stream().distinct().toList());
     }
 
     /**
-     * Moves this copy's branch to the re-merge's result and records it as an ordinary advance from the other head, so
-     * the other computer's audit follows it back to its own head.
+     * Records the re-merge as an ordinary advance from the other head, so the other computer's audit follows it back
+     * to its own head, and then moves this copy's branch to the result. The entry comes first: a crash between the two
+     * leaves an advance this computer's next pass finds recorded and only moves the branch for.
      */
     private static void advance(Path controlRoot, PredictionEventStore store, NodeIdentity identity, String remergeId, String other,
             String result, List<String> snapshotIds) throws IOException, GeneralSecurityException {
@@ -359,11 +382,13 @@ final class RemergeService {
         } catch (Exception unreadable) {
             throw new IOException("the control checkout could not be read", unreadable);
         }
+        if (!result.equals(store.taskCompletionProjection().lastControlHeadAdvanced(identity.nodeId()))) {
+            IntegrationAttemptPayload advanced = new IntegrationAttemptPayload(remergeId, store.projectId(), snapshotIds, other, result,
+                    "advanced", "");
+            store.append(nameUuid("remerge-advanced:" + remergeId), PredictionEventType.CONTROL_BRANCH_ADVANCED, identity.nodeId(),
+                    advanced.encode(), identity);
+        }
         GitProcessRunner.run(controlRoot, "merge", "--ff-only", result);
-        IntegrationAttemptPayload advanced = new IntegrationAttemptPayload(remergeId, store.projectId(), snapshotIds, other, result,
-                "advanced", "");
-        store.append(nameUuid("remerge-advanced:" + remergeId), PredictionEventType.CONTROL_BRANCH_ADVANCED, identity.nodeId(),
-                advanced.encode(), identity);
         GitProcessRunner.run(controlRoot, "update-ref", "-d", RESULT_PREFIX + remergeId);
         LOG.log(System.Logger.Level.INFO, "Re-merge {0} landed: main moved to {1}.", remergeId, result);
     }

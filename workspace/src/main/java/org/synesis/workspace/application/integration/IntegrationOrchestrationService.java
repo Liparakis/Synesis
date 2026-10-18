@@ -446,8 +446,9 @@ public final class IntegrationOrchestrationService {
      * step 5). The integration entries it writes then act for its own participants only, as attribution requires.
      */
     static boolean ownLane(PredictionEventStore store, NodeIdentity identity, TaskSnapshotRecord snapshot) {
+        // This computer's own lanes are introduced in its own log, so an unknown introducer is another computer's.
         return store.collaborationProjection().introducingNode(snapshot.provenance().participantIdentity())
-                .map(identity.nodeId()::equals).orElse(true);
+                .map(identity.nodeId()::equals).orElse(false);
     }
 
     private static boolean isAncestor(Path workdir, String base, String head) {

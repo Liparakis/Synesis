@@ -845,15 +845,23 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     original snapshot needed no review gets no re-merge snapshot; a re-merge with none lands as soon as it is built
     and validated. A re-merge that Git cannot make, whose validation fails, or that a review rejects is reported once
     in the server's log and not tried again by that server process until the heads change; the combine lane that
-    would resolve it is NOT BUILT. A build interrupted between its entries is reported and not landed.
+    would resolve it is NOT BUILT. Every step can be repeated after a crash: the result is kept under its ref before
+    anything is written, each pass reads the lanes back from the result's merge commits and writes only the entries
+    that are missing (their IDs follow from the re-merge), and the advance is written before the branch moves, so a
+    pass that finds it written only moves the branch.
 17. **The reviewer is told and woken.** A re-merge snapshot is in no task's history, so no one is offered it as an open
     review; only its grant offers it. `get_next_action` shows the grant to its reviewer whether or not that reviewer
     still holds a lane, and the run controller resumes a stopped reviewer once for each such grant, as for a review it
     is offered.
-18. **The audit follows a re-merge's old head too.** A re-merge's advance starts from the other head, and its result
-    also holds the re-merging computer's old head; the audit follows both back to commits this copy holds. An advance
-    must move to a descendant of where it started, so the walk always ends; an entry naming anything else is an invalid
-    chain.
+18. **The audit follows every merged history.** A re-merge's advance starts from the other head, and its result also
+    holds the re-merging computer's own advances and old head. For every advance it walks, the audit also follows the
+    other parents of each merge commit the advance adds, back to commits this copy holds, whether or not the re-merge
+    needed a review; a commit no advance names stops it. An advance must move to a descendant of where it started, so
+    the walk always ends; an entry naming anything else is an invalid chain. A snapshot passes only when every verdict
+    on it is ACCEPTED and one of them is not its author's, so a disputed snapshot does not; a lane whose introduction
+    has not arrived is not proven to be the writer's, and its head waits. The same holds for the merge pass: a lane
+    whose introducer is unknown is not this computer's, and an integration entry naming a snapshot that has not
+    arrived waits for it instead of acting for no one.
 19. **"On `main`" is read from each copy.** A run on a computer is complete only when no lane is open and this copy of
     `main` holds every head another computer's pass advanced to (`MainMeeting.holdsEveryHead`). So the run that waits
     for a re-merge's review, or for the other copy's result to arrive, is not ended because every lane has closed.

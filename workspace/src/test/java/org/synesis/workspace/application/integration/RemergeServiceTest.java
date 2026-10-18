@@ -370,4 +370,108 @@ class RemergeServiceTest {
         assertEquals(entries, project.store().events().size(), "no advance was recorded");
         assertFalse(project.isAncestorOfHead(otherHead));
     }
+
+    @Test
+    void runningTheServiceRepeatedlyBeforeAnyReviewWritesEachSnapshotAndGrantOnce() throws Exception {
+        NodeIdentity other = lowerNode();
+        Lane laneA = lane("snap_a", "own-a.txt", true);
+        String ownA = ownMain("own-a.txt", "own a");
+        ownAdvance(base, ownA, laneA.snapshotId());
+        Lane laneB = lane("snap_b", "own-b.txt", true);
+        String ownB = commit("own-b", ownA, "own-b.txt", "own b");
+        project.git("merge", "-q", "--ff-only", ownB);
+        ownAdvance(ownA, ownB, laneB.snapshotId());
+        String otherHead = commit("other", base, "other.txt", "other");
+        otherAdvance(other, otherHead);
+
+        run();
+        run();
+        run();
+
+        List<RemergeSnapshotPayload> built = project.store().taskCompletionProjection().remerge(RemergeService.remergeId(otherHead, ownB));
+        assertEquals(2, built.size());
+        assertEquals(2, events(PredictionEventType.REMERGE_SNAPSHOT_CREATED).size());
+        for (RemergeSnapshotPayload remerge : built) {
+            String rms = remerge.snapshot().snapshotId();
+            assertEquals(1, grants().stream().filter(grant -> rms.equals(grant.snapshotId())).count(), "one grant for " + rms);
+        }
+        assertEquals(ownB, project.head());
+    }
+
+    @Test
+    void aResultKeptUnderItsRefWithNoEntriesGetsItsSnapshotAndGrantOnTheNextPass() throws Exception {
+        NodeIdentity other = lowerNode();
+        Lane lane = lane("snap_a", "own.txt", true);
+        String own = ownMain("own.txt", "own");
+        ownAdvance(base, own, lane.snapshotId());
+        String otherHead = commit("other", base, "other.txt", "other");
+        otherAdvance(other, otherHead);
+        // What a pass that died after build() but before writing anything leaves behind: the result under its ref.
+        String tree = project.git("merge-tree", "--write-tree", otherHead, own).lines().findFirst().orElseThrow().trim();
+        String result = project.git("commit-tree", tree, "-p", otherHead, "-p", own, "-m", "built, then died");
+        project.git("update-ref", "refs/synesis/remerge/" + RemergeService.remergeId(otherHead, own), result);
+        assertEquals(0, events(PredictionEventType.REMERGE_SNAPSHOT_CREATED).size());
+
+        run();
+
+        RemergeSnapshotPayload remerge = built(otherHead, own);
+        assertEquals(result, remerge.result(), "the kept result is used, not built again");
+        assertEquals(result, remerge.snapshot().commitSha());
+        assertEquals(REVIEWER, grantFor(remerge.snapshot().snapshotId()).targetParticipant());
+        assertEquals(own, project.head());
+    }
+
+    @Test
+    void anAdvanceRecordedBeforeTheBranchMovedOnlyMovesTheBranch() throws Exception {
+        NodeIdentity other = lowerNode();
+        Lane lane = lane("snap_a", "own.txt", true);
+        String own = ownMain("own.txt", "own");
+        ownAdvance(base, own, lane.snapshotId());
+        String otherHead = commit("other", base, "other.txt", "other");
+        otherAdvance(other, otherHead);
+        run();
+        RemergeSnapshotPayload remerge = built(otherHead, own);
+        String rms = remerge.snapshot().snapshotId();
+        verdict(lane, rms, grantFor(rms), "ACCEPTED");
+        String remergeId = RemergeService.remergeId(otherHead, own);
+        // The pass appended the advance and died before the branch moved.
+        store.append(UUID.nameUUIDFromBytes(("remerge-advanced:" + remergeId).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                PredictionEventType.CONTROL_BRANCH_ADVANCED, self.nodeId(),
+                new IntegrationAttemptPayload(remergeId, project.location.projectId(), List.of(rms), otherHead, remerge.result(), "advanced", "")
+                        .encode(), self);
+        assertEquals(own, project.head());
+        long advances = events(PredictionEventType.CONTROL_BRANCH_ADVANCED).size();
+
+        run();
+
+        assertEquals(remerge.result(), project.head(), "the branch moved to the recorded result");
+        assertEquals(advances, events(PredictionEventType.CONTROL_BRANCH_ADVANCED).size(), "no second advance entry");
+        assertEquals("", project.git("for-each-ref", "refs/synesis/remerge/"), "the kept result is dropped once it landed");
+        run();
+        assertEquals(remerge.result(), project.head());
+        assertEquals(advances, events(PredictionEventType.CONTROL_BRANCH_ADVANCED).size());
+    }
+
+    @Test
+    void aReviewedLaneAndAnUnreviewedLaneReMergedTogetherPassTheOtherComputersAudit() throws Exception {
+        NodeIdentity other = lowerNode();
+        Lane laneA = lane("snap_a", "own-a.txt", true);
+        String ownA = ownMain("own-a.txt", "own a");
+        ownAdvance(base, ownA, laneA.snapshotId());
+        Lane laneB = lane("snap_b", "own-b.txt", false);
+        String ownB = commit("own-b", ownA, "own-b.txt", "own b");
+        project.git("merge", "-q", "--ff-only", ownB);
+        ownAdvance(ownA, ownB, laneB.snapshotId());
+        String otherHead = commit("other", base, "other.txt", "other");
+        otherAdvance(other, otherHead);
+        run();
+        String rms = project.store().taskCompletionProjection().remerge(RemergeService.remergeId(otherHead, ownB)).getFirst().snapshot().snapshotId();
+        verdict(laneA, rms, grantFor(rms), "ACCEPTED");
+
+        run();
+
+        String result = project.head();
+        assertNotEquals(ownB, result);
+        assertEquals(List.of(), MainMeeting.audit(project.root, project.store(), otherHead, result));
+    }
 }
