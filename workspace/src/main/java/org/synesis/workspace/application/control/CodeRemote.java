@@ -326,7 +326,8 @@ public final class CodeRemote {
         /**
          * Returns the refusal code.
          *
-         * @return {@link CodeRemote#NOT_CONFIGURED}, {@link CodeRemote#UNAVAILABLE} or a role-file code
+         * @return {@link CodeRemote#NOT_CONFIGURED}, {@link CodeRemote#UNAVAILABLE}, a role-file code, or a
+         *         {@link org.synesis.coordination.persistence.CodeTransferMessage} code from a Link transfer
          */
         public String code() {
             return code;

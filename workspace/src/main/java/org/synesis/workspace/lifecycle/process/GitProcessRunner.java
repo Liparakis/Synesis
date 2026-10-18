@@ -27,6 +27,11 @@ public final class GitProcessRunner {
      */
     static final Duration REMOTE_TIMEOUT = Duration.ofSeconds(30);
     /**
+     * Maximum lifetime of one command that plans, writes, checks or reads a bundle of up to a code piece
+     * (150 MB, ADR-0098 step 3) on an ordinary laptop. Such a command never runs under a lock.
+     */
+    static final Duration BUNDLE_TIMEOUT = Duration.ofMinutes(10);
+    /**
      * Maximum merged output retained for one local Git command.
      */
     public static final int DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024;
@@ -59,6 +64,21 @@ public final class GitProcessRunner {
      */
     public static String runRemote(Path workdir, String... arguments) throws IOException {
         return runInternal(workdir, null, REMOTE_TIMEOUT, true, DEFAULT_MAX_OUTPUT_BYTES, true, arguments).output();
+    }
+
+    /**
+     * Runs a required local Git command that works on a whole code piece ({@code bundle create}, {@code bundle
+     * verify}, a {@code fetch} from a bundle file, the {@code rev-list} walks that size a piece) with
+     * {@link #BUNDLE_TIMEOUT}. Git reads and writes the bundle file itself, so only its short output passes through
+     * here, under the usual bound.
+     *
+     * @param workdir   Git working directory
+     * @param arguments Git arguments after {@code git}
+     * @return bounded UTF-8 output
+     * @throws IOException if Git fails to start, times out, or exits nonzero
+     */
+    public static String runBundle(Path workdir, String... arguments) throws IOException {
+        return runInternal(workdir, null, BUNDLE_TIMEOUT, true, arguments).output();
     }
 
     /**

@@ -3,8 +3,9 @@ package org.synesis.coordination.persistence;
 import java.io.IOException;
 
 /**
- * One request and one answer of the replication protocol ({@link ReplicationMessage}) carried by some transport:
- * Link between computers, loopback HTTP between a process and its computer's coordination server.
+ * One request and one answer of the replication protocol ({@link ReplicationMessage}) or of Code over Link
+ * ({@link CodeTransferMessage}) carried by some transport: Link between computers, loopback HTTP between a process
+ * and its computer's coordination server.
  *
  * <p>The contract on failure is what lets the sender tell "never sent" from "sent, no answer": a
  * {@link java.net.ConnectException} means the request did not leave, any other {@link IOException} means it may

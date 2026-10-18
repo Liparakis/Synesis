@@ -259,3 +259,54 @@ beside `events/`:
   when (for a member with no session yet, since the server started). Readers
   skip lines that do not follow this. Removed when the server stops; absent
   with no members.
+
+## Code over Link protocol `SCX1`
+
+Compatibility `7` (ADR-0098 step 3; `LinkCompatibility.CURRENT` is raised when
+it is routed on Link). Carried as the opaque payload of one Link application
+stream between two computers of a project, beside `SRL1` and told apart by its
+magic. One request, one answer per stream. Big-endian, strict: every length is
+checked before allocation, every field against its bound, nothing may follow
+the last field, and a message is at most 524,288 bytes.
+
+Header, all messages: `SCX1` (4 bytes), version `1` (1 byte), kind (1 byte).
+A *commit ID* is a length u8 `40` or `64` and that many lowercase hexadecimal
+ASCII digits; a *piece ID* is a length u8 `64` and 64 such digits.
+
+| Kind | Name | Direction | Fields after the header |
+|-----:|------|-----------|-------------------------|
+|  `1` | WANT | requester to holder | project UUID (16), wanted length u8 `1..255` and wanted (UTF-8), have count u16 `0..256`, that many commit IDs |
+|  `2` | CHUNK | requester to holder | project UUID (16), piece ID, index u32 `0..2^31-1` |
+| `16` | PIECE | answer to WANT | piece ID, total bytes u64, chunk count u32 (total bytes / 262,144 rounded up), tip commit ID, target commit ID |
+| `17` | CHUNK_DATA | answer to CHUNK | index u32 `0..2^31-1`, length u32 `1..262144`, bytes, SHA-256 of the bytes (32) |
+| `18` | UNAVAILABLE | answer to WANT, CHUNK | code length u8 `1..64`, code (UTF-8) |
+
+- **The holder names what it serves.** `wanted` is `refs/synesis/snapshots/<id>`
+  or `refs/synesis/prepared/<id>` (`<id>` is `[A-Za-z0-9_-]{1,128}`), `HEAD`
+  for the head of the holder's checked-out branch, or a commit ID that an
+  entry of the holder's copy of the log names or that equals that head.
+  Anything else is `UNAVAILABLE CODE_NOT_SERVED`; a served name whose commit
+  the holder lacks is `CODE_NOT_HELD`. The holder resolves the name itself and
+  passes Git only its own ref names and commit IDs; nothing is ever written
+  into the requester's or the holder's branches.
+- **A piece** is a Git bundle of the history from the haves the holder holds
+  (it ignores the others) to `tip`, cut along first parents at the latest
+  commit whose `rev-list --objects --disk-usage` stays within 150 MB; a single
+  commit over that is a piece on its own. Its one ref is
+  `refs/synesis/outgoing/<piece ID>`. `target` is the commit `wanted` resolved
+  to; the requester asks again, naming `tip` as a have, until `tip` equals
+  `target`. Total bytes `0` and chunk count `0` mean the haves already
+  contain `target`.
+- **Chunks** are 262,144 bytes but the last. The requester checks each one's
+  size and SHA-256, keeps it under `code-incoming/<piece ID>/` in its
+  coordination folder, and after a lost exchange resumes from the first
+  missing chunk. A whole piece then passes `git bundle verify` and a fetch
+  with `fetch.fsckObjects=true` into `refs/synesis/incoming/<piece ID>`, whose
+  commit must be `tip`; that ref and the files are deleted afterwards.
+- **Prepared pieces** are kept under `code-pieces/` in the holder's
+  coordination folder for 24 hours, named by a hash of (target, held haves),
+  so a repeated WANT gets the same piece. An expired or unknown piece, or a
+  chunk outside it, is `CODE_PIECE_UNKNOWN`; the requester then drops what it
+  holds of it and asks again. A piece the holder cannot prepare is
+  `CODE_PIECE_FAILED`.
+- **Bundle commands** run for at most 10 minutes each, never under a lock.
