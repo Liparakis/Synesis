@@ -7,25 +7,16 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 import org.junit.jupiter.api.AfterEach;
@@ -34,40 +25,23 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
-import org.synesis.coordination.application.CoordinationService;
-import org.synesis.coordination.application.MembershipService;
-import org.synesis.coordination.application.SharedSettingsMigration;
+import org.synesis.cli.command.coordination.TestComputers.Computer;
+import org.synesis.cli.command.coordination.TestComputers.Response;
+
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
-import org.synesis.coordination.domain.membership.MembershipProjection;
-import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.LoopbackExchange;
-import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationPeers;
 import org.synesis.coordination.persistence.ReplicationSettings;
-import org.synesis.coordination.replication.LeaderReplication;
-import org.synesis.coordination.replication.ReplicationJournal;
-import org.synesis.coordination.transport.http.CoordinationHttpServer;
 
-import org.synesis.link.identity.NodeIdentity;
-import org.synesis.link.onboarding.Onboarding;
 import org.synesis.link.protocol.ProjectInvitation;
 
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.transport.control.ProjectSharing;
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
-import org.synesis.workspace.doctor.DoctorService;
-import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
-import org.synesis.workspace.transport.control.ControlPlaneEventHub;
-import org.synesis.workspace.transport.control.ControlPlaneHttpHandler;
-import org.synesis.workspace.transport.control.ControlPlaneReadModel;
-import org.synesis.workspace.transport.control.LinkRuntimeOwner;
-import org.synesis.workspace.transport.control.network.LinkNetworkProjection;
 
 /**
  * One link takes a friend into a project (ADR-0098, "Joining, revised"): the owner invites, the friend opens the link,
@@ -77,17 +51,12 @@ import org.synesis.workspace.transport.control.network.LinkNetworkProjection;
 @Timeout(180)
 final class ProjectLinkFlowTest {
 
-    private static final Set<PredictionEventType> MEMBERSHIP_ENTRIES = EnumSet.of(PredictionEventType.PROJECT_SHARED, PredictionEventType.JOIN_REQUESTED,
-            PredictionEventType.JOIN_ANSWERED, PredictionEventType.JOIN_POLICY_SET, PredictionEventType.MEMBER_REMOVED, PredictionEventType.MEMBER_CARD,
-            PredictionEventType.OWNER_CHANGED);
     private static final String REMOTE_URL = "https://example.test/org/project.git";
 
     @TempDir
     Path temp;
-    private final HttpClient client = HttpClient.newHttpClient();
-    private final ProjectApplicationService service = new ProjectApplicationService();
-    private final List<Computer> started = new ArrayList<>();
-    private final Map<Path, Computer> runtimes = new HashMap<>();
+    private final TestComputers computers = new TestComputers();
+    private final ProjectApplicationService service = computers.service();
     private KnownProjectRegistry friendRegistry;
     private ProjectLocation ownerProject;
     private Path friendHomeRoot;
@@ -104,172 +73,7 @@ final class ProjectLinkFlowTest {
 
     @AfterEach
     void stop() {
-        for (int index = started.size() - 1; index >= 0; index--) {
-            started.get(index).stop();
-        }
-    }
-
-    private record Response(int status, Map<String, Object> body) {
-
-        String code() {
-            return body.get("error") instanceof Map<?, ?> error ? String.valueOf(error.get("code")) : "";
-        }
-
-        @Override
-        public String toString() {
-            return status + " " + body;
-        }
-    }
-
-    /** One computer as the launcher composes it for the product: a replication side that can change role, a link owner, a loopback server. */
-    private final class Computer {
-        final ProjectLocation location;
-        final NodeIdentity node;
-        final URI endpoint;
-        final String commandToken;
-        final LinkRuntimeOwner owner;
-        private final List<AutoCloseable> mine = new ArrayList<>();
-
-        Computer(ProjectLocation location, KnownProjectRegistry registry) throws Exception {
-            this.location = location;
-            this.node = location.loadOrCreateIdentity();
-            Path coordination = location.coordinationDirectory();
-            UUID projectId = location.projectId();
-            PredictionEventStore store = new PredictionEventStore(coordination, projectId);
-            // As the launcher starts: a step-5 settings file moves into the log, and every computer plays the same side.
-            SharedSettingsMigration.migrate(coordination, store, node);
-            MembershipService membership = new MembershipService(store, node);
-            MergeDriver merge = MergeDriver.forProject(location.root(), coordination, projectId, node, 3_000L);
-            LeaderReplication leader = LeaderReplication.shared(coordination, projectId, node.nodeId(), merge::onMemberEntry);
-            ReplicationSide side = new ReplicationSide(coordination, projectId, location.root(), node.nodeId(), leader, merge);
-            ControlPlaneEventHub hub = new ControlPlaneEventHub();
-            this.owner = CoordinationServerLauncher.linkOwner(new Onboarding(location.linkDirectory(), hub::publish), node, hub, location.identity(), side,
-                    new ReplicationJournal(coordination), coordination, new LinkRuntimeOwner.MemberAdmission() {
-                        @Override
-                        public void admit(String nodeId, String codeRemoteUrl) throws IOException {
-                            try {
-                                ProjectSharing.admit(location.root(), coordination, membership, nodeId, codeRemoteUrl);
-                            } catch (ProjectSharing.Refusal refused) {
-                                throw new IOException(refused.code());
-                            }
-                        }
-
-                        @Override
-                        public void requested(String nodeId) throws IOException {
-                            try {
-                                membership.share(Optional.empty());
-                                membership.requestJoin(nodeId);
-                            } catch (GeneralSecurityException unsigned) {
-                                throw new IOException(unsigned);
-                            }
-                        }
-
-                        @Override
-                        public void declined(String nodeId) throws IOException {
-                            try {
-                                membership.answer(nodeId, false);
-                            } catch (GeneralSecurityException unsigned) {
-                                throw new IOException(unsigned);
-                            }
-                        }
-                    });
-            CoordinationService coordinationService = new CoordinationService(store, node);
-            ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, coordinationService, new ProviderApplicationService(), new DoctorService(), new LinkNetworkProjection(owner), registry);
-            AtomicReference<CoordinationHttpServer> serverRef = new AtomicReference<>();
-            ControlPlaneHttpHandler control = new ControlPlaneHttpHandler(readModel, coordinationService, owner, hub, ControlPlaneHttpHandler.SelectionGateway.UNAVAILABLE, registry,
-                    new ControlPlaneHttpHandler.ProjectLinkGateway() {
-                        @Override
-                        public void becomeMember(String leaderNodeId) throws IOException {
-                            side.becomeMember(leaderNodeId, serverRef.get());
-                        }
-
-                        @Override
-                        public Map<String, Object> projectRuntime(Path project) throws IOException {
-                            // The installation daemon starts the runtime of a folder when it is not running.
-                            Computer runtime = runtimes.get(project);
-                            if (runtime == null) {
-                                try {
-                                    runtime = new Computer(service.require(project), registry);
-                                } catch (Exception unavailable) {
-                                    throw new IOException(unavailable);
-                                }
-                            }
-                            return Map.of("endpoint", runtime.endpoint.toString(), "commandToken", runtime.commandToken);
-                        }
-                    });
-            CoordinationHttpServer server = new CoordinationHttpServer(coordinationService, new InetSocketAddress("127.0.0.1", 0), null, control);
-            server.start();
-            serverRef.set(server);
-            leader.serve(server);
-            side.serveCode(server);
-            this.endpoint = URI.create("http://127.0.0.1:" + server.address().getPort());
-            this.commandToken = control.runtimeCommandToken();
-            mine.addAll(List.of(control, owner, server, side));
-            started.add(this);
-            runtimes.put(location.root(), this);
-        }
-
-        void stop() {
-            runtimes.remove(location.root(), this);
-            for (int index = mine.size() - 1; index >= 0; index--) {
-                try {
-                    mine.get(index).close();
-                } catch (Exception ignored) {
-                    // Best effort.
-                }
-            }
-            mine.clear();
-        }
-
-        Response post(String command, Map<String, Object> body) throws Exception {
-            return parse(client.send(HttpRequest.newBuilder(endpoint.resolve("/api/v1/commands/" + command)).header("Content-Type", "application/json; charset=utf-8")
-                    .header(ControlPlaneHttpHandler.RUNTIME_COMMAND_HEADER, commandToken).POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(body))).build(), HttpResponse.BodyHandlers.ofString()));
-        }
-
-        Response read(String route) throws Exception {
-            return parse(client.send(HttpRequest.newBuilder(endpoint.resolve("/api/v1/" + route)).header(ControlPlaneHttpHandler.RUNTIME_COMMAND_HEADER, commandToken).GET().build(),
-                    HttpResponse.BodyHandlers.ofString()));
-        }
-
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> joinRequests() throws Exception {
-            return (List<Map<String, Object>>) ((Map<String, Object>) read("snapshot").body.get("onboarding")).get("joinRequests");
-        }
-
-        PredictionEventStore store() throws Exception {
-            return new PredictionEventStore(location.coordinationDirectory(), location.projectId());
-        }
-
-        ReplicationSettings role() throws Exception {
-            return ReplicationSettings.read(location.coordinationDirectory()).orElseThrow();
-        }
-
-        /** The membership entries this computer's log holds, own and copied, in local order. */
-        List<PredictionEventType> membershipEntries() throws Exception {
-            return store().events().stream().map(PredictionEvent::type).filter(MEMBERSHIP_ENTRIES::contains).toList();
-        }
-
-        MembershipProjection membership() throws Exception {
-            return store().membershipProjection();
-        }
-
-        /** Whether this computer's log, with the copies it holds, names the node a member. */
-        boolean namesMember(String nodeId) {
-            try {
-                return membership().members().contains(nodeId);
-            } catch (Exception unreadable) {
-                return false;
-            }
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Response parse(HttpResponse<String> response) {
-        return new Response(response.statusCode(), (Map<String, Object>) ProviderJson.parse(response.body()));
-    }
-
-    private Computer start(ProjectLocation location, KnownProjectRegistry registry) throws Exception {
-        return new Computer(location, registry);
+        computers.close();
     }
 
     /** The friend's copy: a Git clone of the owner's repository made a replica of the project, as `init` on a clone does not. */
@@ -326,11 +130,11 @@ final class ProjectLinkFlowTest {
 
     @Test
     void theOwnerInvitesTheFriendOpensTheLinkTheOwnerAcceptsAndTheEntriesOfBothLandOnTheOther() throws Exception {
-        Computer owner = start(ownerProject, null);
+        Computer owner = computers.start(ownerProject, null);
         ProjectLocation friendProject = friendClone("friend");
         friendRegistry.register(friendProject.root());
-        Computer friend = start(friendProject, friendRegistry);
-        Computer friendHome = start(service.require(friendHomeRoot), friendRegistry);
+        Computer friend = computers.start(friendProject, friendRegistry);
+        Computer friendHome = computers.start(service.require(friendHomeRoot), friendRegistry);
 
         Response invited = owner.post("invite", Map.of("project", true));
         assertEquals(201, invited.status(), invited.toString());
@@ -400,9 +204,9 @@ final class ProjectLinkFlowTest {
 
     @Test
     void decliningClosesTheFriendsSessionAndLeavesItNoMember() throws Exception {
-        Computer owner = start(ownerProject, null);
+        Computer owner = computers.start(ownerProject, null);
         ProjectLocation friendProject = friendClone("friend");
-        Computer friend = start(friendProject, friendRegistry);
+        Computer friend = computers.start(friendProject, friendRegistry);
         friendRegistry.register(friendProject.root());
 
         Response opened = friend.post("open-project-link", Map.of("link", projectLinkOf(owner)));
@@ -435,8 +239,8 @@ final class ProjectLinkFlowTest {
 
     @Test
     void aProjectNotRegisteredHereIsNotClonedAndTheFolderIsAskedForThenCheckedThenUsed() throws Exception {
-        Computer owner = start(ownerProject, null);
-        Computer friendHome = start(service.require(friendHomeRoot), friendRegistry);
+        Computer owner = computers.start(ownerProject, null);
+        Computer friendHome = computers.start(service.require(friendHomeRoot), friendRegistry);
         String link = projectLinkOf(owner);
         long before = folderCount();
 
@@ -470,10 +274,10 @@ final class ProjectLinkFlowTest {
 
     @Test
     void aLinkThatWasChangedOrIsNotOursIsRefusedAndNothingIsWritten() throws Exception {
-        Computer owner = start(ownerProject, null);
+        Computer owner = computers.start(ownerProject, null);
         ProjectLocation friendProject = friendClone("friend");
         friendRegistry.register(friendProject.root());
-        Computer friend = start(friendProject, friendRegistry);
+        Computer friend = computers.start(friendProject, friendRegistry);
         byte[] encoded = ProjectInvitation.fromShareLink(projectLinkOf(owner)).encoded();
         encoded[2 + 15] ^= 1;
         String tampered = "synesis://project/SLP1-" + Base64.getUrlEncoder().withoutPadding().encodeToString(encoded);
@@ -489,10 +293,10 @@ final class ProjectLinkFlowTest {
 
     @Test
     void aFriendWithItsOwnLogCannotFollowAndOneThatFollowsInvitesWithAProjectLinkToo() throws Exception {
-        Computer owner = start(ownerProject, null);
+        Computer owner = computers.start(ownerProject, null);
         ProjectLocation friendProject = friendClone("friend");
         friendRegistry.register(friendProject.root());
-        Computer friend = start(friendProject, friendRegistry);
+        Computer friend = computers.start(friendProject, friendRegistry);
         assertTrue(announces(friend, lane("agt-f", "src/own.py")));
         String link = projectLinkOf(owner);
 
@@ -504,7 +308,7 @@ final class ProjectLinkFlowTest {
 
         ProjectLocation second = friendClone("second");
         friendRegistry.register(second.root());
-        Computer follower = start(second, friendRegistry);
+        Computer follower = computers.start(second, friendRegistry);
         Response joined = follower.post("open-project-link", Map.of("link", link));
         assertEquals(200, joined.status(), joined.toString());
         Response invite = follower.post("invite", Map.of("project", true));
@@ -522,8 +326,8 @@ final class ProjectLinkFlowTest {
         GitProcessRunner.run(ownerRoot, "commit", "-m", "owner's work");
         String ownerHead = GitProcessRunner.run(ownerRoot, "rev-parse", "HEAD").strip();
         String ownerBranch = GitProcessRunner.run(ownerRoot, "symbolic-ref", "--short", "HEAD").strip();
-        Computer owner = start(ownerProject, null);
-        Computer friendHome = start(service.require(friendHomeRoot), friendRegistry);
+        Computer owner = computers.start(ownerProject, null);
+        Computer friendHome = computers.start(service.require(friendHomeRoot), friendRegistry);
         Path joined = temp.resolve("joined");
 
         Response opened = friendHome.post("open-project-link", Map.of("link", projectLinkOf(owner), "folder", joined.toString()));
@@ -558,10 +362,10 @@ final class ProjectLinkFlowTest {
     @Test
     void anInvitationNeverStopsTheOwnersOwnWorkAndAnAcceptWithoutACodeRemoteMakesALeaderWithNoMirror() throws Exception {
         GitProcessRunner.run(ownerProject.root(), "remote", "remove", "origin");
-        Computer owner = start(ownerProject, null);
+        Computer owner = computers.start(ownerProject, null);
         ProjectLocation friendProject = friendClone("friend");
         friendRegistry.register(friendProject.root());
-        Computer friend = start(friendProject, friendRegistry);
+        Computer friend = computers.start(friendProject, friendRegistry);
 
         Response invited = owner.post("invite", Map.of("project", true));
 
@@ -587,10 +391,10 @@ final class ProjectLinkFlowTest {
 
     @Test
     void openingALinkRefusedForCapacityWritesNoRoleAndAddsNoRemoteAndTheSameLinkWorksLater() throws Exception {
-        Computer owner = start(ownerProject, null);
+        Computer owner = computers.start(ownerProject, null);
         ProjectLocation friendProject = friendClone("friend");
         friendRegistry.register(friendProject.root());
-        Computer friend = start(friendProject, friendRegistry);
+        Computer friend = computers.start(friendProject, friendRegistry);
         String link = projectLinkOf(owner);
         List<String> plain = new ArrayList<>();
         for (int index = 0; index < 16; index++) {
@@ -613,7 +417,7 @@ final class ProjectLinkFlowTest {
 
     @Test
     void anOwnerWhoseRemoteIsAFilePathInvitesWithNoUrlAndSaysWhy() throws Exception {
-        Computer owner = start(ownerProject, null);
+        Computer owner = computers.start(ownerProject, null);
         GitProcessRunner.run(ownerProject.root(), "remote", "set-url", "origin", "file:///srv/project.git");
 
         Response invited = owner.post("invite", Map.of("project", true));
@@ -626,10 +430,10 @@ final class ProjectLinkFlowTest {
 
     @Test
     void aProjectLinkIsDescribedBeforeAnythingIsDoneWithIt() throws Exception {
-        Computer owner = start(ownerProject, null);
+        Computer owner = computers.start(ownerProject, null);
         ProjectLocation friendProject = friendClone("friend");
         friendRegistry.register(friendProject.root());
-        Computer friend = start(friendProject, friendRegistry);
+        Computer friend = computers.start(friendProject, friendRegistry);
         String link = projectLinkOf(owner);
 
         Response described = friend.post("describe-project-link", Map.of("link", link));
@@ -646,10 +450,10 @@ final class ProjectLinkFlowTest {
 
     @Test
     void pendingRequestsAreDroppedWhenTheOwnersRuntimeRestarts() throws Exception {
-        Computer owner = start(ownerProject, null);
+        Computer owner = computers.start(ownerProject, null);
         ProjectLocation friendProject = friendClone("friend");
         friendRegistry.register(friendProject.root());
-        Computer friend = start(friendProject, friendRegistry);
+        Computer friend = computers.start(friendProject, friendRegistry);
         assertEquals(200, friend.post("open-project-link", Map.of("link", projectLinkOf(owner))).status());
         await(() -> {
             try {
@@ -660,7 +464,7 @@ final class ProjectLinkFlowTest {
         });
 
         owner.stop();
-        Computer restarted = start(ownerProject, null);
+        Computer restarted = computers.start(ownerProject, null);
 
         assertEquals(List.of(), restarted.joinRequests(), "the invitation lived in the runtime that is gone; the friend asks again with a new one");
         assertTrue(ReplicationSettings.read(ownerProject.coordinationDirectory()).isEmpty());

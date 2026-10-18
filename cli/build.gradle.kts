@@ -329,6 +329,8 @@ dependencies {
     runtimeOnly(project(":mcp"))
     implementation(libs.picocli)
     add("protectionLite", libs.proguard.base)
+    // The scripted multi-computer scenarios (ADR-0102 item 1) drive the MCP tools of two computers.
+    testImplementation(project(":mcp"))
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

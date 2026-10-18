@@ -46,6 +46,23 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
    model cost, and each one runs independently, so one round can show several defects. Real agents are kept for the
    final confirmation of a step. (DERIVED: every defect of 2026-10-18 except the Windows stderr pipe and the Podman lab
    ones was a protocol defect a scripted scenario would have shown.)
+
+   Built 2026-10-19 (first round): in `cli/src/test/java/org/synesis/cli/command/coordination/`, `TestComputers` is the
+   composition of one computer as the launcher makes it (taken out of `ProjectLinkFlowTest`, which now uses it, with a
+   merge driver that can run every second and a Link owner that can be closed and replaced, which is how a Link is
+   split and healed on loopback), `ScenarioLab` makes two computers joined by a project link (mandatory review, a
+   provider on both) with `split`, `heal`, `drive` (agents take the steps their next action recommends until a named
+   condition holds, bounded) and the log and Git comparisons, and `ScenarioAgent` calls the real MCP protocol handler
+   (`ensure_session` with a claim, `apply_patch`, `finish_lane`, `request_coordination`, `respond_coordination`, the
+   combine). `ApartWithoutOverlapScenarioTest` is S1 and `OverlapAndCombineScenarioTest` is S2, each about 17 to 20 s of
+   test time and 1 to 2 minutes with the Linux gate's start-up; the gate runs them with `--tests '*Scenario*'`. They
+   found four defects the same day (disabled tests with the defect in their Javadoc, and the report). Round two: S3 needs
+   a reviewer that records a chosen verdict and a reviewer on the other computer while linked; S4 needs an agent that
+   dies (its connection closed) and a way to move the away grace period; S5 and the reboot reconnect need
+   `TestComputers.Computer` to stop and start again on its folders at a named point of the log (a restart already
+   exists in `ControlPlaneReplicationTest`); three computers with the owner down need `ScenarioLab` for a list of
+   computers (it names two) and the member links of `MemberLinksFlowTest`'s computer; removal of a member needs only
+   the owner's membership entries and `ScenarioAgent` calls on the removed computer.
 2. **A decoded log dump and an evidence script.** `synesis log dump` prints every log this computer holds (its own and
    each copy) in local applied order, one entry per line with type, writer, sequence and the fields that matter, and
    with the state each projection derives (lanes, snapshots, grants, combines, membership). One evidence script copies
