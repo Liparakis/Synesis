@@ -81,6 +81,16 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
    `AgentRunController.Wait.OTHER_COMPUTER_AWAY`, printed as `AGENT_RUN_WAITING=OTHER_COMPUTER_AWAY` (an additive value).
    The wait ends at `--timeout-minutes` as `TIMED_OUT`; a reconnect resumes the agents through ADR-0099 fix 11. Source-level
    evidence only.
+   Added 2026-10-19 (s5-run12: the VM's run ended `STALLED` six seconds after the heal and its re-merge wrote
+   `COMBINE_REQUIRED` after that, so no agent took the combine): a run does not end `STALLED` while the copies of `main`
+   have not met. With another computer known and an agent here that can still be resumed, it prints
+   `AGENT_RUN_WAITING=COPIES_MEETING` while this copy lacks a head another computer advanced to
+   (`Observation.mainMissesAnotherComputersHead()`, the `MainMeeting.holdsEveryHead` check that already gates `COMPLETED`)
+   and for 30 seconds after that computer connected. The log exchange records no caught-up state, so that second part is a
+   bounded settle (two pulls of `LogExchange.PULL_INTERVAL_SECONDS`), not a signal. A combine that then appears is
+   offered by `reviewsOffered`, which already includes `CombineLaneJoin.offeredTo` (the one rule of what a laneless agent
+   may take), and resumes a stopped laneless agent once, as ADR-0099 fix 9 does for a review. The wait ends at the run's
+   timeout. Source-level evidence only.
 7. **A fast test rule for fixers.** While fixing, a fixer runs only the affected test classes, on Linux in Podman (about
    15 to 30 seconds), and never a whole module suite in the loop. The Windows run is the touched classes plus one final
    Windows gate before a push.

@@ -107,8 +107,8 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         List<WorkGroup> groups = store.workGroupProjection().groups();
         // Done only once the work is on this copy's main too: a re-merge of two copies waits for its review with no lane
         // open (ADR-0098 step 5).
-        boolean complete = WorkIntentService.hasHadWork(store) && !WorkIntentService.hasOpenWork(store)
-                && org.synesis.workspace.application.control.MainMeeting.holdsEveryHead(location.root(), events);
+        boolean holdsEveryHead = org.synesis.workspace.application.control.MainMeeting.holdsEveryHead(location.root(), events);
+        boolean complete = WorkIntentService.hasHadWork(store) && !WorkIntentService.hasOpenWork(store) && holdsEveryHead;
         java.util.Set<String> openLaneProviders = store.collaborationProjection().activeIntents().stream().map(intent -> intent.provider()).collect(java.util.stream.Collectors.toUnmodifiableSet());
         // A proposal belongs to the lane whose authority lineage it carries; that lane's provider
         // is the one whose agent has to come back when the answer period ends.
@@ -166,6 +166,11 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             @Override
             public boolean otherComputerKnown() {
                 return otherComputerKnown;
+            }
+
+            @Override
+            public boolean mainMissesAnotherComputersHead() {
+                return !holdsEveryHead;
             }
 
             @Override

@@ -365,6 +365,87 @@ final class AgentRunControllerTest {
         assertTrue(script.events.indexOf("AGENT_RUN_WAITING=OTHER_COMPUTER_AWAY") < script.events.indexOf("AGENT_RESUMED=claude#1 resume=1"), script.events.toString());
     }
 
+    /**
+     * s5-run12 (PC + VM, 2026-10-19): the VM's run ended STALLED six seconds after the Link healed, with every lane of
+     * its agents ended; its re-merge, which wrote COMBINE_REQUIRED, was still to come. Right after another computer
+     * connects, the run waits a bounded time for this computer to catch up and decide, and an agent with no lane is
+     * resumed for the combine that then appears, as for a review.
+     */
+    @Test
+    void aCombineThatAppearsAMomentAfterAnotherComputerReconnectsResumesALanelessAgentInsteadOfStalling() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude");
+        script.lifetimes(10, 1);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(5).announced().otherComputerAway();
+        script.at(9).head(5).cameBackAt(9);
+        script.at(14).head(9).progressAfter(5).cameBackAt(9).review("cb-1");
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(120));
+
+        assertEquals(List.of(14), script.resumedAtTicks, "resumed for the combine written five seconds after the reconnection");
+        assertEquals(1, result.resumes());
+        assertTrue(script.events.contains("AGENT_RUN_WAITING=COPIES_MEETING"), script.events.toString());
+    }
+
+    @Test
+    void aMainThatDoesNotYetHoldAnotherComputersHeadKeepsTheRunWaitingForTheCombineOfTheReMerge() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude");
+        script.lifetimes(2, 1);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(5).announced().otherComputerAway().mainMissesAHead();
+        script.at(60).head(9).progressAfter(5).otherComputerAway().mainMissesAHead().review("cb-1");
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(600));
+
+        assertEquals(List.of(60), script.resumedAtTicks, "the copies had not met for a minute, and the combine then resumed it");
+        assertEquals(1, result.resumes());
+    }
+
+    @Test
+    void aComputerThatReconnectedAndLeftNothingToCombineLetsTheRunStallOnceTheSettleHasPassed() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude");
+        script.lifetimes(10);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(5).announced().otherComputerAway();
+        script.at(9).head(5).cameBackAt(9);
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(600));
+
+        assertEquals(AgentRunController.Outcome.STALLED, result.outcome());
+        assertEquals(0, result.resumes());
+        assertTrue(script.tick >= 39 && script.tick <= 41, "waited the settle after the reconnection and no longer: " + script.tick);
+    }
+
+    @Test
+    void anOpenCombineResumesALanelessAgentOnceAndTheRunStallsWhenNobodyTakesIt() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude");
+        script.lifetimes(1, 1);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(5).announced().review("cb-1");
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(60));
+
+        assertEquals(List.of(1), script.resumedAtTicks);
+        assertEquals(AgentRunController.Outcome.STALLED, result.outcome());
+        assertTrue(script.tick < 60);
+    }
+
+    @Test
+    void aSingleComputerRunIgnoresTheMeetingOfCopies() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude");
+        script.lifetimes(2);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(5).announced().mainMissesAHead();
+
+        assertEquals(AgentRunController.Outcome.STALLED, script.run(8, Duration.ofSeconds(60)).outcome());
+        assertTrue(script.tick < 5, "it did not wait: " + script.tick);
+    }
+
     @Test
     void aKnownComputerThatIsAwayKeepsNoRunGoingWhenNoAgentHereHasAnythingToComeBackTo() throws Exception {
         Script script = new Script();
@@ -1343,6 +1424,11 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public boolean mainMissesAnotherComputersHead() {
+                    return state.mainMissesAHead;
+                }
+
+                @Override
                 public OptionalLong otherComputerConnectedSince() {
                     return state.otherComputer && state.cameBackAtTick >= 0 ? OptionalLong.of(state.cameBackAtTick * 1_000L) : OptionalLong.empty();
                 }
@@ -1392,6 +1478,7 @@ final class AgentRunControllerTest {
         private boolean foreignLane;
         private boolean otherComputer;
         private boolean otherComputerAway;
+        private boolean mainMissesAHead;
         private long cameBackAtTick = -1;
         private final List<String> operatorRequests = new ArrayList<>();
         private final Map<String, Long> messages = new java.util.HashMap<>();
@@ -1489,6 +1576,12 @@ final class AgentRunControllerTest {
         /** Another computer is a peer of the project but has no open session with this one. */
         private State otherComputerAway() {
             otherComputerAway = true;
+            return this;
+        }
+
+        /** This copy of main lacks a head another computer advanced to. */
+        private State mainMissesAHead() {
+            mainMissesAHead = true;
             return this;
         }
 

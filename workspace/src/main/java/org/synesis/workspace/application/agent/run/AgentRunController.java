@@ -76,6 +76,16 @@ public final class AgentRunController {
      */
     private static final long UNSEEN_BEFORE_EXIT_MILLIS = 30_000L;
 
+    /**
+     * How long after another computer connected this computer is taken to be still catching up with its log and
+     * deciding its re-merge (ADR-0098 step 5). Nothing records that the exchange has caught up, and the entries that
+     * name the other copy of {@code main} arrive in pages, so a run that ended in the first seconds of a reconnection
+     * could win the race against the combine this computer was about to write (s5-run12: STALLED six seconds after
+     * the heal, the combine written after). The exchange pulls on connecting and every
+     * {@code LogExchange.PULL_INTERVAL_SECONDS} (15) seconds, so two pulls fit in the window. A bounded settle, not a signal.
+     */
+    private static final long RECONNECT_SETTLE_MILLIS = 30_000L;
+
     private final AgentProcesses processes;
     private final ProjectObserver observer;
     private final Connections connections;
@@ -199,7 +209,7 @@ public final class AgentRunController {
                         waiting = Wait.ANSWER_DEADLINE;
                     } else {
                         Outcome outcome = observation.complete() ? closedOutcome(observation) : stalledOutcome(agents, observation, request.maxResumesPerAgent());
-                        waiting = outcome == Outcome.STALLED ? progressElsewhere(agents, observation, request.maxResumesPerAgent()) : null;
+                        waiting = outcome == Outcome.STALLED ? progressElsewhere(agents, observation, request.maxResumesPerAgent(), now) : null;
                         if (waiting == null) {
                             if (outcome == Outcome.NEEDS_OPERATOR) {
                                 observation.operatorRequests().forEach(open -> listener.accept("OPERATOR_REQUEST=" + open));
@@ -357,7 +367,7 @@ public final class AgentRunController {
      * computer's agents had claimed anything; the run ended STALLED although those agents went on
      * to review.</p>
      */
-    private static Wait progressElsewhere(List<Agent> agents, Observation observation, int maxResumes) {
+    private static Wait progressElsewhere(List<Agent> agents, Observation observation, int maxResumes, long now) {
         if (observation.foreignActiveLaneOpen(agents.stream()
                 .flatMap(agent -> agent.connectionIds.stream().map(identity -> new Observation.Connection(agent.spec.provider(), identity))).toList())) {
             return Wait.FOREIGN_LANE_OPEN;
@@ -370,7 +380,19 @@ public final class AgentRunController {
         if (observation.otherComputerKnown() && agents.stream().anyMatch(agent -> agent.mayComeBack(observation, maxResumes))) {
             return Wait.OTHER_COMPUTER_AWAY;
         }
+        // The copies of main have not met: another computer's head is known here and not held (this computer or the
+        // other re-merges next, and a combine lane may follow that an agent here is woken for), or that computer
+        // connected moments ago and its log may not be here yet. Only agents that can be woken make it worth waiting.
+        if (observation.otherComputerKnown() && agents.stream().anyMatch(agent -> agent.resumable(maxResumes))
+                && (observation.mainMissesAnotherComputersHead() || justReconnected(observation, now))) {
+            return Wait.COPIES_MEETING;
+        }
         return null;
+    }
+
+    private static boolean justReconnected(Observation observation, long now) {
+        OptionalLong since = observation.otherComputerConnectedSince();
+        return since.isPresent() && now - since.getAsLong() < RECONNECT_SETTLE_MILLIS;
     }
 
     /** Why a run whose agents have all stopped keeps waiting, as printed in {@code AGENT_RUN_WAITING}. */
@@ -382,7 +404,9 @@ public final class AgentRunController {
         /** Another computer of the project is connected and an agent here can come back to its lane or its request. */
         OTHER_COMPUTER_CONNECTED,
         /** Another computer of the project is known but has no open session with this one, and an agent here can come back to its lane or its request. */
-        OTHER_COMPUTER_AWAY
+        OTHER_COMPUTER_AWAY,
+        /** Another computer's copy of main is not met yet, or that computer has only just connected: a combine may still be written. */
+        COPIES_MEETING
     }
 
     /** The log head the controller observed at one moment. */
@@ -739,6 +763,17 @@ public final class AgentRunController {
          * @return {@code true} while another computer is a peer of the project
          */
         default boolean otherComputerKnown() {
+            return false;
+        }
+
+        /**
+         * Reports whether this copy of {@code main} lacks a head another computer advanced to, as this computer's logs
+         * name it (ADR-0098 step 5). Then a fast-forward or a re-merge is still to come, and a re-merge that Git cannot
+         * finish opens a combine lane for an agent here. Unreadable state reports {@code false}.
+         *
+         * @return {@code true} while another computer's advanced head is not in this copy
+         */
+        default boolean mainMissesAnotherComputersHead() {
             return false;
         }
 
