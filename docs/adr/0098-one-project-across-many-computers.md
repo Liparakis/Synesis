@@ -769,6 +769,37 @@ over three computers, and the claim lock. `synesis log problems` is `synesis coo
 built: the UI showing overlaps, disputes and problems; the order dependence of item 18. Item 8 is built: this branch sets
 compatibility 8 directly, and 7 comes with the merge of step 3.
 
+Found in the first PC and VM run of step 4 with the cable cut (project `s1-run4`, build `e384abe7` on both computers,
+2026-10-18; the VM cut off 07:58:13 to 08:18:13 UTC). Both copies of both logs ended byte-identical and no log file was
+changed, so the copying held. The run stalled for two other reasons (designer, 2026-10-18; each open to the owner):
+
+22. **A finish argument copied wrong is named, not called stale.** The VM's primes lane never published. Decoded from
+    the VM's copy: at its last projection the head was 41 and stayed 41, the lane was at epoch 1 and `ANNOUNCED`, its
+    group at version 1, and every argument of the three last `finish_lane` calls equalled the projection except
+    `participant`, which the Codex agent typed `agt_57611847-333e-3bd7-b28c-04bba9c6f9dc` for
+    `...-b28d-04bba9c6f9dc` (five of its seven finishes carried such a typo). `validateSnapshotEvidence` refused it as
+    `SNAPSHOT_COMPLETION_EVIDENCE_STALE`, whose recovery projects the same action again, so the agent retyped the same
+    value until its unchanged-poll limit and stopped. The local revision was not the cause: `headSequence()` and the
+    fence both count local revisions. The caller's participant and its lane's work group cannot change while the lane
+    is open, so a different value can only be a wrong copy: the finish is now refused
+    `SNAPSHOT_COMPLETION_EVIDENCE_MISMATCH` (blocked, retry) with `field` and `expected`, and a no-change finish keeps
+    `NO_CHANGE_COMPLETION_EVIDENCE_MISMATCH` but gains the same two keys and `retry` instead of asking a human. Every
+    other argument still reads as stale. Seen too, and left as designed: the agent's two finishes with every argument
+    right, before the cut (revisions 15 and 27), were stale because review entries of the PC's lanes (a grant issued
+    and consumed, a coordination answer, a verdict) arrived between the projection and the call; `finishEnvelopeStillHolds`
+    counts any of them, from any computer. The agent re-projected each time.
+23. **A computer coming back resumes a stopped agent that has something to come back to.** The PC's reviewer of the
+    VM's fib snapshot consumed its grant ten seconds after the cut, read nothing (`CODE_REMOTE_UNAVAILABLE`), recorded no
+    verdict and stopped. The VM's six entries had all reached the PC before the cut, so after the VM came back nothing
+    new arrived on the PC: its log stayed at 41 from 07:58:22 on, `progressedSince` stayed false, and the controller
+    waited (`FOREIGN_LANE_OPEN`) for ever. Only `replication.log`'s `CONNECTED` line says that the VM is back. The run
+    controller now reads, from that journal, when the session with a computer of the project that is connected now
+    began (`ReplicationJournal.connectedSince`, `Observation.otherComputerConnectedSince`), and resumes once per such
+    session a stopped agent whose lane may move or whose session holds a request or a grant, when the session began
+    after the agent last looked (its process's start, or 30 seconds before its end, as for log progress). An agent with
+    neither is not resumed. A link that drops and comes back often costs one idle resume each time, bounded by
+    `--max-resumes`. ADR-0099 records the rule as fix 11.
+
 ### Step 5: Each computer merges its own lanes
 
 Today the merge pass cherry-picks reviewed snapshots onto the checked-out branch and fast-forwards it

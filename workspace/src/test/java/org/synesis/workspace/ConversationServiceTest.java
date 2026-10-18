@@ -469,10 +469,14 @@ class ConversationServiceTest {
 
         ReplicationSettings.leader(java.util.Set.of("sl1-member")).write(location.coordinationDirectory());
         assertFalse(observer.observe().otherComputerConnected(), "a node that is not a member counts for nothing");
+        long before = System.currentTimeMillis();
         journal.record("CONNECTED peer=sl1-member expiry=30s");
         assertTrue(observer.observe().otherComputerConnected());
+        long since = observer.observe().otherComputerConnectedSince().orElseThrow();
+        assertTrue(since >= before && since <= System.currentTimeMillis(), "when the member's session began, from the journal");
         journal.record("DISCONNECT peer=sl1-member reason=LIVENESS_EXPIRED liveness=EXPIRED lasted=840s");
         assertFalse(observer.observe().otherComputerConnected(), "the member dropped");
+        assertTrue(observer.observe().otherComputerConnectedSince().isEmpty(), "a computer that is away has no session to resume anyone for");
 
         ReplicationSettings.member("sl1-stranger").write(location.coordinationDirectory());
         assertTrue(observer.observe().otherComputerConnected(), "a member sees its leader");

@@ -548,6 +548,17 @@ before it. The ADR stays Proposed. Source-level evidence only: none of these has
     `get_next_action` wait now says that the author admitted another reviewer and that it may call `cancel_lane`, as
     a reviewer whose module was integrated elsewhere is told. Source-level evidence only. No real run has shown it
     yet.
+11. **A computer coming back (the failure VERIFIED in a real PC and VM run, s1-run4, 2026-10-18; ADR-0098 step 4,
+    designer item 23).** A Claude reviewer on the PC held the grant for a snapshot whose code was on the VM, whose
+    cable had just been cut. It could read nothing, recorded no verdict and stopped. Twenty minutes later the VM came
+    back with nothing new to send, so no entry arrived, the PC's controller printed `AGENT_RUN_WAITING=FOREIGN_LANE_OPEN`
+    and resumed nobody, and the review waited for ever. "Every entry of the lane view changes only through a progress
+    event" holds, but what the reviewer waited for was reachability, which no log records. Now a stopped agent whose
+    lane may move, or whose session holds a request or a grant, is resumed once when a session with another computer
+    of the project began after it last looked (`Observation.otherComputerConnectedSince`, read from
+    `replication.log`), and once more for each later session. Contract line visible to agents: an agent may be resumed,
+    with the same neutral prompt, when another computer of the project reconnects. Source-level evidence only. No real
+    run has shown it yet.
 
 ### Not done
 

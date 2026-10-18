@@ -433,6 +433,9 @@ final class McpSyn039NoChangeCompletionTest {
         assertEquals("blocked", rejected.get("status"), rejected.toString());
         assertEquals("policy_denied", rejected.get("reason"), rejected.toString());
         assertEquals("NO_CHANGE_COMPLETION_EVIDENCE_MISMATCH", ((Map<String, Object>) rejected.get("result")).get("reason"));
+        assertEquals("participant", ((Map<String, Object>) rejected.get("result")).get("field"), "the refusal names what to correct");
+        assertEquals(workflow.get("arguments") instanceof Map<?, ?> projected ? projected.get("participant") : null, ((Map<String, Object>) rejected.get("result")).get("expected"));
+        assertEquals("retry", rejected.get("nextAction"), "a mistyped argument needs no human");
         assertTrue(fixture.store().collaborationProjection().intent(fixture.intentId()).isPresent());
         assertTrue(fixture.store().collaborationProjection().noChangeCompletions().isEmpty());
     }

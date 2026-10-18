@@ -3,9 +3,11 @@ package org.synesis.coordination.replication;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -53,6 +55,27 @@ final class ReplicationJournalTest {
 
         assertEquals(Set.of("nodeA", "nodeC"), ReplicationJournal.connectedPeers(root));
         assertEquals(Set.of(), ReplicationJournal.connectedPeers(root.resolve("absent")));
+    }
+
+    /**
+     * The leader's journal of the PC and VM run s1-run4: the VM's cable was cut for twenty minutes and it came back with
+     * nothing new to send, so only this line says that it is reachable again.
+     */
+    @Test
+    void eachConnectedPeerIsReadWithTheStartOfItsCurrentSession() throws Exception {
+        ReplicationJournal journal = new ReplicationJournal(root);
+        journal.record(Instant.parse("2026-10-18T07:56:38.278714200Z"), "CONNECTED peer=sl1-vm expiry=30s");
+        journal.record(Instant.parse("2026-10-18T07:58:43.270483700Z"), "DISCONNECT peer=sl1-vm reason=LIVENESS_EXPIRED liveness=EXPIRED lasted=125s");
+        assertEquals(Map.of(), ReplicationJournal.connectedSince(root), "cut off");
+        journal.record(Instant.parse("2026-10-18T08:18:20.514915700Z"), "CONNECTED peer=sl1-vm expiry=30s");
+        journal.record(Instant.parse("2026-10-18T08:18:21Z"), "CONNECTED peer=sl1-third expiry=30s");
+        journal.record(Instant.parse("2026-10-18T08:18:22Z"), "DISCONNECT peer=sl1-third reason=TRANSPORT_CLOSED liveness=ALIVE lasted=1s replaced=true");
+
+        assertEquals(Map.of("sl1-vm", Instant.parse("2026-10-18T08:18:20.514915700Z"), "sl1-third", Instant.parse("2026-10-18T08:18:21Z")), ReplicationJournal.connectedSince(root));
+        assertEquals(Set.of("sl1-vm", "sl1-third"), ReplicationJournal.connectedPeers(root));
+
+        Files.writeString(root.resolve(ReplicationJournal.FILE), "yesterday CONNECTED peer=sl1-vm expiry=30s\n");
+        assertEquals(Map.of("sl1-vm", Instant.EPOCH), ReplicationJournal.connectedSince(root), "a start whose time is unreadable is the oldest, so it resumes nobody");
     }
 
     @Test

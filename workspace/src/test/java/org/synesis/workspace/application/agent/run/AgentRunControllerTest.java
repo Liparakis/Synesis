@@ -274,6 +274,54 @@ final class AgentRunControllerTest {
                 "each wait is reported once, when it begins");
     }
 
+    /**
+     * The PC and VM run s1-run4 (ADR-0098 step 4): a reviewer on the PC held the grant for a snapshot whose code is on
+     * the VM, and the VM's cable was cut. Every read failed {@code CODE_REMOTE_UNAVAILABLE}; it recorded no verdict and
+     * stopped. The VM came back twenty minutes later with nothing new to send, so the PC's log never moved again, the
+     * controller printed {@code AGENT_RUN_WAITING=FOREIGN_LANE_OPEN} and resumed nobody, and the review waited for ever.
+     */
+    @Test
+    void aStoppedAgentWithAnOpenLaneIsResumedOnceForEachTimeAnotherComputerComesBackAlthoughTheLogDidNotMove() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude");
+        script.lifetimes(3, 2, 2);
+        script.at(0).head(41).announced().foreignLane().otherComputer();
+        script.at(10).head(41).foreignLane();
+        script.at(40).head(41).foreignLane().cameBackAt(40);
+        script.at(70).head(41).foreignLane().cameBackAt(70);
+
+        script.run(8, Duration.ofSeconds(90));
+
+        assertEquals(List.of(40, 70), script.resumedAtTicks, "once when the VM came back, and once more after the next cut");
+    }
+
+    @Test
+    void aComputerThatCameBackBeforeTheAgentLastLookedResumesNobody() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude");
+        script.lifetimes(45);
+        script.at(0).head(41).announced().foreignLane();
+        script.at(5).head(41).foreignLane().cameBackAt(5);
+
+        script.run(8, Duration.ofSeconds(80));
+
+        assertEquals(List.of(), script.resumedAtTicks, "it was running for half a minute after the computer came back");
+    }
+
+    @Test
+    void aComputerComingBackResumesAnAgentHoldingAGrantButNotOneWithNothingToComeBackTo() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.lifetimes(2, 2, 2);
+        script.withoutOwnLane.addAll(List.of("claude#1", "codex#2"));
+        script.at(0).head(41).announced().foreignLane().holdsRequest("claude#1");
+        script.at(40).head(41).foreignLane().holdsRequest("claude#1").cameBackAt(40);
+
+        script.run(8, Duration.ofSeconds(60));
+
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches, "only the agent that holds the review grant");
+    }
+
     @Test
     void aRunWaitingForAnotherComputerThatNeverActsIsTimedOutAtTheDeadline() throws Exception {
         Script script = new Script();
@@ -1204,6 +1252,11 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public OptionalLong otherComputerConnectedSince() {
+                    return state.otherComputer && state.cameBackAtTick >= 0 ? OptionalLong.of(state.cameBackAtTick * 1_000L) : OptionalLong.empty();
+                }
+
+                @Override
                 public List<String> reviewsOffered(String provider, List<String> connectionInstanceIds) {
                     if (connectionInstanceIds.stream().anyMatch(connection -> holdsOpenLane(provider, connection))) {
                         return List.of();
@@ -1242,6 +1295,7 @@ final class AgentRunControllerTest {
         private boolean allCancelled;
         private boolean foreignLane;
         private boolean otherComputer;
+        private long cameBackAtTick = -1;
         private final List<String> operatorRequests = new ArrayList<>();
         private final Map<String, Long> messages = new java.util.HashMap<>();
         private final List<String> endedLanes = new ArrayList<>();
@@ -1325,6 +1379,13 @@ final class AgentRunControllerTest {
         /** Another computer sharing the project's log is connected to this one. */
         private State otherComputer() {
             otherComputer = true;
+            return this;
+        }
+
+        /** Another computer is connected, in a session that began at this tick. */
+        private State cameBackAt(long tick) {
+            otherComputer = true;
+            cameBackAtTick = tick;
             return this;
         }
 

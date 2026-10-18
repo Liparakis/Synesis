@@ -6,9 +6,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -22,7 +24,8 @@ import java.util.Set;
  * which this class serializes; the file is rewritten whole through a temporary file and moved into place, so a
  * reader sees a complete old or a complete new file. A line that cannot be written is lost, never thrown: the journal
  * explains the replication, it must not stop it. It decides no session; the one reader that acts on it is a run of
- * agents deciding whether to keep waiting for another computer ({@link #connectedPeers}).
+ * agents deciding whether to keep waiting for another computer ({@link #connectedPeers}) and whom to resume when one
+ * comes back ({@link #connectedSince}).
  */
 public final class ReplicationJournal {
 
@@ -96,7 +99,21 @@ public final class ReplicationJournal {
      * @return node IDs of the peers connected as far as the journal says; empty when there is no journal
      */
     public static Set<String> connectedPeers(Path root) {
-        Set<String> connected = new HashSet<>();
+        return connectedSince(root).keySet();
+    }
+
+    /**
+     * When the current session with each connected peer began, by the rule of {@link #connectedPeers}. Nothing in
+     * the event log records that a computer came back, yet what it holds (a snapshot to review, the commits
+     * {@code main} moved to) is refused as unreachable while it is away; a run of agents reads this to resume an
+     * agent that stopped before the computer came back (ADR-0098 step 4, item 23). A start whose time cannot be read
+     * counts as the oldest possible, so it resumes nobody.
+     *
+     * @param root the coordination folder
+     * @return each connected peer's node ID and the start of its current session; empty when there is no journal
+     */
+    public static Map<String, Instant> connectedSince(Path root) {
+        Map<String, Instant> connected = new HashMap<>();
         for (String line : read(root)) {
             String[] parts = line.split(" ");
             if (parts.length < 3 || !parts[2].startsWith("peer=") || line.endsWith(" replaced=true")) {
@@ -104,12 +121,20 @@ public final class ReplicationJournal {
             }
             String peer = parts[2].substring("peer=".length());
             if (parts[1].equals(CONNECTED)) {
-                connected.add(peer);
+                connected.put(peer, startOf(parts[0]));
             } else if (parts[1].equals(DISCONNECT)) {
                 connected.remove(peer);
             }
         }
-        return Set.copyOf(connected);
+        return Map.copyOf(connected);
+    }
+
+    private static Instant startOf(String stamp) {
+        try {
+            return Instant.parse(stamp);
+        } catch (DateTimeParseException unreadable) {
+            return Instant.EPOCH;
+        }
     }
 
     /**

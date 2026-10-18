@@ -71,6 +71,11 @@ import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 @SuppressWarnings("DuplicatedCode")
 public final class AgentTaskCompletionService {
 
+    /** Result key naming the finish argument that was copied wrong. */
+    private static final String MISMATCHED_FIELD = "field";
+    /** Result key holding the value that argument must have. */
+    private static final String EXPECTED_VALUE = "expected";
+
     private final ProjectApplicationService projectService;
     private final ProviderSessionBindingService bindingService;
     private final TaskSnapshotService snapshotService;
@@ -243,6 +248,10 @@ public final class AgentTaskCompletionService {
         if (!request.hasCompleteEvidence()) {
             return snapshotEvidenceDenied(request, NextActionProtocol.REASON_SNAPSHOT_COMPLETION_EVIDENCE_REQUIRED);
         }
+        Optional<Map<String, Object>> mistyped = mistypedEvidence(request, intent, participantHandle);
+        if (mistyped.isPresent()) {
+            return evidenceMismatch(NextActionProtocol.REASON_SNAPSHOT_COMPLETION_EVIDENCE_MISMATCH, mistyped.get());
+        }
         WorkGroup group = store.workGroupProjection().group(intent.workGroupId()).orElse(null);
         if (group == null) {
             return snapshotEvidenceDenied(request, NextActionProtocol.REASON_WORK_GROUP_NOT_FOUND);
@@ -253,6 +262,32 @@ public final class AgentTaskCompletionService {
             return snapshotEvidenceDenied(request, NextActionProtocol.REASON_SNAPSHOT_COMPLETION_EVIDENCE_STALE);
         }
         return null;
+    }
+
+    /**
+     * Names the first finish argument that can only have been copied wrong, never gone stale: the caller's own
+     * participant and its lane's work group do not change while the lane is open. Answered as stale, which sends
+     * the agent back to the same projection, a Codex agent that mistyped its participant three times in a row was
+     * shown the same action each time and stopped with its tested work unpublished (ADR-0098 step 4, item 22).
+     */
+    private static Optional<Map<String, Object>> mistypedEvidence(CompleteTaskRequest request, WorkIntent intent, String participantHandle) {
+        if (!request.expectedParticipant().equals(participantHandle)) {
+            return Optional.of(Map.of(MISMATCHED_FIELD, NextActionKeys.PARTICIPANT, EXPECTED_VALUE, participantHandle));
+        }
+        if (!request.expectedWorkGroupId().equals(intent.workGroupId())) {
+            return Optional.of(Map.of(MISMATCHED_FIELD, NextActionKeys.WORK_GROUP_ID, EXPECTED_VALUE, intent.workGroupId().toString()));
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Refuses a finish whose argument was copied wrong, naming it, so the agent corrects it and calls again.
+     */
+    private static AgentResponse evidenceMismatch(String reason, Map<String, Object> mistyped) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put(NextActionKeys.REASON, reason);
+        result.putAll(mistyped);
+        return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, result);
     }
 
     /**
@@ -771,8 +806,11 @@ public final class AgentTaskCompletionService {
             return noChangeDenied(NextActionProtocol.REASON_NO_ACTIVE_INTENT, null);
         }
         WorkIntent announced = laneIntent.get();
-        if (!request.expectedIntentId().equals(announced.intentId()) || !request.expectedWorkGroupId().equals(announced.workGroupId()) || request.expectedClaimEpoch() != announced.version() || !participantHandle.equals(
-                request.expectedParticipant())) {
+        Optional<Map<String, Object>> mistyped = mistypedEvidence(request, announced, participantHandle);
+        if (mistyped.isPresent()) {
+            return evidenceMismatch(NextActionProtocol.REASON_NO_CHANGE_COMPLETION_EVIDENCE_MISMATCH, mistyped.get());
+        }
+        if (!request.expectedIntentId().equals(announced.intentId()) || request.expectedClaimEpoch() != announced.version()) {
             return noChangeDenied(NextActionProtocol.REASON_NO_CHANGE_COMPLETION_EVIDENCE_MISMATCH, null);
         }
 

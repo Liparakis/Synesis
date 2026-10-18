@@ -216,7 +216,11 @@ The `finish_lane` arguments projected by a completion request carry
 while only participant heartbeats are appended after that revision, so another
 agent's polling does not invalidate them. Any other event does, and the call
 then returns `SNAPSHOT_COMPLETION_EVIDENCE_STALE` (or the no-change equivalent)
-with a recommended fresh completion request.
+with a recommended fresh completion request. A `participant` or `workGroupId`
+that differs from the lane's cannot be stale, only copied wrong: the call
+returns `SNAPSHOT_COMPLETION_EVIDENCE_MISMATCH` (or
+`NO_CHANGE_COMPLETION_EVIDENCE_MISMATCH`) with `field` and `expected`, and the
+agent corrects that argument and calls again.
 
 If Synesis cannot load the durable terminal fence for the exact bound session,
 `ensure_session` and `get_next_action` fail closed with

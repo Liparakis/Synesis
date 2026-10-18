@@ -160,6 +160,12 @@ final class NextActionProtocol {
     static final String REASON_SNAPSHOT_COMPLETION_EVIDENCE_STALE = "SNAPSHOT_COMPLETION_EVIDENCE_STALE";
 
     /**
+     * A finish argument that cannot go stale differs from the lane's: it was copied wrong. The refusal names
+     * the field and the value expected.
+     */
+    static final String REASON_SNAPSHOT_COMPLETION_EVIDENCE_MISMATCH = "SNAPSHOT_COMPLETION_EVIDENCE_MISMATCH";
+
+    /**
      * Finish evidence is missing.
      */
     static final String REASON_SNAPSHOT_COMPLETION_EVIDENCE_REQUIRED = "SNAPSHOT_COMPLETION_EVIDENCE_REQUIRED";

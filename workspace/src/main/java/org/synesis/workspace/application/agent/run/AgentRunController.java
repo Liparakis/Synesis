@@ -138,6 +138,7 @@ public final class AgentRunController {
             for (AgentSpec spec : request.agents()) {
                 Agent agent = new Agent(++index, spec);
                 agent.startedAtSequence = headAtStart;
+                agent.startedAtMillis = clockMillis.getAsLong();
                 HeadlessOptions options = agent.connect(connections.open());
                 agent.process = processes.start(spec.session().startCommand(request.projectRoot(), options), request.projectRoot(), spec.session().environment(options), request.prompt(), agent.label(),
                         spec.session()::sessionId);
@@ -156,7 +157,7 @@ public final class AgentRunController {
                 for (Agent agent : agents) {
                     if (agent.process != null && !agent.process.isAlive()) {
                         agent.exited(observation.lastActivitySequence(agent.spec.provider(), agent.connectionId), seenBeforeExit, observation.progressedSince(agent.startedAtSequence),
-                                agent.holdsOpenLane(observation));
+                                agent.holdsOpenLane(observation), now);
                         listener.accept("AGENT_EXITED=" + agent.label() + " exitCode=" + agent.exitCode);
                     }
                     keepOrEnd(agent, observation, request.maxResumesPerAgent(), listener, unrecordedEnds);
@@ -179,6 +180,7 @@ public final class AgentRunController {
                             agent.resumed = true;
                             agent.resumes++;
                             agent.startedAtSequence = observation.headSequence();
+                            agent.startedAtMillis = now;
                             HeadlessOptions options = agent.connectionEnded ? agent.connect(connections.open()) : agent.spec.options().withConnection(agent.connectionId);
                             agent.process = processes.start(agent.spec.session().resumeCommand(request.projectRoot(), agent.providerSessionId, options), request.projectRoot(),
                                     agent.spec.session().environment(options), RESUME_PROMPT, agent.label(), agent.spec.session()::sessionId);
@@ -241,6 +243,11 @@ public final class AgentRunController {
      * ever while both agents here that could review it had stopped with their lanes integrated); or a
      * request it made was answered (its review request was accepted ten minutes after it stopped, and
      * the author waited for ever for the reviewer it had admitted).</p>
+     *
+     * <p>One thing resumes an agent with something to come back to although the log did not move: another computer
+     * of the project connected after the agent stopped. A reviewer whose author's computer was cut off read nothing,
+     * recorded no verdict and stopped; when the cable came back nothing was written anywhere, and the review waited
+     * for ever. Each such connection resumes it once.</p>
      */
     private static Wake wakeFor(Agent agent, Observation observation, long now, List<Agent> agents, List<String> unrecordedEnds) {
         boolean holdsLane = agent.holdsOpenLane(observation);
@@ -257,7 +264,10 @@ public final class AgentRunController {
         // Only once its end is recorded: the close is what lets its lane be held for continuation.
         boolean fencedLaneWaits = agent.fencedLaneToContinue && holdsLane && !unrecordedEnds.contains(agent.connectionId);
         boolean forItsLane = laneMayMove && (fencedLaneWaits || observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || agent.unreadMessageWaiting(observation));
-        if (forItself || forItsLane) {
+        // No entry says that another computer came back, yet what it holds was refused as unreachable while it was
+        // away: a reviewer could not read the snapshot it holds the grant for, and stopped (ADR-0098 step 4, item 23).
+        boolean computerCameBack = agent.computerCameBackUnseen(observation) && (laneMayMove || observation.holdsRequestOrGrant(agent.spec.provider(), agent.connectionId));
+        if (forItself || forItsLane || computerCameBack) {
             return new Wake(Wake.Kind.RESUME, reviews, deadlinePassed ? deadline : OptionalLong.empty());
         }
         return new Wake(deadline.isPresent() && now < deadline.getAsLong() ? Wake.Kind.AWAIT_DEADLINE : Wake.Kind.STAY, List.of(), OptionalLong.empty());
@@ -714,6 +724,18 @@ public final class AgentRunController {
         }
 
         /**
+         * Returns when the newest session with another computer of this project began, for a computer that is
+         * connected now. A computer coming back is written in no log, yet it is what an agent refused
+         * {@code CODE_REMOTE_UNAVAILABLE} while it was away needs; a stopped agent with something to come back to is
+         * resumed once for each such session that began after it stopped.
+         *
+         * @return epoch milliseconds, or empty when no other computer is connected
+         */
+        default OptionalLong otherComputerConnectedSince() {
+            return OptionalLong.empty();
+        }
+
+        /**
          * Returns the log position of the newest message addressed to the lane that the session
          * behind one connection holds and not yet marked as handed to it (ADR-0093). The
          * controller resumes a stopped agent for such a message, and for that message only once.
@@ -871,6 +893,12 @@ public final class AgentRunController {
         private String providerSessionId;
         private long startedAtSequence;
         private long stoppedAtSequence;
+        /** When its current or last process started. */
+        private long startedAtMillis;
+        /** When it is taken to have last looked at the project: as for {@link #stoppedAtSequence}, in time. */
+        private long lastLookMillis;
+        /** The start of the other computer's session it was last resumed for. */
+        private long resumedForConnection = Long.MIN_VALUE;
         private long resumedForDeadline = Long.MIN_VALUE;
         private long resumedForMessage;
         /** The newest answer to a request of its own that it was resumed after. */
@@ -935,8 +963,9 @@ public final class AgentRunController {
          *                       has been observing that long
          * @param progressed     whether anything was recorded in the log while the process ran
          * @param holdsLane      whether the agent's lane is open now
+         * @param now            when the controller saw that the process had ended
          */
-        private void exited(OptionalLong lastActivity, OptionalLong seenBeforeExit, boolean progressed, boolean holdsLane) {
+        private void exited(OptionalLong lastActivity, OptionalLong seenBeforeExit, boolean progressed, boolean holdsLane, long now) {
             exitCode = process.exitCode();
             if (resumed) {
                 idleResumes = progressed ? 0 : idleResumes + 1;
@@ -945,6 +974,7 @@ public final class AgentRunController {
             process.providerSessionId().ifPresent(identifier -> providerSessionId = identifier);
             long seen = seenBeforeExit.orElse(startedAtSequence);
             stoppedAtSequence = Math.max(startedAtSequence, lastActivity.isPresent() ? Math.min(lastActivity.getAsLong(), seen) : seen);
+            lastLookMillis = Math.max(startedAtMillis, now - UNSEEN_BEFORE_EXIT_MILLIS);
             process = null;
         }
 
@@ -984,6 +1014,13 @@ public final class AgentRunController {
             resumedForReview.addAll(wake.reviews());
             resumedForMessage = Math.max(resumedForMessage, newestUnreadMessage(observation).orElse(0L));
             resumedForAnswer = Math.max(resumedForAnswer, newestAnswer(observation).orElse(0L));
+            observation.otherComputerConnectedSince().ifPresent(since -> resumedForConnection = Math.max(resumedForConnection, since));
+        }
+
+        /** Whether another computer connected after it last looked, and it has not been resumed for that connection. */
+        private boolean computerCameBackUnseen(Observation observation) {
+            OptionalLong since = observation.otherComputerConnectedSince();
+            return since.isPresent() && since.getAsLong() > Math.max(lastLookMillis, resumedForConnection);
         }
 
         /** Whether a request it made was answered after it stopped, and it has not been resumed since. */

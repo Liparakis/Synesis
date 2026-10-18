@@ -136,7 +136,7 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
         java.util.Set<String> laneRequests = store.operatorRequestProjection().all().stream().filter(request -> !request.raisedBySynesis())
                 .map(org.synesis.coordination.domain.operator.OperatorRequest::id).collect(java.util.stream.Collectors.toUnmodifiableSet());
-        boolean otherComputerConnected = otherComputerConnected(coordination);
+        OptionalLong otherComputerConnectedSince = otherComputerConnectedSince(coordination);
         // Where the operator closed each request, and where each coordination request was answered,
         // read once for every agent's question.
         Map<String, Long> operatorClosings = new HashMap<>();
@@ -155,7 +155,12 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
 
             @Override
             public boolean otherComputerConnected() {
-                return otherComputerConnected;
+                return otherComputerConnectedSince.isPresent();
+            }
+
+            @Override
+            public OptionalLong otherComputerConnectedSince() {
+                return otherComputerConnectedSince;
             }
 
             @Override
@@ -291,19 +296,20 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
     }
 
     /**
-     * Whether a peer that this computer's role file names (the leader's members, a member's
-     * leader) is connected according to the replication journal. A journal line about a node
-     * that is no longer a peer of the project counts for nothing. An unreadable role file or
-     * journal reads as not connected: this only decides whether a run keeps waiting, and must not
+     * When the newest session began with a peer that this computer's role file names (the leader's members, a
+     * member's leader) and that is connected according to the replication journal, or empty when none is. A journal
+     * line about a node that is no longer a peer of the project counts for nothing. An unreadable role file or
+     * journal reads as not connected: this only decides whether a run keeps waiting and whom it resumes, and must not
      * end the run.
      */
-    private static boolean otherComputerConnected(java.nio.file.Path coordination) {
+    private static OptionalLong otherComputerConnectedSince(java.nio.file.Path coordination) {
         try {
             java.util.Set<String> peers = ReplicationSettings.read(coordination).map(settings -> settings.isMember() ? java.util.Set.of(settings.leaderNodeId()) : settings.members())
                     .orElse(java.util.Set.of());
-            return ReplicationJournal.connectedPeers(coordination).stream().anyMatch(peers::contains);
+            return ReplicationJournal.connectedSince(coordination).entrySet().stream().filter(session -> peers.contains(session.getKey()))
+                    .mapToLong(session -> session.getValue().toEpochMilli()).max();
         } catch (IOException unreadable) {
-            return false;
+            return OptionalLong.empty();
         }
     }
 
