@@ -667,6 +667,38 @@ so a throw makes the log unopenable. Many readers use the global sequence as a c
    answers before requests included; every decision listed under "Order does not decide" is the same.
 8. **Compatibility 8.**
 
+Decided while building step 4 (designer, 2026-10-18; each open to the owner):
+
+9. **Three ways to apply an entry** (`ApplyMode`): `CHECK` for this computer's own new entry (every rule, as
+   today), `ARRIVAL` for an entry of another log applied here for the first time (on a copy, so a held-back entry
+   changes nothing), and `REPLAY` for an entry already in `applied.order`. Applying never throws in `ARRIVAL` or
+   `REPLAY` except to hold an entry back (`MissingReferenceException`, same code as the refusal). Anything else an
+   arriving entry still hits counts for nothing, is reported, and its line records why; so one faulty entry never
+   stops a copy.
+10. **A held-back entry holds back the rest of its own log,** because its later entries may build on it. The other
+    logs go on. A held-back entry is listed, with the code it waits on, in `synesis log problems`.
+11. **Ended is not missing.** A lane that was released, completed or continued is remembered by its id, so a late
+    entry of the away computer about it applies with no effect instead of waiting for ever.
+12. **`applied.order` lines** are `self <sequence>` for this computer's own log (every process that opens a store
+    can write it, and not every process knows the computer's node ID), and `<node> <sequence>` for a copy. A third
+    field, the code, marks an entry that counted for nothing; such an entry takes no local revision. Entries of the
+    own log that have no line yet (a log written before step 4, or an append cut short) apply after every line, in
+    their own order, and the next writer gives them their lines; so a project on one computer changes nothing.
+13. **Marks of delivery are local.** `CONVERSATION_MESSAGES_DELIVERED` names a position in its writer's local order,
+    which means nothing on another computer, so a mark from another log has no effect there. Each computer delivers
+    to its own agents.
+14. **Attribution on arrival.** An arriving entry acting for a participant that another node introduced counts for
+    nothing (`PARTICIPANT_NOT_OWNED_BY_SIGNER`). One acting for a participant not seen yet also counts for nothing,
+    because the signer's own introduction would already have been applied, its log being copied in order. The
+    exception is an entry of the owner's computer, which keeps its exemption until step 5: it waits for the
+    participant. Leader-only types from another computer count for nothing (`EVENT_TYPE_LEADER_ONLY`).
+15. **Two answers to one coordination request** (a review request answered by its first target and by the lane that
+    took it over): both are kept, and the answer of the lower node ID is the request's status.
+16. **Work-group status:** a newer version replaces an older one, and a second change of the same version counts as
+    the first; at one version COMPLETED wins over any other status. **Operator requests:** two raises for one
+    condition are one request, known by the lower request ID; answers are kept per writing node, a node's new answer
+    replaces its own, and two different answers keep the request open.
+
 ### Step 5: Each computer merges its own lanes
 
 Today the merge pass cherry-picks reviewed snapshots onto the checked-out branch and fast-forwards it

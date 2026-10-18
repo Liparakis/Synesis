@@ -99,6 +99,132 @@ The ladder is the same in every row: the rules first, then the agents involved, 
 lane. Synesis never routes a decision to a person by default. A person acts only on the trash, on membership, or when
 the user asks.
 
+### Every rule an arriving entry can reach (ADR-0098 step 4)
+
+Each `throw new` that runs while an entry is applied, classified on 2026-10-18 (VERIFIED by reading the source at
+`6e75ceeb`; line numbers are of that commit, under `coordination/src/main/java/org/synesis/coordination/domain/`). On
+this computer's own append every site refuses as it does today. On an entry that arrives from another computer's log,
+each site counts as its class says:
+
+- **PARK**, a missing reference: the entry names something written in another log that has not arrived. It is held
+  back, with the later entries of its own log, and applied when that arrives. Something the writer's own log names
+  earlier is never missing, because a log is copied in order.
+- **WRITER**, a revision, epoch or state check: judged by the writer against its own view; not judged on arrival.
+- **BOTH**, two facts about one thing: both stand, and the projection keeps the set (rows 1, 4, 6, 6a, 9, 10).
+- **NOTHING**, counts for nothing, reported loudly (rows 3 and 5): only a faulty build writes it.
+- **UNREACHABLE** from a verified entry: a payload rule the writer's build ran, or a state the writer's own log alone
+  decides. If one is ever reached on arrival, the entry counts for nothing and is reported, so applying never throws.
+
+Decoders and payload constructors (`CollaborationCodec`, `*Payload.decode`, `WorkIntent`, `ContractCodec`, ...) throw
+only on malformed bytes: UNREACHABLE for a verified entry of the same compatibility number.
+
+**Collaboration** (`collaboration/CollaborationProjection.java`, `ProviderSessionFences.java`,
+`CoordinationRequests.java`)
+
+| Site | Code | Class | On arrival |
+| --- | --- | --- | --- |
+| CP:77, :554, :791, :795, :799, :940 | `SESSION_EPOCH_FENCED`, `SESSION_TERMINAL`, `PARTICIPANT_NOT_FOUND` (heartbeat, revoke) | UNREACHABLE | no build appends `PARTICIPANT_REVOKED` or `PARTICIPANT_HEARTBEAT` any more; old single logs only |
+| CP:107 | `CONTINUATION_TARGET_INVALID` | WRITER | the taker checked the target against its view of the source |
+| CP:507 | `INTENT_NOT_FOUND` (scope extension) | BOTH | the lane is the writer's own, so missing means another log ended it: the ended lane wins, the late extension has no effect |
+| CP:510, :514, :519, :524 | `CLAIM_EPOCH_STALE`, `INTENT_NOT_ACTIVE`, `SCOPE_EXTENSION_INVALID`, `SCOPE_EXTENSION_NO_CHANGE` | WRITER | applied against what this computer holds |
+| CP:527, :557 | `OVERLAPPING_CLAIM` (extension, announcement) | BOTH | row 1: both lanes stand; the overlap is reported to both agents |
+| CP:550, :688 | `SESSION_TERMINAL` (announcement, request) | WRITER | the fence is the participant's own computer's |
+| CP:573, :1004 | `INTENT_NOT_FOUND` (release, no-change completion) | PARK | a lane already ended (released, continued) is not missing: the entry has no effect |
+| CP:617 | `REPAIR_SOURCE_NOT_FOUND` | PARK | source lane of another log |
+| CP:621, :624, :627, :631 | `REPAIR_TARGET_NOT_ANNOUNCED`, `REPAIR_WORK_GROUP_MISMATCH`, `REPAIR_AUTHORITY_LINEAGE_MISMATCH`, `REPAIR_TARGET_MUST_BE_DISTINCT` | UNREACHABLE | payload and immutable lane fields |
+| CP:634, :641, :647 | `REPAIR_SCOPE_MISMATCH`, `REPAIR_EPOCH_MISMATCH`, `REPAIR_TARGET_ALREADY_ACTIVE` | WRITER | |
+| CP:666, :670 | `UNWIND_SOURCE_NOT_ACTIVE`, `UNWIND_EPOCH_OR_SCOPE_MISMATCH` | WRITER | a replacement lane ended elsewhere is not brought back |
+| CP:692 | `INTENT_NOT_FOUND` (request's conflicting lane) | PARK | |
+| CP:711 (a `return`) | lane of a rejection not found | PARK | today it silently drops the reopening |
+| CP:737 | `VALIDATION_REFUSAL_TARGET_STALE` (lane missing) | PARK | |
+| CP:757 | `REVIEW_TARGET_STALE`, `VALIDATION_REFUSAL_TARGET_STALE` (lane moved) | WRITER | |
+| CP:774 | `PARTICIPANT_NOT_FOUND` (reopen) | UNREACHABLE | every lane comes with its participant |
+| CP:814 | `INTENT_NOT_FOUND` (handoff) | PARK | |
+| CP:817, :821 | `CLAIM_EPOCH_STALE`, `HANDOFF_TARGET_NOT_ACTIVE` | WRITER | |
+| CP:844, :859, :962, :977 | `PARTICIPANT_NOT_FOUND` (suspend, hold, cancel, detach) | PARK | reached only by the owner's computer's exempt entries (until ADR-0098 step 5) |
+| CP:862 | `RECOVERY_NOT_SUSPENDED` | WRITER | a participant that ended (detached, cancelled, completed) stays ended whatever arrives later |
+| CP:877, :884 | `SESSION_TERMINAL`, `CONTINUATION_TARGET_EXISTS` (continuation) | UNREACHABLE | the taker's own participant and id |
+| CP:904 | `CONTINUATION_SOURCE_NOT_FOUND` | PARK | source lane of the away computer's log |
+| CP:907, :911, :928 | `CLAIM_EPOCH_STALE`, `RECOVERY_NOT_HELD`, `OVERLAPPING_CLAIM` (continuation) | WRITER | the takeover stands (row 8) |
+| CP:993 | `NO_CHANGE_COMPLETION_CONFLICT` | BOTH | the lane stays completed; the evidence kept is the first one this computer applied, which only the lane's own computer writes |
+| CP:1000, :1011 | `COMPLETION_REVISION_STALE`, `NO_CHANGE_COMPLETION_BINDING_MISMATCH` | WRITER | revisions are local to each computer |
+| PSF:41 | `TERMINAL_REVISION_STALE` | WRITER | |
+| PSF:47, :52 | `TERMINAL_SESSION_CONFLICT`, `TERMINAL_PARTICIPANT_CONFLICT` | BOTH | the participant is terminal if any session says so |
+| CR:35 | `REQUEST_EXISTS` | UNREACHABLE | the requester's own id |
+| CR:51 | `REQUEST_NOT_FOUND` | PARK | request in the requester's log, answer in the target's |
+| CR:57 | `REQUEST_ALREADY_RESOLVED` | BOTH | both answers are kept; the answer of the lower node ID is the request's status, in either order |
+
+**Work groups and grants** (`collaboration/WorkGroupProjection.java`)
+
+| Site | Code | Class | On arrival |
+| --- | --- | --- | --- |
+| WG:294 | `WORK_GROUP_EXISTS` | BOTH | one group per id; a real creation replaces the placeholder an announcement made, an identical one is the same group |
+| WG:306 | `LANE_GRANT_EXISTS` | UNREACHABLE | grant ids are random or derived from the continuation |
+| WG:309, :427 | `WORK_GROUP_NOT_FOUND` (grant, status change) | PARK | |
+| WG:398, :414, :447 | `LANE_GRANT_NOT_FOUND` (consume, revoke, review) | PARK | |
+| WG:401 | `LANE_GRANT_REPLAYED` | BOTH | consumed and revoked are both kept; a grant is available only if neither |
+| WG:430 | `WORK_GROUP_VERSION_STALE` | WRITER | a newer version replaces an older; a second change of the same version counts as the first (row 6a) |
+| WG:433 | `WORK_GROUP_REVIEW_POLICY_IMMUTABLE` | UNREACHABLE | the group's policy is kept |
+| WG:450 | `REVIEW_SELF_APPROVAL_FORBIDDEN` | NOTHING | row 5 |
+| WG:453, :462, :466 | `LANE_GRANT_NOT_CONSUMED`, `REVIEW_GRANT_BINDING_MISMATCH`, `REVIEW_DECISION_CONFLICT` | UNREACHABLE | one grant has one reviewer, whose log orders its own entries |
+| WG:456 | `REVIEW_GRANT_SUPERSEDED` | WRITER | the verdict is still recorded |
+
+**Snapshots, reviews and integration** (`task/TaskCompletionProjection.java`)
+
+| Site | Code | Class | On arrival |
+| --- | --- | --- | --- |
+| TC:92, :95 | `REVIEW_ACCEPTANCE_REQUIRED`, `REJECTED_SNAPSHOT_CANNOT_INTEGRATE` | WRITER | an integration is a fact: `main` only moves forward |
+| TC:553 | `COMPLETION_PREPARATION_MISMATCH` | PARK | |
+| TC:556 | `PUBLISHED_COMPLETION_CANNOT_UNWIND` | WRITER | |
+| TC:574, :582 | `SNAPSHOT_ID_EXISTS`, `SNAPSHOT_REVISION_EXISTS` | UNREACHABLE | only the publishing participant writes them |
+| TC:614 (a `return`), the snapshot lookups of the integration entries | snapshot not found | PARK | today the verdict or the integration is silently dropped |
+| TC:625, :716 | `REVIEW_SNAPSHOT_BINDING_MISMATCH`, `VALIDATION_REFUSAL_SNAPSHOT_BINDING_MISMATCH` | UNREACHABLE | immutable snapshot fields |
+| TC:628-630 | `REVIEW_DECISION_ALREADY_RECORDED` | BOTH | row 4: each reviewer's verdict is kept; two different verdicts are `REVIEW_DISPUTED` in either order, counted as rejected |
+| TC:711 | `VALIDATION_REFUSAL_SNAPSHOT_UNKNOWN` | PARK | |
+| TC:719 | `VALIDATION_REFUSAL_SNAPSHOT_NOT_ELIGIBLE` | WRITER | |
+
+**Operator requests** (`operator/OperatorRequestProjection.java`)
+
+| Site | Code | Class | On arrival |
+| --- | --- | --- | --- |
+| OR:92 | `OPERATOR_REQUEST_EXISTS` | UNREACHABLE | random id |
+| OR:95 | `OPERATOR_REQUEST_ALREADY_OPEN` | BOTH | row 6: two raises for one condition are one request |
+| OR:103 | `OPERATOR_REQUEST_NOT_OPEN` | PARK when unknown, BOTH when answered | row 6: two different answers keep it open; a new answer replaces its answerer's own |
+
+**Capabilities, contracts, tasks, predictions, conversations**
+
+| Site | Code | Class | On arrival |
+| --- | --- | --- | --- |
+| capability/CapabilityRequestProjection:359, :394, :457 | `DUPLICATE_CAPABILITY_REQUEST_HANDLE`, `INVALID_CAPABILITY_CONTRACT_REVISION_STATE`, `CAPABILITY_LINEAGE_MISMATCH` | UNREACHABLE | |
+| :466, :575, :598, :615 | `CAPABILITY_REQUEST_NOT_ACCEPTED`, `CAPABILITY_REQUEST_NOT_FOUND`, `CAPABILITY_CONTRACT_REVISION_STALE`, `CAPABILITY_VALIDATION_STALE` when what they name has not arrived | PARK | |
+| :472, the same four when what they name is older | `CAPABILITY_IMPLEMENTATION_REVISION_STALE` and the above | WRITER | |
+| :417, :489, :590 | `CAPABILITY_CONTRACT_REVISION_MISMATCH`, `CAPABILITY_PUBLISHER_STALE`, the state codes of `requireRequest` | BOTH | row 10: a superseded request stays superseded |
+| :643, :649 | `CAPABILITY_CONTINUATION_SELF_OWNERSHIP_FORBIDDEN` | NOTHING | |
+| contract/ContractProjection:186, :205, :220, :228 when what they name has not arrived | `CONTRACT_REVISION_STALE`, `CONTRACT_CHANGE_REQUEST_NOT_OPEN` | PARK | |
+| :186, :192, :197, :220 otherwise | `CONTRACT_REVISION_STALE`, `CONTRACT_FROZEN`, `CONTRACT_PATH_ALREADY_COVERED`, `CONTRACT_CHANGE_REQUEST_NOT_OPEN` | BOTH | row 10 |
+| :205 otherwise | `CONTRACT_REVISION_STALE` (binding) | WRITER | |
+| :189 | `CONTRACT_OWNED_BY_ANOTHER_LANE` | NOTHING | |
+| :212, :233, :236 | `CONTRACT_CHANGE_REQUEST_EXISTS`, `CONTRACT_CHANGE_DECLINED_WITHOUT_REASON`, `CONTRACT_CHANGE_ANSWER_INVALID` | UNREACHABLE | |
+| task/CoordinationProjection:171, :187, :199 | `TASK_NOT_FOUND` | PARK | |
+| :174, :208 | `TASK_ALREADY_CLAIMED`, `OWNERSHIP_CONFLICT` | BOTH | row 9 |
+| :158, :203, :224 | `INVALID_TASK_STATE`, `OWNERSHIP_REQUIRES_TASK_CLAIM`, `OWNERSHIP_NOT_FOUND` | UNREACHABLE | |
+| prediction/PredictionProjection:40, :81 (earlier step missing) | not created, invalid transition | PARK | |
+| :81 (after a terminal), :92 | invalid transition, terminal cannot transition | BOTH | a terminal state absorbs later steps |
+| :103 | duplicate creation | UNREACHABLE | |
+| conversation/ConversationProjection:116 | `CONVERSATION_MESSAGE_EXISTS` | UNREACHABLE | |
+| :124 | `CONVERSATION_DELIVERY_AHEAD_OF_LOG` | WRITER | a mark of delivery counts in its writer's local numbering; a mark from another computer's log has no effect here (ADR-0098, step 4 designer items) |
+
+**Admission** (`collaboration/AppendAdmission.java`, `ReviewAdmissionRules.java`, `LaneCompletionRules.java`,
+`ParticipantAttribution.java`): checked only on this computer's own appends (WRITER), except:
+
+| Site | Code | Class | On arrival |
+| --- | --- | --- | --- |
+| ParticipantAttribution:66 | `PARTICIPANT_NOT_OWNED_BY_SIGNER` | NOTHING | row 3, with the owner computer's exemption until ADR-0098 step 5; an entry of the owner's computer for a participant not seen yet is parked |
+| the leader-only types (`prediction/PredictionEventType.java:396-403`) from another computer | `EVENT_TYPE_LEADER_ONLY` | NOTHING | until step 5 |
+| AppendAdmission:278, :281, :102 | `REVIEW_SELF_APPROVAL_FORBIDDEN`, `REVIEW_SNAPSHOT_MISMATCH` (reviewer is the producer) | NOTHING | row 5; parked until the snapshot arrives |
+| AppendAdmission:168, :351, ReviewAdmissionRules:103, WorkIntent:384 | `REVIEW_SELF_NOT_ALLOWED`, `INTENT_OWNER_MISMATCH` | NOTHING | row 5 |
+| ReviewAdmissionRules:305 | `REVIEW_CANDIDATE_ALREADY_ASSIGNED` | BOTH | two reviewers' grants stand; their verdicts follow row 4 |
+
 ### The combine lane
 
 It is today's repair lane, opened by today's conflict path when an integration does not merge onto the other copy of
