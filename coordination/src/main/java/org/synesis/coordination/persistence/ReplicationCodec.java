@@ -26,6 +26,7 @@ public final class ReplicationCodec {
     private static final int NOTICE = 3;
     private static final int HEADS = 4;
     private static final int CLAIM_SEEN = 5;
+    private static final int CLAIM_INTENT = 6;
     private static final int ACCEPTED = 16;
     private static final int HEAD_MOVED = 17;
     private static final int REFUSED = 18;
@@ -98,6 +99,11 @@ public final class ReplicationCodec {
                     WireFormat.writeUuid(out, seen.project());
                     writeEntry(out, seen.entry());
                 }
+                case ReplicationMessage.ClaimIntent intent -> {
+                    out.writeByte(CLAIM_INTENT);
+                    WireFormat.writeUuid(out, intent.project());
+                    writeEntry(out, intent.intent());
+                }
                 case ReplicationMessage.ClaimAnswer answer -> {
                     byte[] code = answer.code().getBytes(StandardCharsets.UTF_8);
                     if (code.length > ReplicationMessage.MAX_CODE_BYTES) {
@@ -157,6 +163,7 @@ public final class ReplicationCodec {
                 case NOTICED -> new ReplicationMessage.Noticed();
                 case HEADS -> new ReplicationMessage.Heads(WireFormat.readUuid(in));
                 case CLAIM_SEEN -> new ReplicationMessage.ClaimSeen(WireFormat.readUuid(in), readEntry(in));
+                case CLAIM_INTENT -> new ReplicationMessage.ClaimIntent(WireFormat.readUuid(in), readEntry(in));
                 case CLAIM_ANSWER -> readClaimAnswer(in);
                 case HEAD_LIST -> readHeads(in);
                 default -> throw invalid(null);

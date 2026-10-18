@@ -68,6 +68,8 @@ final class LaneClaimService {
             throw new CoordinationArgumentException("intent project mismatch");
         }
         AtomicReference<PredictionEvent> announced = new AtomicReference<>();
+        // Before the append, so that no question of a connected computer finds the claim written and not checked.
+        ClaimLock.announce(store.rootDirectory(), store.projectId(), CollaborationCodec.encodeIntent(intent));
         ClaimResult result = appends.call(current -> {
             List<ClaimConflict> conflicts = current.collaborationProjection().conflicts(intent.selectors());
             if (!conflicts.isEmpty()) {

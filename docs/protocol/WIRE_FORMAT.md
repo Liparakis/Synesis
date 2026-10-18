@@ -217,6 +217,8 @@ A *node* is a length u8 `1..128` and that many UTF-8 bytes of a node ID.
 |  `2` | PULL | either way | project UUID (16), log node, after u64 (the requester's head of that log), max entries u32 `1..1024`, max bytes u32 `1..524288` (soft) |
 |  `3` | NOTICE | either way | project UUID (16), head u64: how many entries the sender holds in all; advisory |
 |  `4` | HEADS | either way | project UUID (16) |
+|  `5` | CLAIM_SEEN | either way, and process to its own server on loopback | project UUID (16), entry length u32 `1..81920`, the signed `WORK_INTENT_ANNOUNCED` entry of a claim just appended |
+|  `6` | CLAIM_INTENT | process to its own server, loopback only | project UUID (16), length u32 `1..81920`, the lane about to be claimed as `WORK_INTENT_ANNOUNCED` encodes it |
 | `16` | ACCEPTED | (step 2 only) | sequence u64 |
 | `17` | HEAD_MOVED | (step 2 only) | head u64 |
 | `18` | REFUSED | answer to any request | code length u8 `1..64`, code (UTF-8) |
@@ -225,6 +227,7 @@ A *node* is a length u8 `1..128` and that many UTF-8 bytes of a node ID.
 | `21` | ENTRIES | answer to PULL | count u16 `0..1024`, then per entry length u32 `1..81920` and bytes, in sequence order |
 | `22` | NOTICED | answer to NOTICE | none |
 | `23` | HEAD_LIST | answer to HEADS | count u16 `0..256`, then per log: node, head u64; nodes sorted, none twice |
+| `24` | CLAIM_ANSWER | answer to CLAIM_SEEN, CLAIM_INTENT | code length u8 `0..64`, code (UTF-8): empty, or `OVERLAPPING_CLAIM` |
 
 - **Every computer writes only its own log** and holds byte-identical copies of
   the others' (ADR-0098 step 4). A computer answers HEADS with every log it
@@ -238,6 +241,14 @@ A *node* is a length u8 `1..128` and that many UTF-8 bytes of a node ID.
   the authenticated Link session (`PeerSession.remoteNodeId`) and serves only a
   node it admits: the owner's computer its members, a member the owner's
   computer. Anyone else is `REFUSED PROPOSER_NOT_A_MEMBER`.
+- **The claim lock** (ADR-0098 step 4, designer items 4 and 19): a process
+  sends CLAIM_INTENT to its own server before it appends a claim, then
+  CLAIM_SEEN with the appended entry; the server sends CLAIM_SEEN to every
+  connected computer and waits up to 5 seconds. A computer answers
+  `OVERLAPPING_CLAIM` when it holds an overlapping active lane not of the
+  claimant's computer, or checks an overlapping claim of its own and has the
+  lower node ID; asked by a lower node while it checks, its own claim gives
+  way. A registration whose check never starts is dropped after 15 seconds.
 - **A pull page** holds at most the requested entries and about 256 KiB, plus
   at least one entry when one exists.
 - **Notices are advisory.** A computer also pulls every 15 seconds, which keeps

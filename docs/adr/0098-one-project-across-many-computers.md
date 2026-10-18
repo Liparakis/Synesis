@@ -746,8 +746,10 @@ Decided while building step 4 (designer, 2026-10-18; each open to the owner):
     So a computer that is asked about an overlapping claim while its own is being checked, by a computer with a lower
     node ID, gives its own claim way when its check ends. The question is `CLAIM_SEEN` (the signed claim entry) and
     the answer `CLAIM_ANSWER` (empty, or `OVERLAPPING_CLAIM`), on Link between computers and on the loopback route
-    from an agent's process to its computer's server. The check runs after the append lock is released, since it
-    waits on other computers, and a claim that gives way is released by its own computer's entry before the agent
+    from an agent's process to its computer's server. Before it appends a claim, the process registers it with its
+    own server (`CLAIM_INTENT`, loopback only), so a question that arrives between the append and the check finds
+    the claim being checked; a registration whose check never starts is dropped after 15 seconds. The check runs
+    after the append lock is released, since it waits on other computers, and a claim that gives way is released by its own computer's entry before the agent
     is answered. A computer with no connected computer, or whose server is not running, asks nobody: the claim
     stands. An overlap with a lane of the claimant's own computer is not counted again, since its own append checked
     it; an overlap with a third computer's lane that the asked computer holds is.

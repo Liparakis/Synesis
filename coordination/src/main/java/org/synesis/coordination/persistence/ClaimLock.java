@@ -22,6 +22,27 @@ public final class ClaimLock {
     }
 
     /**
+     * Tells this computer's server that a claim is about to be appended, so that a connected computer asking about
+     * an overlapping claim meanwhile finds it being checked. Nothing is asked of anyone; a server that cannot be
+     * reached is not told, and the claim is then an ordinary lane there.
+     *
+     * @param root      the coordination folder
+     * @param projectId the project
+     * @param intent    the lane about to be claimed, as {@code WORK_INTENT_ANNOUNCED} encodes it
+     */
+    public static void announce(Path root, UUID projectId, byte[] intent) {
+        try {
+            if (ReplicationSettings.read(CoordinationNullException.requireNonNull(root, "root")).isEmpty()) {
+                return;
+            }
+            new LoopbackExchange(root).exchange(ReplicationCodec.encode(new ReplicationMessage.ClaimIntent(
+                    CoordinationNullException.requireNonNull(projectId, "project"), intent)));
+        } catch (IOException notTold) {
+            // No server, or no answer: nothing is registered, and the check after the append asks again.
+        }
+    }
+
+    /**
      * Asks the connected computers whether a claim this computer just appended may stand.
      *
      * @param root      the coordination folder

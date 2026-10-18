@@ -194,7 +194,11 @@ public final class MemberReplication implements AutoCloseable {
      */
     public byte[] relay(byte[] request) {
         try {
-            if (ReplicationCodec.decode(request) instanceof ReplicationMessage.ClaimSeen seen) {
+            ReplicationMessage message = ReplicationCodec.decode(request);
+            if (message instanceof ReplicationMessage.ClaimIntent intent) {
+                return exchange.registerClaim(intent);
+            }
+            if (message instanceof ReplicationMessage.ClaimSeen seen) {
                 return exchange.checkClaim(seen);
             }
         } catch (CoordinationException malformed) {

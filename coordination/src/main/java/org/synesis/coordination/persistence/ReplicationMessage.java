@@ -99,6 +99,18 @@ public sealed interface ReplicationMessage {
     }
 
     /**
+     * An agent's process tells its own computer's server, over loopback only, that it is about to append a claim,
+     * before it does: from then until the claim's check ends, a connected computer that asks about an overlapping
+     * claim of its own finds this one being checked, with no gap between the append and the check.
+     *
+     * @param project the project
+     * @param intent  the lane about to be claimed, as {@code WORK_INTENT_ANNOUNCED} encodes it
+     */
+    record ClaimIntent(UUID project, byte[] intent) implements ReplicationMessage {
+
+    }
+
+    /**
      * The answer to {@link ClaimSeen}.
      *
      * @param code empty when nothing objects; {@code OVERLAPPING_CLAIM} when the claim must give way
