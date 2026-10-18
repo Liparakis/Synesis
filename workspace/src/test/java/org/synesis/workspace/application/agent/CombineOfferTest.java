@@ -16,7 +16,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
+import org.synesis.coordination.persistence.ProjectIntegrationLock;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
@@ -79,6 +82,42 @@ final class CombineOfferTest {
         assertEquals(fixture.authorSnapshot.snapshotId(), task.get("repairSnapshotId"));
         String instruction = String.valueOf(result.get("instruction"));
         assertTrue(instruction.contains("combine lane") && instruction.contains("combineCandidates[0].ensureSession"), instruction);
+    }
+
+    private void assertOfferedTheCombine(AgentResponse response) {
+        List<?> candidates = (List<?>) map(response.result()).get("combineCandidates");
+        assertNotNull(candidates, response.toJson());
+        assertEquals(fixture.combine.combineId(), map(candidates.getFirst()).get("combineId"), response.toJson());
+    }
+
+    /** s5-run6: the second fresh agent was told to wait while another call's pass held the integration lock. */
+    @Test
+    void aLanelessSessionIsOfferedTheCombineWhileAnotherPassHoldsTheIntegrationLock() throws Exception {
+        try (ProjectIntegrationLock held = ProjectIntegrationLock.tryAcquire(fixture.store().rootDirectory())) {
+            assertNotNull(held);
+            assertOfferedTheCombine(new AgentNextActionService().getNextAction(new NextActionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER)));
+        }
+    }
+
+    /** s5-run6: resumed for the combine, it was told to wait for the review of another lane's snapshot instead. */
+    @Test
+    void aLanelessSessionIsOfferedTheCombineWhileAnotherLanesSnapshotAwaitsReview() throws Exception {
+        fixture.awaitingReview("combine-other", "src/g.txt", "combine-reviewer");
+
+        assertOfferedTheCombine(new AgentNextActionService().getNextAction(new NextActionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER)));
+    }
+
+    /** A combine's group never had a lane, so with every other group closed the project looked finished. */
+    @Test
+    void aLanelessSessionIsOfferedTheCombineWhenEveryOtherGroupIsClosed() throws Exception {
+        PredictionEventStore store = fixture.store();
+        WorkGroup group = store.workGroupProjection().group(fixture.authorLane.workGroupId()).orElseThrow();
+        WorkGroup completed = new WorkGroup(group.workGroupId(), group.projectId(), group.goal(), group.acceptance(), group.version() + 1,
+                WorkGroup.Status.COMPLETED, group.reviewPolicy());
+        store.append(group.workGroupId(), PredictionEventType.WORK_GROUP_STATUS_CHANGED, fixture.identity.nodeId(), CollaborationCodec.encodeWorkGroup(completed),
+                fixture.identity);
+
+        assertOfferedTheCombine(new AgentNextActionService().getNextAction(new NextActionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER)));
     }
 
     @Test

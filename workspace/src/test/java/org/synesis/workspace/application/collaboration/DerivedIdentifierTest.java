@@ -1,6 +1,7 @@
 package org.synesis.workspace.application.collaboration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -35,11 +36,25 @@ class DerivedIdentifierTest {
   }
 
   @Test
-  void defaultWorkGroupIdIsNameUuidOfTheProject() {
+  void defaultWorkGroupIdIsNameUuidOfTheProjectAndTheComputer() {
     assertEquals(
-        UUID.fromString("1316e0a6-cf93-322a-bd78-21eb018b0ef4"),
+        UUID.nameUUIDFromBytes(
+            "default-work-group:00000000-0000-4000-8000-00000000000a:sl1-a"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8)),
         WorkIntentAnnouncement.defaultWorkGroupId(
-            UUID.fromString("00000000-0000-4000-8000-00000000000a")));
+            UUID.fromString("00000000-0000-4000-8000-00000000000a"), "sl1-a"));
+  }
+
+  /**
+   * s5-run6: the PC and the VM, apart, each opened "the" default group of the project; the PC
+   * completed it, and the VM's held lane in it could never be continued.
+   */
+  @Test
+  void twoComputersApartNeverOpenTheSameDefaultWorkGroup() {
+    UUID project = UUID.fromString("00000000-0000-4000-8000-00000000000a");
+    assertNotEquals(
+        WorkIntentAnnouncement.defaultWorkGroupId(project, "sl1-80ed"),
+        WorkIntentAnnouncement.defaultWorkGroupId(project, "sl1-5479"));
   }
 
   @Test

@@ -136,7 +136,7 @@ final class WorkIntentAnnouncement {
         if (expectedIntentId != null || expectedClaimEpoch != null) {
             throw new IOException("SCOPE_EXTENSION_INTENT_NOT_FOUND");
         }
-        UUID defaultGroup = defaultWorkGroupId(location.projectId());
+        UUID defaultGroup = defaultWorkGroupId(location.projectId(), identity.nodeId());
         UUID group = workGroupId == null ? store.workGroupProjection().groups().stream().filter(candidate -> candidate.projectId().equals(location.projectId()))
                                            .filter(candidate -> candidate.status() == WorkGroup.Status.ACTIVE).map(WorkGroup::workGroupId).findFirst()
                                            .orElseGet(() -> store.workGroupProjection().group(defaultGroup).isEmpty() ? defaultGroup : UUID.randomUUID()) : workGroupId;
@@ -159,8 +159,12 @@ final class WorkIntentAnnouncement {
         return service.announce(intent, location.review());
     }
 
-    static UUID defaultWorkGroupId(UUID projectId) {
-        return UUID.nameUUIDFromBytes(("default-work-group:" + projectId).getBytes(StandardCharsets.UTF_8));
+    /**
+     * The work group a computer's first lane opens when no group is active. It is this computer's: two computers
+     * apart each open one, and one closing its group never closes the other's lanes (s5-run6, ADR-0098 step 5).
+     */
+    static UUID defaultWorkGroupId(UUID projectId, String nodeId) {
+        return UUID.nameUUIDFromBytes(("default-work-group:" + projectId + ":" + nodeId).getBytes(StandardCharsets.UTF_8));
     }
 
     static UUID repairJoinIntentId(UUID repairIntentId, String sessionId) {

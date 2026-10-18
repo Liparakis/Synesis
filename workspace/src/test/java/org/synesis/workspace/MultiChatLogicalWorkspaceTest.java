@@ -110,9 +110,10 @@ final class MultiChatLogicalWorkspaceTest {
         Path laneBWorktree = Path.of(laneB.worktreePath());
         assertNotEquals(laneA.worktreePath(), laneB.worktreePath());
 
-        UUID group = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
         WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
-        assertTrue(collaboration.announce(root, "codex", "chat-a", "group", "tests", List.of(ResourceSelector.pathExact("src/a.py"))).acquired());
+        var chatAClaim = collaboration.announce(root, "codex", "chat-a", "group", "tests", List.of(ResourceSelector.pathExact("src/a.py")));
+        assertTrue(chatAClaim.acquired());
+        UUID group = chatAClaim.intent().workGroupId();
         var chatBClaim = collaboration.announce(root, "codex", "chat-b", "group", "tests", List.of(ResourceSelector.pathExact("src/b.py")));
         assertTrue(chatBClaim.acquired());
         var overlap = collaboration.announce(root,
@@ -189,7 +190,7 @@ final class MultiChatLogicalWorkspaceTest {
         var sourceClaim = collaboration.announce(root, "codex", "repair-source", "source", "repair", selectors);
         assertTrue(sourceClaim.acquired());
         UUID sourceIntentId = UUID.nameUUIDFromBytes(("codex:" + sourceBinding.sessionId()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        UUID group = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        UUID group = sourceClaim.intent().workGroupId();
         Files.createDirectories(sourceWorktree.resolve("src"));
         Files.writeString(sourceWorktree.resolve("src/conflict.py"), "original\n");
         TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(new SnapshotRequest(sourceClaim.intent().taskId(), "node", "sup", "worker", sourceBinding.sessionId(), sourceWorktree, root, "conflict", java.util.Optional.empty(), List.of(),

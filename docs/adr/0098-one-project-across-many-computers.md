@@ -967,6 +967,34 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     - **Not done:** an older build that meets an entry type it does not know still reports `durable_state_ambiguous`
       and asks for a person; naming it "this Synesis is older than the project's log" would have shown the cause at
       once. `agents run` does not check that its agents' MCP server is its own build.
+24. **A combine nobody was shown** (s5-run6, 2026-10-18: PC and VM partitioned for 20 minutes right after the join,
+    agents started only once apart). Apart, the PC merged primes, fib and digits onto its `main` and the VM merged its
+    own primes. After the heal the PC, the higher node ID, re-merged onto the VM's copy; its oldest advance (primes,
+    `snap_19da…`) met the VM's primes, so it wrote `COMBINE_REQUIRED` and the combine's work group, and stopped, as
+    item 22 says. Of the four fresh agents, one PC agent continued the held gcd lane (offered and taken, lawfully). The
+    other PC agent held no lane and wrote none of the combined work, so the run controller resumed it for the combine,
+    but its next action said to wait: first because another call's pass held the integration lock, then because gcd's
+    snapshot waited for its review. The combine is offered only by the claim gate (`claimRequiredResponse`), which a
+    lane-less caller reached only when the merge pass had nothing to say; and a combine's group never had a lane, so
+    with every other group closed the project would have read as finished. **Rule:** a caller that holds no lane is
+    offered a combine it may take before the merge pass's wait and before "no open work", right after a continuation
+    (`AgentNextActionService.stagedAction`), so the next action shows what the run controller woke the agent for.
+    The VM's agents are rightly not offered it (a combine lane on another computer, NOT BUILT).
+    - **The held fib lane on the VM was never offered** to the VM's fresh agents. Both computers, apart, opened their
+      first lane in "the" default work group, whose ID was derived from the project alone; the step 4 table merged the
+      two creations into one group, the PC completed it after its own two lanes, and a held lane in a completed group
+      is offered to nobody (`RecoveryContinuationProjection`). **Rule:** the default group is the computer's own,
+      derived from the project and the node ID; a group open when a computer starts a lane is still joined as before.
+      Not covered: a group opened while connected that one computer completes while apart and the other still works
+      in (the same symptom, rarer; a group should not count as complete while a lane in it is open). NOT BUILT.
+    - **Why both computers stalled before the heal** (not fixed here). On each computer a reviewer consumed its grant
+      (gcd on the PC, fib on the VM), then the merge pass integrated the reviewer's own lane, and from then on every
+      `read_file` and `run_command` of its review answered `SESSION_RECOVERY_STATE_UNAVAILABLE`
+      (`McpProtocolHandler.refuseFencedRecovery`: a completed binding may still record a verdict, but not read what it
+      reviews). The reviewers stopped without a verdict, the grants stay consumed by participants that are gone, and
+      no other agent is offered those reviews. The re-merge's own reviews will meet the same wall: the original
+      reviewers of primes and fib are sessions that ended, and another reviewer when the original cannot be reached
+      (designer item 2) is NOT BUILT, so the combined re-merge cannot land yet.
 
 ### Step 6: Membership in the owner's log
 

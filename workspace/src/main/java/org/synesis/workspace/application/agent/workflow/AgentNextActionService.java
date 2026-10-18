@@ -571,6 +571,7 @@ public final class AgentNextActionService {
      *   <li>integration pump (terminal short-circuit when it completes the lane),</li>
      *   <li>review lane: review requests, reviewer wait, revision, review and grant waits,</li>
      *   <li>explicit completion, when the caller requested it,</li>
+     *   <li>for a caller that holds no lane, a recovery continuation, then a combine lane offered to it,</li>
      *   <li>integration visibility versus recovery continuation,</li>
      *   <li>claim gate for sessions without an own active intent,</li>
      *   <li>integration conflict / dependency wait,</li>
@@ -741,6 +742,12 @@ public final class AgentNextActionService {
             // snapshot awaited review was shown that wait instead, never took its lane back, and
             // so never admitted the reviewer the wait was for.
             return continuation;
+        }
+        if (coordinationActivated && callerIntent.isEmpty() && !combineCandidates(store, lane.participantId(), location).isEmpty()) {
+            // So is a combine lane, and the run controller resumes a stopped agent for it (designer item 22). The pump's
+            // wait is for other lanes, and a combine's group never had a lane, so the project can look finished while
+            // it waits. In s5-run6 the agent resumed for a combine was told to wait for another lane's review, and stopped.
+            return claimRequiredResponse(store, lane.participantId(), collaboration, location);
         }
         AgentResponse integrationOrContinuation = integrationOrContinuationAction(store, collaboration, integrationPump, continuation);
         if (integrationOrContinuation != null) {
