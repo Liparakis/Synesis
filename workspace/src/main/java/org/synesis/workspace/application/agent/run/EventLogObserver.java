@@ -225,8 +225,10 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             public List<String> reviewsOffered(String provider, List<String> connectionInstanceIds) {
                 List<String> sessions = connectionInstanceIds.stream().map(connection -> participantOf(provider, connection)).filter(Objects::nonNull).distinct().toList();
                 // A re-merge to review again is offered to its original reviewer alone, whatever it holds (ADR-0098 step 5).
-                return java.util.stream.Stream.concat(CollaborationResponseMapper.openReviewSnapshots(store, sessions).stream(),
-                        CollaborationResponseMapper.remergeReviewsGranted(store, sessions).stream()).distinct().toList();
+                // So is a combine lane, to the agents of this computer that wrote none of what it combines (designer item 22).
+                return java.util.stream.Stream.of(CollaborationResponseMapper.openReviewSnapshots(store, sessions).stream(),
+                        CollaborationResponseMapper.remergeReviewsGranted(store, sessions).stream(), combinesOffered(store, location, sessions).stream())
+                        .flatMap(java.util.function.Function.identity()).distinct().toList();
             }
 
             @Override
@@ -350,6 +352,16 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             return java.util.Optional.of(org.synesis.coordination.domain.operator.OperatorRequest.closedRequestId(event.payload()));
         } catch (IOException malformed) {
             return java.util.Optional.empty();
+        }
+    }
+
+    /** The combine lanes these sessions' agent may take, by combine ID; none when this computer is unknown. */
+    private static List<String> combinesOffered(PredictionEventStore store, ProjectLocation location, List<String> sessions) {
+        try {
+            return org.synesis.workspace.application.collaboration.CombineLaneJoin.offeredTo(store, sessions, location.loadOrCreateIdentity().nodeId())
+                    .stream().map(org.synesis.coordination.domain.task.CombinePayload::combineId).toList();
+        } catch (Exception unreadable) {
+            return List.of();
         }
     }
 

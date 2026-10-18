@@ -189,6 +189,13 @@ final class WorkIntentAnnouncement {
         }
         NodeIdentity identity = location.loadOrCreateIdentity();
         PredictionEventStore store = location.openCoordinationStore();
+        // A snapshot whose re-merge Git could not make is combined in a combine lane, taken with this same call
+        // (ADR-0098 step 5, designer item 22).
+        java.util.Optional<org.synesis.coordination.domain.task.CombinePayload> combine = CombineLaneJoin.openFor(store, snapshotId, binding.sessionId());
+        if (combine.isPresent()) {
+            return CombineLaneJoin.join(store, identity, location.projectId(), location.root(), Path.of(binding.worktreePath()),
+                    participantHandle(binding.sessionId()), binding.sessionId(), provider, combine.get());
+        }
         TaskSnapshotRecord snapshot = store.taskCompletionProjection().findSnapshotById(snapshotId).orElseThrow(() -> new IOException("REPAIR_SNAPSHOT_NOT_FOUND"));
         if (!snapshot.provenance().snapshotRef().equals(SnapshotRefs.snapshotRef(snapshot.snapshotId()))) {
             throw new IOException("REPAIR_SNAPSHOT_REF_MISMATCH");
