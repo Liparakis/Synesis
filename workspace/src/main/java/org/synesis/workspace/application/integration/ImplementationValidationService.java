@@ -25,7 +25,7 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentFailures;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
-import org.synesis.workspace.application.control.CodeRemote;
+import org.synesis.workspace.application.control.CodeExchange;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderManualService;
@@ -185,7 +185,7 @@ public final class ImplementationValidationService {
                 || store.capabilityRequestProjection().findValidationContext(request.requestHandle()).isPresent()) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.STALE_REQUEST, AgentNextAction.RETRY, null);
         }
-        CodeRemote.ensureCommit(location.coordinationDirectory(), location.root(), implementation.commitSha());
+        CodeExchange.ensureCommit(location.coordinationDirectory(), location.projectId(), location.root(), implementation.commitSha());
         Path validationWorktree = validationWorkspaceService.createValidationWorktree(location.root(), record.handle(), implementation.revisionNumber(), implementation);
         try {
             ImplementationEventPayload started = event(record, implementation, "", "", List.of(), validationWorktree.toString(), binding.sessionId());

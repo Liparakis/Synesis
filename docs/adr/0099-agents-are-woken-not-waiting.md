@@ -67,6 +67,47 @@ Codex CLI 0.162.0:
   the bypass flag, which would also run any other hook the checkout holds.
 - So a headless Codex agent has no Stop hook. It is woken by the run controller after it stops (below).
 
+### Codex CLI 0.163.0, re-tested on 2026-10-18
+
+Throwaway repositories only, 14 model runs, on this PC and on the Linux VM; codex-rs read at tag `rust-v0.163.0`.
+Full notes outside the repository (session notes, `codex-0.163-hooks.md`). Each claim says where it comes from.
+
+- **Hooks run headless** in `codex exec`, `codex exec resume` and `codex app-server` (VERIFIED, Windows and Linux).
+  The 0.162 tests saw none for three reasons, each VERIFIED: an untrusted project's `.codex/hooks.json` is never
+  loaded, even with `--dangerously-bypass-hook-trust`, which only skips per-hook review; `node` is not on this PC's
+  `PATH`, so `node -e` hooks failed at once; and on Windows a hook runs as `pwsh -NoProfile -Command "<command>"`,
+  which breaks inner double quotes. `exec --json` prints no hook events and skips an untrusted hook without a word.
+- **Where hooks come from** (DOCS, SOURCE): every active config layer, all of them run. User (`~/.codex/hooks.json`,
+  `[hooks]` in `~/.codex/config.toml`), project (`.codex/`, loaded only when the project is trusted), the command
+  line (`-c hooks.<Event>=...`, the "session flags" layer, loaded even in an untrusted project), plugins, managed
+  policy. The schema is Claude Code's: event, matcher groups, `hooks` handlers with `type`, `command`, `timeout`
+  (seconds, default 600).
+- **Two gates** (SOURCE, VERIFIED with app-server `hooks/list`): project trust decides whether project hooks load;
+  per-hook trust decides whether a loaded non-managed hook runs. A hook is trusted when
+  `hooks.state."<key>".trusted_hash` equals its hash. The key is `<source path>:<event>:<group>:<handler>`; for the
+  command-line layer it is `C:\<session-flags>\config.toml:stop:0:0` on Windows (a fixed `C:\`, whatever the
+  project's drive) and `/<session-flags>/config.toml:stop:0:0` elsewhere. The hash is `sha256:` and the hex SHA-256
+  of the handler's normalized identity as compact JSON with sorted keys, for example
+  `{"event_name":"stop","hooks":[{"async":false,"command":"...","timeout":660,"type":"command"}]}`. Trust state is
+  read only from the user layer and the command line; a project cannot trust its own hooks. The TUI `/hooks` review
+  writes the user-layer entry. There is no `codex hooks trust` command.
+- **So Synesis can trust its own hook, and only it, for one run** (VERIFIED): `-c hooks.Stop=[...]` defines the hook
+  and `-c hooks.state={'<key>'={trusted_hash='<hash>'}}` trusts exactly that event, command and timeout. Nothing is
+  written to `~/.codex` or the project, no project trust is needed, user and project hooks keep their own review
+  state, and the bypass flag is not used. The key and hash recipe are internal to Codex, not in its docs; a Codex
+  that computes them differently shows the hook `untrusted` and skips it. A managed `allow_managed_hooks_only` policy
+  drops command-line hooks.
+- **Stop semantics** (VERIFIED): `{"decision":"block","reason":"..."}` on stdout continues the same turn and the
+  model acts on the reason; `stop_hook_active` is `true` on every later Stop of that turn; hooks get the codex
+  process's environment; they run unsandboxed in the user's shell. Differences from Claude Code: **no cap** on
+  continuations (six in a row were honoured); on Windows a hook that times out is **not killed**, and `codex exec`
+  waits for it; exit code 2 with a reason on stderr does not work on Windows (pwsh turns it into 1), only the JSON
+  form works on both.
+
+Verdict: a headless Codex agent can have a Stop hook with the same wake semantics as Claude Code's, provided
+Synesis bounds the wakes itself (it does: three without a WAIT) and ends its own hold before the hook's timeout (it
+does: a ten-minute hold in a 660 s timeout). Built for agents the run controller starts (amendment, 2026-10-18 fix 7).
+
 ## Decision
 
 ### In one example
@@ -129,6 +170,7 @@ is a small map, one entry per thing that can be waiting for that lane:
 | `contracts` | contract change requests against its files or filed by it, with state | a change request, an answer |
 | `capabilities` | capability requests its lineage owns, or that this caller asked for, with state and revision | an implementation published for it to validate, a validation of its own |
 | `messages` | unread messages for its lane | a message (ADR-0093) |
+| `operator` | requests its lane put to the operator, with state (added 2026-10-18) | the operator closing one |
 | `group` | its WorkGroup's status | WorkGroup complete or cancelled |
 
 Something is addressed to the lane when an entry differs from what it was when the agent was last told WAIT,
@@ -289,7 +331,7 @@ the same lane, and it admits the reviewer.
 - **Bounded.** A kept lane cannot be taken over while the run lives: at most `--timeout-minutes` (30 by default). A
   controller that is killed stops renewing; its agents' lanes become recoverable after the existing five-minute grace,
   as for any lost process. A first process that exits before the controller's next look (2 s) closed its own lease;
-  that agent then falls back to the old behaviour (a new connection on resume).
+  that agent then fell back to the old behaviour (a new connection on resume). Fixed on 2026-10-18 (below, 5).
 - **The controller asks the connection's current session at every look.** A kept connection starts a fresh session
   when its lane has ended (Decision 4), so which participant it stands for changes; the observer had kept the first
   answer per connection, and in the first real run on this amendment it ended two kept sessions that had just taken
@@ -377,26 +419,160 @@ project runtime lives (`MergeDriver.repeatEvery`); a pass with nothing to merge 
   instead of at the fence with `SESSION_RECOVERY_STATE_UNAVAILABLE`.
 - Java API, additive: `SessionLeaseService.keep`, `ProviderSessionTerminalizationService.openAuthority`, and a default
   method `keep` on `AgentRunController.Connections` (an implementation without it keeps the old behaviour).
+- Changed by the fixes of 2026-10-18. Additive unless said otherwise: `Connections.end`, `Observation.sessionFenced` and
+  `Observation.newestOperatorAnswerFor` (default methods), and `Observation.reviewsOffered` (default) with
+  `CollaborationResponseMapper.openReviewSnapshots` (fix 9), and `Observation.newestAnswerFor` and
+  `Observation.holdsRequestOrGrant` (defaults) with `ProviderSessionTerminalizationService.holdsRequestOrGrant`
+  (fix 10); `SessionLeaseService.reserveKeeper` and `releaseKeeper`;
+  `HeadlessOptions.hookLauncher` with `withHookLauncher` (a fourth record component: the two- and three-argument
+  constructors stay, so callers compile unchanged; a record pattern over three components would not);
+  `ProviderIntegration.trustNote` (default); `ProviderApplicationService.launcherPath` made public. Local file
+  `<connection>.keeper` beside the session lease, read only by the MCP server that opens that lease. The wait note
+  gains an `operator` entry; a note from an older build lacks it and is not compared on it. Codex agents the controller
+  starts get two more `--config` arguments and one more environment variable; a `.cmd` provider shim is started
+  through `cmd.exe /d /s /c` with one quoted line. Not additive, a changed meaning of existing output (needs the
+  owner's approval with this ADR): `provider install codex` prints `SUCCESS` where it printed `DEGRADED` for hook
+  review alone, and `provider status codex` prints `HEALTHY` in the same case; the new key `TRUST_NOTE` says why. Not
+  additive, a narrowed ADR-0093 rule: a lane's request to the operator being closed now resumes that lane's agent.
+
+### Fixes of 2026-10-18: the limits this amendment listed
+
+The owner asked on 2026-10-18 to fix every limit below (USER-STATED); each fix has a test that fails on the code
+before it. The ADR stays Proposed. Source-level evidence only: none of these has run in a real two-computer run yet.
+
+1. **A kept session fenced for recovery.** `keep` reads only the lease, so a kept participant that the log had
+   suspended (its keeper stopped renewing past the grace period) was resumed on the same connection, refused
+   `SESSION_EPOCH_FENCED` at every call, and idled until the run ended. The controller now reads the fence itself
+   (`Observation.sessionFenced`: the participant of the connection's binding is `SUSPENDED` or `RECOVERY_HELD`, the
+   rule the MCP server's recovery fence applies). Such a session is not kept: the connection is ended and the agent is
+   resumed once on a new connection, without waiting for progress (suspension and holding are bookkeeping, not
+   progress), where continuing its held lane is offered to it through the ordinary continuation. No fence moves: the
+   old binding stays fenced, and the new session gets the lane only by the continuation every other session would use.
+2. **A lane waiting on the operator.** ADR-0093 made a lane's request to the operator, and the operator closing it,
+   resume nobody, because the closing used to resume every stopped agent. A lane that asked and ended its turn to wait
+   for the answer was therefore never woken and kept its lane until the run ended. The closing is now addressed to the
+   lane that asked, alone: the lane view gains an `operator` entry (that lane's requests and their state), so the Stop
+   hook wakes it, and the controller resumes its stopped agent once for the closing, as for a message
+   (`Observation.newestOperatorAnswerFor`). It is still not progress, so no other agent is resumed. This narrows one
+   sentence of ADR-0093 ("neither does the operator closing it") to "nobody but the lane that asked". A lane whose
+   published work waits for a request Synesis raised (`heldByOperator`) needed no change: that request's closing is
+   progress, and the integration it lets through changes the lane's `task` entry.
+3. **An end the project lock refused.** `ControllerConnections.ended` waited up to 30 s and then gave up, and the
+   kept lease went on naming the controller, so the lane looked held by a live session until the run ended. While the
+   run lives an end is now tried once (`Connections.end`) and, when the project could not record it, offered again at
+   each observation; the run's end still waits a bounded time for any left. The controller's loop no longer blocks on
+   it.
+4. **A stale clean worker with private commits.** `ProviderSessionBindingService.resumeStale` gave such a worker a new
+   binding, stranding the open lane of a session the controller keeps on that connection. A session that holds an open
+   lane now keeps its binding and its worktree, as a managed attachment, a continuation and a no-change lane already
+   did; a session without a lane is still reallocated.
+5. **A first process that closes its lease before the controller looks.** The controller now reserves itself as the
+   keeper of every identity it hands out, before starting the process (`SessionLeaseService.reserveKeeper`, a local
+   note `<connection>.keeper` beside the lease). The MCP server that creates the lease names the reserved keeper
+   when that keeper is alive (pid and start time) and the server descends from it, the fence `keep` already applied,
+   and otherwise names itself as before. Its own close at end of input is then a no-op (pid fence) and the controller
+   keeps the session from the start. A process can still keep only the sessions of processes it started; ending the
+   connection drops the note, and identities are never reused.
+6. (`link join` answering too early belongs to ADR-0098 step 3 and is fixed there.)
+7. **Codex.** After the re-test above, an agent the run controller starts on Codex is given Synesis's own Stop hook on
+   its command line, `hooks.Stop` running `<launcher> hook codex` with a 660 s timeout, and `hooks.state` trusting
+   exactly that hook by its hash (`CodexStopHook`; the hash is pinned in a test to the one Codex 0.163.0 reported).
+   Nothing else is trusted and nothing is written to the user's or the project's Codex files; the bypass flag is never
+   passed. The Codex process now carries the connection identity in its environment, and `synesis hook codex` answers
+   the Stop event as `synesis hook claude` does: the same lane view, the same ten-minute hold, three wakes without a
+   WAIT. When the launcher's path cannot be run unquoted by every shell Codex may use (a space, a quote), no hook is
+   given; when a Codex release hashes differently, it skips the hook. In both cases the agent is woken by the
+   controller after it stops, as before. A `codex.cmd` shim is now started as `cmd.exe /d /s /c "<line>"`, each
+   argument that holds a space or `< > & | ^` quoted inside the line, since the trust key holds `<` and `>`; plain
+   `/c` also stripped the first and last quote of a line, which broke a shim in a folder with a space. `provider install codex` and `provider status`
+   no longer report `DEGRADED` for hook review alone: the review is the person's step in Codex (trust the project,
+   `/hooks`), Synesis must not take it for them, and an agent Synesis starts needs neither (Codex's read-only sandbox
+   for writes, ADR-0091, and its own Stop hook). `TRUST_STATUS=REVIEW_REQUIRED` stays, with a `TRUST_NOTE` saying
+   so; any other fault still degrades the install.
+8. **Windows test.** `LeaseKeeperTest` proved the keeper fence with the test JVM's parent, which a fresh Windows 11
+   install hides from `ProcessHandle.parent()`. It now starts a process through a launcher that exits, so the process
+   descends from nothing in the JVM, and checks that before using it.
+9. **A review only an agent here without a lane could take (the failure VERIFIED in a real PC and VM run, mp17-link, 2026-10-18).**
+   Both Claude agents on the PC stopped with their lanes integrated. Ten minutes later a Codex agent on the VM
+   published work whose review is mandatory, and the other Codex agent there held a lane of its own, so it could not
+   take the review. The controller printed `AGENT_RUN_WAITING=FOREIGN_LANE_OPEN` and resumed nobody: a stopped agent
+   was resumed only for its own open lane, once when that lane ended while it was stopped, or for a message or an
+   answer deadline of its lane. The goal stopped at 6 of 7 modules. Now a stopped agent that holds no lane is also
+   resumed when the log offers it a review it may take, the candidates `get_next_action` offers a session without a
+   lane (`reviewCandidatesFor`: review required and pending, author active as Decision 3 says, no reviewer holding
+   it, not authored in its lineage by the current session behind any connection the agent had), read through
+   `Observation.reviewsOffered`. Each agent is resumed once per snapshot while it stays offered, and one agent here
+   at a time per snapshot: if it stops without taking it, the next stopped agent is tried, once. A snapshot taken and
+   then given up is offered again, and counts as a new offer. Such a resume needs the agent to be under
+   `--max-resumes`, and one that records nothing counts as idle; the publication that offers the review is progress
+   and resets the count, so in practice only a budget of 0 stops it. It gets the same neutral prompt, and a new
+   connection when its connection ended, as after a lane ends. This is a rule change agents can see: more resumes,
+   at most one per agent per offer. A Claude agent's Stop hook has no
+   matching gap to close: it holds only an agent that was told WAIT with a lane, and one without a lane stops and is
+   resumed by the controller. Source-level evidence only. No real run has shown it yet.
+10. **An answer to a request of an agent here without a lane (the failure VERIFIED in a real PC and VM run, mp18-link, 2026-10-18).**
+    A Claude agent on the PC whose lane for `case.py` had been integrated asked to review `count.py`, which a producer
+    lane of the same group that has published may do (ADR-0089, amendment). It was told to wait for the author's
+    answer and stopped (08:04). The author, a Codex agent on the VM, accepted at about 08:14. Nothing resumed the PC
+    agent: it held no lane, and fix 9 does not offer a review the agent itself holds. Both computers printed
+    `AGENT_RUN_WAITING=FOREIGN_LANE_OPEN`; `count.py` waited for ever for the reviewer it had admitted, and `cli.py` for
+    `count.py`. Resuming alone would not have been enough: the controller had ended that agent's connection when it
+    stopped with no lane, a closed session is never reopened, and the grant belongs to the session that asked
+    (Decision 4), so a new session could not have used it. Two rules now, with or without a lane:
+    - The controller keeps the session of a stopped agent it may resume while that session holds a coordination
+      request that is pending or a review grant it has not finished (`Observation.holdsRequestOrGrant`, the
+      `PENDING_DEPENDENCY` and `PENDING_REVIEW` checks of `ProviderSessionTerminalizationService`, read as
+      `holdsRequestOrGrant`). The same rule closes the gap Decision 4 described for a stopped agent: one holding a
+      review grant when its own lane was integrated had its session ended, and was resumed in a new one that could
+      not finish the review; it is now resumed in its own. A run whose agents have all stopped also keeps waiting
+      while another computer is connected and such a session is kept (`OTHER_COMPUTER_CONNECTED`), by the same rule
+      that keeps the session, since that computer may answer.
+    - A stopped agent is resumed once when a request one of its current sessions made is answered after it stopped
+      (accepted, rejected or otherwise resolved: a `COORDINATION_RESPONDED` event for it, read through
+      `Observation.newestAnswerFor`). The grant an accepted review request issues is part of that answer and is not
+      counted again, and a response given again appends nothing. An answer it saw before it stopped resumes nothing,
+      a later answer resumes it once more, and this applies too when its own published work waits for an operator.
+    The controller's wake decision now lives in one method, `wakeFor`. Contract line visible to agents: an agent that
+    asked something through Synesis is resumed, on the session that asked, when the request is answered. The Stop
+    hook needs no change: it holds only an agent told WAIT with a lane, and one without a lane stops and is resumed
+    by the controller as above. Also from this run: a second reviewer lane for `count.py`, whose author had accepted
+    the first reviewer's request for its only snapshot, waited (`WAIT_FOR_ELIGIBLE_PRODUCER`) for an admission that
+    would not come. When every snapshot it could review was admitted to another participant (an accepted review
+    request, or a review grant that participant holds; a request still pending admits nobody yet), its
+    `get_next_action` wait now says that the author admitted another reviewer and that it may call `cancel_lane`, as
+    a reviewer whose module was integrated elsewhere is told. Source-level evidence only. No real run has shown it
+    yet.
 
 ### Not done
 
+- Fix 9 counts only agents resumed for a review as looking at it. A running agent here with no lane may see the same
+  review and a stopped one be resumed for it at the same moment; the claim settles it, at the cost of one resume. An
+  agent none of whose connections has a known session is never resumed for a review.
+- Fix 10 resumes an agent for an answer only to a request one of its current sessions made. A request whose session
+  was ended by an older build, or because the agent ran out of `--max-resumes`, has no session left to use the answer.
+  As for a message, an answer recorded in the 30 seconds before the agent's process ended is taken as unseen, so an
+  answer it read just before stopping can cost one resume. `AgentRunController` is now about 1,020 lines; its
+  `Agent` bookkeeping class (about 200 lines) is the piece to move into its own package-private file next.
 - A lane its agent cancelled does not start a fresh session on `ensure_session`: the session is told its lane is
   closed (`CLOSE`), as an existing test requires so that cancelled work is not announced again, and a task in the same
-  process is refused. The controller starts such an agent again on a new connection once its lane has ended. Letting
-  the same process take a next lane after a cancel needs a decision between the two.
-
-- `keep` reads only the lease, not the log. A participant that was suspended while its controller still kept it (only
-  possible if the controller was stopped past the grace period) is resumed on the same connection and refused
-  `SESSION_EPOCH_FENCED`; it is not continued by its own agent until the run ends. A controller agent that the resume
-  rule will not wake (its lanes wait for an operator) also keeps its lane until the run ends. Both are bounded by
-  `--timeout-minutes`.
-- `ControllerConnections.ended` gives up after its attempts when the project lock stays busy, as before; the lease then
-  names the controller until the run ends and is recovered after the grace period.
-
-- A binding whose worker is clean, holds private commits and is behind a moved control head is replaced by a new
-  binding on `ensure_session` (`ProviderSessionBindingService.resumeStale`), which would strand an open lane of a kept
-  session. Agents write through `apply_patch` and snapshots are made with `commit-tree`, so their worktrees stay dirty and
-  take the refresh path instead; the case is recorded, not fixed.
+  process is refused. The controller starts such an agent again on a new connection once its lane has ended. The owner
+  chose to keep this (USER-STATED, 2026-10-18): the restart costs seconds and the CLOSE rule stays. It is listed for
+  ADR-0101 as a rule that may be loosened.
+- The Codex Stop hook rests on Codex internals (the trust key and the hash recipe) that its documentation does not
+  describe. Nothing checks at run time that Codex accepted it: a skipped hook is silent, and only the slower controller
+  wake shows it. `provider status` could ask app-server `hooks/list` for `trustStatus: "trusted"`; not built.
+- A Codex session a person starts in a Synesis project still runs this project's hooks only after they review them.
+- The keeper note of an identity whose controller was killed is left beside the lease. It is never read again, and
+  nothing sweeps it.
+- An end the project could not record is offered again once per observation, and each attempt may wait the project
+  lock's two seconds, so a busy project slows the controller's loop by that much per pending end.
+- A kept binding behind a moved control head (fix 4) keeps its worktree as it is, as the other kept bindings do; no
+  test shows such a lane integrating afterwards.
+- The session lease treats a process whose start time it cannot read as unverified (`AMBIGUOUS`, never recovered),
+  and the Windows tests showed one more such gap: a transient failure to read `.synesis/project.json` sends lease
+  reads to a `default-project` folder (`ProjectAdministrativeLayout.resolveProjectId`), which made
+  `ControllerConnectionsTest`'s lock tests fail about one run in four on this PC, before and after these fixes.
+  Recorded, not fixed here.
 
 ## Future
 
@@ -415,8 +591,9 @@ project runtime lives (`MergeDriver.repeatEvery`); a pass with nothing to merge 
   which members may message or request which lanes. That is a rule on who may write those events, not on the hooks:
   on the leader in step 2, and from ADR-0098 step 4 a rule on how an arriving entry counts, applied by every
   computer.
-- **Codex.** If a Codex release runs a project's reviewed hooks headless, or offers a hook trust Synesis can
-  lawfully set for its own hook only, install the same `Stop` hook for Codex.
+- **Codex.** Done for agents the run controller starts (fixes of 2026-10-18, 7). Left: a run-time check that Codex
+  trusted the hook, and the `PreToolUse` hook given the same way, which would route a native write of a headless Codex
+  agent into its lane instead of relying on the read-only sandbox alone.
 
 ### Other waits and polls the same mechanism can replace next
 

@@ -2,10 +2,12 @@ package org.synesis.link.onboarding;
 
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.quic.QuicChannel;
 import io.netty.handler.codec.quic.QuicStreamType;
 import java.net.InetSocketAddress;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.synesis.link.candidate.CandidateDescriptor;
@@ -44,14 +46,24 @@ final class ClientQuicConnectionAttempt {
       byte[] hostPublicKey, HandshakeTranscript transcript, Channel udp, CandidatePair pair,
       PeerSession.ApplicationStreamHandler applicationHandler, LivenessConfiguration liveness) {
     return new ConnectionAttempt() {
-      private volatile QuicChannel connection;
+      /** Known from registration on, before the first packet leaves, so a connection still dialing can be closed. */
+      private volatile Channel connection;
+      private volatile boolean cancelled;
 
       @Override
       public CompletionStage<PeerSession> connect(
           org.synesis.link.candidate.CandidateCancellation cancellation) {
         CompletableFuture<PeerSession> result = new CompletableFuture<>();
         QuicChannel.newBootstrap(udp)
-            .handler(new ChannelInboundHandlerAdapter())
+            .handler(new ChannelInboundHandlerAdapter() {
+              @Override
+              public void handlerAdded(ChannelHandlerContext context) {
+                connection = context.channel();
+                if (cancelled) {
+                  context.close();
+                }
+              }
+            })
             .streamHandler(NettySessionHandshake.clientApplicationStreamHandler())
             .remoteAddress(new InetSocketAddress(pair.remote()
                 .address(),
@@ -63,12 +75,20 @@ final class ClientQuicConnectionAttempt {
                 result.completeExceptionally(future.cause());
                 return;
               }
-              connection = (QuicChannel) future.getNow();
+              QuicChannel connected = (QuicChannel) future.getNow();
+              // A race that gave up on this attempt dials again with the same transcript. Were this connection to get
+              // through later, as when the host's firewall opens for the answer, its handshake would use up the
+              // single-use invitation on a session nobody waits for, and the live attempt would be refused.
+              if (cancelled) {
+                connected.close();
+                result.completeExceptionally(new CancellationException("connection attempt cancelled"));
+                return;
+              }
               CompletableFuture<PeerSession> established = new CompletableFuture<>();
               try {
                 HandshakeProof proof = SessionAuthenticator.createProof(identity, transcript,
                     HandshakeRole.INITIATOR);
-                connection.createStream(QuicStreamType.BIDIRECTIONAL,
+                connected.createStream(QuicStreamType.BIDIRECTIONAL,
                     NettySessionHandshake.clientStreamHandler(identity, hostNodeId, transcript,
                         proof, new ReplayGuard(), established,
                         liveness,
@@ -89,8 +109,10 @@ final class ClientQuicConnectionAttempt {
 
       @Override
       public void cancel() {
-        if (connection != null) {
-          connection.close()
+        cancelled = true;
+        Channel dialing = connection;
+        if (dialing != null) {
+          dialing.close()
               .addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
         }
       }

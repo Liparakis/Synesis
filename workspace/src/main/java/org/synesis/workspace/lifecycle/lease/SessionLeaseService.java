@@ -112,7 +112,7 @@ public final class SessionLeaseService {
             processIdentity = prev.processIdentity();
             createdAt = prev.createdAtEpochMillis();
         } else {
-            processIdentity = identityOf(ProcessHandle.current(), now, UUID.randomUUID().toString());
+            processIdentity = reservedKeeper(controlRoot, connectionInstanceId, now).orElseGet(() -> identityOf(ProcessHandle.current(), now, UUID.randomUUID().toString()));
             createdAt = now;
         }
 
@@ -304,6 +304,52 @@ public final class SessionLeaseService {
                     SessionLeaseState.ACTIVE));
             return true;
         }
+    }
+
+    /**
+     * Names the calling process as the keeper of a connection that no process has opened yet, so the
+     * lease is created naming it (ADR-0099, amendment). A process that opened its lease and reached
+     * end of input before its keeper's first look had closed the lease, and its agent lost the
+     * session it was meant to keep. Only the process that opens the lease decides: it names the
+     * reserved keeper when that keeper is alive and the opening process descends from it, the same
+     * rule {@link #keep} applies afterwards, and otherwise names itself as before.
+     *
+     * @param controlRoot          control project root
+     * @param connectionInstanceId exact connection identity, not yet given to any process
+     * @throws IOException when the reservation cannot be written; the lease is then kept only once the
+     *                     keeper looks, as before
+     */
+    public void reserveKeeper(Path controlRoot, String connectionInstanceId) throws IOException {
+        Objects.requireNonNull(controlRoot, "controlRoot");
+        Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
+        ProcessHandle keeper = ProcessHandle.current();
+        // Without its start time a reused pid could not be told from the keeper, so nothing is reserved.
+        long start = keeper.info().startInstant().map(java.time.Instant::toEpochMilli).orElseThrow(() -> new IOException("keeper start time unknown"));
+        store.saveKeeper(controlRoot, connectionInstanceId, keeper.pid(), start);
+    }
+
+    /**
+     * Forgets the keeper reserved for a connection that has ended.
+     *
+     * @param controlRoot          control project root
+     * @param connectionInstanceId exact connection identity
+     * @throws IOException when the reservation cannot be removed
+     */
+    public void releaseKeeper(Path controlRoot, String connectionInstanceId) throws IOException {
+        store.deleteKeeper(Objects.requireNonNull(controlRoot, "controlRoot"), Objects.requireNonNull(connectionInstanceId, "connectionInstanceId"));
+    }
+
+    /**
+     * The reserved keeper of a connection, when it is alive, its start time is the reserved one, and the calling
+     * process descends from it. Any doubt names the caller itself, as before.
+     */
+    private Optional<SessionProcessIdentity> reservedKeeper(Path controlRoot, String connectionInstanceId, long now) {
+        ProcessHandle self = ProcessHandle.current();
+        return store.loadKeeper(controlRoot, connectionInstanceId)
+                .flatMap(reserved -> ProcessHandle.of(reserved.pid())
+                        .filter(keeper -> keeper.isAlive() && keeper.info().startInstant().map(java.time.Instant::toEpochMilli).map(start -> start == reserved.processStartTime()).orElse(false)))
+                .filter(keeper -> keeper.pid() == self.pid() || keeper.descendants().anyMatch(descendant -> descendant.pid() == self.pid()))
+                .map(keeper -> identityOf(keeper, now, UUID.randomUUID().toString()));
     }
 
     /** Whether the named process is alive and descended from the keeper, its start time fencing a reused pid. */

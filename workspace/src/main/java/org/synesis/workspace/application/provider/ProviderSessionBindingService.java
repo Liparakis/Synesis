@@ -202,7 +202,10 @@ public final class ProviderSessionBindingService {
         if (controlAdvancedWithoutUnintegratedWorkerWork(location, binding) && !activeManagedAttachment && !activeNoChangeIntent && worktreeClean) {
             return persist(bindingPath, reallocatePreservingSession(location, binding).touch());
         }
-        if (!activeManagedAttachment && !authorizedContinuation && !activeNoChangeIntent) {
+        // A session that holds an open lane keeps its binding, private commits and all: a fresh binding
+        // would leave the lane with a participant nobody speaks for, and a kept controller session is
+        // resumed on this connection to continue exactly that lane (ADR-0099, amendment).
+        if (!activeManagedAttachment && !authorizedContinuation && !activeNoChangeIntent && !hasActiveIntent(location, binding)) {
             return persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch());
         }
         return persist(bindingPath, binding.touch());

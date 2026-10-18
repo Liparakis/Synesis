@@ -103,6 +103,23 @@ final class CandidateRacerTest {
     }
   }
 
+  @Test
+  void anAttemptThatTimesOutIsCancelledSoItCannotConnectOnceTheRaceStoppedWaitingForIt() throws Exception {
+    AtomicInteger cancelled = new AtomicInteger();
+
+    try (CandidateRacer racer = new CandidateRacer(new ConnectionPolicy(
+        4, 4, 1, java.time.Duration.ZERO, java.time.Duration.ofMillis(100),
+        java.time.Duration.ofSeconds(2), 16))) {
+      DirectConnectionResult result = racer.race(List.of(pair("192.0.2.1", 1)), "remote",
+              pair -> new StubAttempt(new CompletableFuture<>(), cancelled))
+          .completion()
+          .toCompletableFuture()
+          .get(2, TimeUnit.SECONDS);
+      assertEquals(null, result.session());
+      assertEquals(1, cancelled.get());
+    }
+  }
+
   /**
    * Represents one controllable candidate connection attempt.
    */

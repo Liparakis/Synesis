@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -66,6 +67,8 @@ public final class MemberReplication implements AutoCloseable {
     private final Path root;
     private final String leaderNodeId;
     private final LogExchange exchange;
+    private volatile Runnable pulled = () -> {
+    };
     private volatile State state = State.DISCONNECTED;
     private volatile CoordinationHttpServer served;
 
@@ -80,13 +83,18 @@ public final class MemberReplication implements AutoCloseable {
         this.root = CoordinationNullException.requireNonNull(root, "root");
         CoordinationNullException.requireNonNull(projectId, "project ID");
         this.leaderNodeId = CoordinationNullException.requireNonNull(leaderNodeId, "leader node ID");
-        this.exchange = new LogExchange(root, projectId, leaderNodeId::equals, log -> true, () -> {
+        this.exchange = new LogExchange(root, projectId, leaderNodeId::equals, log -> true, this::tellPulled);
+        exchange.watch((node, next) -> {
+            setState(switch (next) {
+                case CONNECTED -> State.CONNECTED;
+                case DISCONNECTED -> State.DISCONNECTED;
+                case DIVERGED -> State.DIVERGED;
+            });
+            if (next == LogExchange.State.CONNECTED) {
+                // The first good pull of a session: what the logs name may have moved while this computer was apart.
+                tellPulled();
+            }
         });
-        exchange.watch((node, next) -> setState(switch (next) {
-            case CONNECTED -> State.CONNECTED;
-            case DISCONNECTED -> State.DISCONNECTED;
-            case DIVERGED -> State.DIVERGED;
-        }));
     }
 
     /**
@@ -102,6 +110,17 @@ public final class MemberReplication implements AutoCloseable {
                 .filter(ReplicationSettings::isMember)
                 .orElseThrow(() -> new CoordinationException("NOT_A_MEMBER"));
         return new MemberReplication(root, projectId, settings.leaderNodeId());
+    }
+
+    /**
+     * Tells {@code listener} after each pull that brought entries and after the first good pull of each session, so
+     * this computer's code can follow what the logs now name (ADR-0098 step 3, "Members follow {@code main}"). It
+     * runs on the exchange thread and must return at once.
+     *
+     * @param listener told after such a pull
+     */
+    public void whenPulled(Runnable listener) {
+        pulled = CoordinationNullException.requireNonNull(listener, "listener");
     }
 
     /**
@@ -163,10 +182,7 @@ public final class MemberReplication implements AutoCloseable {
     public void serve(CoordinationHttpServer server) throws IOException {
         served = server;
         server.relay(this::relay);
-        String host = server.address().getAddress().getHostAddress();
-        Files.writeString(root.resolve(LoopbackExchange.ENDPOINT_FILE),
-                (host.contains(":") ? "[" + host + "]" : host) + ":" + server.address().getPort() + "\n",
-                StandardCharsets.UTF_8);
+        LoopbackExchange.recordEndpoint(root, server.address());
         setState(state);
     }
 
@@ -189,6 +205,15 @@ public final class MemberReplication implements AutoCloseable {
     }
 
     /**
+     * The session to the owner's computer while it is live, for other protocols that ride on it (Code over Link).
+     *
+     * @return the owner computer's node and its session, or nothing
+     */
+    public Map<String, PeerSession> liveSessions() {
+        return exchange.liveSessions();
+    }
+
+    /**
      * The state as of the last pull.
      *
      * @return the state
@@ -204,6 +229,15 @@ public final class MemberReplication implements AutoCloseable {
      */
     public LogExchange exchange() {
         return exchange;
+    }
+
+    /** A listener that throws must not end the pulling. */
+    private void tellPulled() {
+        try {
+            pulled.run();
+        } catch (RuntimeException failed) {
+            LOGGER.log(System.Logger.Level.WARNING, "Following the pulled log failed; the next pull tries again.", failed);
+        }
     }
 
     private void setState(State next) {

@@ -52,7 +52,7 @@ final class CodeRemoteCheckTest {
         Path coordination = temp.resolve("coordination");
         java.nio.file.Files.createDirectories(coordination);
         org.synesis.coordination.persistence.ReplicationSettings.leader(java.util.Set.of()).withCodeRemote("origin").write(coordination);
-        CodeRemote remote = CodeRemote.of(coordination).orElseThrow();
+        CodeRemote remote = CodeRemote.of(org.synesis.coordination.persistence.ReplicationSettings.read(coordination).orElseThrow()).orElseThrow();
 
         CodeRemote.Refused refused = assertThrows(CodeRemote.Refused.class, () -> remote.pushRefs(clone, "refs/synesis/probe"));
 

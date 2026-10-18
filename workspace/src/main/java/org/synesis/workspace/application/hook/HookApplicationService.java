@@ -124,7 +124,7 @@ public final class HookApplicationService {
         Map<String, Object> event = parsed(json);
         boolean runAgent = connectionInstanceId != null && !connectionInstanceId.isBlank();
         if (event != null && "Stop".equals(event.get("hook_event_name"))) {
-            return claudeStop(event, runAgent ? connectionInstanceId : null, hold);
+            return stop("claude", event, runAgent ? connectionInstanceId : null, hold);
         }
         if (runAgent && event != null && object(event.get("tool_input")) instanceof Map<String, Object> toolInput && toolInput.get("command") instanceof String command
                 && SleepCommands.onlySleeps(command)) {
@@ -150,9 +150,9 @@ public final class HookApplicationService {
     /**
      * Answers a Stop event: holds the agent while it was told WAIT and nothing has arrived for its lane, then tells it
      * so. Any failure lets it stop: the run controller resumes a stopped agent on the next progress, while a stop
-     * refused for nothing would keep it running.
+     * refused for nothing would keep it running. Claude Code and Codex send the same event and read the same answer.
      */
-    private static HookExecutionResult claudeStop(Map<String, Object> event, String connectionInstanceId, java.time.Duration hold) {
+    private static HookExecutionResult stop(String provider, Map<String, Object> event, String connectionInstanceId, java.time.Duration hold) {
         Path projectRoot = null;
         String reason = null;
         try {
@@ -166,21 +166,43 @@ public final class HookApplicationService {
         }
         HookExecutionResult result = reason == null ? new HookExecutionResult("STOP_ALLOWED", "{}", null)
                 : new HookExecutionResult("WOKEN", ProviderJson.write(Map.of("decision", "block", "reason", reason)), reason);
-        LocalDiagnostics.hook(projectRoot, "claude", "Stop", result.outcome(), result.humanReason());
+        LocalDiagnostics.hook(projectRoot, provider, "Stop", result.outcome(), result.humanReason());
         return result;
     }
 
     /**
-     * Processes one Codex PreToolUse event using payload cwd project discovery.
+     * Processes one Codex hook event using payload cwd project discovery: a PreToolUse or SessionStart event of the
+     * project's hooks, or the Stop event of the hook the run controller gives its agents (ADR-0099).
      *
      * @param input provider event stream
      * @return structured hook result
      */
     public HookExecutionResult codex(InputStream input) {
+        String json;
+        try {
+            json = read(input);
+        } catch (Exception unreadable) {
+            json = "";
+        }
+        return codex(json, System.getenv(ProviderIntegration.CONNECTION_INSTANCE_VARIABLE), LaneWake.HOLD);
+    }
+
+    /**
+     * Processes one Codex hook event for the agent behind a connection.
+     *
+     * @param json                 the event
+     * @param connectionInstanceId the connection identity the run controller gave the agent's process, or {@code null}
+     * @param hold                 longest hold of a Stop event
+     * @return structured hook result
+     */
+    HookExecutionResult codex(String json, String connectionInstanceId, java.time.Duration hold) {
+        Map<String, Object> stopEvent = parsed(json);
+        if (stopEvent != null && "Stop".equals(stopEvent.get("hook_event_name"))) {
+            return stop("codex", stopEvent, connectionInstanceId == null || connectionInstanceId.isBlank() ? null : connectionInstanceId, hold);
+        }
         Path projectRoot = null;
         String eventName = null;
         try {
-            String json = read(input);
             Map<String, Object> event = object(ProviderJson.parse(json));
             eventName = text(event, "hook_event_name");
             Path eventCwd = Path.of(text(event, "cwd"));

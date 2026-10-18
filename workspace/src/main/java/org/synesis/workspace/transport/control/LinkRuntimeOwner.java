@@ -95,13 +95,9 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
          * @param nodeId        the node to add to the member list
          * @param codeRemoteUrl the URL of the code remote the project link carried, or {@code null} for an invitation
          *                      that was not a project link
-         * @throws java.io.IOException when the list cannot be saved; the request then stays pending. A message of
-         *                             {@value #CODE_REMOTE_NOT_CONFIGURED} makes the refusal that code
+         * @throws java.io.IOException when the list cannot be saved; the request then stays pending
          */
         void admit(String nodeId, String codeRemoteUrl) throws java.io.IOException;
-
-        /** The refusal code of an accept whose invitation carried no usable code remote. */
-        String CODE_REMOTE_NOT_CONFIGURED = "CODE_REMOTE_NOT_CONFIGURED";
     }
 
     private record Held(String nodeId, Instant requestedAt, Instant expiresAt, int port, String codeRemoteUrl) {
@@ -537,7 +533,7 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
         try {
             admission.admit(nodeId, held.codeRemoteUrl);
         } catch (java.io.IOException | RuntimeException unsaved) {
-            throw new JoinRequestException(MemberAdmission.CODE_REMOTE_NOT_CONFIGURED.equals(unsaved.getMessage()) ? MemberAdmission.CODE_REMOTE_NOT_CONFIGURED : "MEMBER_NOT_SAVED");
+            throw new JoinRequestException("MEMBER_NOT_SAVED");
         }
         requests.remove(nodeId, held);
         record("JOIN_ACCEPTED peer=" + nodeId);

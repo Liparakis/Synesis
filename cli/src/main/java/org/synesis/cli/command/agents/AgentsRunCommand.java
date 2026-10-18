@@ -106,7 +106,10 @@ public final class AgentsRunCommand implements Callable<Integer> {
                 if (!installed) {
                     throw new IllegalArgumentException("provider is not installed in this project; run: synesis provider install " + agent.provider());
                 }
-                specifications.add(agent);
+                // A provider whose hooks are given per session (Codex) runs the launcher its installed hooks run.
+                Path hookLauncher = runtime.providerService().launcherPath();
+                specifications.add(Files.isRegularFile(hookLauncher)
+                        ? new AgentRunController.AgentSpec(agent.provider(), agent.session(), agent.options().withHookLauncher(hookLauncher)) : agent);
             }
         } catch (IllegalArgumentException invalid) {
             runtime.terminal().stderr("ERROR=" + invalid.getMessage());

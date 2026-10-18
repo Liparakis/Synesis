@@ -170,4 +170,42 @@ public final class SessionLeaseStore {
         }
         return Collections.unmodifiableList(records);
     }
+
+    /**
+     * The process reserved to keep a connection's lease before any process opened it, as written by
+     * {@link SessionLeaseService#reserveKeeper}. Local, never authority: the process that opens the
+     * lease checks it.
+     *
+     * @param pid              process ID of the keeper
+     * @param processStartTime its start time in epoch milliseconds
+     */
+    record KeeperReservation(long pid, long processStartTime) {
+    }
+
+    void saveKeeper(Path controlRoot, String connectionInstanceId, long pid, long processStartTime) throws IOException {
+        Path file = keeperFile(controlRoot, connectionInstanceId);
+        Files.createDirectories(file.getParent());
+        Path tmpFile = file.resolveSibling(connectionInstanceId + ".keeper.tmp");
+        Files.writeString(tmpFile, ProviderJson.write(Map.of("pid", pid, "processStartTime", processStartTime)), StandardCharsets.UTF_8);
+        Files.move(tmpFile, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    /** A reservation that is missing or unreadable is none. */
+    Optional<KeeperReservation> loadKeeper(Path controlRoot, String connectionInstanceId) {
+        try {
+            Map<?, ?> map = (Map<?, ?>) ProviderJson.parse(Files.readString(keeperFile(controlRoot, connectionInstanceId), StandardCharsets.UTF_8));
+            return Optional.of(new KeeperReservation(((Number) map.get("pid")).longValue(), ((Number) map.get("processStartTime")).longValue()));
+        } catch (Exception missingOrUnreadable) {
+            return Optional.empty();
+        }
+    }
+
+    void deleteKeeper(Path controlRoot, String connectionInstanceId) throws IOException {
+        Files.deleteIfExists(keeperFile(controlRoot, connectionInstanceId));
+    }
+
+    /** Beside the lease, under a suffix {@link #listAll} does not read. */
+    private static Path keeperFile(Path controlRoot, String connectionInstanceId) {
+        return resolveLeasesDirectory(controlRoot.toAbsolutePath().normalize()).resolve(connectionInstanceId + ".keeper");
+    }
 }

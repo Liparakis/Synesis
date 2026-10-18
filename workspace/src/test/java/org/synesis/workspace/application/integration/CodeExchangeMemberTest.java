@@ -41,13 +41,15 @@ import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
+import org.synesis.workspace.test.CodeLinkPair;
 import org.synesis.workspace.test.ProviderTestSupport;
 import org.synesis.workspace.test.TestGit;
 
 /**
- * Code moves through a shared Git remote between a member's clone and the leader's (ADR-0098, step 2, slice 3b),
- * driven through the real session, completion and integration services. The log is exchanged in process; the code is
- * exchanged through a bare repository.
+ * Code moves over Link between a member's clone and the leader's (ADR-0098 step 3), driven through the real session,
+ * completion and integration services. The log is exchanged in process, and so is the code, between the two computers'
+ * code sides ({@link CodeLinkPair}) as their Link session would carry it. A bare repository stands for a Git remote,
+ * which only the tests of a mirror name in the settings.
  */
 class CodeExchangeMemberTest {
 
@@ -61,6 +63,7 @@ class CodeExchangeMemberTest {
     private ProjectLocation member;
     private NodeIdentity memberIdentity;
     private Path memberCoordination;
+    private CodeLinkPair link;
     private final ProviderSessionBindingService bindings = new ProviderSessionBindingService();
 
     @BeforeEach
@@ -87,12 +90,31 @@ class CodeExchangeMemberTest {
     @AfterEach
     void unregister() throws Exception {
         ReplicationRole.register(memberCoordination, ReplicationRole.leader());
+        if (link != null) {
+            link.close();
+        }
     }
 
-    /** Both computers get their replication settings; the member is a member of the leader's computer. */
+    /** Both computers get their replication settings, with no Git remote; the member's log proposes to the leader's in process. */
     private void replicate() throws Exception {
-        ReplicationSettings.leader(Set.of(memberIdentity.nodeId())).withCodeRemote("origin").write(leader.root.resolve(".synesis/coordination"));
-        ReplicationSettings.member(leader.identity.nodeId()).withCodeRemote("origin").write(memberCoordination);
+        replicate(false, true);
+    }
+
+    /**
+     * As {@link #replicate()}; with {@code mirror} both settings also name the bare repository as a mirror. The two
+     * computers' code sides are joined as their Link session would join them, and the session is up when
+     * {@code connected}.
+     */
+    private void replicate(boolean mirror, boolean connected) throws Exception {
+        ReplicationSettings leaderSettings = ReplicationSettings.leader(Set.of(memberIdentity.nodeId()));
+        ReplicationSettings memberSettings = ReplicationSettings.member(leader.identity.nodeId());
+        (mirror ? leaderSettings.withCodeRemote("origin") : leaderSettings).write(leader.root.resolve(".synesis/coordination"));
+        (mirror ? memberSettings.withCodeRemote("origin") : memberSettings).write(memberCoordination);
+        link = new CodeLinkPair(leader.location.projectId(), leader.root, leader.root.resolve(".synesis/coordination"), leader.identity.nodeId(),
+                memberRoot, memberCoordination, memberIdentity.nodeId());
+        if (!connected) {
+            link.disconnect();
+        }
         ReplicationRole.register(memberCoordination, ReplicationRole.memberOf(leader.identity.nodeId()));
         ProviderTestSupport.install(member, "codex");
     }
@@ -101,7 +123,7 @@ class CodeExchangeMemberTest {
         return new PredictionEventStore(memberCoordination, leader.location.projectId());
     }
 
-    /** What the member appended to its own log, in order. */
+    /** What the member appended to its own log, in order (ADR-0098 step 4: a member appends locally). */
     private List<PredictionEventType> memberAppended() throws Exception {
         List<PredictionEventType> types = new java.util.ArrayList<>();
         for (byte[] encoded : memberStore().entriesAfter(0, 10_000, Integer.MAX_VALUE)) {
@@ -110,7 +132,7 @@ class CodeExchangeMemberTest {
         return types;
     }
 
-    /** Each computer receives byte-identical copies of the other's log, until neither has anything new. */
+    /** Each computer receives byte-identical copies of the other's log, as their log exchange would bring them. */
     private void exchangeLogs() throws Exception {
         PredictionEventStore leaderStore = leader.store();
         PredictionEventStore memberStore = memberStore();
@@ -147,24 +169,21 @@ class CodeExchangeMemberTest {
     }
 
     @Test
-    void aMembersLaneTravelsThroughTheRemoteAndTheNextLaneStartsOnTheIntegratedHead() throws Exception {
+    void aMembersLaneTravelsOverLinkAndTheNextLaneStartsOnTheIntegratedHead() throws Exception {
         replicate();
+        String branchBefore = TestGit.output(remote, "rev-parse", "refs/heads/" + branch);
         startLane("m-1", "src/a.txt");
 
         AgentResponse finished = finish("m-1");
 
         assertTrue(memberAppended().contains(PredictionEventType.COMPLETION_PREPARED), finished.toJson());
         assertTrue(memberAppended().contains(PredictionEventType.TASK_SNAPSHOT_CREATED), finished.toJson());
+        assertEquals("", remoteRefs(), "the member pushed nothing: its refs stay in its clone");
         assertEquals(0, leader.count(PredictionEventType.COMPLETION_PREPARED), "nothing reached the leader before the logs were exchanged");
-        String refs = remoteRefs();
-        assertTrue(refs.contains("refs/synesis/prepared/"), "the prepared commit is on the remote the leader fetches from");
-        assertTrue(refs.contains("refs/synesis/snapshots/"), "the snapshot commit is on the remote the leader fetches from");
-
         exchangeLogs();
-
-        assertEquals(1, leader.count(PredictionEventType.COMPLETION_PREPARED), "the leader received the member's entry in a byte-identical copy");
         String snapshotId = leader.store().taskCompletionProjection().allSnapshots().getFirst().snapshotId();
         String snapshotCommit = leader.store().taskCompletionProjection().allSnapshots().getFirst().commitSha();
+        assertEquals(snapshotCommit, TestGit.output(memberRoot, "rev-parse", "refs/synesis/snapshots/" + snapshotId));
         assertFalse(commitInLeaderClone(snapshotCommit), "the leader's clone does not hold the member's commit yet");
 
         // After integrating, the leader releases the member's lane: its own entry, which may act for any participant.
@@ -173,7 +192,7 @@ class CodeExchangeMemberTest {
         assertEquals(AgentStatus.COMPLETED, pass.status(), pass.toJson());
         assertEquals(TaskCompletionState.INTEGRATED, leader.state(snapshotId));
         assertTrue(leader.headHas("src/a.txt"));
-        assertEquals(leader.head(), TestGit.output(remote, "rev-parse", "refs/heads/" + branch), "the leader published the control branch");
+        assertEquals(branchBefore, TestGit.output(remote, "rev-parse", "refs/heads/" + branch), "with no mirror nothing is pushed");
 
         // The merged lane was the group's only one, so the group completed; new work starts a new group.
         exchangeLogs();
@@ -185,8 +204,40 @@ class CodeExchangeMemberTest {
     }
 
     @Test
-    void aRemoteThatRefusesThePushStopsTheCompletionBeforeAnythingIsAppended() throws Exception {
+    void aMembersCheckoutFollowsTheIntegratedHeadAsSoonAsItsLogNamesIt() throws Exception {
         replicate();
+        startLane("m-1", "src/a.txt");
+        finish("m-1");
+        exchangeLogs();
+        assertEquals(AgentStatus.COMPLETED, leader.pump().status());
+        exchangeLogs();
+
+        link.member.mainMayHaveMoved();
+
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
+        while (!leader.head().equals(TestGit.output(memberRoot, "rev-parse", "HEAD")) && System.nanoTime() < deadline) {
+            Thread.sleep(100);
+        }
+        assertEquals(leader.head(), TestGit.output(memberRoot, "rev-parse", "HEAD"), "main is equal on both computers without a new lane");
+    }
+
+    @Test
+    void aSnapshotMadeOnTheLeadersComputerReachesTheMembersReviewerOverLink() throws Exception {
+        replicate();
+        var lane = leader.announce("agt_leader", "src/review.txt");
+        String commit = leader.publish(lane, "snap_review", 1, "src/review.txt", "for review\n");
+        exchangeLogs();
+        assertFalse(commitIn(memberRoot, commit));
+
+        org.synesis.workspace.application.control.CodeExchange.ensureCommit(memberCoordination, member.projectId(), memberRoot, commit);
+
+        assertEquals(commit, TestGit.output(memberRoot, "rev-parse", "refs/synesis/snapshots/snap_review"),
+                "the reviewer's checkout holds the commit under the snapshot ref the log names");
+    }
+
+    @Test
+    void aMirrorThatRefusesThePushStopsTheCompletionBeforeAnythingIsAppended() throws Exception {
+        replicate(true, true);
         startLane("m-1", "src/a.txt");
         TestGit.run(memberRoot, "remote", "set-url", "origin", temp.resolve("gone.git").toString());
         int appendedBefore = memberAppended().size();
@@ -196,6 +247,7 @@ class CodeExchangeMemberTest {
         assertEquals(AgentStatus.BLOCKED, finished.status(), finished.toJson());
         assertTrue(finished.toJson().contains("CODE_REMOTE_UNAVAILABLE"), finished.toJson());
         assertFalse(memberAppended().contains(PredictionEventType.COMPLETION_PREPARED));
+        assertFalse(memberAppended().contains(PredictionEventType.TASK_SNAPSHOT_CREATED));
         assertEquals(appendedBefore, memberAppended().size(), "no entry was appended");
         exchangeLogs();
         assertEquals(0, leader.count(PredictionEventType.COMPLETION_PREPARED));
@@ -205,7 +257,8 @@ class CodeExchangeMemberTest {
     void aMemberThatCannotFetchTellsTheAgentAndTheInstallWhyAndStartsOnceItCan() throws Exception {
         String url = TestGit.output(memberRoot, "remote", "get-url", "origin");
         TestGit.run(memberRoot, "remote", "set-url", "origin", temp.resolve("gone.git").toString());
-        replicate();
+        // Neither the leader over Link nor the mirror can be reached; the mirror's reason is the one shown.
+        replicate(true, false);
 
         Map<String, String> status = new ProviderApplicationService().status(member, "codex").values();
         assertEquals("FAILED", status.get("WORKTREE_BINDING_STATUS"), status.toString());
@@ -224,6 +277,7 @@ class CodeExchangeMemberTest {
         assertEquals(answer, new WorkspaceReadinessService().assess(member, "codex", "m-1").response().toMap(), "every operation gives the same answer");
 
         TestGit.run(memberRoot, "remote", "set-url", "origin", url);
+        link.reconnect();
         AgentResponse recovered = new AgentSessionService().ensureSession(new SessionResolutionRequest(memberRoot, "codex", "m-1", null, false));
 
         assertEquals(AgentStatus.READY, recovered.status(), recovered.toJson());
@@ -231,17 +285,18 @@ class CodeExchangeMemberTest {
     }
 
     @Test
-    void aMemberWithNoCodeRemoteSettingRefusesAndPushesNothing() throws Exception {
-        replicate();
+    void aMemberWithAMirrorHandsInThroughItAsWell() throws Exception {
+        replicate(true, true);
         startLane("m-1", "src/a.txt");
-        ReplicationSettings.member(leader.identity.nodeId()).write(memberCoordination);
 
         AgentResponse finished = finish("m-1");
 
-        assertEquals(AgentStatus.BLOCKED, finished.status(), finished.toJson());
-        assertTrue(finished.toJson().contains("CODE_REMOTE_NOT_CONFIGURED"), finished.toJson());
-        assertFalse(memberAppended().contains(PredictionEventType.COMPLETION_PREPARED));
-        assertEquals("", remoteRefs());
+        // Since step 4 the member appends locally, so the order of push and append is not observed here; the
+        // mirror refusing the push stopping the append is the test above.
+        assertTrue(memberAppended().contains(PredictionEventType.COMPLETION_PREPARED), finished.toJson());
+        assertTrue(memberAppended().contains(PredictionEventType.TASK_SNAPSHOT_CREATED), finished.toJson());
+        assertTrue(remoteRefs().contains("refs/synesis/prepared/"), "the prepared commit is on the mirror");
+        assertTrue(remoteRefs().contains("refs/synesis/snapshots/"), "the snapshot commit is on the mirror");
     }
 
     @Test
@@ -258,8 +313,12 @@ class CodeExchangeMemberTest {
     }
 
     private boolean commitInLeaderClone(String commit) {
+        return commitIn(leader.root, commit);
+    }
+
+    private static boolean commitIn(Path repository, String commit) {
         try {
-            TestGit.output(leader.root, "cat-file", "-e", commit + "^{commit}");
+            TestGit.output(repository, "cat-file", "-e", commit + "^{commit}");
             return true;
         } catch (IOException absent) {
             return false;

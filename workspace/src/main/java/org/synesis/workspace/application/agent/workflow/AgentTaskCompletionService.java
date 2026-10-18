@@ -40,6 +40,7 @@ import org.synesis.workspace.application.agent.completion.CompleteTaskRequest;
 import org.synesis.workspace.application.agent.completion.CompletionOutcome;
 import org.synesis.workspace.application.agent.session.CallerAdmission;
 import org.synesis.workspace.application.collaboration.LaneIdentities;
+import org.synesis.workspace.application.control.CodeExchange;
 import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.IntegrationOrchestrationService;
@@ -516,11 +517,12 @@ public final class AgentTaskCompletionService {
         String participantHandle = WorkspaceCollaborationService.participantHandle(binding.sessionId());
         UUID taskId = snapshot.taskId();
 
-        // On a computer that exchanges code, the commits the next entries name must reach the code
-        // remote first (ADR-0098). Whether it can is known before anything is pinned or proposed.
-        Optional<CodeRemote> codeRemote;
+        // On a computer that exchanges code, the commits the next entries name stay here for the others to
+        // fetch, and reach a mirror first when there is one (ADR-0098). Settings that cannot be read are known
+        // before anything is pinned or proposed.
+        Optional<CodeExchange> codeExchange;
         try {
-            codeRemote = CodeRemote.of(location.coordinationDirectory());
+            codeExchange = CodeExchange.of(location.coordinationDirectory(), location.projectId());
         } catch (CodeRemote.Refused refused) {
             if (!snapshotAlreadyExists) {
                 snapshotService.removeSnapshotRef(worktree, snapshot);
@@ -583,9 +585,9 @@ public final class AgentTaskCompletionService {
         }
         String preparedRef = snapshotService.pinPreparedRef(worktree, snapshot, completionId);
         String preparedTreeHash = snapshotService.treeHash(worktree, snapshot.commitSha());
-        if (codeRemote.isPresent()) {
+        if (codeExchange.isPresent()) {
             try {
-                codeRemote.get().pushRefs(worktree, preparedRef);
+                codeExchange.get().handIn(worktree, preparedRef);
             } catch (CodeRemote.Refused refused) {
                 return codeRemoteRefusal(refused);
             }
@@ -603,9 +605,9 @@ public final class AgentTaskCompletionService {
         }
 
         snapshotService.promotePreparedRef(worktree, preparedRef, snapshot.provenance().snapshotRef(), snapshot.commitSha());
-        if (codeRemote.isPresent()) {
+        if (codeExchange.isPresent()) {
             try {
-                codeRemote.get().pushRefs(worktree, snapshot.provenance().snapshotRef());
+                codeExchange.get().handIn(worktree, snapshot.provenance().snapshotRef());
             } catch (CodeRemote.Refused refused) {
                 return codeRemoteRefusal(refused);
             }
@@ -640,7 +642,7 @@ public final class AgentTaskCompletionService {
         return sealAndContinue(result, request, location, binding, identity);
     }
 
-    /** Nothing was proposed; an unreachable remote is tried again, a missing setting needs the operator. */
+    /** Nothing was proposed; an unreachable mirror is tried again, unreadable settings need the operator. */
     private static AgentResponse codeRemoteRefusal(CodeRemote.Refused refused) {
         AgentNextAction next = CodeRemote.UNAVAILABLE.equals(refused.code()) ? AgentNextAction.RETRY : AgentNextAction.REQUEST_HUMAN_HELP;
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, next, Map.of(NextActionKeys.REASON, refused.code(), "message", refused.getMessage()));

@@ -62,7 +62,7 @@ final class AgentRunControllerTest {
         assertEquals(List.of("open conn-1", "open conn-2", "ended conn-1", "open conn-3", "ended conn-2", "ended conn-3"), script.connections,
                 "a resumed process is a new connection, opened only after the previous one was reported ended");
         assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-1"), script.environments.get(0), "Claude Code passes its environment to the MCP server");
-        assertEquals(Map.of(), script.environments.get(1), "Codex is given the identity through its configuration arguments");
+        assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-2"), script.environments.get(1), "Codex's hooks read it from its environment");
         assertTrue(script.commands.get(1).contains("mcp_servers.synesis.env.SYNESIS_MCP_CONNECTION_INSTANCE_ID=conn-2"), script.commands.get(1).toString());
         assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-3"), script.environments.get(2));
     }
@@ -108,6 +108,51 @@ final class AgentRunControllerTest {
         assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches,
                 "resumed once to take the next work, then not again: it holds no lane");
         assertEquals(List.of(3), script.resumedAtTicks);
+    }
+
+    /**
+     * A kept session whose participant was suspended (its keeper stopped renewing past the grace period)
+     * was resumed on the same connection, refused SESSION_EPOCH_FENCED at every call, and idled until
+     * the run ended. It is ended, and its agent is resumed once on a new connection, where continuing
+     * its held lane is offered to it, without waiting for progress.
+     */
+    @Test
+    void anAgentWhoseKeptSessionWasFencedIsResumedOnceInANewSessionToContinueItsLane() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.lifetimes(1, 20, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(5).announced();
+        script.at(3).head(7).fenced("claude#1");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches, "resumed once, though nothing progressed");
+        assertEquals(List.of(3), script.resumedAtTicks);
+        assertEquals(List.of("open conn-1", "open conn-2", "ended conn-1", "open conn-3"), script.connections.subList(0, 4), "the fenced session is ended, the resume is a new one");
+        assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-3"), script.environments.get(2));
+    }
+
+    /**
+     * An end the project lock refused was given up, and the lease went on naming the controller for
+     * an agent that had ended, its lane looking held by a live session until the run ended. It is
+     * offered again at each observation until it is recorded.
+     */
+    @Test
+    void anEndTheProjectCouldNotRecordIsOfferedAgainUntilItIsRecorded() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.busyEnds = 2;
+        script.lifetimes(1, 20, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(5).announced();
+        script.at(3).head(9).progressAfter(5).laneEnded("claude#1");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        List<String> conn1 = script.connections.stream().filter(line -> line.endsWith(" conn-1")).toList();
+        assertEquals(List.of("open conn-1", "busy conn-1", "busy conn-1", "ended conn-1"), conn1, "the end is offered at each look until the project records it");
+        assertTrue(script.connections.indexOf("ended conn-1") < script.connections.indexOf("ended conn-2"), "while the run goes on: " + script.connections);
     }
 
     @Test
@@ -631,6 +676,260 @@ final class AgentRunControllerTest {
         assertFalse(AgentRunController.isProgress(PredictionEventType.CONVERSATION_MESSAGES_DELIVERED));
     }
 
+    /**
+     * A lane that asked the operator and stopped to wait for the answer was resumed by nothing when the
+     * operator closed its request, and kept its lane until the run ended. The closing resumes that
+     * lane's agent once, and no other.
+     */
+    @Test
+    void theOperatorClosingALanesRequestResumesThatLanesAgentOnceAndNoOther() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "codex", "claude");
+        script.lifetimes(1, 20, 1, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(5).announced();
+        script.at(3).head(6).operatorAnswer("claude#1", 6);
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("start claude#1", "start codex#2", "start claude#3", "resume claude#1 session-1"), script.launches);
+        assertEquals(List.of(3), script.resumedAtTicks, "once, at the answer");
+    }
+
+    /**
+     * Real run across a PC and a VM (2026-10-18, mp17-link): both Claude agents here stopped with
+     * their lanes integrated; ten minutes later a Codex agent there published work that needs an
+     * independent review, and the other Codex agent there held a lane of its own. The run printed
+     * {@code AGENT_RUN_WAITING=FOREIGN_LANE_OPEN} and resumed nobody, so the review waited for ever.
+     * One agent here is resumed for it; only when that one stops without taking it is the next one
+     * tried, and neither again.
+     */
+    @Test
+    void aStoppedAgentWithNoLaneIsResumedOnceForAReviewItMayTakeAndTheNextOnlyAfterIt() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "claude");
+        script.lifetimes(1, 1, 5, 1);
+        script.withoutOwnLane.addAll(List.of("claude#1", "claude#2"));
+        script.at(0).head(5).announced().foreignLane();
+        script.at(3).head(9).progressAfter(5).foreignLane().review("snap-cli");
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(20));
+
+        assertEquals(List.of("start claude#1", "start claude#2", "resume claude#1 session-1", "resume claude#2 session-2"), script.launches);
+        assertEquals(List.of(3, 8), script.resumedAtTicks, "claude#2 waits while claude#1 looks at the review, and is tried when claude#1 stops without it");
+        assertEquals(AgentRunController.RESUME_PROMPT, script.prompts.getLast(), "the resume names no review");
+        assertEquals(AgentRunController.Outcome.TIMED_OUT, result.outcome(), "the foreign author's lane is still open");
+        assertTrue(script.connections.containsAll(List.of("ended conn-1", "open conn-3")), "a resumed agent whose connection ended gets a new one: " + script.connections);
+    }
+
+    @Test
+    void aReviewTheAgentMayNotTakeResumesNobody() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "claude");
+        script.lifetimes(1, 1);
+        script.withoutOwnLane.addAll(List.of("claude#1", "claude#2"));
+        script.at(0).head(5).announced().foreignLane();
+        // Authored in their lineage, or already held by a reviewer: either way not offered to them.
+        script.at(3).head(9).progressAfter(5).foreignLane().review("snap-own", "claude#1", "claude#2");
+
+        assertEquals(0, script.run(8, Duration.ofSeconds(10)).resumes());
+    }
+
+    @Test
+    void aStoppedAgentIsResumedAgainForANewReviewButNotForOneItWasResumedFor() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "codex");
+        script.lifetimes(1, 40, 1, 1);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(5).announced();
+        script.at(3).head(9).progressAfter(5).review("snap-1");
+        script.at(6).head(12).progressAfter(9).review("snap-1").review("snap-2");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of(3, 6), script.resumedAtTicks);
+    }
+
+    @Test
+    void aReviewGivenUpAndOfferedAgainIsANewOffer() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "codex");
+        script.lifetimes(1, 40, 1, 1);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(5).announced();
+        script.at(3).head(9).progressAfter(5).review("snap-1");
+        // A reviewer elsewhere took it, then gave it up.
+        script.at(5).head(12).progressAfter(9);
+        script.at(7).head(15).progressAfter(12).review("snap-1");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of(3, 7), script.resumedAtTicks);
+    }
+
+    @Test
+    void aReviewResumesAnAgentWithNoLaneBesideASiblingWhoseLaneWaitsForAnOperator() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "claude");
+        script.lifetimes(1, 1, 1);
+        script.withoutOwnLane.add("claude#2");
+        script.heldByOperator.add("claude");
+        script.at(0).head(5).announced().review("snap-1", "claude#1");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("start claude#1", "start claude#2", "resume claude#2 session-2"), script.launches);
+    }
+
+    @Test
+    void aReviewDoesNotResumeAnAgentPastItsResumeBudget() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "claude");
+        script.lifetimes(1, 1);
+        script.withoutOwnLane.add("claude#2");
+        script.at(0).head(5).announced().review("snap-1", "claude#1");
+
+        assertEquals(0, script.run(0, Duration.ofSeconds(10)).resumes());
+    }
+
+    /**
+     * On one computer: the author waits for a review and the other agent stopped earlier with no
+     * lane. Before, the run ended STALLED at once with nobody resumed. The other agent is resumed
+     * once for the review; when it stops without taking it, nothing here can, and the run ends.
+     */
+    @Test
+    void aReviewNobodyHereTakesEndsTheRunStalledAfterEachAgentTriedItOnce() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "claude");
+        script.lifetimes(1, 1, 1);
+        script.withoutOwnLane.add("claude#2");
+        script.at(0).head(5).announced().review("snap-1", "claude#1");
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(30));
+
+        assertEquals(List.of("start claude#1", "start claude#2", "resume claude#2 session-2"), script.launches);
+        assertEquals(AgentRunController.Outcome.STALLED, result.outcome());
+        assertTrue(script.tick < 30, "it did not wait for the deadline");
+    }
+
+    /**
+     * Real run across a PC and a VM (2026-10-18, mp18-link): a Claude agent here whose lane was
+     * integrated asked to review count.py, was told to wait for the author's answer, and stopped. Ten
+     * minutes later the author on the VM accepted. Nothing resumed the agent, which held no lane and
+     * was not offered the review (it held it), and count.py waited for ever for the reviewer it had
+     * admitted. Now its session is kept while the request is open, and it is resumed once, on that
+     * session, which alone may use the grant.
+     */
+    @Test
+    void aStoppedAgentWithNoLaneIsResumedOnceOnItsOwnSessionWhenItsRequestIsAnswered() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.providers = List.of("claude", "claude");
+        script.lifetimes(1, 1, 1);
+        script.withoutOwnLane.addAll(List.of("claude#1", "claude#2"));
+        script.at(0).head(5).announced().foreignLane().holdsRequest("claude#1");
+        script.at(4).head(9).progressAfter(5).foreignLane().holdsRequest("claude#1").answer("claude#1", 8);
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(20));
+
+        assertEquals(List.of("start claude#1", "start claude#2", "resume claude#1 session-1"), script.launches);
+        assertEquals(List.of(4), script.resumedAtTicks, "once, at the answer, and not again while the same answer stands");
+        assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-1"), script.environments.get(2), "resumed on the session that asked");
+        assertEquals(AgentRunController.RESUME_PROMPT, script.prompts.getLast(), "the resume names no request");
+        assertEquals(List.of("open conn-1", "open conn-2", "ended conn-2"), script.connections.subList(0, 3),
+                "the session holding the request is kept; the one holding nothing is ended: " + script.connections);
+        assertEquals(1, result.resumes());
+    }
+
+    @Test
+    void aRequestStillPendingKeepsTheSessionAndResumesNobody() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.providers = List.of("claude", "claude");
+        script.lifetimes(1, 1);
+        script.withoutOwnLane.addAll(List.of("claude#1", "claude#2"));
+        script.at(0).head(5).announced().foreignLane().holdsRequest("claude#1");
+        script.at(4).head(9).progressAfter(5).foreignLane().holdsRequest("claude#1");
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(0, result.resumes(), "the foreign lane's progress is not an answer");
+        assertEquals(AgentRunController.Outcome.TIMED_OUT, result.outcome());
+        assertEquals(List.of("open conn-1", "open conn-2", "ended conn-2", "ended conn-1"), script.connections, "the session holding the request is kept until the run ends");
+    }
+
+    @Test
+    void aRunWaitsForAnotherComputerThatMayAnswerARequestOfAnAgentHereWithNoLane() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.providers = List.of("claude");
+        script.lifetimes(1, 1);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(5).announced().otherComputer().holdsRequest("claude#1");
+        script.at(6).head(9).progressAfter(5).otherComputer().holdsRequest("claude#1").answer("claude#1", 8);
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(12));
+
+        assertTrue(script.events.contains("AGENT_RUN_WAITING=OTHER_COMPUTER_CONNECTED"), script.events.toString());
+        assertEquals(List.of(6), script.resumedAtTicks, "it did not end STALLED before the answer came");
+        assertEquals(AgentRunController.Outcome.TIMED_OUT, result.outcome());
+    }
+
+    @Test
+    void anAnswerTheAgentSawBeforeItStoppedResumesNobodyAndALaterAnswerResumesItOnce() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.providers = List.of("claude", "codex");
+        script.lifetimes(35, 60, 1);
+        script.withoutOwnLane.add("claude#1");
+        script.lastActivity.put("conn-1", 7L);
+        script.at(0).head(5).announced().holdsRequest("claude#1");
+        // Rejected while it ran, and read: it asks again, and that request is accepted after it stopped.
+        script.at(2).head(7).progressAfter(5).holdsRequest("claude#1").answer("claude#1", 7);
+        script.at(38).head(10).progressAfter(7).holdsRequest("claude#1").answer("claude#1", 10);
+
+        script.run(8, Duration.ofSeconds(45));
+
+        assertEquals(List.of(38), script.resumedAtTicks);
+    }
+
+    @Test
+    void anAnswerResumesAnAgentWhoseLaneWaitsForAnOperator() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "codex");
+        script.lifetimes(1, 40, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.heldByOperator.add("claude");
+        // Its published work waits for an operator; it also asked to review another module.
+        script.at(0).head(5).announced();
+        script.at(3).head(9).progressAfter(5);
+        script.at(5).head(10).progressAfter(9).answer("claude#1", 10);
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of(5), script.resumedAtTicks, "not for other lanes' progress, once for the answer");
+    }
+
+    /**
+     * Decision 4's grant left to nobody, the same missing rule: an agent holding a review grant whose
+     * own lane is integrated while it is stopped had its session ended, and was resumed in a new one,
+     * which may not use the grant. It is resumed on its own session while it holds the grant.
+     */
+    @Test
+    void aSessionWhoseLaneEndedWhileItHoldsAGrantIsKeptAndResumedOnTheSameConnection() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.lifetimes(1, 20, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(5).announced().holdsRequest("claude#1");
+        script.at(3).head(9).progressAfter(5).laneEnded("claude#1").holdsRequest("claude#1");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches);
+        assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-1"), script.environments.get(2), "the session holding the grant");
+    }
+
     @Test
     void runLeftWithAnOpenRequestARaisedByALaneSaysItNeedsAnOperator() throws Exception {
         Script script = new Script();
@@ -705,6 +1004,8 @@ final class AgentRunControllerTest {
         private boolean endlessProgress;
         /** Whether the controller's sessions can be kept, as real leases opened by its own children can. */
         private boolean keepSessions;
+        /** How many attempts to record an end the project refuses first, as a busy project lock does. */
+        private int busyEnds;
         private int tick;
         private int launched;
 
@@ -735,6 +1036,17 @@ final class AgentRunControllerTest {
                 @Override
                 public void ended(String connectionInstanceId) {
                     connections.add("ended " + connectionInstanceId);
+                }
+
+                @Override
+                public boolean end(String connectionInstanceId) {
+                    if (busyEnds > 0) {
+                        busyEnds--;
+                        connections.add("busy " + connectionInstanceId);
+                        return false;
+                    }
+                    ended(connectionInstanceId);
+                    return true;
                 }
 
                 @Override
@@ -871,6 +1183,17 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public OptionalLong newestOperatorAnswerFor(String provider, String connectionInstanceId) {
+                    Long sequence = laneHeldUnder(connectionInstanceId) ? state.operatorAnswers.get(agentOf.get(connectionInstanceId)) : null;
+                    return sequence == null ? OptionalLong.empty() : OptionalLong.of(sequence);
+                }
+
+                @Override
+                public boolean sessionFenced(String provider, String connectionInstanceId) {
+                    return state.fenced.contains(agentOf.get(connectionInstanceId)) && Integer.valueOf(1).equals(ordinalOf.get(connectionInstanceId));
+                }
+
+                @Override
                 public boolean foreignActiveLaneOpen(List<Connection> managed) {
                     return state.foreignLane;
                 }
@@ -878,6 +1201,26 @@ final class AgentRunControllerTest {
                 @Override
                 public boolean otherComputerConnected() {
                     return state.otherComputer;
+                }
+
+                @Override
+                public List<String> reviewsOffered(String provider, List<String> connectionInstanceIds) {
+                    if (connectionInstanceIds.stream().anyMatch(connection -> holdsOpenLane(provider, connection))) {
+                        return List.of();
+                    }
+                    String agent = agentOf.get(connectionInstanceIds.getFirst());
+                    return state.reviews.entrySet().stream().filter(review -> !review.getValue().contains(agent)).map(Map.Entry::getKey).toList();
+                }
+
+                @Override
+                public OptionalLong newestAnswerFor(String provider, String connectionInstanceId) {
+                    Long sequence = state.answers.get(agentOf.get(connectionInstanceId));
+                    return sequence == null ? OptionalLong.empty() : OptionalLong.of(sequence);
+                }
+
+                @Override
+                public boolean holdsRequestOrGrant(String provider, String connectionInstanceId) {
+                    return state.requestsHeld.contains(agentOf.get(connectionInstanceId));
                 }
 
                 @Override
@@ -902,6 +1245,41 @@ final class AgentRunControllerTest {
         private final List<String> operatorRequests = new ArrayList<>();
         private final Map<String, Long> messages = new java.util.HashMap<>();
         private final List<String> endedLanes = new ArrayList<>();
+        private final List<String> fenced = new ArrayList<>();
+        private final Map<String, Long> operatorAnswers = new java.util.HashMap<>();
+        private final Map<String, List<String>> reviews = new java.util.LinkedHashMap<>();
+        private final Map<String, Long> answers = new java.util.HashMap<>();
+        private final List<String> requestsHeld = new ArrayList<>();
+
+        /** A request a session of this agent, by its label, made was answered at this log position. */
+        private State answer(String agent, long sequence) {
+            answers.put(agent, sequence);
+            return this;
+        }
+
+        /** The current session of this agent, by its label, holds a pending request or an unfinished review grant. */
+        private State holdsRequest(String agent) {
+            requestsHeld.add(agent);
+            return this;
+        }
+
+        /** The operator closed, at this log position, a request the lane of this agent, by its label, put to it. */
+        private State operatorAnswer(String agent, long sequence) {
+            operatorAnswers.put(agent, sequence);
+            return this;
+        }
+
+        /** A snapshot waits for a review that every agent here but these, by their labels, may take. */
+        private State review(String snapshot, String... notOfferedTo) {
+            reviews.put(snapshot, List.of(notOfferedTo));
+            return this;
+        }
+
+        /** The session of this agent's first connection, by its label, is suspended or held for recovery. */
+        private State fenced(String agent) {
+            fenced.add(agent);
+            return this;
+        }
 
         /** The lane of this agent, by its label, has ended: integrated, cancelled or continued by another. */
         private State laneEnded(String agent) {

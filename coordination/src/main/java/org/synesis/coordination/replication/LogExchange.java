@@ -128,8 +128,9 @@ public final class LogExchange implements AutoCloseable {
      *                      members' (a signature proves who wrote an entry, not that the writer belongs to the
      *                      project); on a member every log the owner's computer serves, until membership is in the
      *                      owner's log (ADR-0098 step 6)
-     * @param afterArrivals called on the exchange thread after entries of another computer arrived, so the owner's
-     *                      computer can act on them without an agent of its own (the merge driver); it must not block
+     * @param afterArrivals called on the exchange thread after a pull that brought entries of another computer, so
+     *                      this computer can act on what the logs name without an agent of its own (the merge
+     *                      driver, a member following {@code main}); it must not block
      */
     public LogExchange(Path root, UUID projectId, Predicate<String> admitted, Predicate<String> copied,
             Runnable afterArrivals) {
@@ -193,6 +194,21 @@ public final class LogExchange implements AutoCloseable {
      */
     public State state(String node) {
         return states.getOrDefault(node, State.DISCONNECTED);
+    }
+
+    /**
+     * The sessions of admitted peers that are live now, for other protocols that ride on them (Code over Link).
+     *
+     * @return each peer's node and its session
+     */
+    public Map<String, PeerSession> liveSessions() {
+        Map<String, PeerSession> live = new LinkedHashMap<>();
+        sessions.forEach((node, session) -> {
+            if (admitted.test(node) && Sessions.live(session)) {
+                live.put(node, session);
+            }
+        });
+        return Map.copyOf(live);
     }
 
     /**

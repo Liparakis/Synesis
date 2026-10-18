@@ -75,6 +75,7 @@ public final class LinkInviteCommand extends LinkOperationCommand {
             case "CODE_REMOTE_MISSING" -> "'code.remote' names a remote this project does not have";
             default -> "this project has no Git remote";
         };
-        runtime.terminal().stdout("NOTE=" + why + ", so the other computer cannot be accepted: add a Git remote, then create a new invitation");
+        // Code moves over Link (ADR-0098 step 3); a remote is only a mirror, so its absence is information, not a stop.
+        runtime.terminal().stdout("NOTE=" + why + ", so code moves over Link only, with no mirror");
     }
 }

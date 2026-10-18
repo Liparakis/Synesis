@@ -51,7 +51,7 @@ function projectLinkMessage(error: unknown): string {
   const code = error && typeof error === "object" && "code" in error && typeof error.code === "string"
     ? error.code : "";
   if (code === "PROJECT_IDENTITY_MISMATCH") return "That folder holds a different project than the invitation's.";
-  if (code === "PROJECT_FOLDER_NOT_THE_PROJECT") return "That folder is not a copy of this project. Clone the project's repository, then choose the clone.";
+  if (code === "PROJECT_FOLDER_NOT_THE_PROJECT") return "That folder is neither empty nor a copy of this project. Choose an empty folder, or a clone of the project.";
   if (code === "PROJECT_FOLDER_INVALID") return "That folder could not be found.";
   if (code === "LOG_NOT_EMPTY") return "This copy of the project already has its own work log, so it cannot follow another computer.";
   if (code === "ALREADY_A_MEMBER" || code === "FOLLOWING_ANOTHER_LEADER") return "This computer already follows another computer for this project.";
@@ -992,9 +992,9 @@ function JoinPanel({client, initialLink = "", onRegistered}: {client: JoinClient
       setFolderNeeded(null);
       setAnswerUri(response.answerUri ?? "");
       setMessage("Connecting to the owner of the project. They have to accept this computer before any work is shared. If it does not connect within a few seconds, send the answer link below to the person who invited you.");
-      // The join goes on: the person can fix this afterwards, and agents here cannot start until they do.
+      // The join goes on: code comes over Link, and the person can fix the mirror afterwards.
       if (response.codeRemoteCheck && response.codeRemoteCheck !== "REACHABLE") {
-        setCodeRemoteProblem(`This computer cannot fetch the project's code without a sign-in, so agents here cannot start yet. ${response.codeRemoteDetail ?? response.codeRemoteCheck}`);
+        setCodeRemoteProblem(`This computer cannot fetch from the project's Git mirror without a sign-in. Code still comes over Link from the owner's computer; the mirror is used only when that computer is away. ${response.codeRemoteDetail ?? response.codeRemoteCheck}`);
       }
       await onRegistered?.();
     } catch (error) {
@@ -1024,16 +1024,16 @@ function JoinPanel({client, initialLink = "", onRegistered}: {client: JoinClient
       </div>
       {details && <div className="form-block" role="group" aria-label="About this invitation">
         <p>From computer <code>{shortNode(details.hostNodeId)}</code> for the project <strong>{details.projectName ?? details.projectId}</strong>.</p>
-        <p>{details.codeRemoteUrl ? <>Code is fetched from <code>{details.codeRemoteUrl}</code>.</> : "It names no code remote, so code cannot move between you until the owner adds one."}</p>
+        <p>{details.codeRemoteUrl ? <>Code comes over Link from the owner's computer. It is also kept at <code>{details.codeRemoteUrl}</code>.</> : "Code comes over Link from the owner's computer."}</p>
         <p className="muted">Expires {new Date(details.expiresAt).toLocaleString()}.</p>
       </div>}
       {folderNeeded && <div className="form-block" role="group" aria-label="Where is the project?">
-        <p role="status">This project is not on this computer yet. {folderNeeded.url
-          ? <>Clone it from <code>{folderNeeded.url}</code>, then choose the folder you cloned it into.</>
-          : "Choose the folder where you have it."}</p>
+        <p role="status">This project is not on this computer yet. Choose an empty folder, or type a new one. Synesis fetches the project into it from the owner's computer once the owner accepts this computer.{folderNeeded.url
+          ? <> If you prefer, you can clone it yourself from <code>{folderNeeded.url}</code> and choose that clone instead.</>
+          : ""}</p>
         <label className="form-label" htmlFor="project-folder">Project folder</label>
         <div className="inline-form">
-          <input className="text-field" id="project-folder" value={folder} onChange={(event) => setFolder(event.target.value)} placeholder="Folder that holds the project" />
+          <input className="text-field" id="project-folder" value={folder} onChange={(event) => setFolder(event.target.value)} placeholder="Empty folder for the project" />
           {client && <button className="button button-secondary" type="button" disabled={busy} onClick={() => void chooseFolder()}><FolderOpen size={15}/> Choose folder</button>}
           <button className="button button-secondary" type="button" disabled={busy || !folder.trim()} onClick={() => void open(folder.trim())}><Check size={15}/> Use this folder</button>
         </div>
@@ -1075,8 +1075,8 @@ export function NetworkView({network, onboarding, projectName, client}: {network
       setActionMessage(response.kind !== "PROJECT"
         ? "Invitation created. Send it to the other computer; this one waits for it."
         : response.codeRemoteUrl
-          ? `Invitation created. It names the Git remote ${response.codeRemoteName ?? ""} (${response.codeRemoteUrl}): that is where the other computer gets the code. Send it to the other computer; this one waits for it and asks you before it lets that computer in.`
-          : `Invitation created, but it names no code remote (${codeRemoteReasonText(response.codeRemoteReason)}). The other computer cannot be accepted until the project has one: add a Git remote, then create a new invitation.`);
+          ? `Invitation created. The code moves over Link from this computer; the Git remote ${response.codeRemoteName ?? ""} (${response.codeRemoteUrl}) is named as an optional mirror. Send it to the other computer; this one waits for it and asks you before it lets that computer in.`
+          : `Invitation created. It names no Git remote (${codeRemoteReasonText(response.codeRemoteReason)}); that is fine, the code moves over Link from this computer. Send it to the other computer; this one waits for it and asks you before it lets that computer in.`);
     } catch (error) {
       fail(error, "Invitation failed.");
     } finally { setBusy(false); }

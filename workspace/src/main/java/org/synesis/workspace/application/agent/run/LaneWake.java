@@ -38,8 +38,9 @@ import org.synesis.workspace.infrastructure.json.ProviderJson;
  * the run controller resumes the stopped agent on the next progress; a duplicate costs one short turn.</p>
  *
  * <p>What is "for its lane" is read from the projections {@code get_next_action} reads, as a small view of the
- * lane: its requests, grants, reviews, task, contract and capability requests, unread messages and WorkGroup. Its lane
- * ending is a change too. The view the agent last saw, when it was told WAIT, is kept in a local note per connection,
+ * lane: its requests, grants, reviews, task, contract and capability requests, unread messages, the requests it put to
+ * the operator, and WorkGroup; an entry that a note written by an older build lacks is not compared. Its lane ending
+ * is a change too. The view the agent last saw, when it was told WAIT, is kept in a local note per connection,
  * so what arrived between that answer and the stop still wakes it. A wait that ends at a time rather than on an event
  * (a recovery deadline, a requester's answer period, a silent consumer's absence) is kept in the note as well, and
  * that time wakes the agent. The note is this computer's alone and never authority; without one the agent is not held.
@@ -66,6 +67,7 @@ public final class LaneWake {
             "contracts", "a contract change request against your files, or an answer to yours",
             "capabilities", "a capability request of your lane changed",
             "messages", "a message",
+            "operator", "the operator closed a request your lane put to it",
             "group", "your WorkGroup's status changed");
 
     private LaneWake() {
@@ -149,7 +151,7 @@ public final class LaneWake {
             if (current != head) {
                 head = current;
                 Map<String, String> now = view(open(location), note.participant(), note.requester());
-                List<String> changed = now.isEmpty() ? List.of() : now.keySet().stream().filter(entry -> !now.get(entry).equals(seen.get(entry))).toList();
+                List<String> changed = now.isEmpty() ? List.of() : now.keySet().stream().filter(entry -> seen.containsKey(entry) && !now.get(entry).equals(seen.get(entry))).toList();
                 if (now.isEmpty() || !changed.isEmpty()) {
                     write(notePath, note.woken(), now);
                     return Optional.of("Synesis recorded something for your lane: " + (now.isEmpty() ? "your lane has ended" : changed.stream().map(WHAT_CHANGED::get).collect(Collectors.joining("; ")))
@@ -208,6 +210,9 @@ public final class LaneWake {
                         || requester != null && request.matchesRequester(requester.nodeId(), requester.supervisorId(), requester.workerId()))
                 .map(request -> request.handle().value() + "=" + request.state() + "@" + request.contractRevision())));
         view.put("messages", sorted(store.conversationProjection().unread(lineage).stream().map(message -> message.id().toString())));
+        // A lane that asked the operator and waits for the answer is woken by its request closing (ADR-0093).
+        view.put("operator", sorted(store.operatorRequestProjection().all().stream().filter(request -> request.raisedBy().equals(lineage.toString()))
+                .map(request -> request.id() + "=" + request.state())));
         view.put("group", groups.group(intent.workGroupId()).map(group -> group.status().name()).orElse(""));
         return view;
     }

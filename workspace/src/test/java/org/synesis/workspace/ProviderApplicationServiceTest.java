@@ -70,7 +70,9 @@ final class ProviderApplicationServiceTest {
         assertEquals(org.synesis.workspace.provider.ProviderMcpEvidenceTier.MCP_CONFIRMED_WORKING, ProviderRegistry.find("codex").mcpEvidenceTier());
         assertEquals(org.synesis.workspace.provider.ProviderMcpEvidenceTier.MCP_CONFIRMED_WORKING, ProviderRegistry.find("claude").mcpEvidenceTier());
         assertEquals("REVIEW_REQUIRED", ProviderRegistry.find("codex").trustStatus());
-        assertTrue(ProviderRegistry.find("codex").requiresRealValidation());
+        // Reviewing the project's hooks in Codex is the person's step, reported beside a healthy install (ADR-0099, 2026-10-18).
+        assertFalse(ProviderRegistry.find("codex").requiresRealValidation());
+        assertTrue(ProviderRegistry.find("codex").trustNote().contains("/hooks"));
     }
 
     @Test
@@ -110,8 +112,11 @@ final class ProviderApplicationServiceTest {
             ProviderApplicationService service = new ProviderApplicationService();
 
             var installed = service.install(location, "codex");
+            // This test's launcher starts no MCP server; the review Codex asks for no longer degrades the install.
             assertEquals("DEGRADED", installed.values().get("PROVIDER_INSTALL_RESULT"));
+            assertTrue(installed.values().get("MCP_HEALTH").startsWith("FAILED"), installed.values().toString());
             assertEquals("REVIEW_REQUIRED", installed.values().get("TRUST_STATUS"));
+            assertTrue(installed.values().get("TRUST_NOTE").contains("/hooks in Codex"));
             Map<?, ?> merged = (Map<?, ?>) ProviderJson.parse(Files.readString(config));
             assertEquals(Boolean.TRUE, ((Map<?, ?>) merged.get("unrelated")).get("value"));
             assertFalse(Files.readString(config).contains("versions"));
@@ -120,7 +125,8 @@ final class ProviderApplicationServiceTest {
             Map<?, ?> preToolUse = (Map<?, ?>) ((java.util.List<?>) hooks.get("PreToolUse")).getFirst();
             Map<?, ?> handler = (Map<?, ?>) ((java.util.List<?>) preToolUse.get("hooks")).getFirst();
             assertTrue(String.valueOf(handler.get("commandWindows")).startsWith("cmd.exe /d /s /c"));
-            assertEquals("DEGRADED", service.status(location, "codex").values().get("PROVIDER_STATUS"));
+            assertEquals("HEALTHY", service.status(location, "codex").values().get("PROVIDER_STATUS"));
+            assertTrue(service.status(location, "codex").values().containsKey("TRUST_NOTE"));
             assertEquals("REVIEW_REQUIRED", service.status(location, "codex").values().get("TRUST_STATUS"));
             assertEquals("UP_TO_DATE", service.status(location, "codex").values().get("MCP_CONFIG_STATUS"));
             assertEquals("SUCCESS", service.uninstall(location, "codex").values().get("PROVIDER_UNINSTALL_RESULT"));

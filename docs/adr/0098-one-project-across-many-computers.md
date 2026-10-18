@@ -625,6 +625,30 @@ agents' processes reach it by HTTP on loopback (`LoopbackExchange`). No Java cod
     Git writes and reads the bundle file itself, so nothing streams through the runner.
 11. **Compatibility 7.**
 
+Calls made while building it (designer, 2026-10-18):
+
+- **A `Want` names one thing** (a snapshot or prepared ref, `HEAD`, or a commit ID), and a `Piece` also carries the
+  commit the name resolved to and the holder's branch name, so a client asking for `HEAD` knows when it is done and a
+  joiner names its branch the same.
+- **Pieces are cut along first parents by binary search** on `rev-list --objects --disk-usage`, which only shrinks as
+  the cut moves back along first parents; a cut over merges in plain `--reverse` order is not monotonic.
+- **Every Link failure reaches callers as `CODE_REMOTE_UNAVAILABLE`,** so their "try again" handling is unchanged.
+- **A snapshot is asked for by its ref,** which its author serves before its own log copy has the entry; the result
+  must equal the commit the log names.
+- **The merge pass fetches outside the integration lock, and only the snapshots it may merge now** (reviewed and in
+  order). One computer that is away therefore holds back only its own snapshots, not every integration.
+- **A member fetches `main` only when the advanced head is missing,** and moves its checkout by `followLeader`'s rule
+  whenever the commit is held, so a checkout that cannot fast-forward does not download again on every pull.
+- **The first checkout goes only into a folder that holds nothing but Synesis's own files;** otherwise
+  `CODE_FOLDER_NOT_EMPTY`, and nothing is touched.
+- **Removed, not deprecated:** `CodeRemote.of(Path)`, `ensureCommit`, `followLeaderIfMember`, `fetchIfMissing`,
+  `NOT_CONFIGURED` and `MemberAdmission.CODE_REMOTE_NOT_CONFIGURED`. Every caller is in this repository and was
+  migrated, and the workspace module ships only inside the CLI, so these are treated as internal. A refusal code that
+  can no longer happen is dropped: a reader that knew it never sees it. Open to the owner.
+- **Not built yet:** a leader passing a commit from one member to another (a member's reviewer gets another member's
+  snapshot once the leader holds it, which with two computers is always), and the invitation's mirror for a joiner
+  that used `--into`.
+
 ### Step 4: Each computer writes its own log
 
 Today: one log, `events/%020d.sce`, chained by a global `sequence`; each projection's `validate` is a copy of `apply`, so
@@ -815,7 +839,9 @@ losing their lanes.
 
 1. **The compatibility number.** DONE.
 2. **One fixed leader.** DONE 2026-10-16 (run 7), with a Git remote. The baseline.
-3. **Code over Link.** Link becomes the path code always takes.
+3. **Code over Link.** Link becomes the path code always takes. DONE 2026-10-18 (remaster66, `1ebeb275`): run 7's goal
+   COMPLETED on the PC and the VM with no Git remote, `main` equal on both (`6ff0c11`); a 450 MB history joined in four
+   pieces, cut in the middle of the first and resumed from chunk 151 (`docs/agent/CURRENT.md`, 2026-10-18).
    - **Built:** the Link code mover ("Code over Link"); `code.remote` optional; a reviewer fetches a snapshot from its
      author's computer, the leader fetches before it merges, and members follow `main`, all over Link; joining fetches
      the repository over Link.

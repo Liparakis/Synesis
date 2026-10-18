@@ -126,7 +126,7 @@ final class ProjectLinkFlowTest {
             MemberReplication member = settings.filter(ReplicationSettings::isMember).isPresent() ? MemberReplication.open(coordination, projectId) : null;
             MergeDriver merge = member == null ? MergeDriver.forProject(location.root(), coordination, projectId, node, 3_000L) : null;
             LeaderReplication leader = merge != null ? LeaderReplication.serving(coordination, projectId, merge::onMemberEntry) : null;
-            ReplicationSide side = new ReplicationSide(coordination, projectId, member, settings.map(ReplicationSettings::leaderNodeId).orElse(null), leader, merge);
+            ReplicationSide side = new ReplicationSide(coordination, projectId, location.root(), member, settings.map(ReplicationSettings::leaderNodeId).orElse(null), leader, merge);
             ControlPlaneEventHub hub = new ControlPlaneEventHub();
             this.owner = CoordinationServerLauncher.linkOwner(new Onboarding(location.linkDirectory(), hub::publish), node, hub, location.identity(), side,
                     new ReplicationJournal(coordination), coordination, (nodeId, codeRemoteUrl) -> {
@@ -166,6 +166,7 @@ final class ProjectLinkFlowTest {
             if (member != null) {
                 member.serve(server);
             }
+            side.serveCode(server);
             this.endpoint = URI.create("http://127.0.0.1:" + server.address().getPort());
             this.commandToken = control.runtimeCommandToken();
             mine.addAll(List.of(control, owner, server, side));
@@ -369,7 +370,7 @@ final class ProjectLinkFlowTest {
         assertEquals(409, wrongProject.status(), wrongProject.toString());
         assertEquals("PROJECT_IDENTITY_MISMATCH", wrongProject.code());
         assertTrue(friendRegistry.projects().stream().noneMatch(view -> view.projectId().equals(ownerProject.projectId())));
-        assertEquals(400, friendHome.post("open-project-link", Map.of("link", link, "folder", temp.resolve("nowhere").toString())).status());
+        assertEquals(400, friendHome.post("open-project-link", Map.of("link", link, "folder", temp.resolve("nowhere/deeper").toString())).status());
 
         // The friend cloned the project themselves; it holds only the tracked project file, so it becomes a replica.
         Path clone = temp.resolve("friend-clone");
@@ -432,7 +433,46 @@ final class ProjectLinkFlowTest {
     }
 
     @Test
-    void anInvitationNeverStopsTheOwnersOwnWorkAndAnAcceptWithoutACodeRemoteIsRefused() throws Exception {
+    void aFriendWithNoCopyJoinsIntoAnEmptyFolderAndGetsTheOwnersBranchOverLink() throws Exception {
+        Path ownerRoot = ownerProject.root();
+        Files.writeString(ownerRoot.resolve("board.txt"), "the owner's work\n");
+        GitProcessRunner.run(ownerRoot, "add", "board.txt");
+        GitProcessRunner.run(ownerRoot, "commit", "-m", "owner's work");
+        String ownerHead = GitProcessRunner.run(ownerRoot, "rev-parse", "HEAD").strip();
+        String ownerBranch = GitProcessRunner.run(ownerRoot, "symbolic-ref", "--short", "HEAD").strip();
+        Computer owner = start(ownerProject, null);
+        Computer friendHome = start(service.require(friendHomeRoot), friendRegistry);
+        Path joined = temp.resolve("joined");
+
+        Response opened = friendHome.post("open-project-link", Map.of("link", projectLinkOf(owner), "folder", joined.toString()));
+
+        assertEquals(200, opened.status(), opened.toString());
+        assertEquals("CONNECTING", opened.body().get("state"));
+        assertEquals(joined.toString(), opened.body().get("folder"));
+        assertFalse(Files.exists(joined.resolve(".git")), "no code before the owner accepts");
+        assertEquals(ReplicationSettings.member(owner.node.nodeId()), ReplicationSettings.read(joined.resolve(".synesis/coordination")).orElseThrow(),
+                "a folder with no repository yet names no mirror");
+        await(() -> {
+            try {
+                return owner.joinRequests().size() == 1;
+            } catch (Exception failure) {
+                return false;
+            }
+        });
+
+        assertEquals(200, owner.post("accept-join", Map.of("nodeId", owner.joinRequests().getFirst().get("nodeId"))).status());
+
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+        while (!Files.isRegularFile(joined.resolve("board.txt")) && System.nanoTime() < deadline) {
+            Thread.sleep(100);
+        }
+        assertEquals(ownerHead, GitProcessRunner.run(joined, "rev-parse", "HEAD").strip(), "the friend's copy holds the owner's head");
+        assertEquals(ownerBranch, GitProcessRunner.run(joined, "symbolic-ref", "--short", "HEAD").strip(), "under the owner's branch name");
+        assertEquals("the owner's work\n", Files.readString(joined.resolve("board.txt")).replace("\r\n", "\n"));
+    }
+
+    @Test
+    void anInvitationNeverStopsTheOwnersOwnWorkAndAnAcceptWithoutACodeRemoteMakesALeaderWithNoMirror() throws Exception {
         GitProcessRunner.run(ownerProject.root(), "remote", "remove", "origin");
         Computer owner = start(ownerProject, null);
         ProjectLocation friendProject = friendClone("friend");
@@ -456,10 +496,9 @@ final class ProjectLinkFlowTest {
 
         Response accepted = owner.post("accept-join", Map.of("nodeId", friend.node.nodeId()));
 
-        assertEquals(409, accepted.status(), accepted.toString());
-        assertEquals("CODE_REMOTE_NOT_CONFIGURED", accepted.code());
-        assertTrue(ReplicationSettings.read(ownerProject.coordinationDirectory()).isEmpty());
-        assertEquals(1, owner.joinRequests().size(), "the request stays until it is declined or expires");
+        assertEquals(200, accepted.status(), accepted.toString());
+        assertEquals(ReplicationSettings.leader(java.util.Set.of(friend.node.nodeId())), owner.role(), "code moves over Link, so no remote is needed");
+        assertEquals(List.of(), owner.joinRequests());
     }
 
     @Test

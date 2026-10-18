@@ -3,6 +3,7 @@ package org.synesis.workspace.application.agent.workflow;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.synesis.coordination.domain.capability.CapabilityContract;
 import org.synesis.coordination.domain.collaboration.CollaborationProjection;
 import org.synesis.coordination.domain.collaboration.CoordinationRequest;
@@ -67,6 +68,26 @@ public final class CollaborationResponseMapper {
             compact.put("reviewerIntent", candidate.get("reviewerIntent"));
             return compact;
         }).toList();
+    }
+
+    /**
+     * Names the snapshots whose review an agent that holds no lane may take up, read from a log already
+     * open: the {@link #openReviewCandidates review candidates} that none of the sessions it has had
+     * produced. The service knows sessions, not agents, so the agent's next session would be offered
+     * what an earlier one produced; the run controller, which resumes a stopped agent for one of these
+     * (ADR-0099), asks about every session it knows of.
+     *
+     * @param store    current project projection
+     * @param sessions exact participant handles of the agent's sessions
+     * @return the candidates' snapshot identifiers, empty when there are none, no session is named, or
+     *         one of them holds a lane
+     */
+    public static List<String> openReviewSnapshots(PredictionEventStore store, java.util.Collection<String> sessions) {
+        Objects.requireNonNull(store, "store");
+        if (sessions.isEmpty() || sessions.stream().anyMatch(session -> NextActionSupport.activeIntentOf(store, session).isPresent())) {
+            return List.of();
+        }
+        return AgentReviewActionProjection.reviewCandidatesFor(store, sessions).stream().map(candidate -> String.valueOf(candidate.get(NextActionKeys.SNAPSHOT_ID))).toList();
     }
 
     /**

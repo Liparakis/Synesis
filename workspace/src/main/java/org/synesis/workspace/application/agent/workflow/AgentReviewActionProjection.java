@@ -186,6 +186,11 @@ static AgentResponse reviewActionResponse(Map<String, Object> collaboration, boo
                 // session holds one lane, so the reviewer cannot take the implementation over itself.
                 result.put("instruction", "No open producer lane claims what this lane reviews: its producer left, or its work was integrated after another review. "
                         + "Nothing will be submitted for this lane to review until a participant announces it again. Keep waiting, or call cancel_lane with the reason if no producer is coming.");
+            } else if (admittedAnotherReviewer(store, reviewer)) {
+                // In a real run a second reviewer lane waited here for ever: the author had accepted
+                // the other reviewer's request for the only snapshot this lane could review.
+                result.put("instruction", "What this lane reviews was published, and its author admitted another reviewer to that review. "
+                        + "Nothing will be submitted for this lane to review unless that review is given up. Keep waiting, or call cancel_lane with the reason if that review is not coming back.");
             }
             result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(reviewer));
             result.put(NextActionKeys.WORK_GROUP_ID, reviewer.workGroupId().toString());
@@ -197,6 +202,23 @@ static AgentResponse reviewActionResponse(Map<String, Object> collaboration, boo
             return new AgentResponse(AgentStatus.WAITING, AgentReason.VALIDATION_REQUIRED, AgentNextAction.WAIT, result);
         }
         return null;
+    }
+
+/**
+     * Returns whether everything waiting for review that a reviewer lane targets was admitted to
+     * another participant: its author accepted that participant's review request, or that
+     * participant holds the review grant. A request still pending admits nobody yet, and the author
+     * may still refuse it, so it does not count here, although it keeps the snapshot from being
+     * offered.
+     */
+    private static boolean admittedAnotherReviewer(PredictionEventStore store, WorkIntent reviewer) {
+        List<TaskSnapshotRecord> pending = store.taskCompletionProjection().pendingReviewSnapshots().stream().filter(snapshot -> snapshot.provenance().workGroupId().equals(reviewer.workGroupId()))
+                .filter(snapshot -> reviewTargetsMatch(reviewer, snapshot)).toList();
+        return !pending.isEmpty() && pending.stream().allMatch(snapshot -> store.collaborationProjection().requests().stream()
+                .anyMatch(request -> request.kind() == CoordinationRequest.Kind.REVIEW && request.status() == CoordinationRequest.Status.ACCEPTED && snapshot.snapshotId().equals(request.snapshotId())
+                        && !request.requester().equals(reviewer.participant()))
+                || store.workGroupProjection().grants().stream().anyMatch(grant -> snapshot.snapshotId().equals(grant.snapshotId()) && !grant.targetParticipant().equals(reviewer.participant())
+                        && ReviewAdmissionRules.holdsReview(store, grant)));
     }
 
 static boolean hasMandatoryReviewCandidate(PredictionEventStore store, WorkIntent reviewer) {
@@ -639,12 +661,25 @@ static List<Map<String, Object>> reviewCandidates(PredictionEventStore store) {
      * @return the open candidates the participant did not produce and whose author is active
      */
     static List<Map<String, Object>> reviewCandidatesFor(PredictionEventStore store, String participantId) {
+        return reviewCandidatesFor(store, List.of(participantId));
+    }
+
+    /**
+     * Lists the review candidates that every one of several participants may take up, as
+     * {@link #reviewCandidatesFor(PredictionEventStore, String)} decides for one: the sessions an
+     * agent has had, where the work any of them produced is the agent's own.
+     *
+     * @param store        current project projection
+     * @param participants exact participant handles
+     * @return the open candidates none of the participants produced and whose author is active
+     */
+    static List<Map<String, Object>> reviewCandidatesFor(PredictionEventStore store, java.util.Collection<String> participants) {
         var collaboration = store.collaborationProjection();
-        ParticipantId caller = new ParticipantId(participantId);
+        List<ParticipantId> callers = participants.stream().map(ParticipantId::new).toList();
         return reviewCandidates(store).stream().filter(candidate -> store.taskCompletionProjection().findSnapshotById(String.valueOf(candidate.get(NextActionKeys.SNAPSHOT_ID))).filter(snapshot -> {
             WorkIntent producer = reviewProducerIntent(store, snapshot);
-            boolean ownWork = ReviewAdmissionRules.authoredInLineage(store, caller, snapshot.provenance().lineageIdentity())
-                    || snapshot.provenance().participant().equals(participantId) || producer != null && producer.participant().equals(participantId);
+            boolean ownWork = callers.stream().anyMatch(caller -> ReviewAdmissionRules.authoredInLineage(store, caller, snapshot.provenance().lineageIdentity()))
+                    || participants.contains(snapshot.provenance().participant()) || producer != null && participants.contains(producer.participant());
             boolean authorAbsent = producer != null && collaboration.participantState(producer.participant()).orElse(null) != Participant.State.ACTIVE;
             return !ownWork && !authorAbsent;
         }).isPresent()).toList();

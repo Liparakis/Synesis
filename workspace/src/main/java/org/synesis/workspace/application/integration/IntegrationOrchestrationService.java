@@ -36,6 +36,7 @@ import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentFailures;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.control.CodeExchange;
 import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.application.control.ControlBranchAdvancementService;
 import org.synesis.workspace.application.project.execution.ExecutionRequest;
@@ -410,7 +411,7 @@ public final class IntegrationOrchestrationService {
     /** Whether commits reach this log's computer from others, so that the paths a snapshot declares were not made here. */
     private static boolean exchangesCode(PredictionEventStore store) {
         try {
-            return CodeRemote.of(store.rootDirectory()).isPresent();
+            return CodeExchange.of(store.rootDirectory(), store.projectId()).isPresent();
         } catch (CodeRemote.Refused refused) {
             return true;
         }
@@ -488,15 +489,15 @@ public final class IntegrationOrchestrationService {
     }
 
     /**
-     * Gives the code remote the leader's control branch once a pass has run, outside every lock. It asks the
-     * remote nothing when the remote is known to hold the head, so a failed push is simply tried again by the
-     * next pass, and a remote that is down never delays the log (ADR-0098).
+     * Gives a mirror the leader's control branch once a pass has run, outside every lock. It asks the mirror
+     * nothing when it is known to hold the head, so a failed push is simply tried again by the next pass, and a
+     * mirror that is down never delays the log (ADR-0098). The members learn the head from the log.
      */
     private static void publishControlBranch(Path controlRoot, PredictionEventStore store) {
         try {
-            Optional<CodeRemote> remote = CodeRemote.of(store.rootDirectory());
-            if (remote.isPresent()) {
-                remote.get().publishControlBranch(controlRoot);
+            Optional<CodeExchange> exchange = CodeExchange.of(store.rootDirectory(), store.projectId());
+            if (exchange.isPresent()) {
+                exchange.get().publishControlBranch(controlRoot);
             }
         } catch (CodeRemote.Refused refused) {
             if (CodeRemote.UNAVAILABLE.equals(refused.code())) {
@@ -507,34 +508,33 @@ public final class IntegrationOrchestrationService {
 
     /**
      * Brings in the commits the log names before a pass reads them. The leader's clone holds the lanes of
-     * its own computer only; the members' snapshots were pushed to the code remote before they were proposed.
-     * The pass is not started when they cannot be had, because its checks would then record work as missing.
+     * its own computer only; each member keeps its snapshots and serves them over Link, and a mirror may hold
+     * them too. The pass is not started when they cannot be had, because its checks would then record work as
+     * missing.
      *
      * @return the pass's response when it must not run, {@code null} when it may
      */
     private static AgentResponse fetchCommitsNamedByLog(Path controlRoot, PredictionEventStore store) {
-        Optional<CodeRemote> remote = Optional.empty();
-        CodeRemote.Refused notConfigured = null;
+        Optional<CodeExchange> exchange;
         try {
-            remote = CodeRemote.of(store.rootDirectory());
-        } catch (CodeRemote.Refused refused) {
-            notConfigured = refused;
+            exchange = CodeExchange.of(store.rootDirectory(), store.projectId());
+        } catch (CodeRemote.Refused unreadable) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failure", unreadable.code(), "message", unreadable.getMessage()));
         }
-        if (remote.isEmpty() && notConfigured == null) {
+        if (exchange.isEmpty()) {
             return null;
         }
+        Map<String, String> snapshots = new java.util.LinkedHashMap<>();
         try {
-            if (IntegrationCandidatePolicy.currentRevisions(new PredictionEventStore(store.rootDirectory(), store.projectId())).isEmpty()) {
-                return null;
-            }
+            // Only what the pass may integrate: work still waiting for its review fetches nothing, so a computer that is
+            // away holds up only its own reviewed work.
+            IntegrationCandidatePolicy.reviewAcceptedInOrder(new PredictionEventStore(store.rootDirectory(), store.projectId()))
+                    .forEach(snapshot -> snapshots.put(snapshot.provenance().snapshotRef(), snapshot.commitSha()));
         } catch (IOException | java.security.GeneralSecurityException unreadable) {
             return null;
         }
-        if (notConfigured != null) {
-            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failure", notConfigured.code(), "message", notConfigured.getMessage()));
-        }
         try {
-            remote.get().fetchSynesisRefs(controlRoot);
+            exchange.get().ensureSnapshots(controlRoot, snapshots);
             return null;
         } catch (CodeRemote.Refused refused) {
             return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.RETRY, Map.of("pending", 1, "failure", refused.code(), "message", refused.getMessage()));
@@ -542,15 +542,17 @@ public final class IntegrationOrchestrationService {
     }
 
     private AgentResponse integrate(Path controlRoot, PredictionEventStore store, NodeIdentity identity, boolean operatorAsked) {
+        // Before the lock: moving code can take minutes (ADR-0098 step 3), and bringing a commit that is here already
+        // changes nothing, so two passes may both ask.
+        AgentResponse fetchFailed = fetchCommitsNamedByLog(controlRoot, store);
+        if (fetchFailed != null) {
+            return fetchFailed;
+        }
         try (ProjectIntegrationLock onePass = ProjectIntegrationLock.tryAcquire(store.rootDirectory())) {
             if (onePass == null) {
                 // The pass that holds the lock integrates what is ready; this caller waits like any
                 // other for an attempt in progress.
                 return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, Map.of("pending", 1, "integrationRunning", true));
-            }
-            AgentResponse fetchFailed = fetchCommitsNamedByLog(controlRoot, store);
-            if (fetchFailed != null) {
-                return fetchFailed;
             }
             AtomicReference<Attempt> started = new AtomicReference<>();
             AgentResponse notStarted = startAttempt(controlRoot, store, identity, operatorAsked, started);

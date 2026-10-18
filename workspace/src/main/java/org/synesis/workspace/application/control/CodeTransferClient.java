@@ -73,6 +73,34 @@ public final class CodeTransferClient {
         if (CodeTransferCodec.isCommitId(wanted) && holds(wanted)) {
             return wanted;
         }
+        return transfer(wanted, haves).tip();
+    }
+
+    /**
+     * The head of the peer's checked-out branch and that branch's name, with the head's objects now present here:
+     * what a computer that has no copy of the project yet starts from.
+     *
+     * @param haves commit IDs this repository holds, which the peer leaves out of the pieces
+     * @return the head and the branch name, which is empty when the peer could not give one
+     * @throws CodeRemote.Refused as {@link #fetch}
+     * @throws IOException          as {@link #fetch}
+     */
+    public Head fetchHead(List<String> haves) throws IOException {
+        CodeTransferMessage.Piece last = transfer("HEAD", haves);
+        return new Head(last.tip(), last.branch());
+    }
+
+    /**
+     * A peer's branch head, fetched.
+     *
+     * @param commit the head, present here
+     * @param branch the branch's short name, or empty
+     */
+    public record Head(String commit, String branch) {
+    }
+
+    /** Asks for pieces until one reaches the wanted name's commit, and returns that last piece. */
+    private CodeTransferMessage.Piece transfer(String wanted, List<String> haves) throws IOException {
         String lastTip = null;
         while (true) {
             List<String> have = new ArrayList<>(haves);
@@ -89,7 +117,7 @@ public final class CodeTransferClient {
             }
             String tip = piece.chunkCount() == 0 ? present(piece.tip()) : receive(piece);
             if (tip.equals(piece.target())) {
-                return tip;
+                return piece;
             }
             lastTip = tip;
         }

@@ -236,6 +236,21 @@ public final class LeaderReplication implements AutoCloseable {
     }
 
     /**
+     * The live sessions of the members the settings name now, for other protocols that ride on them (Code over Link).
+     *
+     * @return each such member's node and its session
+     */
+    public Map<String, PeerSession> liveSessions() {
+        Map<String, PeerSession> live = new HashMap<>();
+        sessions.forEach((node, session) -> {
+            if (isMember(node) && Sessions.live(session)) {
+                live.put(node, session);
+            }
+        });
+        return Map.copyOf(live);
+    }
+
+    /**
      * The handler to install on every Link session that may carry members.
      *
      * @return handler answering proposals and pulls
@@ -350,10 +365,7 @@ public final class LeaderReplication implements AutoCloseable {
     public void serve(CoordinationHttpServer server) throws IOException {
         served = server;
         server.relay(this::relay);
-        String host = server.address().getAddress().getHostAddress();
-        Files.writeString(root.resolve(LoopbackExchange.ENDPOINT_FILE),
-                (host.contains(":") ? "[" + host + "]" : host) + ":" + server.address().getPort() + "\n",
-                StandardCharsets.UTF_8);
+        LoopbackExchange.recordEndpoint(root, server.address());
     }
 
     /**

@@ -41,6 +41,8 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.agent.run.AgentRunController;
+import org.synesis.workspace.application.agent.run.EventLogObserver;
 import org.synesis.workspace.application.agent.session.AgentSessionService;
 import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
@@ -388,6 +390,50 @@ class AgentNextActionServiceTest {
         assertEquals("ensure_session", ((Map<String, Object>) offered.getFirst().get("reviewerIntent")).get("tool"));
         // The only candidate is the owner's own snapshot, and a session that holds a lane takes no second one.
         assertTrue(CollaborationResponseMapper.openReviewCandidates(location, owner.intent().participant()).isEmpty());
+
+        // The run controller resumes a stopped agent with no lane for exactly what this offers (ADR-0099).
+        AgentRunController.Observation observed = new EventLogObserver(location).observe();
+        assertEquals(List.of("snap_fresh"), observed.reviewsOffered("codex", List.of("fresh-newcomer")));
+        assertEquals(List.of(), observed.reviewsOffered("codex", List.of("fresh-newcomer", "fresh-owner")), "an agent one of whose sessions is the author is not offered the review");
+        assertEquals(List.of(), observed.reviewsOffered("codex", List.of("never-connected")), "nothing is offered to a connection with no session");
+    }
+
+    /**
+     * What the run controller reads to keep the session of an agent that asked for a review and to
+     * resume it once when the author answers (ADR-0099, 2026-10-18 fix 10), from a real log.
+     */
+    @Test
+    void theRunControllerSeesARequestHeldUntilItsGrantIsUsedAndItsAnswerOnce() throws Exception {
+        prepareSessionAndTrust("codex", "answer-author");
+        prepareSessionAndTrust("codex", "answer-reviewer");
+        ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
+        UUID groupId = UUID.randomUUID();
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        collaboration.createWorkGroup(controlRoot, groupId, "Count words", "Review each module", ReviewPolicy.mandatoryIndependent());
+        var author = collaboration.announce(controlRoot, "codex", "answer-author", "Implement count", "Publish count", List.of(ResourceSelector.pathExact("count.py")), groupId);
+        collaboration.announce(controlRoot, "codex", "answer-reviewer", "Review count", "Independently review count", List.of(ResourceSelector.pathExact("review_count.md")), groupId,
+                WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathExact("count.py")));
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        appendMandatorySnapshot(new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()), identity,
+                new ProviderSessionBindingService().find(location, "codex", "answer-author").orElseThrow(), author.intent(), "snap_count", "count.py");
+        AgentRunController.Observation before = new EventLogObserver(location).observe();
+        assertTrue(before.newestAnswerFor("codex", "answer-reviewer").isEmpty());
+        assertFalse(before.holdsRequestOrGrant("codex", "answer-reviewer"));
+
+        CoordinationRequest request = collaboration.request(controlRoot, "codex", "answer-reviewer", author.intent().intentId(), CoordinationRequest.Kind.REVIEW, "Review count", "snap_count");
+        AgentRunController.Observation pending = new EventLogObserver(location).observe();
+        assertTrue(pending.newestAnswerFor("codex", "answer-reviewer").isEmpty(), "asking is not an answer");
+        assertTrue(pending.holdsRequestOrGrant("codex", "answer-reviewer"), "a pending request keeps the session that asked");
+
+        collaboration.respond(controlRoot, "codex", "answer-author", request.requestId(), CoordinationRequest.Status.ACCEPTED, "admitted");
+        AgentRunController.Observation accepted = new EventLogObserver(location).observe();
+        long answeredAt = accepted.newestAnswerFor("codex", "answer-reviewer").orElseThrow();
+        assertTrue(answeredAt > pending.headSequence() && answeredAt < accepted.headSequence(), "the response, before the grant it issues: " + answeredAt);
+        assertTrue(accepted.holdsRequestOrGrant("codex", "answer-reviewer"), "the grant keeps it");
+        assertTrue(accepted.newestAnswerFor("codex", "answer-author").isEmpty(), "the author answered and asked nothing");
+
+        collaboration.respond(controlRoot, "codex", "answer-author", request.requestId(), CoordinationRequest.Status.ACCEPTED, "admitted again");
+        assertEquals(answeredAt, new EventLogObserver(location).observe().newestAnswerFor("codex", "answer-reviewer").orElseThrow(), "the same answer given again is not a new one");
     }
 
     private static final String VALIDATION_SENTENCE = " Synesis runs this project's validation command (`python -m unittest`) on every integration, so running or reporting it is not a part to claim.";

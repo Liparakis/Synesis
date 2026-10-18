@@ -116,6 +116,23 @@ public final class ProviderSessionTerminalizationService {
         return terminalBlockers(location.openCoordinationStore(), binding, WorkspaceCollaborationService.participantHandle(binding.sessionId()));
     }
 
+    /**
+     * Returns whether one participant still holds a coordination request that is pending or a review
+     * grant it has not finished: the request and grant checks behind {@link #openAuthority}'s
+     * {@code PENDING_DEPENDENCY} and {@code PENDING_REVIEW}, read from a log already open. A run
+     * controller keeps such a session rather than end it, because a closed session is never reopened
+     * and only this one may use the answer or the grant (ADR-0099, 2026-10-18 fix 10).
+     *
+     * @param store       current project projection
+     * @param participant exact participant handle of the session
+     * @return {@code true} while it holds such a request or grant
+     */
+    public static boolean holdsRequestOrGrant(PredictionEventStore store, String participant) {
+        Set<java.util.UUID> intentIds = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).map(WorkIntent::intentId)
+                .collect(java.util.stream.Collectors.toSet());
+        return hasPendingRequest(store, participant, intentIds) || hasOpenGrant(store, participant, intentIds);
+    }
+
     private static Set<String> terminalBlockers(PredictionEventStore store, ProviderSessionBindingService.Binding binding, String participant) {
         Set<String> blockers = new LinkedHashSet<>();
         List<WorkIntent> intents = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).toList();

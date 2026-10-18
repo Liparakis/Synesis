@@ -126,7 +126,7 @@ final class CoordinationServerLauncher {
                     ? MergeDriver.forProject(location.root(), projectData, location.projectId(), node, MERGE_DELAY_MILLIS).repeatEvery(MERGE_INTERVAL_MILLIS) : null;
             var leaderReplication = mergeDriver != null
                     ? LeaderReplication.serving(projectData, location.projectId(), mergeDriver::onMemberEntry) : null;
-            var side = new ReplicationSide(projectData, location.projectId(), memberReplication,
+            var side = new ReplicationSide(projectData, location.projectId(), location.root(), memberReplication,
                     replicationSettings.map(ReplicationSettings::leaderNodeId).orElse(null), leaderReplication, mergeDriver);
             var journal = new ReplicationJournal(projectData);
             var linkOwner = linkOwner(controlOnboarding, node, eventHub, location.identity(), side, journal, projectData,
@@ -183,6 +183,7 @@ final class CoordinationServerLauncher {
                     // Its agents' claims are checked with the connected members through this server (ADR-0098 step 4).
                     leaderReplication.serve(server);
                 }
+                side.serveCode(server);
                 Thread parentWatcher = parentPid > 0 ? parentWatcher(parentPid) : null;
                 String endpoint = "http://" + hostForUrl(server.address().getHostString()) + ":" + server.address().getPort();
                 try {
@@ -234,19 +235,9 @@ final class CoordinationServerLauncher {
      * <p>Those peers are also written to {@code replication.peers} in {@code coordination} as sessions are made, and
      * read back here: a restart of this server dials the hosts it dialed and listens again on the ports it hosted, for
      * the nodes the role still names, with no new invitation. A file that cannot be read restores nothing.
-     */
-    static LinkRuntimeOwner linkOwner(Onboarding onboarding, NodeIdentity node, ControlPlaneEventHub eventHub, ProjectIdentity identity, ReplicationSettings settings,
-            MemberReplication member, LeaderReplication leader, ReplicationJournal journal, Path coordination) {
-        if (member == null && leader == null) {
-            return new LinkRuntimeOwner(onboarding, node, null, eventHub::publish, identity);
-        }
-        ReplicationSide side = new ReplicationSide(coordination, identity.projectId(), member, settings == null ? null : settings.leaderNodeId(), leader, null);
-        return linkOwner(onboarding, node, eventHub, identity, side, journal, coordination, null);
-    }
-
-    /**
-     * The same owner over a replication side that can change role while the server runs, for the product: it holds a
-     * joiner that no member list names until {@code admission} is told to add it (ADR-0098, "Joining, revised").
+     *
+     * <p>The side can change role while the server runs: the owner holds a joiner that no member list names until
+     * {@code admission} is told to add it (ADR-0098, "Joining, revised").
      */
     static LinkRuntimeOwner linkOwner(Onboarding onboarding, NodeIdentity node, ControlPlaneEventHub eventHub, ProjectIdentity identity, ReplicationSide side,
             ReplicationJournal journal, Path coordination, LinkRuntimeOwner.MemberAdmission admission) {
