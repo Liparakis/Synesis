@@ -180,6 +180,7 @@ public final class ReviewSnapshotAccessService {
                     // auditable, but must never redirect that producer to an
                     // immutable review worktree.
                     .filter(grant -> !store.workGroupProjection().continuationGrant(grant.grantId())).filter(grant -> !store.workGroupProjection().grantSuperseded(grant.grantId()))
+                    .filter(grant -> !store.workGroupProjection().grantRevoked(grant.identity()))
                     .filter(grant -> store.workGroupProjection().grantConsumed(grant.grantId())).filter(grant -> store.workGroupProjection().reviewValidationForGrant(grant.grantId()).isEmpty())
                     .map(grant -> snapshotFor(store, grant)).flatMap(Optional::stream).toList();
             if (candidates.isEmpty()) {

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
@@ -35,9 +36,12 @@ import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.control.MainMeeting;
 import org.synesis.workspace.application.integration.IntegrationValidationRefusalTest.Project;
 import org.synesis.workspace.application.project.execution.ProjectProcessExecutor;
+import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 
 /**
  * The re-merge of two diverged copies of {@code main} (ADR-0098 step 5, designer items 13 to 15): which computer acts,
@@ -247,6 +251,54 @@ class RemergeServiceTest {
         assertEquals(1, events(PredictionEventType.REMERGE_SNAPSHOT_CREATED).size(), "a second pass before the review builds nothing again");
         assertEquals(1, grants().stream().filter(value -> rms.equals(value.snapshotId())).count());
         assertEquals(own, project.head());
+    }
+
+    /**
+     * A producer of this computer, its participant named by its session, with a lane open and, when {@code live}, a
+     * live session lease here.
+     */
+    private String producerHere(String session, String path, boolean live) throws Exception {
+        String participant = WorkspaceCollaborationService.participantHandle(session);
+        UUID lane = UUID.randomUUID();
+        WorkIntent intent = new WorkIntent(lane, project.location.projectId(), participant, "codex", UUID.randomUUID(), "implement", "acceptance", base,
+                List.of(ResourceSelector.pathExact(path)), 1, UUID.randomUUID(), WorkIntent.defaultAuthorityLineage(lane), WorkIntent.Status.ANNOUNCED);
+        assertTrue(new WorkIntentService(store, self).announce(intent).acquired());
+        if (live) {
+            new SessionLeaseService().createOrRenewLease(project.root, project.location.projectId().toString(), "codex", "conn-" + session, self.nodeId(), session,
+                    new SessionLeasePolicy());
+        }
+        return participant;
+    }
+
+    /**
+     * Designer item 2: the reviewer who accepted the original cannot be reached, so its re-merge grant was released.
+     * The next pass offers the re-merge to another agent of this computer that is live and not the author, once.
+     */
+    @Test
+    void aReMergeWhoseReviewerWasReleasedIsOfferedToAnotherLiveNonAuthorHere() throws Exception {
+        NodeIdentity other = lowerNode();
+        Lane lane = lane("snap_a", "own.txt", true);
+        String own = ownMain("own.txt", "own");
+        ownAdvance(base, own, lane.snapshotId());
+        String otherHead = commit("other", base, "other.txt", "other");
+        otherAdvance(other, otherHead);
+        run();
+        String rms = built(otherHead, own).snapshot().snapshotId();
+        LaneGrant first = grantFor(rms);
+        assertEquals(REVIEWER, first.targetParticipant());
+        String gone = producerHere("session-gone-producer", "gone.txt", false);
+        String live = producerHere("session-live-producer", "live.txt", true);
+        run();
+        assertEquals(1, grants().stream().filter(grant -> rms.equals(grant.snapshotId())).count(), "a held re-merge review is offered to nobody else");
+
+        assertTrue(new WorkGroupService(project.store(), self).revokeStalledReview(first.identity()));
+        run();
+        run();
+
+        List<LaneGrant> offered = grants().stream().filter(grant -> rms.equals(grant.snapshotId())).toList();
+        assertEquals(2, offered.size(), "one more grant, written once: " + offered);
+        assertEquals(live, offered.get(1).targetParticipant(), "the live agent here, not " + gone + " whose session is gone, nor the author");
+        assertNotEquals(first.grantId(), offered.get(1).grantId());
     }
 
     @Test

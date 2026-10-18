@@ -17,10 +17,15 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
+import org.synesis.coordination.domain.collaboration.Participant;
+import org.synesis.coordination.domain.collaboration.ReviewAdmissionRules;
 import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
+import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
@@ -34,6 +39,7 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.collaboration.AwayLanes;
 import org.synesis.workspace.application.control.ControlBranchAdvancementService;
 import org.synesis.workspace.application.control.MainMeeting;
 import org.synesis.workspace.application.project.execution.ExecutionRequest;
@@ -434,7 +440,7 @@ final class RemergeService {
                         remerge.encode(), identity);
                 LOG.log(System.Logger.Level.INFO, "Re-merge {0} onto {1}: snapshot {2} waits for its review.", remergeId, other, snapshotId);
             }
-            offerReview(store, identity, remerge);
+            offerReview(controlRoot, store, identity, remerge);
         }
     }
 
@@ -452,29 +458,56 @@ final class RemergeService {
     }
 
     /**
-     * Offers the re-merge snapshot to the reviewer who accepted the original one, with a grant bound to it, unless the
-     * grant is on the log already. Another reviewer when that one cannot be reached (designer item 2) is NOT BUILT.
+     * Offers the re-merge snapshot for review with a grant bound to it, unless a grant on it is on the log and not
+     * released. The first goes to the reviewer who accepted the original snapshot. Once every grant on it was released
+     * because its reviewer could not be reached (designer item 2, {@link AwayLanes#releaseUnreachableReviews}), the next
+     * goes to {@link #anotherReviewer}; with none, the re-merge waits for a later pass.
      */
-    private static void offerReview(PredictionEventStore store, NodeIdentity identity, RemergeSnapshotPayload remerge)
+    private static void offerReview(Path controlRoot, PredictionEventStore store, NodeIdentity identity, RemergeSnapshotPayload remerge)
             throws IOException, GeneralSecurityException {
-        UUID grantId = nameUuid("remerge-grant:" + remerge.snapshot().snapshotId());
-        if (store.workGroupProjection().grants().stream().anyMatch(grant -> grant.grantId().equals(grantId))) {
+        String snapshotId = remerge.snapshot().snapshotId();
+        var workGroups = store.workGroupProjection();
+        List<LaneGrant> offered = workGroups.grants().stream().filter(grant -> snapshotId.equals(grant.snapshotId())).toList();
+        if (offered.stream().anyMatch(grant -> !workGroups.grantRevoked(grant.identity()))) {
             return;
         }
         TaskSnapshotRecord original = store.taskCompletionProjection().findSnapshotById(remerge.originalSnapshotId()).orElseThrow();
         String producer = original.provenance().participant();
-        Optional<String> reviewer = store.taskCompletionProjection().verdicts(original.snapshotIdentity()).entrySet().stream()
-                .filter(verdict -> "ACCEPTED".equals(verdict.getValue()) && !verdict.getKey().equals(producer)).map(Map.Entry::getKey)
-                .sorted().findFirst();
+        Optional<String> reviewer = offered.isEmpty()
+                ? store.taskCompletionProjection().verdicts(original.snapshotIdentity()).entrySet().stream()
+                        .filter(verdict -> "ACCEPTED".equals(verdict.getValue()) && !verdict.getKey().equals(producer)).map(Map.Entry::getKey)
+                        .sorted().findFirst()
+                : anotherReviewer(controlRoot, store, identity, original, offered);
         if (reviewer.isEmpty()) {
-            LOG.log(System.Logger.Level.WARNING, "Re-merge snapshot {0} has no reviewer to offer it to: no one other than its author accepted {1}.",
-                    remerge.snapshot().snapshotId(), original.snapshotId());
+            LOG.log(System.Logger.Level.WARNING, offered.isEmpty()
+                    ? "Re-merge snapshot {0} has no reviewer to offer it to: no one other than its author accepted {1}."
+                    : "Re-merge snapshot {0} waits for another reviewer: no agent of this computer that may review {1} is live.",
+                    snapshotId, original.snapshotId());
             return;
         }
+        // The first grant keeps the ID it always had; a later one is named by its reviewer, so each is written once.
+        UUID grantId = nameUuid(offered.isEmpty() ? "remerge-grant:" + snapshotId : "remerge-grant:" + snapshotId + "\n" + reviewer.get());
         SnapshotProvenance provenance = remerge.snapshot().provenance();
-        LaneGrant grant = new LaneGrant(grantId, provenance.workGroupId(), provenance.laneId(), reviewer.get(), provenance.claimEpoch(), true,
-                remerge.snapshot().snapshotId());
+        LaneGrant grant = new LaneGrant(grantId, provenance.workGroupId(), provenance.laneId(), reviewer.get(), provenance.claimEpoch(), true, snapshotId);
         store.append(grant.grantId(), PredictionEventType.LANE_GRANT_ISSUED, identity.nodeId(), CollaborationCodec.encodeLaneGrant(grant), identity);
+    }
+
+    /**
+     * Another reviewer for a re-merge whose reviewers could not be reached (designer item 2): an active participant this
+     * computer put on the log and whose session it judges live ({@link AwayLanes#goneHere}), neither the author nor in
+     * its lineage, and not released from this snapshot before. Only this computer's agents are chosen, since only their
+     * sessions can be judged here; the lowest handle, so a repeated pass chooses the same one.
+     */
+    private static Optional<String> anotherReviewer(Path controlRoot, PredictionEventStore store, NodeIdentity identity, TaskSnapshotRecord original,
+            List<LaneGrant> released) {
+        Predicate<String> gone = AwayLanes.goneHere(controlRoot);
+        Set<String> releasedFrom = released.stream().map(LaneGrant::targetParticipant).collect(Collectors.toSet());
+        var collaboration = store.collaborationProjection();
+        return collaboration.participants().stream().filter(participant -> participant.state() == Participant.State.ACTIVE).map(Participant::id)
+                .filter(handle -> !releasedFrom.contains(handle) && !handle.equals(original.provenance().participant()) && !gone.test(handle))
+                .filter(handle -> collaboration.introducingNode(new ParticipantId(handle)).map(identity.nodeId()::equals).orElse(false))
+                .filter(handle -> !ReviewAdmissionRules.authoredInLineage(store, new ParticipantId(handle), original.provenance().lineageIdentity()))
+                .sorted().findFirst();
     }
 
     /**

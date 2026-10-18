@@ -594,8 +594,10 @@ public final class IntegrationOrchestrationService {
         try {
             ProjectLocation location = projectService.locate(controlRoot);
             PredictionEventStore current = location.openCoordinationStore();
-            // Reviews held by reviewers of away computers, while this one is stalled (ADR-0098 step 7, item 17).
-            org.synesis.workspace.application.collaboration.AwayLanes.releaseStalledReviews(current, location.coordinationDirectory(), identity);
+            // Reviews held by reviewers that cannot be reached: gone here, or away while this computer is stalled
+            // (ADR-0098 designer item 2, step 7 item 17).
+            org.synesis.workspace.application.collaboration.AwayLanes.releaseUnreachableReviews(current, location.coordinationDirectory(), identity,
+                    org.synesis.workspace.application.collaboration.AwayLanes.goneHere(location.root()));
             org.synesis.workspace.application.collaboration.WorkTrash.sweep(location, location.openCoordinationStore(), identity);
         } catch (Exception unreadable) {
             LOG.log(System.Logger.Level.WARNING, "trash sweep skipped; the next pass tries again", unreadable);

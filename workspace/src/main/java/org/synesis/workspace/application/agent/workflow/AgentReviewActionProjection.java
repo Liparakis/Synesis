@@ -483,7 +483,8 @@ static List<Map<String, Object>> reviewActions(PredictionEventStore store, Strin
         var projection = store.workGroupProjection();
         List<WorkIntent> activeIntents = store.collaborationProjection().activeIntents();
         for (LaneGrant grant : projection.grants()) {
-            if (projection.grantSuperseded(grant.grantId()) || grantTargetsSupersededIntent(store, grant)) {
+            // A revoked grant holds no review: its reviewer could not be reached, and its verdict would be refused.
+            if (projection.grantSuperseded(grant.grantId()) || projection.grantRevoked(grant.identity()) || grantTargetsSupersededIntent(store, grant)) {
                 continue;
             }
             if (!grant.targetParticipant().equals(participantId)) {
@@ -634,9 +635,12 @@ static List<Map<String, Object>> reviewCandidates(PredictionEventStore store) {
                         .noneMatch(grant -> ReviewAdmissionRules.holdsReview(store, grant) && (source.snapshot().snapshotId().equals(grant.snapshotId()) || (
                                 grant.snapshotId() == null && grant.workGroupId().equals(source.snapshot().provenance().workGroupId()) && grant.targetIntentId().equals(source.snapshot().provenance().laneId())
                                         && grant.claimEpoch() == source.snapshot().provenance().claimEpoch()))))
+                // An accepted request holds the review until its grant is issued; from then on the grant does, as at
+                // admission (ReviewAdmissionRules), so a review released from an unreachable reviewer is offered again.
                 .filter(source -> collaboration.requests().stream()
                         .noneMatch(request -> request.kind() == CoordinationRequest.Kind.REVIEW && source.snapshot().snapshotId().equals(request.snapshotId()) && (request.status() == CoordinationRequest.Status.PENDING
-                                || request.status() == CoordinationRequest.Status.ACCEPTED))).sorted(Comparator.comparing(source -> source.snapshot().snapshotId())).map(source -> {
+                                || request.status() == CoordinationRequest.Status.ACCEPTED && workGroups.grants().stream()
+                                        .noneMatch(grant -> grant.grantId().equals(LaneGrant.reviewGrantId(request.requestId())))))).sorted(Comparator.comparing(source -> source.snapshot().snapshotId())).map(source -> {
                     TaskSnapshotRecord snapshot = source.snapshot();
                     WorkGroup group = workGroups.group(snapshot.provenance().workGroupId()).orElseThrow();
                     WorkIntent producer = source.producer();

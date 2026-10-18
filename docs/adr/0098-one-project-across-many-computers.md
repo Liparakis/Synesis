@@ -876,8 +876,8 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     it as an ordinary advance, `CONTROL_BRANCH_ADVANCED` from the other head to the result naming the re-merge
     snapshots, so the other computer's audit follows it to its own head and fast-forwards. A re-merge whose basis
     moved (this copy advanced meanwhile, or the other head is not the other computer's last) is left, and the next
-    pass builds a new one. A rejected re-merge is left as it is and reported; another reviewer when the original one
-    cannot be reached (designer item 2) is NOT BUILT.
+    pass builds a new one. A rejected re-merge is left as it is and reported. Another reviewer when the original one
+    cannot be reached (designer item 2) is item 24's rule.
 16. **How the re-merge is built and found again.** Its ID follows from the two heads (`rm-` and a hash of the other
     head and this copy's head), so every pass on the same basis finds the same re-merge in the log and goes on to land
     it; a pass on a new basis builds a new one. Each re-merge snapshot is `refs/synesis/snapshots/rms-…` at its lane's
@@ -987,14 +987,39 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
       derived from the project and the node ID; a group open when a computer starts a lane is still joined as before.
       Not covered: a group opened while connected that one computer completes while apart and the other still works
       in (the same symptom, rarer; a group should not count as complete while a lane in it is open). NOT BUILT.
-    - **Why both computers stalled before the heal** (not fixed here). On each computer a reviewer consumed its grant
-      (gcd on the PC, fib on the VM), then the merge pass integrated the reviewer's own lane, and from then on every
-      `read_file` and `run_command` of its review answered `SESSION_RECOVERY_STATE_UNAVAILABLE`
-      (`McpProtocolHandler.refuseFencedRecovery`: a completed binding may still record a verdict, but not read what it
-      reviews). The reviewers stopped without a verdict, the grants stay consumed by participants that are gone, and
-      no other agent is offered those reviews. The re-merge's own reviews will meet the same wall: the original
-      reviewers of primes and fib are sessions that ended, and another reviewer when the original cannot be reached
-      (designer item 2) is NOT BUILT, so the combined re-merge cannot land yet.
+    - **Why both computers stalled before the heal.** On each computer a reviewer consumed its grant (gcd on the PC,
+      fib on the VM), then the merge pass integrated the reviewer's own lane, and from then on every `read_file` and
+      `run_command` of its review answered `SESSION_RECOVERY_STATE_UNAVAILABLE` (`McpProtocolHandler.refuseFencedRecovery`:
+      a completed binding could record a verdict but not read what it reviewed). The reviewers stopped without a
+      verdict, the grants stayed consumed by participants that were gone, and no other agent was offered those reviews.
+      The re-merge's own reviews would have met the same wall: the original reviewers of primes and fib are sessions
+      that ended. **Rules (2026-10-18):**
+      - *A completed lane finishes the review it holds.* `read_file` and `run_command` admit a completed binding at
+        the fence, as `get_next_action`, `request_coordination` and `respond_coordination` already did (ADR-0099,
+        amendment), on a managed connection too. Downstream only the review snapshot access accepts a completed
+        binding (`ReviewSnapshotAccessService`, through `SessionAuthorityResolver.resolveReview`), and only while its
+        grant is consumed and has no verdict; it reads and runs in the disposable review worktree, never the lane's.
+        A completed lane that holds no review, or whose verdict is recorded, is told to start a fresh session
+        (`SESSION_NOT_ACTIVE`, `ensure_session`); `apply_patch`, `finish_lane` and every other tool still fail closed.
+      - *A reviewer that cannot be reached is replaced (designer item 2).* The merge pass releases (`LANE_REVOKED`) a
+        review grant on a snapshot still under review, with no verdict, whose reviewer holds no lane, when the
+        reviewer's own computer judges its session gone: no lease of that computer names the session as live
+        (`AwayLanes.goneHere`: closed cleanly, terminal, or unseen past the grace period, or the connection went on to
+        a fresh session). This needs no stall and runs at once, since only that computer can judge the session; a
+        quiet agent keeps a live lease and its review (ADR-0099). The away-computer release of step 7 (item 17) is the
+        same rule for a reviewer whose computer is away. A released ordinary review is a candidate again: an accepted
+        review request holds the review only until its grant is issued, then the grant does, in the candidates agents
+        are shown as at admission (`ReviewAdmissionRules.validateReviewSnapshotUnassigned`). A released grant holds
+        nothing for its former reviewer: its next action no longer asks for the verdict, its reads no longer reach the
+        snapshot, and it no longer holds its session open (`ProviderSessionTerminalizationService.openAuthority`), so
+        a session that comes back may start a fresh one. A released re-merge review
+        is offered by the next pass to another agent of the re-merging computer: an active participant whose session
+        it judges live, neither the author nor in its lineage, not released from it before, the lowest handle first
+        (`RemergeService.offerReview`); with none, the re-merge waits. Only this computer's agents are chosen, because
+        only their sessions can be judged here.
+      - *Not covered:* a reviewer that holds a lane is never released here; continuing its lane carries its grants. While
+        any lease of the computer cannot be read, or it has no leases folder, nobody of it is judged gone: the
+        unreadable lease may be the live one.
 
 ### Step 6: Membership in the owner's log
 
@@ -1182,7 +1207,8 @@ Decided while building step 7 (designer, 2026-10-18; each open to the owner):
     does. A review held by a reviewer of an away computer that holds no lane (since ADR-0089 a producer reviews
     without one) is released instead: while this computer is stalled, its integration pass revokes that grant
     (`LANE_REVOKED`, judged again under the append lock) when no verdict is recorded and the snapshot is still under
-    review, and a reviewer here may then be admitted. A revoked grant holds no review. A verdict the away reviewer writes before the release reaches it
+    review, and a reviewer here may then be admitted. A reviewer of this computer is released by its own session,
+    stalled or not (step 5, item 24). A revoked grant holds no review. A verdict the away reviewer writes before the release reaches it
     stands beside the new reviewer's, and the two may meet as a dispute; one written after is refused
     (`REVIEW_GRANT_REVOKED`). NOT BUILT: a re-review offered to an away original reviewer alone, and a review request
     accepted on the away computer whose grant never reached this one.

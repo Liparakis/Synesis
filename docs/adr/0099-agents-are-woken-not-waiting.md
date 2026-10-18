@@ -397,7 +397,11 @@ completed binding through to the tools whose policy already admits one (`request
 `respond_coordination`; the rule a managed connection had, `ManagedAdmissionState.REVIEW_ONLY`). Downstream only
 consuming a review grant and recording a review decision accept a completed binding, and both check the grant
 (`SessionAuthorityResolver.resolveReview`); every other coordination operation resolves a bound binding and fails
-closed as before.
+closed as before. The reads and test runs of that review were still fenced, so in the real PC + VM run s5-run6 two
+reviewers whose own lanes were integrated could not read what they reviewed and stopped without a verdict
+(ADR-0098, step 5 item 24). `read_file` and `run_command` now admit a completed binding at the fence too; downstream
+only the immutable review snapshot of a consumed grant without a verdict accepts one (`ReviewSnapshotAccessService`),
+and a completed lane holding no review is told to start a fresh session.
 
 ### Decision 5: one open lane per agent (documented, no new rule)
 

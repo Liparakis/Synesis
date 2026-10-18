@@ -177,8 +177,9 @@ public final class ProviderSessionTerminalizationService {
     private static boolean hasOpenGrant(PredictionEventStore store, String participant, Set<java.util.UUID> intentIds) {
         for (LaneGrant grant : store.workGroupProjection().grants()) {
             boolean exact = grant.targetParticipant().equals(participant) || intentIds.contains(grant.targetIntentId());
+            // A revoked grant is finished: its review was released to another reviewer and no verdict on it is taken.
             if (exact && !store.workGroupProjection().grantSuperseded(grant.grantId()) && (store.workGroupProjection().grantAvailable(grant.grantId()) || (store.workGroupProjection().grantConsumed(grant.grantId())
-                    && store.workGroupProjection().reviewValidationForGrant(grant.grantId()).isEmpty()))) {
+                    && !store.workGroupProjection().grantRevoked(grant.identity()) && store.workGroupProjection().reviewValidationForGrant(grant.grantId()).isEmpty()))) {
                 return true;
             }
         }

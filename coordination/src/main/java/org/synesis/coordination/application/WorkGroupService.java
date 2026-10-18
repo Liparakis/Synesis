@@ -172,8 +172,9 @@ public final class WorkGroupService {
     }
 
     /**
-     * Revokes a review grant of a reviewer whose computer is away, judged again under the append lock: a grant already
-     * revoked, superseded, or carrying a verdict by now is left as it is (ADR-0098 step 7, designer item 17).
+     * Revokes a review grant of a reviewer that cannot be reached, its session gone or its computer away, judged again
+     * under the append lock: a grant already revoked, superseded, or carrying a verdict by now is left as it is (ADR-0098
+     * designer item 2, step 7 item 17).
      *
      * @param grantIdentity the review grant
      * @return whether this call revoked it

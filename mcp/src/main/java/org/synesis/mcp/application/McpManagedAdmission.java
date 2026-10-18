@@ -77,7 +77,8 @@ final class McpManagedAdmission {
      * create coordination state and the same connection becomes eligible only after trusted lifecycle
      * activation.</p>
      *
-     * @param completedReviewTool whether the requested tool is one of the three review coordination calls
+     * @param completedReviewTool whether the requested tool admits a completed binding: the review coordination calls
+     *                            and the reads and test runs of the review snapshot it may hold
      * @param activeProjectRoot the connection's currently selected control project root
      * @param projectRootResolved whether this connection has resolved a project root
      * @return current managed admission state
@@ -173,7 +174,8 @@ final class McpManagedAdmission {
          */
         ACTIVE,
         /**
-         * The completed binding may continue exact review coordination only.
+         * The completed binding may continue only the review it holds: its coordination, and the reads
+         * and test runs of its immutable snapshot.
          */
         REVIEW_ONLY,
         /**
