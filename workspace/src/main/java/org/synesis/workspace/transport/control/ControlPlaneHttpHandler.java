@@ -518,7 +518,40 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
             case "choose-project" -> projects.chooseProject(exchange);
             case "register-project" -> projects.registerProject(exchange, body);
             case "remove-project" -> projects.removeProject(exchange, body);
+            case "restore-trash" -> trash(exchange, body, false);
+            case "empty-trash" -> trash(exchange, body, true);
             default -> throw failure(404, "NOT_FOUND", "control-plane command not found");
+        }
+    }
+
+    /**
+     * Restores or empties one piece of trashed work, a person's action from the Trash tab (ADR-0098 step 7). The page
+     * asks the person to confirm an empty; this endpoint also requires {@code confirmed: true} for it, so no other
+     * caller deletes work by mistake.
+     */
+    private void trash(HttpExchange exchange, Map<String, Object> body, boolean empty) throws IOException, ApiFailure {
+        UUID lane = ControlPlaneHttpJson.uuid(ControlPlaneHttpJson.requiredText(body, "laneId", 64), "laneId");
+        if (!(body.get("epoch") instanceof Number epoch) || epoch.longValue() < 0) {
+            throw failure(400, "INVALID_REQUEST", "epoch must be a lane epoch");
+        }
+        if (empty && !Boolean.TRUE.equals(body.get("confirmed"))) {
+            throw failure(400, "CONFIRMATION_REQUIRED", "emptying the trash deletes the work for good, on every computer");
+        }
+        try {
+            var location = readModel.location();
+            var identity = location.loadOrCreateIdentity();
+            if (empty) {
+                org.synesis.workspace.application.collaboration.WorkTrash.empty(location, identity, lane, epoch.longValue());
+                sendJson(exchange, 200, ordered("apiVersion", API_VERSION, "state", "EMPTIED", "laneId", lane.toString(), "epoch", epoch.longValue()));
+            } else {
+                UUID group = org.synesis.workspace.application.collaboration.WorkTrash.restore(location, identity, lane, epoch.longValue());
+                sendJson(exchange, 200, ordered("apiVersion", API_VERSION, "state", "RESTORED", "laneId", lane.toString(), "epoch", epoch.longValue(),
+                        "workGroupId", group.toString()));
+            }
+        } catch (org.synesis.coordination.exception.CoordinationException refused) {
+            throw failure(409, "TRASH_REFUSED", String.valueOf(refused.getMessage()));
+        } catch (Exception failed) {
+            throw failure(500, "TRASH_FAILED", String.valueOf(failed.getMessage()));
         }
     }
 }

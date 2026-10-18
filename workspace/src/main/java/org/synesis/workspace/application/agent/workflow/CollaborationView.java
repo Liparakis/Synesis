@@ -98,6 +98,17 @@ final class CollaborationView {
      *                       leaves provider-specific continuation eligibility undecided
      */
     static Map<String, Object> collaborationDetails(PredictionEventStore store, String sessionId, Set<UUID> reviewGroupFilter, String callerProvider) {
+        return collaborationDetails(store, sessionId, reviewGroupFilter, callerProvider, null);
+    }
+
+    /**
+     * Builds the public collaboration view for one caller of a known computer, whose continuation candidates include
+     * the lanes of computers that are away when this one is stalled (ADR-0098 step 7).
+     *
+     * @param callerProvider the caller's provider when its exact binding is known
+     * @param thisNode       this computer's node ID, or {@code null} when unknown
+     */
+    static Map<String, Object> collaborationDetails(PredictionEventStore store, String sessionId, Set<UUID> reviewGroupFilter, String callerProvider, String thisNode) {
         String participantId = sessionId == null || sessionId.isBlank() ? "" : WorkspaceCollaborationService.participantHandle(sessionId);
         var collaboration = store.collaborationProjection();
         var workGroups = store.workGroupProjection();
@@ -118,7 +129,7 @@ final class CollaborationView {
         result.put("currentParticipant", participantId);
         result.put(NextActionKeys.CURRENT_INTENT, currentIntent);
         result.put(NextActionKeys.PENDING_COORDINATION, enrichedPending);
-        result.put(NextActionKeys.CONTINUATION_CANDIDATES, RecoveryContinuationProjection.continuationCandidates(store, participantId, callerProvider));
+        result.put(NextActionKeys.CONTINUATION_CANDIDATES, RecoveryContinuationProjection.continuationCandidates(store, participantId, callerProvider, thisNode));
 
         List<Map<String, Object>> reviewCandidates = AgentReviewActionProjection.reviewCandidates(store);
         result.put("reviewCandidates", reviewCandidates);

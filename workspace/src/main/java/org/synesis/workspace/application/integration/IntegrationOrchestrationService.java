@@ -355,7 +355,8 @@ public final class IntegrationOrchestrationService {
             WorkIntent laneIntent = IntegrationCandidatePolicy.currentIntentForSnapshot(store, snapshot);
             boolean exactLane = laneIntent != null && laneIntent.intentId().equals(snapshot.provenance().laneId());
             if (laneIntent == null || !laneIntent.taskId().equals(snapshot.taskId()) || !laneIntent.workGroupId().equals(snapshot.provenance().workGroupId()) || !laneIntent.authorityLineageId()
-                    .equals(snapshot.provenance().authorityLineageId()) || (exactLane ? laneIntent.version() != snapshot.provenance().claimEpoch() : laneIntent.version() <= snapshot.provenance().claimEpoch())) {
+                    .equals(snapshot.provenance().authorityLineageId()) || (exactLane ? !store.taskCompletionProjection().boundToLaneAt(snapshot, laneIntent.version())
+                    : laneIntent.version() <= snapshot.provenance().claimEpoch())) {
                 failures.add("STALE_CLAIM_EPOCH:" + snapshot.snapshotId());
             }
             for (String path : snapshot.changedPaths()) {
@@ -575,6 +576,9 @@ public final class IntegrationOrchestrationService {
             }
             // A copy of main that diverged from this one is re-merged first, under the same lock (ADR-0098 step 5).
             remerges.run(controlRoot, store, identity);
+            // Stalled reviews released and what went to the trash on this computer, whether or not an agent calls in
+            // (ADR-0098 step 7).
+            trashSweep(controlRoot, identity);
             AtomicReference<Attempt> started = new AtomicReference<>();
             AgentResponse notStarted = startAttempt(controlRoot, store, identity, operatorAsked, started);
             if (notStarted != null) {
@@ -583,6 +587,18 @@ public final class IntegrationOrchestrationService {
             return runAndRecord(controlRoot, store, identity, started.get());
         } catch (IOException failure) {
             return LOCK_UNAVAILABLE;
+        }
+    }
+
+    private void trashSweep(Path controlRoot, NodeIdentity identity) {
+        try {
+            ProjectLocation location = projectService.locate(controlRoot);
+            PredictionEventStore current = location.openCoordinationStore();
+            // Reviews held by reviewers of away computers, while this one is stalled (ADR-0098 step 7, item 17).
+            org.synesis.workspace.application.collaboration.AwayLanes.releaseStalledReviews(current, location.coordinationDirectory(), identity);
+            org.synesis.workspace.application.collaboration.WorkTrash.sweep(location, location.openCoordinationStore(), identity);
+        } catch (Exception unreadable) {
+            LOG.log(System.Logger.Level.WARNING, "trash sweep skipped; the next pass tries again", unreadable);
         }
     }
 

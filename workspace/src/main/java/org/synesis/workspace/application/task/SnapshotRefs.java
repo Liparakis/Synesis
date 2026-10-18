@@ -14,7 +14,35 @@ public final class SnapshotRefs {
     /** Namespace prefix of refs that pin a snapshot commit during a completion transaction. */
     static final String PREPARED_PREFIX = "refs/synesis/prepared/";
 
+    /** Namespace prefix of the refs that keep trashed work (ADR-0098 step 7). */
+    static final String TRASH_PREFIX = "refs/synesis/trash/";
+
+    private static final java.util.regex.Pattern TRASH_REF = java.util.regex.Pattern.compile(
+            "refs/synesis/trash/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/(0|[1-9][0-9]{0,18})");
+
     private SnapshotRefs() {
+    }
+
+    /**
+     * Returns the ref that keeps one lane's trashed work at one epoch. Only {@code WorkTrash} deletes such a ref,
+     * when a person empties the trash (the "nothing taken back" fitness function).
+     *
+     * @param laneId the lane
+     * @param epoch  the lane's epoch
+     * @return the trash ref
+     */
+    public static String trashRef(java.util.UUID laneId, long epoch) {
+        return TRASH_PREFIX + laneId + "/" + epoch;
+    }
+
+    /**
+     * Returns whether a name is exactly a trash ref, as {@link #trashRef} makes them.
+     *
+     * @param ref ref name
+     * @return whether it is one
+     */
+    public static boolean isTrashRef(String ref) {
+        return TRASH_REF.matcher(ref).matches();
     }
 
     /**

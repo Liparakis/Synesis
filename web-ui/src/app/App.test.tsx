@@ -4,6 +4,7 @@ import {AgentsView, App, DiagnosticsView, NetworkView, ProjectHeader, ProjectSel
 import {parseRoute, routePath} from "./routes";
 import {ControlPlaneClient, ControlPlaneError, type AgentSnapshot, type ProjectSelection, type Snapshot} from "../api/controlPlane";
 import {vi} from "vitest";
+import {mockSnapshot} from "../dev/mockSnapshot";
 
 const emptySnapshot = {
   project: null,
@@ -489,6 +490,158 @@ describe("truthful product states", () => {
 
     await user.click(screen.getByRole("button", {name: "Back to projects"}));
     expect(screen.queryByRole("navigation", {name: "Project views"})).not.toBeInTheDocument();
+  });
+});
+
+describe("review disputes", () => {
+  const original = mockSnapshot.disputes;
+
+  afterEach(() => {
+    mockSnapshot.disputes = original;
+  });
+
+  async function openReviews(user: ReturnType<typeof userEvent.setup>) {
+    window.history.replaceState(null, "", "/projects?mock=1");
+    render(<App/>);
+    await screen.findByRole("button", {name: "Add project"});
+    await user.click(screen.getByRole("button", {name: "Open project"}));
+    await user.click(within(screen.getByRole("navigation", {name: "Project views"})).getByRole("button", {name: "Coordination"}));
+    await user.click(within(screen.getByRole("navigation", {name: "Coordination records"})).getByRole("button", {name: "Reviews"}));
+  }
+
+  it("lists a disagreement as open and one the reviewers settled as ended", async () => {
+    mockSnapshot.disputes = [
+      {snapshotId: "snap-open", taskId: "task-1", author: "agent-author", verdicts: {"agent-a": "ACCEPTED", "agent-b": "REJECTED"}, state: "review_disputed"},
+      {snapshotId: "snap-ended", taskId: "task-2", author: "agent-author", verdicts: {"agent-a": "ACCEPTED", "agent-b": "ACCEPTED"}, state: "review_accepted"},
+    ];
+    await openReviews(userEvent.setup());
+
+    const open = screen.getByRole("row", {name: /snap-open/});
+    expect(within(open).getByText("agent-a: accepted, agent-b: rejected")).toBeInTheDocument();
+    expect(within(open).getByText("open")).toBeInTheDocument();
+    expect(within(open).getByText("agent-author")).toBeInTheDocument();
+    const ended = screen.getByRole("row", {name: /snap-ended/});
+    expect(within(ended).getByText("ended: accepted")).toBeInTheDocument();
+    expect(within(ended).queryByText("open")).not.toBeInTheDocument();
+  });
+
+  it("says how a dispute ended when the snapshot went another way", async () => {
+    mockSnapshot.disputes = [
+      {snapshotId: "snap-int", verdicts: {"agent-a": "ACCEPTED"}, state: "integrated"},
+      {snapshotId: "snap-rej", verdicts: {"agent-a": "REJECTED"}, state: "review_rejected"},
+      {snapshotId: "snap-odd", verdicts: {}, state: "validation_refused"},
+    ];
+    await openReviews(userEvent.setup());
+
+    expect(within(screen.getByRole("row", {name: /snap-int/})).getByText("ended: accepted")).toBeInTheDocument();
+    expect(within(screen.getByRole("row", {name: /snap-rej/})).getByText("ended: rejected")).toBeInTheDocument();
+    const odd = screen.getByRole("row", {name: /snap-odd/});
+    expect(within(odd).getByText("ended: validation refused")).toBeInTheDocument();
+    expect(within(odd).getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("says so when no reviewers have disagreed", async () => {
+    mockSnapshot.disputes = [];
+    await openReviews(userEvent.setup());
+
+    expect(screen.getByText("No reviewers have disagreed.")).toBeInTheDocument();
+  });
+});
+
+describe("the trash", () => {
+  const kept = {laneId: "6f1c2a8e-0000-4000-8000-000000000001", epoch: 2, taskId: "task-3", workGroupId: "wg-1", commit: "3f2a9c1d7e8b4a6f0c1d2e3f4a5b6c7d8e9f0a1b",
+    reason: "TAKEN_OVER", trashedBy: "peer_9x23a", restoredInto: [] as string[], emptied: false};
+  const late = {...kept, laneId: "6f1c2a8e-0000-4000-8000-000000000002", epoch: 1, reason: "LATE_FOR_MET_GOAL", restoredInto: ["wg-a", "wg-b"]};
+  const gone = {...kept, laneId: "6f1c2a8e-0000-4000-8000-000000000003", reason: "DISPUTE_GIVEN_UP", emptied: true};
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    window.history.replaceState(null, "", "/projects");
+  });
+
+  async function openLiveTrash(trash: Array<typeof kept>) {
+    vi.spyOn(ControlPlaneClient.prototype, "resumeSession").mockResolvedValue({...mockSnapshot, trash} as Snapshot);
+    vi.spyOn(ControlPlaneClient.prototype, "startEvents").mockReturnValue(() => undefined);
+    window.history.replaceState(null, "", "/projects/" + mockSnapshot.project!.id + "/trash");
+    render(<App/>);
+    await screen.findByText("Work kept for you");
+  }
+
+  it("lists kept work with why it is there and leaves emptied work out", async () => {
+    await openLiveTrash([kept, late, gone]);
+
+    const rows = screen.getAllByRole("row");
+    expect(rows).toHaveLength(3);
+    expect(screen.getByText("Taken over by another computer")).toBeInTheDocument();
+    expect(screen.getByText("Finished after the goal was met")).toBeInTheDocument();
+    expect(screen.queryByText("Given up in a dispute")).not.toBeInTheDocument();
+    expect(within(rows[1]).getByText("3f2a9c1d7e8b")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("2×")).toBeInTheDocument();
+  });
+
+  it("says the trash is empty when nothing is kept", async () => {
+    await openLiveTrash([gone]);
+
+    expect(screen.getByText("The trash is empty.")).toBeInTheDocument();
+  });
+
+  it("restores a piece of work and names the work group it came back in", async () => {
+    const restore = vi.spyOn(ControlPlaneClient.prototype, "restoreTrash").mockResolvedValue({workGroupId: "wg-new"});
+    const empty = vi.spyOn(ControlPlaneClient.prototype, "emptyTrash").mockResolvedValue({});
+    await openLiveTrash([kept]);
+
+    await userEvent.setup().click(screen.getByRole("button", {name: "Restore"}));
+
+    expect(restore).toHaveBeenCalledWith(kept.laneId, kept.epoch);
+    expect(await screen.findByText(/Restored in work group wg-new/)).toBeInTheDocument();
+    expect(empty).not.toHaveBeenCalled();
+  });
+
+  it("asks before it empties, and only a second click deletes", async () => {
+    const empty = vi.spyOn(ControlPlaneClient.prototype, "emptyTrash").mockResolvedValue({});
+    const user = userEvent.setup();
+    await openLiveTrash([kept]);
+
+    await user.click(screen.getByRole("button", {name: "Empty"}));
+    expect(empty).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/cannot be restored/)).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", {name: "Delete for good"}));
+
+    expect(empty).toHaveBeenCalledWith(kept.laneId, kept.epoch);
+    expect(await screen.findByText(/Emptied\./)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("cancelling the confirmation deletes nothing", async () => {
+    const empty = vi.spyOn(ControlPlaneClient.prototype, "emptyTrash").mockResolvedValue({});
+    const user = userEvent.setup();
+    await openLiveTrash([kept]);
+
+    await user.click(screen.getByRole("button", {name: "Empty"}));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", {name: "Cancel"}));
+
+    expect(empty).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("shows the refusal when the control plane will not restore", async () => {
+    vi.spyOn(ControlPlaneClient.prototype, "restoreTrash").mockRejectedValue(new Error("TRASH_EMPTIED"));
+    await openLiveTrash([kept]);
+
+    await userEvent.setup().click(screen.getByRole("button", {name: "Restore"}));
+
+    expect(await screen.findByText("TRASH_EMPTIED")).toBeInTheDocument();
+  });
+
+  it("offers the actions only to a page that has a control-plane client", async () => {
+    window.history.replaceState(null, "", "/projects/" + mockSnapshot.project!.id + "/trash?mock=1");
+    render(<App/>);
+    await screen.findByText("Work kept for you");
+
+    expect(screen.getByRole("button", {name: "Restore"})).toBeDisabled();
+    expect(screen.getByRole("button", {name: "Empty"})).toBeDisabled();
   });
 });
 

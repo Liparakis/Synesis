@@ -200,6 +200,17 @@ public final class WorkGroupProjection {
     }
 
     /**
+     * Returns whether a grant was revoked: what a stalled computer writes for the review grant of another computer's
+     * reviewer that is away, so that a reviewer here may be admitted (ADR-0098 step 7, designer item 2).
+     *
+     * @param id typed identity to look up
+     * @return whether it was revoked
+     */
+    public synchronized boolean grantRevoked(LaneGrantId id) {
+        return revokedGrants.contains(CoordinationNullException.requireNonNull(id, "grant ID"));
+    }
+
+    /**
      * Returns whether a typed grant identity has been superseded.
      *
      * @param id typed identity to look up
@@ -519,10 +530,9 @@ public final class WorkGroupProjection {
                 grant.snapshot().isPresent() && !grant.snapshot().equals(Optional.of(payload.snapshotIdentity())))) {
             throw new CoordinationException("REVIEW_GRANT_BINDING_MISMATCH");
         }
-        ReviewValidationPayload previous = validations.get(grantId);
-        if (mode.checking() && previous != null && !previous.equals(payload)) {
-            throw new CoordinationException("REVIEW_DECISION_CONFLICT");
-        }
+        // A grant's verdict is its reviewer's alone (the binding above), so a second one on the same grant is that
+        // reviewer replacing its own, which the task projection allows only while the snapshot is disputed (ADR-0098
+        // step 7, designer item 7); the newest stands here.
         validations.put(grantId, payload);
     }
 }

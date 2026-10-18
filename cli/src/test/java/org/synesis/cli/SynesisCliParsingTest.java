@@ -73,6 +73,35 @@ final class SynesisCliParsingTest {
     }
 
     @Test
+    void trashSubcommandsAreInstantiable() throws Exception {
+        for (String subcommand : new String[]{"list", "restore", "empty"}) {
+            Invocation invocation = invocation();
+            assertEquals(0, SynesisCli.execute(new String[]{"trash", subcommand, "--help"}, invocation.runtime()), subcommand);
+            assertTrue(invocation.stdout().contains("synesis trash " + subcommand), subcommand);
+        }
+        Invocation parent = invocation();
+        assertEquals(0, SynesisCli.execute(new String[]{"trash", "--help"}, parent.runtime()));
+        assertTrue(parent.stdout().contains("synesis trash"));
+    }
+
+    @Test
+    void emptyingTheTrashWithoutYesIsRefusedBeforeAnythingIsOpened() throws Exception {
+        Invocation invocation = invocation();
+        Path nowhere = invocation.profile().resolveSibling("no-such-project");
+
+        int exit = SynesisCli.execute(new String[]{"trash", "empty", "--project", nowhere.toString(), "2f0b1c1e-6f6e-4b8c-9a55-0d8e7b6a1c11", "1"}, invocation.runtime());
+
+        assertEquals(ExitCodes.COMMAND_FAILED, exit);
+        assertTrue(invocation.stderr().contains("TRASH_NOT_EMPTIED=CONFIRMATION_REQUIRED"), invocation.stderr());
+        assertFalse(Files.exists(nowhere));
+    }
+
+    @Test
+    void emptyingNeedsALaneAndAnEpoch() throws Exception {
+        assertEquals(2, SynesisCli.execute(new String[]{"trash", "empty", "--yes"}, invocation().runtime()));
+    }
+
+    @Test
     void contractSubcommandsAreInstantiable() throws Exception {
         for (String subcommand : new String[]{"status"}) {
             Invocation invocation = invocation();

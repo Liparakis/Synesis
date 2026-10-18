@@ -154,7 +154,7 @@ public final class CodeTransferServer {
     /** Whether a name is exactly a snapshot or prepared ref, with an ID Git can take only as a ref name. */
     static boolean isServedRef(String name) {
         String id = name.substring(name.lastIndexOf('/') + 1);
-        return REF_ID.matcher(id).matches()
+        return SnapshotRefs.isTrashRef(name) || REF_ID.matcher(id).matches()
                 && (name.equals(SnapshotRefs.snapshotRef(id)) || name.equals(SnapshotRefs.preparedRef(id)));
     }
 

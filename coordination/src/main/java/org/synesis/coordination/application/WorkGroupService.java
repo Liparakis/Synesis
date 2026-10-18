@@ -172,6 +172,29 @@ public final class WorkGroupService {
     }
 
     /**
+     * Revokes a review grant of a reviewer whose computer is away, judged again under the append lock: a grant already
+     * revoked, superseded, or carrying a verdict by now is left as it is (ADR-0098 step 7, designer item 17).
+     *
+     * @param grantIdentity the review grant
+     * @return whether this call revoked it
+     * @throws IOException              when persistence fails
+     * @throws GeneralSecurityException when signing fails
+     */
+    public boolean revokeStalledReview(LaneGrantId grantIdentity) throws IOException, GeneralSecurityException {
+        LaneGrantId grantKey = CoordinationNullException.requireNonNull(grantIdentity, "grant ID");
+        return appends.call(current -> {
+            var workGroups = current.workGroupProjection();
+            LaneGrant grant = workGroups.grants().stream().filter(candidate -> candidate.identity().equals(grantKey)).findFirst().orElse(null);
+            if (grant == null || workGroups.grantRevoked(grantKey) || workGroups.grantSuperseded(grantKey)
+                    || workGroups.reviewValidationForGrant(grantKey).isPresent()) {
+                return false;
+            }
+            current.append(grantKey.value(), PredictionEventType.LANE_REVOKED, signer.nodeId(), CollaborationCodec.encodeLaneGrant(grant), signer);
+            return true;
+        });
+    }
+
+    /**
      * Closes or cancels the logical group without releasing sibling lane claims.
      *
      * @param groupId         group ID

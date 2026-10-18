@@ -86,7 +86,7 @@ final class LaneCompletionService {
                                                                                     <= snapshot.provenance()
                                                                                        .claimEpoch()
                 : !intent.participant().equals(snapshot.provenance().participant())
-                  || intent.version() != snapshot.provenance().claimEpoch())) {
+                  || !current.taskCompletionProjection().boundToLaneAt(snapshot, intent.version()))) {
             throw new CoordinationException("INTEGRATED_LANE_BINDING_MISMATCH");
         }
         current.append(intent.intentId(),

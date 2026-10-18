@@ -54,6 +54,10 @@ public final class TaskCompletionProjection {
      * another computer two may meet in either order (ADR-0100 row 4).
      */
     private final Map<SnapshotId, Map<String, String>> verdicts = new LinkedHashMap<>();
+    /** Every snapshot whose reviewers ever disagreed, so the dispute and how it ended stay on record (ADR-0098 step 7). */
+    private final java.util.Set<SnapshotId> disputed = new java.util.LinkedHashSet<>();
+    /** Every result ever recorded on each snapshot, by any reviewer: what {@link #disputed} is derived from. */
+    private final Map<SnapshotId, java.util.Set<String>> results = new LinkedHashMap<>();
     /** Each re-merge snapshot, by its ID (ADR-0098 step 5): reviewed, never integrated by itself. */
     private final Map<SnapshotId, RemergeSnapshotPayload> remerges = new LinkedHashMap<>();
     /** Each combine a re-merge asked for, by its ID (ADR-0098 step 5, designer item 22). */
@@ -86,6 +90,8 @@ public final class TaskCompletionProjection {
         integrationPriorStates.putAll(source.integrationPriorStates);
         validationRefusals.putAll(source.validationRefusals);
         source.verdicts.forEach((snapshot, byReviewer) -> verdicts.put(snapshot, new LinkedHashMap<>(byReviewer)));
+        disputed.addAll(source.disputed);
+        source.results.forEach((snapshot, recorded) -> results.put(snapshot, new java.util.HashSet<>(recorded)));
         remerges.putAll(source.remerges);
         combines.putAll(source.combines);
     }
@@ -811,12 +817,21 @@ public final class TaskCompletionProjection {
             throw new CoordinationException("REVIEW_SNAPSHOT_BINDING_MISMATCH");
         }
         TaskCompletionState current = snapshotStates.get(snapshot.snapshotIdentity());
-        if (mode.checking() && (current == TaskCompletionState.REVIEW_ACCEPTED || current.refused()
-                || current == TaskCompletionState.INTEGRATED)) {
+        Map<String, String> given = verdicts.computeIfAbsent(snapshot.snapshotIdentity(), id -> new LinkedHashMap<>());
+        // While the reviewers disagree, a reviewer may replace its own verdict (ADR-0098 step 7, designer item 7).
+        boolean replacing = current == TaskCompletionState.REVIEW_DISPUTED && given.containsKey(payload.targetParticipant());
+        if (mode.checking() && !replacing && (given.containsKey(payload.targetParticipant()) || current == TaskCompletionState.REVIEW_ACCEPTED
+                || current.refused() || current == TaskCompletionState.INTEGRATED)) {
             throw new CoordinationException("REVIEW_DECISION_ALREADY_RECORDED");
         }
-        Map<String, String> given = verdicts.computeIfAbsent(snapshot.snapshotIdentity(), id -> new LinkedHashMap<>());
         given.put(payload.targetParticipant(), payload.result());
+        // Ever disputed when both results were ever recorded on it: the same on every computer, whatever order the
+        // reviewers' logs arrive in, since one reviewer's verdicts always arrive in its own order.
+        java.util.Set<String> seen = results.computeIfAbsent(snapshot.snapshotIdentity(), id -> new java.util.HashSet<>());
+        seen.add(payload.result());
+        if (seen.size() > 1) {
+            disputed.add(snapshot.snapshotIdentity());
+        }
         if (current == TaskCompletionState.INTEGRATED || current == TaskCompletionState.VALIDATION_REFUSED) {
             // An integration and a validation refusal are facts no verdict takes back.
             return;
@@ -854,6 +869,57 @@ public final class TaskCompletionProjection {
     public synchronized Map<String, String> verdicts(SnapshotId snapshotId) {
         return Map.copyOf(verdicts.getOrDefault(CoordinationNullException.requireNonNull(snapshotId, "snapshot ID"),
                 Map.of()));
+    }
+
+    /**
+     * Returns every snapshot whose reviewers ever disagreed, in the order the disputes began: the record of disputes
+     * and how each ended (ADR-0098 step 7, designer item 8).
+     *
+     * @return the snapshots
+     */
+    public synchronized List<SnapshotId> disputedSnapshots() {
+        return List.copyOf(disputed);
+    }
+
+    /**
+     * Whether a snapshot still speaks for its lane at the lane's current version: published at that epoch, or at an
+     * earlier one that a rejection moved on and its reviewers then withdrew (ADR-0098 step 7). The one rule the
+     * integration pass and the release after integration share.
+     *
+     * @param snapshot    the snapshot
+     * @param laneVersion the lane's version now
+     * @return whether it is bound to the lane at that version
+     */
+    public synchronized boolean boundToLaneAt(TaskSnapshotRecord snapshot, long laneVersion) {
+        return laneVersion == snapshot.provenance().claimEpoch() || rejectionWithdrawn(snapshot, laneVersion);
+    }
+
+    /**
+     * Whether a snapshot whose lane a rejection moved on is the one to merge after all: its reviewers disagreed, every
+     * one of them now accepts it, and its lane published nothing since. The correction the rejection asked for was
+     * withdrawn with the rejection (ADR-0098 step 7, designer item 7).
+     *
+     * @param snapshot    the snapshot
+     * @param laneVersion the lane's version now
+     * @return whether the lane's later version stands for this snapshot
+     */
+    public synchronized boolean rejectionWithdrawn(TaskSnapshotRecord snapshot, long laneVersion) {
+        Map<String, String> given = verdicts.getOrDefault(snapshot.snapshotIdentity(), Map.of());
+        return disputed.contains(snapshot.snapshotIdentity()) && laneVersion > snapshot.provenance().claimEpoch()
+                && !given.isEmpty() && given.values().stream().allMatch("ACCEPTED"::equals)
+                && allSnapshots().stream().noneMatch(later -> later.taskId().equals(snapshot.taskId())
+                        && later.provenance().authorityLineageId().equals(snapshot.provenance().authorityLineageId())
+                        && later.provenance().claimEpoch() > snapshot.provenance().claimEpoch());
+    }
+
+    /**
+     * Whether a snapshot's reviewers ever disagreed.
+     *
+     * @param snapshotId snapshot identity
+     * @return whether it was ever disputed
+     */
+    public synchronized boolean everDisputed(SnapshotId snapshotId) {
+        return disputed.contains(CoordinationNullException.requireNonNull(snapshotId, "snapshot ID"));
     }
 
     /**

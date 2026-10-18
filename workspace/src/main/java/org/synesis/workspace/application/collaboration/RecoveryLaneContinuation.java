@@ -140,6 +140,9 @@ final class RecoveryLaneContinuation {
             return ContinuationResult.observed(successor, callerOwnsSuccessor);
         }
         WorkIntent source = store.collaborationProjection().intent(sourceIntentId).orElseThrow(() -> new IOException("CONTINUATION_SOURCE_NOT_FOUND"));
+        if (AwayLanes.anotherComputers(store, source, identity.nodeId())) {
+            return takeOver(location, store, identity, binding, provider, grantId, source, claimEpoch);
+        }
         List<ProviderSessionBindingService.Binding> sourceBindings = new ProviderSessionBindingService().list(location, provider)
                 .stream()
                 .filter(candidate -> participantHandle(candidate.sessionId()).equals(source.participant()))
@@ -193,6 +196,43 @@ final class RecoveryLaneContinuation {
             return service.continueFromRecovery(continuation);
         } else {
             return service.continueEligibleFromRecovery(continuation);
+        }
+    }
+
+    /**
+     * Takes over another computer's lane (ADR-0098 step 7, designer items 9 to 11): judged here, now, that the lane's
+     * computer is away and this one stalled, then continued from the lane's last snapshot that reached this computer,
+     * or from its base, with no actor scopes, since no session of that computer is here. The worktree gets the
+     * snapshot's work before the entry is written, as a combine lane's does.
+     */
+    private static ContinuationResult takeOver(ProjectLocation location, PredictionEventStore store, NodeIdentity identity, ProviderSessionBindingService.Binding binding,
+            String provider, UUID grantId, WorkIntent source, long claimEpoch) throws Exception {
+        if (!AwayLanes.offered(store, location.coordinationDirectory(), identity.nodeId()).contains(source)) {
+            throw new IOException("TAKEOVER_NOT_OFFERED");
+        }
+        String targetParticipant = participantHandle(binding.sessionId());
+        if (grantId != null) {
+            throw new IOException("TAKEOVER_GRANT_NOT_ACCEPTED");
+        }
+        UUID targetIntentId = recoveryContinuationIntentId(source.intentId(), targetParticipant, claimEpoch);
+        Optional<org.synesis.coordination.domain.task.TaskSnapshotRecord> snapshot = AwayLanes.lastSnapshotHere(store, location.root(), source);
+        WorkIntent target = new WorkIntent(targetIntentId, source.projectId(), targetParticipant, provider, source.taskId(), source.goal(), source.acceptance(),
+                binding.baseCommit(), source.selectors(), source.version() + 1, source.workGroupId(), source.authorityLineageId(), WorkIntent.Status.ANNOUNCED,
+                source.role(), source.reviewTargetSelectors(), source.knownDependencies());
+        LaneContinuation continuation = new LaneContinuation(recoveryContinuationGrantId(source.intentId(), targetParticipant, claimEpoch), source.intentId(), target,
+                source.participant(), targetParticipant, claimEpoch, AwayLanes.reference(snapshot, source));
+        var worktrees = new org.synesis.workspace.application.integration.IntegrationWorkspaceService();
+        if (snapshot.isPresent()) {
+            worktrees.materializeTakeover(Path.of(binding.worktreePath()), snapshot.get());
+        }
+        try {
+            return new WorkIntentService(store, identity).continueEligibleFromRecovery(continuation);
+        } catch (Exception refused) {
+            // Another taker won, or the lane moved: the worktree goes back to how it was made.
+            if (snapshot.isPresent()) {
+                worktrees.undoTakeover(Path.of(binding.worktreePath()), snapshot.get());
+            }
+            throw refused;
         }
     }
 

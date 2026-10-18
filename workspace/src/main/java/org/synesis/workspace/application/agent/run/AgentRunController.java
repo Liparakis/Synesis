@@ -242,7 +242,8 @@ public final class AgentRunController {
      * in the same process); a review it may take is offered (a foreign author's snapshot waited for
      * ever while both agents here that could review it had stopped with their lanes integrated); or a
      * request it made was answered (its review request was accepted ten minutes after it stopped, and
-     * the author waited for ever for the reviewer it had admitted).</p>
+     * the author waited for ever for the reviewer it had admitted). A review dispute it is a party to resumes it too,
+     * once for each state of the dispute: the reviewers settle it between themselves (ADR-0098 step 7).</p>
      *
      * <p>One thing resumes an agent with something to come back to although the log did not move: another computer
      * of the project connected after the agent stopped. A reviewer whose author's computer was cut off read nothing,
@@ -254,7 +255,7 @@ public final class AgentRunController {
         boolean laneEnded = agent.heldLaneAtStop && !holdsLane;
         // Records which reviews it is offered now (reviewsToTry forgets the ones taken since).
         List<String> reviews = laneEnded || holdsLane ? List.of() : agent.reviewsToTry(observation.reviewsOffered(agent.spec.provider(), agent.connectionIds), agents);
-        boolean forItself = laneEnded || !reviews.isEmpty() || agent.answerWaiting(observation);
+        boolean forItself = laneEnded || !reviews.isEmpty() || agent.answerWaiting(observation) || agent.disputeUnseen(observation);
         // A lane whose published work waits for an operator is not resumed for its lane: resumed, it took
         // its lane back, published the same work again and was refused again, eleven times in one real
         // run, each on another lane's progress.
@@ -799,14 +800,29 @@ public final class AgentRunController {
          * Reports whether the session behind one connection still holds a coordination request that
          * is pending, or a review grant it has not finished: what refuses a fresh session on that
          * connection with {@code SESSION_AUTHORITY_OPEN} (ADR-0099, Decision 4). Only that session can
-         * use them, so the controller keeps it while it may resume its agent.
+         * use them, so the controller keeps it while it may resume its agent. A verdict it recorded on a snapshot
+         * not yet settled counts too: only that session may replace it if another reviewer disagrees (ADR-0098
+         * step 7).
          *
          * @param provider             provider identifier
          * @param connectionInstanceId connection of the agent's current process
-         * @return {@code true} while that session holds such a request or grant
+         * @return {@code true} while that session holds such a request, grant or verdict
          */
         default boolean holdsRequestOrGrant(String provider, String connectionInstanceId) {
             return false;
+        }
+
+        /**
+         * Returns the review disputes the sessions behind these connections are parties to, as reviewer or author:
+         * one key per snapshot and set of verdicts, so a dispute whose verdicts change is a new one to see (ADR-0098
+         * step 7).
+         *
+         * @param provider              provider identifier
+         * @param connectionInstanceIds every connection the agent's processes have had
+         * @return the keys, empty when there is no dispute
+         */
+        default List<String> disputesFor(String provider, List<String> connectionInstanceIds) {
+            return List.of();
         }
     }
 
@@ -905,6 +921,8 @@ public final class AgentRunController {
         private long resumedForAnswer;
         /** The snapshots waiting for review that it was resumed, without a lane, to look at. */
         private final Set<String> resumedForReview = new java.util.HashSet<>();
+        /** The review disputes, each in the state it was in, that it was resumed for. */
+        private final Set<String> resumedForDispute = new java.util.HashSet<>();
         /** Every connection this agent's processes have had, oldest first. */
         private final List<String> connectionIds = new ArrayList<>();
         private int exitCode;
@@ -1012,6 +1030,7 @@ public final class AgentRunController {
         private void markResumedFor(Wake wake, Observation observation) {
             wake.deadlinePassed().ifPresent(passed -> resumedForDeadline = passed);
             resumedForReview.addAll(wake.reviews());
+            resumedForDispute.addAll(observation.disputesFor(spec.provider(), connectionIds));
             resumedForMessage = Math.max(resumedForMessage, newestUnreadMessage(observation).orElse(0L));
             resumedForAnswer = Math.max(resumedForAnswer, newestAnswer(observation).orElse(0L));
             observation.otherComputerConnectedSince().ifPresent(since -> resumedForConnection = Math.max(resumedForConnection, since));
@@ -1021,6 +1040,13 @@ public final class AgentRunController {
         private boolean computerCameBackUnseen(Observation observation) {
             OptionalLong since = observation.otherComputerConnectedSince();
             return since.isPresent() && since.getAsLong() > Math.max(lastLookMillis, resumedForConnection);
+        }
+
+        /** Whether it is a party to a review dispute, in a state it has not been resumed for. */
+        private boolean disputeUnseen(Observation observation) {
+            List<String> disputes = observation.disputesFor(spec.provider(), connectionIds);
+            resumedForDispute.retainAll(disputes);
+            return !resumedForDispute.containsAll(disputes);
         }
 
         /** Whether a request it made was answered after it stopped, and it has not been resumed since. */

@@ -34,6 +34,7 @@ import {
   type ProjectFolderChoice,
   type ProjectSelection,
   type Snapshot,
+  type TrashSnapshot,
   clearSelectionId,
   projectLinkFromLocation,
   selectionIdFromLocation,
@@ -42,7 +43,7 @@ import {parseRoute, projectTabs, routePath, type ProjectView, type Route} from "
 
 export type View = ProjectView | "projects";
 type StatusTone = "good" | "warn" | "bad" | "neutral";
-type CoordinationTab = "claims" | "tasks" | "capabilities" | "ownership" | "conversations" | "operator";
+type CoordinationTab = "claims" | "tasks" | "reviews" | "capabilities" | "ownership" | "conversations" | "operator";
 type ProjectRegistryClient = Pick<ControlPlaneClient, "chooseProject" | "registerProject" | "removeProjects">;
 type JoinClient = Pick<ControlPlaneClient, "join" | "openProjectLink" | "chooseProject"> & Partial<Pick<ControlPlaneClient, "describeProjectLink">>;
 const PROJECT_LINK_PREFIX = "synesis://project/";
@@ -317,6 +318,7 @@ export function App() {
             {route.view === "overview" && <ProjectOverviewView snapshot={snapshot} onNavigate={openProjectView}/>}
             {route.view === "agents" && <AgentsView agents={snapshot.agents}/>}
             {route.view === "coordination" && <CoordinationView snapshot={snapshot}/>}
+            {route.view === "trash" && <TrashView trash={snapshot.trash} client={clientRef.current}/>}
             {route.view === "network" && <NetworkView network={snapshot.network} onboarding={snapshot.onboarding} projectName={snapshot.project?.name} client={clientRef.current}/>}
             {route.view === "diagnostics" && <DiagnosticsView diagnostics={snapshot.diagnostics}/>}
           </div>
@@ -672,6 +674,7 @@ const projectTabIcons: Record<ProjectView, LucideIcon> = {
   overview: LayoutDashboard,
   agents: Users,
   coordination: GitBranch,
+  trash: Trash2,
   network: Network,
   diagnostics: ShieldCheck,
 };
@@ -681,6 +684,7 @@ function ProjectTabs({snapshot, view, onNavigate}: {snapshot: Snapshot; view: Pr
   const counts: Partial<Record<ProjectView, number>> = {
     agents: snapshot.agents.length,
     coordination: snapshot.workgroups.length,
+    trash: snapshot.trash.filter((item) => !item.emptied).length,
     network: snapshot.network.peers.length,
     diagnostics: findings,
   };
@@ -855,13 +859,78 @@ function CoordinationView({snapshot}: {snapshot: Snapshot}) {
           </div>
           {!group ? <EmptyState icon={GitBranch} title="No workgroups yet" detail="Claims, tasks, and capabilities will appear when a workgroup is projected."/> : (
             <>
-              <nav className="sub-tabs" aria-label="Coordination records">{(["claims", "tasks", "capabilities", "ownership", "conversations", "operator"] as CoordinationTab[]).map((item) => <button key={item} className={cx(tab === item && "is-active")} type="button" onClick={() => setTab(item)}>{capitalize(item)}</button>)}</nav>
+              <nav className="sub-tabs" aria-label="Coordination records">{(["claims", "tasks", "reviews", "capabilities", "ownership", "conversations", "operator"] as CoordinationTab[]).map((item) => <button key={item} className={cx(tab === item && "is-active")} type="button" onClick={() => setTab(item)}>{capitalize(item)}</button>)}</nav>
               <CoordinationTable snapshot={snapshot} tab={tab}/>
             </>
           )}
         </section>
       </div>
       {group && detailOpen && <CoordinationInspector snapshot={snapshot} tab={tab} onClose={() => setDetailOpen(false)}/>}
+    </div>
+  );
+}
+
+type TrashClient = Pick<ControlPlaneClient, "restoreTrash" | "emptyTrash">;
+
+const trashReasons: Record<string, string> = {
+  TAKEN_OVER: "Taken over by another computer",
+  LATE_FOR_MET_GOAL: "Finished after the goal was met",
+  DISPUTE_GIVEN_UP: "Given up in a dispute",
+};
+
+/**
+ * The trash (ADR-0098 step 7): work that left an agent's hands, kept until a person restores or empties it. Emptying
+ * deletes the work for good on every computer, so it is asked for twice.
+ */
+function TrashView({trash, client}: {trash: TrashSnapshot[]; client: TrashClient | null}) {
+  const [confirming, setConfirming] = useState<TrashSnapshot | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const act = async (item: TrashSnapshot, empty: boolean) => {
+    if (!client || busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      if (empty) {
+        await client.emptyTrash(item.laneId, item.epoch);
+        setMessage("Emptied. The work is deleted on every computer.");
+      } else {
+        const answer = await client.restoreTrash(item.laneId, item.epoch);
+        setMessage("Restored in work group " + String(answer.workGroupId ?? "") + ". The next lane announced there starts with this work.");
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The trash could not be changed.");
+    } finally {
+      setBusy(false);
+      setConfirming(null);
+    }
+  };
+  const kept = trash.filter((item) => !item.emptied);
+  return (
+    <div className="view-stack">
+      <div className="view-intro"><div><p className="eyebrow">Trash</p><h2>Work kept for you</h2><p>Nothing here is deleted until you empty it.</p></div></div>
+      <section className="data-table-wrap panel">
+        <table className="data-table"><thead><tr><th>Lane</th><th>Why</th><th>Commit</th><th>Restored</th><th></th></tr></thead>
+          <tbody>{kept.length === 0 ? <TableEmpty colSpan={5} text="The trash is empty."/> : kept.map((item) => <tr key={item.laneId + "/" + item.epoch}>
+            <td className="mono">{item.laneId} · {item.epoch}</td>
+            <td>{trashReasons[item.reason] ?? item.reason}</td>
+            <td className="mono">{item.commit.slice(0, 12)}</td>
+            <td>{item.restoredInto.length === 0 ? "—" : item.restoredInto.length + "×"}</td>
+            <td className="table-action-cell">
+              <button className="button button-secondary" type="button" disabled={!client || busy} onClick={() => void act(item, false)}>Restore</button>
+              <button className="button button-danger" type="button" disabled={!client || busy} onClick={() => setConfirming(item)}>Empty</button>
+            </td>
+          </tr>)}</tbody>
+        </table>
+      </section>
+      {message && <p className="muted" role="status">{message}</p>}
+      {confirming && <DetailModal title="Empty from the trash" onClose={() => { if (!busy) setConfirming(null); }}>
+        <div className="registry-form">
+          <p>Delete the work of lane <strong className="mono">{confirming.laneId}</strong> (epoch {confirming.epoch}) for good?</p>
+          <p className="muted">It is deleted on every computer of the project and cannot be restored.</p>
+          <div className="registry-form-actions"><button className="button button-secondary" type="button" onClick={() => setConfirming(null)} disabled={busy}>Cancel</button><button className="button button-danger" type="button" onClick={() => void act(confirming, true)} disabled={busy}>Delete for good</button></div>
+        </div>
+      </DetailModal>}
     </div>
   );
 }
@@ -883,6 +952,13 @@ function CoordinationTable({snapshot, tab}: {snapshot: Snapshot; tab: Coordinati
     <section className="data-table-wrap panel">
       <table className="data-table"><thead><tr><th>Task ID</th><th>Title</th><th>Capability Requested</th><th>Owner</th></tr></thead>
         <tbody>{snapshot.tasks.length === 0 ? <TableEmpty colSpan={4} text="No tasks in the projection."/> : snapshot.tasks.map((task) => <tr key={task.id}><td className="mono">{task.id}</td><td>{task.title}</td><td className="mono">{task.capability}</td><td>{task.owner || "Unassigned"}</td></tr>)}</tbody>
+      </table>
+    </section>
+  );
+  if (tab === "reviews") return (
+    <section className="data-table-wrap panel">
+      <table className="data-table"><thead><tr><th>Snapshot</th><th>Author</th><th>Verdicts</th><th>Dispute</th></tr></thead>
+        <tbody>{snapshot.disputes.length === 0 ? <TableEmpty colSpan={4} text="No reviewers have disagreed."/> : snapshot.disputes.map((dispute) => <tr key={dispute.snapshotId}><td className="mono">{dispute.snapshotId}</td><td>{dispute.author ?? "—"}</td><td className="table-cell-wrap">{Object.entries(dispute.verdicts).map(([reviewer, verdict]) => reviewer + ": " + verdict.toLowerCase()).join(", ")}</td><td><StatusBadge value={dispute.state} label={disputeOutcome(dispute.state)}/></td></tr>)}</tbody>
       </table>
     </section>
   );
@@ -916,6 +992,14 @@ function CoordinationTable({snapshot, tab}: {snapshot: Snapshot; tab: Coordinati
   );
 }
 
+/** How a dispute stands, from its snapshot's state: open until the reviewers agree, then what came of it. */
+function disputeOutcome(state: string): string {
+  if (state === "review_disputed") return "open";
+  if (state === "review_accepted" || state === "integrated") return "ended: accepted";
+  if (state === "review_rejected") return "ended: rejected";
+  return "ended: " + state.replace(/_/g, " ");
+}
+
 function CoordinationInspector({snapshot, tab, onClose}: {snapshot: Snapshot; tab: CoordinationTab; onClose(): void}) {
   const title = tab === "claims" ? "Claim Detail" : tab === "tasks" ? "Task Detail" : tab === "capabilities" ? "Capability Detail" : tab === "ownership" ? "Ownership Detail" : "Detail";
   const claim = snapshot.claims[0];
@@ -929,7 +1013,7 @@ function CoordinationInspector({snapshot, tab, onClose}: {snapshot: Snapshot; ta
       {tab === "capabilities" && capability && <><div className="inspector-title"><h2>{capability.capability}</h2><StatusBadge value={capability.state}/></div><DetailList><DetailRow label="Requester" value={capability.requester}/><DetailRow label="Owner" value={capability.owner || "—"}/><DetailRow label="Reason" value={capability.reason || "—"}/></DetailList><InspectorSection title="Contract"><DetailList><DetailRow label="Inputs" value={capability.contract.inputs.join(", ") || "—"}/><DetailRow label="Output" value={capability.contract.output || "—"}/><DetailRow label="Required Behavior" value={capability.contract.requiredBehavior || "—"}/></DetailList></InspectorSection></>}
       {tab === "ownership" && ownership && <><div className="inspector-title"><h2>{ownership.capability}</h2></div><DetailList><DetailRow label="Task ID" value={ownership.taskId}/><DetailRow label="Owner" value={ownership.owner}/><DetailRow label="Protected Scopes" value={ownership.protectedScopes.join(", ") || "—"}/><DetailRow label="Intent Version" value={String(ownership.intentVersion)}/></DetailList></>}
       {((tab === "claims" && !claim) || (tab === "tasks" && !task) || (tab === "capabilities" && !capability) || (tab === "ownership" && !ownership)) && <p className="muted inspector-copy">No record is available in the current projection.</p>}
-      {(tab === "conversations" || tab === "operator") && <p className="muted inspector-copy">The table shows every record of this kind in full.</p>}
+      {(tab === "conversations" || tab === "operator" || tab === "reviews") && <p className="muted inspector-copy">The table shows every record of this kind in full.</p>}
     </DetailModal>
   );
 }

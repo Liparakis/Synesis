@@ -45,6 +45,7 @@ final class LogNamedCommits {
     static LogNamedCommits of(List<PredictionEvent> events) {
         Map<String, Naming> byCommit = new HashMap<>();
         Map<List<Object>, String> preparedRefs = new HashMap<>();
+        Map<List<Object>, String> trashed = new HashMap<>();
         for (PredictionEvent event : events) {
             try {
                 switch (event.type()) {
@@ -65,6 +66,25 @@ final class LogNamedCommits {
                         // A lane's re-merge commit, served under the re-merge snapshot's own ref (ADR-0098 step 5).
                         TaskSnapshotPayload remerge = RemergeSnapshotPayload.decode(event.payload()).snapshot();
                         name(byCommit, remerge.commitSha(), event.actorNodeId()).refs().add(remerge.provenance().snapshotRef());
+                    }
+                    case WORK_TRASHED -> {
+                        // Kept work, served under its trash ref so a restore on any computer can fetch it (ADR-0098 step 7).
+                        var work = org.synesis.coordination.domain.trash.TrashEntries.WorkTrashed.decode(event.payload());
+                        trashed.put(List.of(work.laneId(), work.epoch()), work.commit());
+                        name(byCommit, work.commit(), event.actorNodeId()).refs()
+                                .add(org.synesis.workspace.application.task.SnapshotRefs.trashRef(work.laneId(), work.epoch()));
+                    }
+                    case TRASH_EMPTIED -> {
+                        // Emptied work is no longer served: its ref is gone everywhere, and nothing asks for it again.
+                        var emptied = org.synesis.coordination.domain.trash.TrashEntries.TrashEmptied.decode(event.payload());
+                        String commit = trashed.remove(List.of(emptied.laneId(), emptied.epoch()));
+                        Naming naming = commit == null ? null : byCommit.get(commit);
+                        if (naming != null) {
+                            naming.refs().remove(org.synesis.workspace.application.task.SnapshotRefs.trashRef(emptied.laneId(), emptied.epoch()));
+                            if (naming.refs().isEmpty()) {
+                                byCommit.remove(commit);
+                            }
+                        }
                     }
                     case CAPABILITY_IMPLEMENTATION_PUBLISHED ->
                             name(byCommit, ImplementationEventPayload.decode(event.payload()).commitSha(), event.actorNodeId());
