@@ -77,6 +77,16 @@ The owner's answers below leave these gaps. Each is the designer's choice, open 
     one (GitHub, GitLab, Gitea, a bare repository over SSH, any Git remote), may co-exist as an extra place to exchange
     code and as a mirror, but nothing may depend on it.
 
+### The owner's answers (USER-STATED, 2026-10-18)
+
+13. **A takeover starts from the last snapshot the away computer handed in** that reached the taker's computer, or from
+    the lane's base if there is none. An agent's unsaved work stays on its own computer and goes to the trash when that
+    computer comes back. No checkpoints are shared.
+14. **The step 6 third computer runs real agents:** the VM's Claude and Codex sign-ins may be copied into it.
+15. **Real runs with live agents** are allowed for every step's done-when, unattended.
+16. **A step whose real run fails and is not fixed in about two hours** is recorded as PARTIAL, with what failed and
+    why, and the build goes on with the next step's code and tests.
+
 Accepted on 2026-10-16 by the repository owner. Rewritten on 2026-10-17 against the premise, as a design, and settled
 by the owner's answers that evening: no code exists for steps 3 to 7 below. ADR-0100 is folded into this model; it
 now describes how work from separate copies meets on `main`. ADR-0099 (agents are woken) is unchanged in substance.
@@ -562,6 +572,160 @@ Each was designed on 2026-10-16 or 2026-10-17 and is dropped, with the reason.
 - Agents can still get around the operator gate with `run_command` (recorded, deferred).
 - A removed member keeps its copy. Removal ends future access, not past access.
 
+## Build design (designer, 2026-10-18)
+
+How each step is built, from a survey of the source on 2026-10-18. Each item is the designer's choice, open to the
+owner. "Today" facts are VERIFIED on `master` at `972435f2`.
+
+### Step 3: Code over Link
+
+Today: `CodeRemote` is a concrete class whose static `of` refuses a shared project without `code.remote`
+(`CodeRemote.java:57-69`). A Link exchange is one request and one reply on its own QUIC stream, at most 512 KiB, within
+5 s (`ApplicationStreamCodec.java:17`, `StreamExchange.java:37-38`). Only the coordination server holds Link sessions;
+agents' processes reach it by HTTP on loopback (`LoopbackExchange`). No Java code uses `git bundle`.
+
+1. **One code exchange, used by every caller.** `CodeRemote`'s callers (snapshot hand-in, publication, the reviewer's
+   and validator's `ensureCommit`, the merge pass's fetch, `followLeader`, `publishControlBranch`) call one
+   `CodeExchange`. It always uses Link in a shared project, and also the Git remote when one is configured, as a mirror:
+   fetch from Link first, then the remote; publish to the remote as today. A single-computer project does nothing, as
+   today.
+2. **Agents' processes ask their own server.** A new loopback path `/code` beside `/replication` takes "make commit C
+   present" or "bring `main` up to date". The server does the Link transfer and the `git fetch` from the bundle, then
+   answers. The process waits at most 10 minutes, the bundle bound.
+3. **A new Link protocol, `SCX1`, beside `SRL1`,** routed by `ReplicationSide` by its magic:
+   - `Want(wanted, have)` names refs or commit IDs; the server answers `Piece(pieceId, bytes, chunkCount, tip)` or
+     `Unavailable(code)`.
+   - `Chunk(pieceId, index)` answers `ChunkData(index, bytes, sha256)`, 256 KiB at most, so one chunk fits one exchange.
+   - The server names what it serves itself: `refs/synesis/snapshots/*`, `refs/synesis/prepared/*`, and the head of the
+     default branch, and only commits an entry in its copy of the log names (or that branch). It builds the bundle with
+     `git bundle create` from refs it resolved. A peer never chooses a Git command, and nothing is pushed into a
+     computer.
+4. **Pieces of at most 150 MB.** The server walks `git rev-list --reverse` from `have` to `wanted` and cuts at the last
+   commit whose `--disk-usage` total stays under 150 MB; the piece's `tip` is that commit. The client asks again with
+   the new `have` until the tip is the wanted commit. A prepared piece is kept 24 h under
+   `<coordination>/code-pieces/`, keyed by (wanted, have), so a resumed request reuses it, and a client resumes from its
+   first missing chunk. Disk usage is an estimate of bundle size (REQUIRES-MEASUREMENT, "Unresolved").
+5. **Each piece is checked** on arrival: each chunk's SHA-256, `git bundle verify`, `git fetch` with
+   `fetch.fsckObjects=true` into `refs/synesis/incoming/<pieceId>`, and the fetched tip must equal the piece's tip. Only
+   then does the client move a snapshot ref (which must equal what the log names) or fast-forward `main` by today's
+   `followLeader` rule. The incoming ref is then deleted: it is a transfer buffer, not work.
+6. **Who holds what in step 3.** The leader is still fixed. A member no longer pushes: its snapshot refs stay where
+   they are ("hold the refs until the lane ends"). The leader's merge pass fetches each snapshot an entry names from the
+   computer that wrote the entry. A member's reviewer fetches from the leader, which serves every commit its log names
+   once it has it. `main` stays the leader's to move.
+7. **Members follow `main` without waiting for a lane.** Today a member fast-forwards only when it allocates a lane
+   (`ProviderWorktreeAllocation.java:55`). In step 3 its server also follows whenever an applied `CONTROL_BRANCH_ADVANCED`
+   names a head its `main` lacks, so `main` ends equal on every computer.
+8. **`code.remote` becomes optional:** `CodeRemote.of` returns empty without it, `ProjectSharing.admit` and `follow` no
+   longer require it, and an invitation without a URL is complete.
+9. **Joining clones over Link.** When the project is not on the joining computer, `synesis link join <link> --into
+   <empty folder>` (and a folder field in the UI) waits for the owner's acceptance, then fetches `main` in pieces, checks
+   it out, and follows. A URL in the invitation is offered as a faster start, never needed.
+10. **Bundle commands** run with a 10-minute bound, outside every lock, through `GitProcessRunner` with its output cap;
+    Git writes and reads the bundle file itself, so nothing streams through the runner.
+11. **Compatibility 7.**
+
+### Step 4: Each computer writes its own log
+
+Today: one log, `events/%020d.sce`, chained by a global `sequence`; each projection's `validate` is a copy of `apply`, so
+all 112 `throw new` sites fire on replay and on arriving entries too; `applyCommitted` places the file before applying,
+so a throw makes the log unopenable. Many readers use the global sequence as a cursor (`ControlPlaneEventStream`,
+`EventLogObserver`, `unchangedSince`, `CoordinationService.replayAfter`).
+
+1. **Layout.** `events/` is this computer's own log, unchanged. `peers/<node>/events/` holds a byte-identical copy of
+   each other computer's log. `applied.order` is an append-only list of `<node> <sequence>` in the order this computer
+   applied entries.
+2. **The local revision.** A line's position in `applied.order` is the entry's local revision. Every reader that uses
+   "the sequence" as a cursor or a revision uses the local revision, so the dashboard, the CLI, agent runs and
+   optimistic envelopes keep working unchanged. A log's own `sequence` stays its chain position.
+3. **Checking is separate from applying.** Each projection keeps today's rules as its check, run only on this computer's
+   own appends (with `AppendAdmission`). Applying never throws on a verified entry. An arriving entry that today's rules
+   would refuse is treated by kind:
+   - **Missing reference** (`*_NOT_FOUND`, `CONVERSATION_DELIVERY_AHEAD_OF_LOG`, an unknown snapshot): parked, and
+     applied when what it names arrives. An entry's own earlier entries are always present, because a log is copied in
+     order.
+   - **Revision and epoch checks** (`*_STALE`, `CLAIM_EPOCH_STALE`, `expectedRevision`, `validatedRevision`): checked on
+     the writer's own computer against its own view; not checked again on arrival.
+   - **Two facts about one thing:** both stand, and the projection keeps the set (overlapping claims, review verdicts per
+     reviewer with `REVIEW_DISPUTED`, operator raises and answers, duplicate COMPLETED).
+   - **Acting for another computer's participant, or a self-review:** counts for nothing, reported loudly in the UI and
+     `synesis log problems`. These do not depend on order: a participant's introduction is in its own computer's log,
+     before any entry acting for it.
+   - Every other site is decided one by one into one of these four, in a table kept beside ADR-0100's, each with a test
+     that applies the two entries in both orders.
+4. **The claim lock between connected computers.** The claim is appended locally. Before its answer, the server asks
+   every connected computer `ClaimSeen(entry)`; each pulls if needed and answers with any overlapping active claim and
+   whether that claim's own check has finished. The claim is refused if an overlapping claim's check has finished, or if
+   both are still being checked and the other computer's node ID is lower. A computer that does not answer in 5 s counts
+   as not connected. The refused claim's lane is closed by its own computer's entry, and its agent is told
+   `OVERLAPPING_CLAIM` before it may write.
+5. **The proposal path goes.** Every computer appends locally; `LEADER_UNREACHABLE` and `LEADER_OUTCOME_UNKNOWN` go
+   with it. The merge pass still runs only on the owner's computer, with its attribution exemption, until step 5.
+6. **Migration** (owner's answer 9): a shared step-2 project keeps its log in `events-step2/` on every computer and
+   starts a fresh one; the project is invited again once. A project on one computer changes nothing.
+7. **Property test:** random logs from three computers, applied in random arrival orders, each log in its own order,
+   answers before requests included; every decision listed under "Order does not decide" is the same.
+8. **Compatibility 8.**
+
+### Step 5: Each computer merges its own lanes
+
+Today the merge pass cherry-picks reviewed snapshots onto the checked-out branch and fast-forwards it
+(`IntegrationWorkspaceService.java:142`, `ControlBranchAdvancementService.java:118`); a member skips it.
+
+1. **The merge pass runs on every computer, for its own lanes** (lanes introduced by its node). Integration entries are
+   written only by the lane's computer, and attribution has no exemption.
+2. **`main` over Link:** a peer's `CONTROL_BRANCH_ADVANCED` makes this computer fetch that head (step 3's exchange) and
+   fast-forward when its own `main` is an ancestor.
+3. **Audit before moving.** Every commit a fetched head adds must be an integration or re-merge named by an entry, with
+   an accepted review where required and a passed validation. A commit no entry names yet waits for the next pull; one
+   still unnamed once the writer's log covers that head is reported loudly and not taken.
+4. **Diverged copies:** the higher node ID re-merges (designer item 5): one merge commit per own integration not in the
+   other copy, oldest first, then its old head if needed, then the validation command. The result is a new snapshot of
+   each lane, `REMERGE`, reviewed through today's review flow, with the grant offered first to the original reviewer
+   (designer item 2 when it cannot be reached). Only when every re-merge is accepted does the result become this
+   computer's `main`. A conflict opens today's repair lane as the combine lane.
+5. **A lane is on `main`** when its integration commit is an ancestor of this computer's `main`; a goal is complete when
+   every lane it names is. A second COMPLETED counts as the first.
+6. **The mirror:** pushed with no force after each advance; a refused push follows "Getting onto `main`".
+7. **Property test:** random merges, cuts and meetings among three copies end with every copy of `main` equal and only
+   ever moved forward.
+8. **Compatibility 9** (new entry types), so steps 6 and 7 are 10.
+
+### Step 6: Membership in the owner's log
+
+Today membership is `replication.properties` on each computer; join requests live in memory
+(`LinkRuntimeOwner.java:225`); node keys are Ed25519 in `identity.bin`; no owner or recovery key exists.
+
+1. **The owner key is the owner computer's node key.** It already never leaves that computer, so no second key is
+   kept. `OWNER_CHANGED` moves ownership to another node's key and is signed by the current owner or the recovery key.
+2. **The recovery key:** 256 random bits shown once as 24 BIP-39 English words at `project share`, never stored; the
+   words derive an Ed25519 key whose public half goes in `PROJECT_SHARED`.
+3. **Entries** as in "Membership and keys". `JOIN_REQUESTED` is written by the inviting member. The owner's acceptance
+   becomes `JOIN_ANSWERED`, and the join waits for it however long the owner is away, unless the owner set
+   `JOIN_POLICY_SET{ANY_MEMBER}`.
+4. **Links:** each member publishes a `MEMBER_CARD` (a retained invitation of its listener, as `replication.peers` keeps
+   today), and dials every other member's card it can reach.
+5. **`replication.properties`** keeps only `role=shared` and an optional `code.remote`.
+6. **The third computer:** a Podman container with the Linux build and the VM's Claude and Codex sign-ins (owner's
+   answer 14), with host networking. If the VM cannot reach it over QUIC, a clone of the VM instead.
+
+### Step 7: Disputes, takeovers and the trash
+
+1. **Disputes:** both reviewers are told in their next answer and woken (ADR-0099); a reviewer's new verdict replaces
+   its own. The UI shows the dispute, the messages and the end, in the Coordination view.
+2. **"Stalled"** is computed by each computer for itself (designer item 4). A stalled lane of an away computer is
+   offered to this computer's agents as a continuation candidate, as recovery candidates are today; no agent is
+   assigned.
+3. **The takeover** is the taker's own `LANE_CONTINUATION_ACCEPTED`, from the last handed-in snapshot that reached this
+   computer, or the lane's base (owner's answer 13). Today's continuation needs a `SUSPENDED` or `RECOVERY_HELD`
+   source (`CollaborationProjection.java:861`); a new source state, away and stalled, is judged by the taker's
+   computer.
+4. **The returning agent** is told `LANE_TAKEN_OVER`: stop, release, close, with its own entries. Its computer commits
+   the lane's worktree to `refs/synesis/trash/<lane>/<epoch>` and writes `WORK_TRASHED{lane, epoch, commit, reason}`.
+5. **The trash** also takes late work for a met goal and a disputed snapshot its author gave up on. A Trash tab lists
+   it; "Restore" opens a new lane from it (`TRASH_RESTORED`); "Empty" is a person's action, confirmed in the UI or with
+   `synesis trash empty`, and is the only place a ref is deleted (`TRASH_EMPTIED`).
+
 ## Build order
 
 Each step is small, works on its own, and ends with a real run on this PC and `synesis-peer-vm` (scripts in
@@ -603,7 +767,7 @@ losing their lanes.
      original reviewers review again, the tests pass, and `main` is equal on the PC and the VM. S2 (one file both sides
      change) ends with a combine lane, reviewed and merged. S5 (the VM's server killed during a re-merge) ends the same
      as S1. Then S1 once more with a bare repository as a mirror, made unreachable halfway: the result is the same, and
-     the mirror catches up when it is back.
+     the mirror catches up when it is back. Compatibility 9.
 6. **Membership in the owner's log, and a third computer.**
    - **Built:** the membership entries above, durable join requests, the owner and recovery keys, `MEMBER_CARD` and
      dialing every member, `role=shared`.
@@ -612,7 +776,7 @@ losing their lanes.
      because the container runs on it. The VM and the third computer keep working together: each sees the other's
      claims, an overlapping claim is refused, and their copies of `main` meet. With Synesis on the PC started again,
      all three copies of `main` become equal. The owner removes the third computer: its open work ends, and an entry it
-     writes afterwards is copied and counts for nothing. Compatibility 9.
+     writes afterwards is copied and counts for nothing. Compatibility 10.
 7. **Disputes, taking over stalled work, and the trash.**
    - **Built:** agents of a dispute told to settle it by messages, and a new verdict replacing a reviewer's own;
      the dispute and its end shown in the UI; the stall test (designer item 4) and takeover through lane continuation;
