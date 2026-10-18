@@ -2,6 +2,7 @@ package org.synesis.workspace.application.agent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.persistence.ProjectIntegrationLock;
@@ -118,6 +120,33 @@ final class CombineOfferTest {
                 fixture.identity);
 
         assertOfferedTheCombine(new AgentNextActionService().getNextAction(new NextActionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER)));
+    }
+
+    /**
+     * s5-run7: with every other group closed, an agent that announced ordinary work joined the combine's group, the
+     * only active one. The combine then read as taken, so the agent shown it was refused, and every later lane and
+     * snapshot landed in the group whose snapshots wait for the re-merge.
+     */
+    @Test
+    void anOrdinaryLaneOpensOutsideTheCombinesGroupAndTheCombineIsStillTaken() throws Exception {
+        PredictionEventStore store = fixture.store();
+        WorkGroup group = store.workGroupProjection().group(fixture.authorLane.workGroupId()).orElseThrow();
+        WorkGroup completed = new WorkGroup(group.workGroupId(), group.projectId(), group.goal(), group.acceptance(), group.version() + 1,
+                WorkGroup.Status.COMPLETED, group.reviewPolicy());
+        store.append(group.workGroupId(), PredictionEventType.WORK_GROUP_STATUS_CHANGED, fixture.identity.nodeId(), CollaborationCodec.encodeWorkGroup(completed),
+                fixture.identity);
+        assertOfferedTheCombine(new AgentNextActionService().getNextAction(new NextActionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER)));
+        fixture.session("combine-other");
+
+        WorkIntent ordinary = fixture.collaboration.announce(fixture.root, CombineFixture.PROVIDER, "combine-other", "change g", "g changed",
+                List.of(ResourceSelector.pathExact("src/g.txt"))).intent();
+
+        assertNotEquals(fixture.combine.workGroupId(), ordinary.workGroupId());
+        assertOfferedTheCombine(new AgentNextActionService().getNextAction(new NextActionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER)));
+        WorkIntent combineLane = fixture.collaboration.joinRepair(fixture.root, CombineFixture.PROVIDER, COMBINER, fixture.authorLane.intentId(),
+                fixture.authorSnapshot.snapshotId()).intent();
+        assertEquals(fixture.combine.workGroupId(), combineLane.workGroupId());
+        assertEquals(fixture.combine.taskId(), combineLane.taskId());
     }
 
     @Test

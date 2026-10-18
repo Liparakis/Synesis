@@ -211,10 +211,24 @@ final class CombineLaneJoinTest {
 
         assertEquals(Optional.empty(), CombineLaneJoin.openFor(fixture.store(), fixture.authorSnapshot.snapshotId(), fixture.binding("combine-late").sessionId()),
                 "the late session is shown no open combine");
-        assertThrows(Exception.class, () -> join("combine-late"));
+        IOException taken = assertThrows(IOException.class, () -> join("combine-late"));
+        assertEquals("COMBINE_TAKEN_OR_CLOSED", taken.getMessage(), "s5-run7: the refusal named the combined lane's intent as not found");
         assertEquals(List.of(), CombineLaneJoin.offeredTo(fixture.store(), List.of(fixture.participant("combine-late")), fixture.identity.nodeId()));
         assertNotEquals(Optional.empty(), CombineLaneJoin.openFor(fixture.store(), fixture.authorSnapshot.snapshotId(), fixture.binding(COMBINER).sessionId()),
                 "the taker still finds its own lane");
+    }
+
+    @Test
+    void anOrdinaryLaneNamingTheCombinesGroupIsRefusedAndTheCombineStillWaits() throws Exception {
+        fixture.session("combine-other");
+        int eventsBefore = fixture.store().events().size();
+
+        IOException refused = assertThrows(IOException.class, () -> fixture.collaboration.announce(fixture.root, CombineFixture.PROVIDER, "combine-other", "change g",
+                "g changed", List.of(ResourceSelector.pathExact("src/g.txt")), fixture.combine.workGroupId()));
+
+        assertEquals("COMBINE_GROUP_HOLDS_ONLY_ITS_COMBINE_LANE", refused.getMessage());
+        assertEquals(eventsBefore, fixture.store().events().size());
+        assertTrue(CombineLaneJoin.waiting(fixture.store(), fixture.combine));
     }
 
     @Test

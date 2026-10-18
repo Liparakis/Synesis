@@ -136,9 +136,16 @@ final class WorkIntentAnnouncement {
         if (expectedIntentId != null || expectedClaimEpoch != null) {
             throw new IOException("SCOPE_EXTENSION_INTENT_NOT_FOUND");
         }
+        // A combine's group holds only its combine lane: one more lane there makes the combine read as taken, and its
+        // snapshots wait for the re-merge instead of their own review and merge (s5-run7, ADR-0098 step 5).
+        if (workGroupId != null && store.taskCompletionProjection().combineOfGroup(workGroupId).isPresent()) {
+            throw new IOException("COMBINE_GROUP_HOLDS_ONLY_ITS_COMBINE_LANE");
+        }
         UUID defaultGroup = defaultWorkGroupId(location.projectId(), identity.nodeId());
         UUID group = workGroupId == null ? store.workGroupProjection().groups().stream().filter(candidate -> candidate.projectId().equals(location.projectId()))
-                                           .filter(candidate -> candidate.status() == WorkGroup.Status.ACTIVE).map(WorkGroup::workGroupId).findFirst()
+                                           .filter(candidate -> candidate.status() == WorkGroup.Status.ACTIVE)
+                                           .filter(candidate -> store.taskCompletionProjection().combineOfGroup(candidate.workGroupId()).isEmpty())
+                                           .map(WorkGroup::workGroupId).findFirst()
                                            .orElseGet(() -> store.workGroupProjection().group(defaultGroup).isEmpty() ? defaultGroup : UUID.randomUUID()) : workGroupId;
         WorkIntent intent = new WorkIntent(intentId,
                 location.projectId(),
@@ -209,6 +216,11 @@ final class WorkIntentAnnouncement {
         if (combine.isPresent()) {
             return CombineLaneJoin.join(store, identity, location.projectId(), location.root(), Path.of(binding.worktreePath()),
                     participantHandle(binding.sessionId()), binding.sessionId(), provider, combine.get());
+        }
+        // A combined snapshot is integrated and its lane ended, so the repair path below can only fail, and naming
+        // that lane as not found hid why (s5-run7).
+        if (store.taskCompletionProjection().combines().stream().anyMatch(known -> known.snapshotIds().contains(snapshotId))) {
+            throw new IOException("COMBINE_TAKEN_OR_CLOSED");
         }
         TaskSnapshotRecord snapshot = store.taskCompletionProjection().findSnapshotById(snapshotId).orElseThrow(() -> new IOException("REPAIR_SNAPSHOT_NOT_FOUND"));
         if (!snapshot.provenance().snapshotRef().equals(SnapshotRefs.snapshotRef(snapshot.snapshotId()))) {

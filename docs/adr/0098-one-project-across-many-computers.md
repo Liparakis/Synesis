@@ -1020,6 +1020,28 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
       - *Not covered:* a reviewer that holds a lane is never released here; continuing its lane carries its grants. While
         any lease of the computer cannot be read, or it has no leases folder, nobody of it is judged gone: the
         unreadable lease may be the live one.
+25. **A combine taken by ordinary work** (s5-run7, 2026-10-18: PC and VM partitioned for 20 minutes right after the
+    join; apart, each computer finished the goal, PC `main` 7491f26 with 5 snapshots, VM `main` b276a5f with 2). After
+    the heal the VM, the higher node ID, re-merged onto the PC's copy; its first advance (primes, `snap_55baa9c2…`) met
+    the PC's primes, so it wrote `COMBINE_REQUIRED` and the combine's work group `5e4684e3` at 19:28:59 UTC, as item 22
+    says. Both fresh VM agents were offered the combine (`combineCandidates`). Before either took it, a fresh PC agent
+    announced ordinary work (digits) with no group named; every other group was completed, so the announcement joined
+    the first active group, the combine's (`WorkIntentAnnouncement`'s default group). From then on the combine read as
+    taken (`CombineLaneJoin.waiting`: its group holds a lane), so the VM agent's `ensure_session` with the offered
+    arguments fell through to the repair path and was refused `REPAIR_INTENT_NOT_FOUND` (the combined lane ended long
+    ago). Both VM agents then announced ordinary lanes, which joined the same group; the NOTES lane's snapshot
+    (`snap_844271e2…`) counted as the combine's result (`combinePending`), was never offered for review (a combine's
+    group requires none) and waited for a re-merge that never came, because the re-merge was still waiting for its
+    combine. No re-merge snapshot or re-merge review grant was ever written, so the release of a gone reviewer (item
+    24) had nothing to release; the "original reviewer" in the agents' wait was the combine-pending text. The PC
+    agents were rightly shown no open work: the combine is the VM's (a combine lane on another computer, NOT BUILT).
+    **Rule:** a combine's group holds only its combine lane. An announcement that names no group never joins one,
+    and one that names it is refused (`COMBINE_GROUP_HOLDS_ONLY_ITS_COMBINE_LANE`). A repair join that names a combined
+    snapshot whose combine is not open to the caller is refused `COMBINE_TAKEN_OR_CLOSED`, not sent down the repair
+    path.
+    - *Not covered:* a log already written with ordinary lanes in a combine's group (this run's) stays stuck; and an
+      ordinary lane merged onto this computer's `main` while its re-merge waits for a combine moves the head the
+      re-merge started from (untested).
 
 ### Step 6: Membership in the owner's log
 
