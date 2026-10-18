@@ -40,7 +40,7 @@ public final class MainMeeting {
      * @param to          the head it moved to
      * @param snapshotIds the snapshots it integrated
      */
-    record Advance(String writer, String from, String to, List<String> snapshotIds) {
+    public record Advance(String writer, String from, String to, List<String> snapshotIds) {
     }
 
     /**
@@ -82,12 +82,37 @@ public final class MainMeeting {
     }
 
     /**
+     * The advances one computer's passes made, oldest first.
+     *
+     * @param events the applied entries
+     * @param writer the computer
+     * @return its advances, in log order
+     */
+    public static List<Advance> advancesBy(List<PredictionEvent> events, String writer) {
+        Map<String, Advance> byHead = advances(events);
+        List<Advance> made = new ArrayList<>();
+        for (PredictionEvent event : events) {
+            if (event.type() == PredictionEventType.CONTROL_BRANCH_ADVANCED && event.actorNodeId().equals(writer)) {
+                try {
+                    Advance advance = byHead.get(IntegrationAttemptPayload.decode(event.payload()).integrationCommitSha());
+                    if (advance != null && advance.writer().equals(writer)) {
+                        made.add(advance);
+                    }
+                } catch (IOException | RuntimeException undecodable) {
+                    // Names nothing.
+                }
+            }
+        }
+        return made;
+    }
+
+    /**
      * The heads other computers' passes advanced to last, as this computer's logs name them.
      *
      * @param events the applied entries
      * @return each writer's last advanced head
      */
-    static Map<String, String> lastHeads(List<PredictionEvent> events) {
+    public static Map<String, String> lastHeads(List<PredictionEvent> events) {
         Map<String, String> last = new HashMap<>();
         for (PredictionEvent event : events) {
             if (event.type() == PredictionEventType.CONTROL_BRANCH_ADVANCED) {
@@ -102,6 +127,34 @@ public final class MainMeeting {
     }
 
     /**
+     * Whether this copy of {@code main} holds every head another computer's pass advanced to, as this computer's logs
+     * name them: then every lane integrated anywhere is on this copy's {@code main} (ADR-0098 step 5, item 5). Each copy
+     * reads it from its own Git, so no entry announces it. A head this computer cannot compare, not fetched yet or Git
+     * unreadable, is not held.
+     *
+     * @param repository the control checkout
+     * @param events     the applied entries
+     * @return {@code true} when every advanced head is in this copy
+     */
+    public static boolean holdsEveryHead(Path repository, List<PredictionEvent> events) {
+        Map<String, String> heads = lastHeads(events);
+        if (heads.isEmpty()) {
+            return true;
+        }
+        try {
+            String own = GitProcessRunner.run(repository, "rev-parse", "HEAD");
+            for (String head : heads.values()) {
+                if (!own.equals(head) && !GitProcessRunner.isAncestor(repository, head, own)) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (IOException | RuntimeException unreadable) {
+            return false;
+        }
+    }
+
+    /**
      * Compares this copy's head with another head held here.
      *
      * @param repository the control checkout
@@ -110,7 +163,7 @@ public final class MainMeeting {
      * @return how they relate
      * @throws IOException when Git cannot compare them
      */
-    static Relation relate(Path repository, String own, String other) throws IOException {
+    public static Relation relate(Path repository, String own, String other) throws IOException {
         if (own.equals(other) || GitProcessRunner.isAncestor(repository, other, own)) {
             return Relation.HELD;
         }
@@ -122,7 +175,8 @@ public final class MainMeeting {
      * history is followed back advance by advance, each named by an entry, until a commit this copy holds; every
      * advance on the way must name snapshots this computer has seen, each made on the advancing computer's own lane,
      * and each accepted by a reviewer who is not its author where review is required. The cherry-picked commits
-     * inside one advance are that advance's; the validation command passed before its entry was written.
+     * inside one advance are that advance's; the validation command passed before its entry was written. A re-merge's
+     * advance also brings in the old head of the computer that made it, which is followed back the same way.
      *
      * @param repository the control checkout
      * @param store      this computer's logs
@@ -135,17 +189,25 @@ public final class MainMeeting {
         Map<String, Advance> byHead = advances(store.events());
         List<String> problems = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
-        String commit = other;
-        for (int steps = 0; !commit.equals(own) && !GitProcessRunner.isAncestor(repository, commit, own); steps++) {
+        java.util.ArrayDeque<String> heads = new java.util.ArrayDeque<>(List.of(other));
+        for (int steps = 0; !heads.isEmpty(); steps++) {
+            String commit = heads.pop();
+            if (commit.equals(own) || GitProcessRunner.isAncestor(repository, commit, own)) {
+                continue;
+            }
             Advance advance = byHead.get(commit);
             if (advance == null) {
                 // The writer's entry may not have arrived yet: the head waits for the next pull.
                 problems.add("UNNAMED_COMMIT:" + commit);
                 return problems;
             }
-            if (!seen.add(commit) || steps > MAX_STEPS) {
+            if (steps > MAX_STEPS) {
                 problems.add("ADVANCE_CHAIN_INVALID:" + commit);
                 return problems;
+            }
+            if (!seen.add(commit)) {
+                // Reached again through a re-merge's old head: checked already.
+                continue;
             }
             for (String snapshotId : advance.snapshotIds()) {
                 Optional<TaskSnapshotRecord> snapshot = store.taskCompletionProjection().findSnapshotById(snapshotId);
@@ -164,12 +226,17 @@ public final class MainMeeting {
                         .noneMatch(verdict -> "ACCEPTED".equals(verdict.getValue()) && !verdict.getKey().equals(producer))) {
                     problems.add("REVIEW_MISSING:" + snapshotId);
                 }
+                store.taskCompletionProjection().remergeOf(snapshot.get().snapshotIdentity())
+                        .filter(remerge -> remerge.result().equals(commit)).ifPresent(remerge -> heads.push(remerge.ownHead()));
             }
-            if (advance.from() == null || advance.from().isBlank()) {
+            // An advance moves to a descendant of where it started, so the walk only goes back and ends; an entry that
+            // names anything else describes no history.
+            if (advance.from() == null || advance.from().isBlank() || advance.from().equals(commit)
+                    || !GitProcessRunner.isAncestor(repository, advance.from(), commit)) {
                 problems.add("ADVANCE_CHAIN_INVALID:" + commit);
                 return problems;
             }
-            commit = advance.from();
+            heads.push(advance.from());
         }
         return problems;
     }

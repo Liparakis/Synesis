@@ -98,6 +98,7 @@ public final class IntegrationOrchestrationService {
     private final ProjectProcessExecutor processExecutor;
     private final ProviderSessionBindingService bindingService;
     private final Runnable beforeRecording;
+    private final RemergeService remerges;
 
     /** What a pass chose to integrate: the attempt it recorded as started, the head it started from, and the snapshots in apply order. */
     private record Attempt(String id, String expectedControlHead, List<TaskSnapshotRecord> ordered) {
@@ -123,6 +124,7 @@ public final class IntegrationOrchestrationService {
         this.projectService = new ProjectApplicationService();
         this.processExecutor = new ProjectProcessExecutor();
         this.bindingService = new ProviderSessionBindingService();
+        this.remerges = new RemergeService(projectService, processExecutor);
     }
 
     /**
@@ -561,6 +563,8 @@ public final class IntegrationOrchestrationService {
                 // other for an attempt in progress.
                 return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, Map.of("pending", 1, "integrationRunning", true));
             }
+            // A copy of main that diverged from this one is re-merged first, under the same lock (ADR-0098 step 5).
+            remerges.run(controlRoot, store, identity);
             AtomicReference<Attempt> started = new AtomicReference<>();
             AgentResponse notStarted = startAttempt(controlRoot, store, identity, operatorAsked, started);
             if (notStarted != null) {

@@ -11,6 +11,7 @@ import org.synesis.coordination.domain.integration.ImplementationEventPayload;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.task.CompletionPreparedPayload;
+import org.synesis.coordination.domain.task.RemergeSnapshotPayload;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 
 /**
@@ -62,6 +63,11 @@ final class LogNamedCommits {
                         if (prepared != null) {
                             refs.add(prepared);
                         }
+                    }
+                    case REMERGE_SNAPSHOT_CREATED -> {
+                        // A lane's re-merge commit, served under the re-merge snapshot's own ref (ADR-0098 step 5).
+                        TaskSnapshotPayload remerge = RemergeSnapshotPayload.decode(event.payload()).snapshot();
+                        name(byCommit, remerge.commitSha(), event.actorNodeId()).refs().add(remerge.provenance().snapshotRef());
                     }
                     case CAPABILITY_IMPLEMENTATION_PUBLISHED ->
                             name(byCommit, ImplementationEventPayload.decode(event.payload()).commitSha(), event.actorNodeId());

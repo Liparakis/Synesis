@@ -76,6 +76,15 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
             // Every computer takes another's newer main, the owner's computer too (ADR-0098 step 5).
             leader.whenPulled(code::mainMayHaveMoved);
         }
+        if (code != null) {
+            // A diverged copy is re-merged by a pass, once its head is here (ADR-0098 step 5, designer item 13).
+            code.whenDiverged(head -> {
+                MergeDriver asMerge = this.mergeDriver;
+                if (asMerge != null) {
+                    asMerge.onMemberEntry();
+                }
+            });
+        }
     }
 
     /**

@@ -838,6 +838,39 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     moved (this copy advanced meanwhile, or the other head is not the other computer's last) is left, and the next
     pass builds a new one. A rejected re-merge is left as it is and reported; another reviewer when the original one
     cannot be reached (designer item 2) is NOT BUILT.
+16. **How the re-merge is built and found again.** Its ID follows from the two heads (`rm-` and a hash of the other
+    head and this copy's head), so every pass on the same basis finds the same re-merge in the log and goes on to land
+    it; a pass on a new basis builds a new one. Each re-merge snapshot is `refs/synesis/snapshots/rms-…` at its lane's
+    merge commit, and the result is kept reachable under `refs/synesis/remerge/<id>` until it lands. A lane whose
+    original snapshot needed no review gets no re-merge snapshot; a re-merge with none lands as soon as it is built
+    and validated. A re-merge that Git cannot make, whose validation fails, or that a review rejects is reported once
+    in the server's log and not tried again by that server process until the heads change; the combine lane that
+    would resolve it is NOT BUILT. A build interrupted between its entries is reported and not landed.
+17. **The reviewer is told and woken.** A re-merge snapshot is in no task's history, so no one is offered it as an open
+    review; only its grant offers it. `get_next_action` shows the grant to its reviewer whether or not that reviewer
+    still holds a lane, and the run controller resumes a stopped reviewer once for each such grant, as for a review it
+    is offered.
+18. **The audit follows a re-merge's old head too.** A re-merge's advance starts from the other head, and its result
+    also holds the re-merging computer's old head; the audit follows both back to commits this copy holds. An advance
+    must move to a descendant of where it started, so the walk always ends; an entry naming anything else is an invalid
+    chain.
+19. **"On `main`" is read from each copy.** A run on a computer is complete only when no lane is open and this copy of
+    `main` holds every head another computer's pass advanced to (`MainMeeting.holdsEveryHead`). So the run that waits
+    for a re-merge's review, or for the other copy's result to arrive, is not ended because every lane has closed.
+    `WORK_GROUP_STATUS_CHANGED` COMPLETED is unchanged and may be written by both computers (step 4 counts it once).
+20. **The mirror.** The push stays unforced, as before. A push the mirror refuses because it holds another computer's
+    diverged copy is tried again after every pass, and succeeds by fast-forward once the re-merge over Link has
+    landed. Re-merging onto the mirror's copy when the other computer is not connected (designer item 5's last clause)
+    is NOT BUILT: that copy's commits are named by entries this computer cannot have without Link, so the audit could
+    not pass.
+21. **Who re-merges among more than two copies.** Designer item 5 names two computers. With three, letting the higher
+    of every diverged pair re-merge never settled in the convergence property test: the middle computer re-merged onto
+    the lowest one's copy while the highest re-merged onto the middle one's, and every new merge commit was a new
+    divergence. So a computer first takes every copy it is behind, by fast-forward. Of the copies still diverged from
+    it, those another diverged copy already holds are dropped; the rest are "in the way". Only when this computer's
+    node ID is higher than every writer in the way does it re-merge, onto the lowest of them, one at a time. Every
+    other computer waits and fast-forwards to the result. A computer that cannot see a higher writer's copy yet may
+    re-merge too; the higher one then re-merges onto that result, and the lower never does, so the rounds still end.
 
 ### Step 6: Membership in the owner's log
 

@@ -377,14 +377,35 @@ static AgentResponse pendingReviewRequestResponse(Map<String, Object> collaborat
         return null;
     }
 
-static Set<UUID> completedParticipantWorkGroups(PredictionEventStore store, String participant) {
+/**
+     * The work groups whose review a participant whose lane ended may still owe: those it produced a snapshot in,
+     * and those of a re-merge it is granted to review again (ADR-0098 step 5, designer item 14).
+     */
+    static Set<UUID> completedParticipantWorkGroups(PredictionEventStore store, String participant) {
         Set<UUID> groups = new LinkedHashSet<>();
         for (TaskSnapshotRecord snapshot : store.taskCompletionProjection().allSnapshots()) {
             if (participant.equals(snapshot.provenance().participant())) {
                 groups.add(snapshot.provenance().workGroupId());
             }
         }
+        remergeGrants(store, List.of(participant)).forEach(grant -> groups.add(grant.workGroupId()));
         return Set.copyOf(groups);
+    }
+
+    /**
+     * The grants not yet taken up that ask one of these participants to review a re-merge snapshot again (ADR-0098
+     * step 5, designer item 14). A re-merge snapshot is no review candidate: only its grant offers it.
+     *
+     * @param store        current project projection
+     * @param participants exact participant handles
+     * @return the grants, in log order
+     */
+    static List<LaneGrant> remergeGrants(PredictionEventStore store, java.util.Collection<String> participants) {
+        var workGroups = store.workGroupProjection();
+        var completion = store.taskCompletionProjection();
+        return workGroups.grants().stream().filter(grant -> participants.contains(grant.targetParticipant()))
+                .filter(grant -> grant.snapshotId() != null && workGroups.grantAvailable(grant.grantId()) && !workGroups.grantSuperseded(grant.grantId()))
+                .filter(grant -> completion.remergeOf(new org.synesis.coordination.domain.identity.SnapshotId(grant.snapshotId())).isPresent()).toList();
     }
 
 static Map<String, Object> enrichPendingRequest(Map<String, Object> request, PredictionEventStore store) {
@@ -472,7 +493,10 @@ static List<Map<String, Object>> reviewActions(PredictionEventStore store, Strin
                 continue;
             }
             WorkIntent reviewedIntent = activeIntents.stream().filter(intent -> intent.intentId().equals(grant.targetIntentId())).findFirst().orElse(null);
-            TaskSnapshotRecord snapshot = store.taskCompletionProjection().allSnapshots().stream().filter(value -> grant.snapshotId() == null || grant.snapshotId().equals(value.snapshotId()))
+            // A grant naming a snapshot finds it by its ID: a re-merge snapshot is in no task's history (ADR-0098 step 5).
+            Stream<TaskSnapshotRecord> named = grant.snapshotId() == null ? store.taskCompletionProjection().allSnapshots().stream()
+                    : store.taskCompletionProjection().findSnapshotById(grant.snapshotId()).stream();
+            TaskSnapshotRecord snapshot = named
                     .filter(value -> value.provenance().workGroupId().equals(grant.workGroupId())).filter(value -> value.provenance().laneId().equals(grant.targetIntentId()))
                     .filter(value -> value.provenance().claimEpoch() == grant.claimEpoch()).findFirst().orElse(null);
             if (reviewedIntent == null && snapshot == null) {

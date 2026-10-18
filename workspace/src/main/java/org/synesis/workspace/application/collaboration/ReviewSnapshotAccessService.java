@@ -66,7 +66,12 @@ public final class ReviewSnapshotAccessService {
     }
 
     private static Optional<GrantSnapshot> snapshotFor(PredictionEventStore store, LaneGrant grant) {
-        return store.taskCompletionProjection().allSnapshots().stream().filter(snapshot -> grant.snapshotId() == null || grant.snapshotId().equals(snapshot.snapshotId()))
+        // A grant that names its snapshot finds it by ID: a re-merge snapshot is outside its task's history
+        // (ADR-0098 step 5).
+        java.util.stream.Stream<TaskSnapshotRecord> named = grant.snapshotId() == null
+                ? store.taskCompletionProjection().allSnapshots().stream()
+                : store.taskCompletionProjection().findSnapshotById(grant.snapshotId()).stream();
+        return named.filter(snapshot -> grant.snapshotId() == null || grant.snapshotId().equals(snapshot.snapshotId()))
                 .filter(snapshot -> snapshot.provenance().workGroupId().equals(grant.workGroupId())).filter(snapshot -> snapshot.provenance().laneId().equals(grant.targetIntentId()))
                 .filter(snapshot -> snapshot.provenance().claimEpoch() == grant.claimEpoch()).map(snapshot -> new GrantSnapshot(grant, snapshot)).findFirst();
     }
