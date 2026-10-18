@@ -274,8 +274,12 @@ Each was part of an earlier form of this ADR. One line each on why it is no long
 
 The scripts go in `D:\SynesisAcceptance\offline\`, beside `link-vm`. The project is disposable, and Synesis is used
 normally in it. **There is no Git remote** unless a scenario adds one as a mirror. Agents are Sonnet 5.5 at medium
-effort, two on each side. The link is cut with `VBoxManage controlvm synesis-peer-vm setlinkstate1 off` and restored
-with `on`.
+effort on this PC and GPT 6 Luna at high effort on the VM (owner, 2026-10-18), two on each side. The two computers are
+cut apart with a firewall partition on the VM that drops only traffic to and from the PC, both ways, and lifts itself
+after the cut (`partition.sh <seconds>` in the VM's `~/accept`). Pulling the VM's virtual cable
+(`VBoxManage controlvm synesis-peer-vm setlinkstate1 off`) is not a partition: it also cuts the VM's agents off from
+their model provider, so they fail and are held for recovery and the VM does no work apart (found on 2026-10-18; the
+step 4 and step 5 cut runs before `s5-run4` showed only the PC working apart).
 
 | Scenario | Steps | Expected |
 | --- | --- | --- |
