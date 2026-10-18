@@ -52,11 +52,16 @@ class LeaseKeeperTest {
     @Test
     void aProcessCannotKeepTheSessionOfAProcessItDidNotStart(@TempDir Path temp) throws Exception {
         Path root = project(temp);
-        ProcessHandle parent = ProcessHandle.current().parent().orElseThrow();
-        lease(root, "conn-foreign", identityOf(parent));
+        ProcessHandle foreign = foreignProcess();
+        try {
+            assertTrue(ProcessHandle.current().descendants().noneMatch(process -> process.pid() == foreign.pid()), "the foreign process must not descend from this one");
+            lease(root, "conn-foreign", identityOf(foreign));
 
-        assertFalse(leases.keep(root, "conn-foreign", policy));
-        assertEquals(parent.pid(), store.load(root, "conn-foreign").orElseThrow().processIdentity().pid());
+            assertFalse(leases.keep(root, "conn-foreign", policy));
+            assertEquals(foreign.pid(), store.load(root, "conn-foreign").orElseThrow().processIdentity().pid());
+        } finally {
+            foreign.destroyForcibly();
+        }
     }
 
     @Test
@@ -104,8 +109,26 @@ class LeaseKeeperTest {
     }
 
     private static Process longLivedChild() throws Exception {
-        boolean windows = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win");
-        List<String> command = windows ? List.of("ping", "-n", "60", "127.0.0.1") : List.of("sleep", "60");
+        List<String> command = windows() ? List.of("ping", "-n", "60", "127.0.0.1") : List.of("sleep", "60");
         return new ProcessBuilder(command).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+    }
+
+    /**
+     * A live process this one did not start: a launcher starts it and exits, so it descends from no
+     * process of this JVM. The JVM's own parent is not used, since a fresh Windows 11 install hides it
+     * from {@link ProcessHandle#parent()}.
+     */
+    private static ProcessHandle foreignProcess() throws Exception {
+        List<String> launcher = windows()
+                ? List.of("powershell", "-NoProfile", "-NonInteractive", "-Command", "(Start-Process ping -ArgumentList '-n','60','127.0.0.1' -WindowStyle Hidden -PassThru).Id")
+                : List.of("sh", "-c", "sleep 60 >/dev/null 2>&1 & echo $!");
+        Process started = new ProcessBuilder(launcher).redirectErrorStream(true).start();
+        List<String> output = new String(started.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).strip().lines().toList();
+        assertTrue(started.waitFor(60, TimeUnit.SECONDS), "launcher did not exit");
+        return ProcessHandle.of(Long.parseLong(output.getLast().strip())).orElseThrow();
+    }
+
+    private static boolean windows() {
+        return System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT).contains("win");
     }
 }
