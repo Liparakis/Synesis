@@ -3,7 +3,10 @@
 ## Status
 
 Proposed on 2026-10-19, at the owner's request (USER-STATED: "Powerful by default. Simple by design. Complexity only
-when requested."). Nothing here is built. It changes published CLI output and deprecates commands, so the items marked
+when requested."). Refined the same day at the owner's review (USER-STATED): the project's README is context, never a
+task; readiness and first-task times are measured apart, with Synesis's own overhead apart from external latency; stage
+estimates are preliminary and each stage lists its tasks, blockers, approvals, tests and completion criteria. Nothing here
+is built. It changes published CLI output and deprecates commands, so the items marked
 **contract change** need the owner's approval before they are built (AGENTS.md, "Public contract stability").
 
 Claims are marked VERIFIED (file:line on branch `adr-0098-step3-code-over-link`), MEASURED (real runs of 2026-10-18/19),
@@ -21,7 +24,8 @@ This ADR keeps every capability Synesis has and changes the path to them:
 1. Install Synesis (one installer, as today).
 2. `cd` into a repository and run `synesis init`. It finds the agents already on the computer, connects the ones the
    developer picks (one question, skipped when there is only one choice), and prints the one next thing to do.
-3. Start the agent the usual way (`claude`, `codex`) or let Synesis start several (`synesis agents run`).
+3. Start the agent the usual way (`claude`, `codex`) and tell it what to do, or let Synesis start several with an
+   explicit task (`synesis agents run --agent claude --prompt "Implement X"`). Synesis never invents the task.
 4. `synesis status` (or the browser UI) answers "what is happening, what is blocked, what needs me".
 5. `synesis link invite` / `synesis link join` adds a computer; the owner approves the join on the invite's own screen.
 
@@ -223,12 +227,28 @@ answer link more across networks.
 
 ### 6. Agents: discover, start, see, recover
 
-- `synesis agents run` keeps its contract and becomes the way to start several agents. It defaults `--prompt` to "work
-  on this project's README goal" when the README has one (DERIVED from every real run of 2026-10-18, which used the same
-  prompt), so `synesis agents run --agent claude` is a complete command.
-- **Logs:** `agents run` prints where each agent's transcript is, and `synesis agents log <label>` tails it (the one
-  other new command; today the logs exist outside the project with no command to read them,
-  `AgentsRunCommand.java:180`).
+**Project context is not a task.** The README and the rest of the repository belong to the user's project. Agents read
+them, as they read any code, to understand what the project is; Synesis never turns their content into work. A task
+reaches an agent only from a person: what they type to an interactive agent, an explicit `--prompt`/`--prompt-file`, or
+a task a person created in Synesis.
+
+- `synesis agents run` keeps its contract: starting headless agents needs a task, because the harnesses' headless modes
+  take an initial prompt (`claude -p`, `codex exec`; VERIFIED in `ProviderAgentProcesses`) and an empty one would only
+  produce an agent with nothing it is allowed to do.
+  - `--prompt "Implement X"` or `--prompt-file` start the agents with that task, as today.
+  - With neither, on an interactive terminal, it asks one question, "What should the agents work on?", shows the
+    answer back, and starts only on a non-empty answer. Nothing is filled in for the person.
+  - With neither, in a script or with `--porcelain` or no terminal, it never asks: it refuses with
+    `ERROR=TASK_REQUIRED`, `MESSAGE=agents run needs a task`, `FIX=pass --prompt "<task>" or --prompt-file <file>`
+    (today it refuses with a picocli usage error, so only the message improves; exit code 2 stays).
+  - There is no default prompt, and the README is never used as one.
+- **Ready without a task** (an agent that connects and waits for instructions) is *not* part of this ADR's default: a
+  waiting headless agent needs a way for a person to send it work later, and today a person cannot post into a
+  conversation (`ConversationsCommand` is read-only, VERIFIED). It is listed under stage 4 and "Decisions for the
+  owner". Until then, "ready" means connected and passing its health check (`provider status` = `HEALTHY`), which is
+  what an interactive `claude`/`codex` session needs.
+- **Logs:** `agents run` prints where each agent's transcript is, and `synesis agents log <label>` tails it (today the
+  logs exist outside the project with no command to read them, `AgentsRunCommand.java:180`).
 - **Interactive sessions** stay the provider's own (`claude`, `codex`); Synesis only connects them. After a reboot the
   MCP server starts the project runtime itself, through the CLI's daemon client (the MCP server is launched by
   `synesis mcp`, in the CLI module, so no module boundary moves).
@@ -271,13 +291,15 @@ answer link more across networks.
    first command the installer names. Extending `init` keeps one entry.
 2. **The installer configures agents.** Rejected: the installer is per computer, agent connection is per project, and
    the installer runs before any project exists.
-3. **UI-first onboarding, CLI unchanged.** Rejected: half of the users never open the UI, and scripts need the CLI path;
+3. **UI-first onboarding, CLI unchanged.** Rejected: users who work in a terminal may never open the UI, and scripts need the CLI path;
    both are thin over one service instead.
 4. **Hide the expert commands entirely.** Rejected: the owner asked for complexity on request, not removed; `help --all`
    keeps them one flag away.
-5. **Auto-accept joins from computers on the same network.** Rejected: a join is a trust decision (ADR-0098, owner
+5. **The README as a default task for `agents run`.** Rejected (USER-STATED, 2026-10-19): the README is the project's
+   context, not an instruction; turning it into work would authorize changes nobody asked for.
+6. **Auto-accept joins from computers on the same network.** Rejected: a join is a trust decision (ADR-0098, owner
    approves each join); the approval moves to the invite screen instead.
-6. **A Synesis-run account or relay for onboarding.** Rejected: no mandatory service, free and open-source (ADR-0097).
+7. **A Synesis-run account or relay for onboarding.** Rejected: no mandatory service, free and open-source (ADR-0097).
 
 ## Module responsibilities
 
@@ -291,47 +313,126 @@ answer link more across networks.
 
 No new module and no new interface type: discovery is a set of doctor findings and init inputs; status is a renderer.
 
-## Build order (each stage ships on its own)
+## Build order
 
-**Stage 1 — immediately implementable (no contract change; about one to two days):**
-README; quickstart; `init` next step; `provider install` real error causes; doctor launcher path; `link` and
-`conversations` in their help groups; generated command reference; stale docs; the two UI defects and the overview empty
-state; `agents run` default prompt; `synesis mcp` starts the runtime.
+Each stage ships on its own. Durations are preliminary estimates for planning, not commitments: correctness, security
+and maintainability decide when a stage is done, by its completion criteria below, not the calendar.
 
-**Stage 2 — discovery and visibility (additive contract changes; about two to three days):**
-agent discovery in `init` and `doctor`; `init --agent/--no-agents/--git-init`; `status` (+ `--porcelain`, `--watch`);
-doctor environment and network groups; `agents log`; the error shape added beside the old keys; executed walkthroughs in
-the Linux gate.
+### Stage 1 — corrections with no contract change (preliminary: one to two days)
 
-**Stage 3 — flows that change behaviour (owner approval; about two days):**
-interactive accept in `link invite`; firewall offer in `link invite` and refreshed on upgrade; installer default;
-`help` depths; init stops writing Codex's global config when Codex is not connected; deprecation of `host`/`join`/`sync`;
-UI first run, readiness panel, operator and member actions.
+- **Tasks.** Restore `README.md` as the front door. Write the one-agent quickstart. `init` prints the right next step
+  (connect an agent, start it, `synesis status`). `provider install|status|list` report the real cause instead of the
+  blanket `PROJECT_NOT_CONFIGURED`. `doctor` looks for the launcher where the installer puts it. `link` and
+  `conversations` join their help groups. `command-reference.md` is generated from the picocli tree. The stale documents
+  named under "Context" are corrected or archived. The UI's coordination tables follow the selected WorkGroup, "View
+  details" opens the chosen record, and the overview's empty state names an action the user can take. `synesis mcp`
+  starts the project runtime when it is down. `agents run` with no task refuses with a message naming the fix (message
+  only; exit code 2 as today).
+- **Dependencies and blockers.** None outside the repository. `synesis mcp` starting the runtime reuses the daemon client
+  `agents run` uses since 2026-10-18; it must not slow a single-computer session (measured before and after).
+- **Contract changes needing approval.** None: new or clearer messages only, same keys and exit codes.
+- **Automated tests.** One test per refusal path of `provider` naming its real cause; a doctor test for the installed
+  launcher path; a test that every command appears in the generated reference; web-ui tests for the WorkGroup filter and
+  the details record; a test that `synesis mcp` starts a stopped runtime; `agents run` without a task starts no agent.
+- **Real-world test.** A fresh VM user follows the new README from install to an interactive `claude` session.
+- **Completion criteria.** Every item merged with its tests green on the Linux gate and the Windows gate; the README path
+  works on the fresh VM user without any step the README does not state.
 
-**Stage 4 — needs foundations first:**
-starting and stopping agents from the UI (needs a daemon-side agent runner shared with `agents run`); OS packages
-(winget, Homebrew, apt) with signed release manifests (the manifest key is a placeholder today,
-`bootstrap/main.go:117-119`); removal of the deprecated commands and old error keys; AppCDS if the measurement asks for
-it; adapters for further agents beside Claude and Codex.
+### Stage 2 — discovery and visibility (additive contract changes; preliminary: two to three days)
 
-Stages 1 and 2 depend on nothing else; stage 3's interactive accept depends on ADR-0098 step 6 (built); stage 4's UI
-agent start depends on stage 2's status read model.
+- **Tasks.** Agent discovery per provider (`ProviderIntegration` finds its executable on `PATH`, asks its version, asks
+  its own sign-in status command where one exists, else "could not tell"). `init` uses it: connects one found agent,
+  asks once when several are found, offers `--agent`, `--no-agents`, `--git-init` for scripts, and lists every file it
+  wrote. `doctor` gains the environment, network and work groups with confirmed / suspected / advice and `FIX=`.
+  `synesis status` (+ `--porcelain`, `--watch`) as a renderer over `ControlPlaneReadModel` and the replication facts.
+  `agents log`. The error shape (`ERROR`, `MESSAGE`, `FIX`) added beside the existing keys, with `ERROR=TASK_REQUIRED`
+  for `agents run` without a task. `agents run`'s one interactive question for a task. The walkthroughs become executed
+  fixtures in the Linux gate.
+- **Dependencies and blockers.** The status renderer needs the read model to carry what it shows (agents' current work,
+  operator requests, computers and their last successful pull); the last-pull time needs ADR-0102's per-log pull record
+  or an equivalent field. Sign-in discovery depends on each harness offering a status command (Codex has
+  `codex login status`, VERIFIED 2026-10-19; Claude Code's is to be checked; without one the answer is "could not
+  tell").
+- **Contract changes needing approval.** New CLI output keys (`ERROR`/`MESSAGE`/`FIX` beside the old ones, `STATUS_*`),
+  two new commands (`status`, `agents log`), new `init` flags, new doctor finding codes. All additive.
+- **Automated tests.** Discovery over fixtures with 0, 1 and 2 agents and with a harness that has no status command; a
+  planted-token test (no output, log or diagnostic contains a token file's content, and discovery opens no credential
+  file); a file-system snapshot test of what `init` touches; output tests for `status` (none exist today for the three
+  status commands); a test that every setup refusal path prints `ERROR`, `MESSAGE` and `FIX`; executed walkthroughs.
+- **Real-world tests.** Fresh Windows user and fresh VM user: install, `init` with Claude only, Codex only, and both;
+  readiness measured as below; `status` checked against a real PC + VM run.
+- **Completion criteria.** Readiness measured on both computers with Synesis's own overhead reported separately from
+  external latency; every setup failure in the tests prints a fix; the planted-token test green; the old error keys still
+  printed.
+
+### Stage 3 — behaviour changes (owner approval first; preliminary: about two days)
+
+- **Tasks.** Interactive approval in `link invite` (who asks; accept? y/N). The firewall fix offered by `link invite`
+  and refreshed by the installer on upgrade; the installer's checkbox checked by default. Help in depths (`help` and
+  `help --all`). `init` stops writing Codex's global config when Codex is not connected. `host`/`join`/`sync host`/
+  `sync join` deprecated, naming `link invite`/`link join` as the replacement. UI first run, readiness panel, operator
+  recheck/close and member removal, membership in the read model.
+- **Dependencies and blockers.** ADR-0098 step 6 (membership, built) for member views and removal; stage 2's discovery
+  and doctor groups for the readiness panel; the firewall offer needs the person's elevation and cannot be tested
+  unattended on a real machine.
+- **Contract changes needing approval.** The installer's firewall default; `init` no longer writing Codex's global
+  config without Codex; deprecation of four commands; the default help showing fewer commands; `doctor --strict` using
+  exit code 3 and provider results no longer reusing 2 and 3.
+- **Automated tests.** The interactive invite accepts on yes and declines on no or end of input; the deprecated commands
+  print their replacement and still work; UI tests for the new actions; `init` without Codex leaves `~/.codex`
+  untouched.
+- **Real-world tests.** A second computer joins with one action per side and one approval on the same network, counted;
+  an upgrade keeps Link reachable without a manual firewall step.
+- **Completion criteria.** The owner's approval recorded for each contract change; the join count met on PC + VM;
+  nothing accepted without a person's yes.
+
+### Stage 4 — needs foundations first
+
+- **Tasks.** A person sends an agent a task after it started ("ready without a task"), which needs a person-to-agent
+  message path (conversations are read-only for people today) and a decision on what such a message may authorize.
+  Starting and stopping agents from the UI through a daemon-side runner shared with `agents run`. OS packages (winget,
+  Homebrew, apt) with signed release manifests (the manifest key is a placeholder today, `bootstrap/main.go:117-119`).
+  Removal of the deprecated commands and old error keys. AppCDS if the start-time measurement asks for it. Adapters for
+  further agent harnesses.
+- **Dependencies and blockers.** Each needs its own design and approval; release signing needs a key the owner holds.
+- **Completion criteria.** Set in its own ADR or amendment.
 
 ## Acceptance tests and targets
 
+### Two onboarding times, measured apart
+
+| Measure | From → to | Target |
+| --- | --- | --- |
+| **Time to agent readiness** | installer started → `synesis init` done → the chosen agent connected and passing its health check (`provider status` `HEALTHY`; for an interactive agent, its MCP `initialize` and `tools/list` answered) | Synesis's own part ≤ 2 min (REQUIRES-MEASUREMENT; baseline first) |
+| **Time to first successful task** | installer started → a predefined task done and verified | ≤ 5 min under normal conditions, median of 5 runs (REQUIRES-MEASUREMENT) |
+
+- **The predefined task** is fixed and reproducible: a disposable fixture repository with one failing test; the task text
+  is given explicitly ("Make the failing test pass without changing the test"); it is done when the test passes on
+  `main` and the change was reviewed where review is required. The fixture and the task text are checked in, so every
+  run measures the same work.
+- **Synesis-controlled overhead is measured separately from external latency.** Every run records timestamps for the
+  installer's extraction and activation; `init` (git checks, baseline commit, discovery, provider connection, health
+  probe); runtime start; and, during the task, the time Synesis spends between an agent's tool calls (MCP request in to
+  answer out). External time is recorded on its own: the person's sign-in (excluded from the targets, reported), network
+  and provider availability (a run during a provider outage is reported, not averaged in), and model response time (from
+  the harness's own transcript timings).
+- **Conditions are recorded** with each result: machine, OS, network, provider, model and effort, harness version.
+
+### Other measures
+
 | Measure | Target | How |
 | --- | --- | --- |
-| Install → first agent task done | ≤ 5 min, median of 5 runs (REQUIRES-MEASUREMENT; baseline first) | scripted on a fresh Windows user and a fresh VM user, real Claude Code and Codex, the README goal of the lab |
-| User actions to first task | ≤ 4: run installer, `cd`, `synesis init` (+1 answer), start the agent | the same script counts commands and prompts |
-| Mandatory decisions | ≤ 1 (which agents, only when several are found) | test over discovery fixtures: 0, 1, 2 agents |
+| User actions to readiness | ≤ 3: run the installer, `cd`, `synesis init` (+1 answer when several agents are found) | the measuring script counts commands and prompts |
+| Mandatory decisions | ≤ 1 (which agents, only when several are found) | discovery fixtures with 0, 1, 2 agents |
 | Second computer joins | ≤ 1 action per side + 1 approval (same network) | real PC + VM run, counted |
-| Setup failure messages | 100 % of setup failures print `ERROR`, `MESSAGE`, `FIX` | a test enumerating every refusal path of init, provider, link |
+| Setup failure messages | 100 % print `ERROR`, `MESSAGE`, `FIX` | a test over every refusal path of init, provider, link and agents run |
 | Interrupted setup | re-running `init` after a kill at each step ends in the same state | fault-injection test in the Linux gate |
 | CLI responsiveness | `--help` and `status` p95 under a budget set from the measured baseline | timed in the gate on this PC and the VM |
-| Docs accuracy | every walkthrough runs green in the gate | executed fixtures |
-| Credentials | no command output, log or diagnostic contains a token file's content; discovery opens no credential file | a test with planted token files, grepping all output |
-| Files touched by `init` | exactly the documented list, project and global | snapshot test of the file system before and after |
-| Cross-platform | the five-step path on Windows and Linux (macOS when a Mac is available) | real runs |
+| Docs accuracy | every walkthrough runs green | executed fixtures |
+| Credentials | no output, log or diagnostic contains a token file's content; discovery opens no credential file | planted-token test |
+| Files touched by `init` | exactly the documented list, project and global | file-system snapshot test |
+| No invented work | `agents run` without a task starts no agent; nothing Synesis sends an agent is derived from the README | a test over `agents run` and the provider prompt builders |
+| Cross-platform | readiness and first task on Windows and Linux (macOS when a Mac is available) | real runs |
 
 ## Security, compatibility and maintenance risks
 
@@ -351,15 +452,36 @@ agent start depends on stage 2's status read model.
 
 ## Consequences
 
-- A newcomer runs three commands and answers at most one question before an agent works.
+- A newcomer runs three commands and answers at most one question before an agent is ready; it works on what the
+  person tells it, never on a task Synesis made up.
 - One status answer in the CLI and the UI, from one read model.
 - Errors say what happened and what to do.
 - More of the CLI's surface is behind `--all`, none of it removed in this ADR.
 - Two new commands (`status`, `agents log`); everything else is existing commands made clearer.
 
-## Not decided
+## Decisions for the owner
 
-- Whether interactive `init` should also offer `project share` (the owner key and recovery words) on first run, or only
-  when the first invite is made (ASSUMED: at the first invite, so a single-computer user never sees it).
-- The exact CLI start-time budget, until it is measured.
-- Which further agent harnesses get adapters first (ASSUMED: whichever the owner uses next; none is mandatory).
+Each is needed before the stage named; the designer's recommendation comes first.
+
+1. **Stage 2 — new CLI output and commands (additive).** Add `ERROR`/`MESSAGE`/`FIX` beside today's keys, `STATUS_*`
+   keys, `synesis status`, `synesis agents log`, `init --agent/--no-agents/--git-init`, and new doctor finding codes.
+   Recommended: yes; nothing existing changes meaning.
+2. **Stage 3 — `init` stops writing Codex's global config when Codex is not connected.** A project initialized without
+   Codex then has no Codex MCP entry; existing entries are left alone. Recommended: yes; it stops changing configuration
+   the user did not ask to touch.
+3. **Stage 3 — the installer's "Let other computers connect" checkbox checked by default**, still needing the person's
+   elevation. Recommended: yes; joining without it needs pasted answer links and fails to redial after long drops
+   (MEASURED 2026-10-18).
+4. **Stage 3 — deprecate `host`, `join`, `sync host`, `sync join`** in favour of `link invite`/`link join`; they keep
+   working and name their replacement; removal is a later, separately authorized change. Recommended: yes.
+5. **Stage 3 — default help shows the everyday commands; `help --all` shows everything.** Recommended: yes.
+6. **Stage 3 — exit codes:** `doctor --strict` uses 3 (`DOCTOR_BROKEN`) instead of 10; provider results stop reusing 2
+   and 3. Recommended: yes, documented in the exit-code table.
+7. **Stage 4 — "ready without a task":** whether a person may send a started agent its task later, which needs a
+   person-to-agent message path and a rule for what such a message may authorize (today people cannot post into a
+   conversation). Recommended: decide when stage 4 starts; not needed for stages 1 to 3.
+8. **When to offer `project share`** (owner key and recovery words): on first run or at the first invite. Recommended:
+   at the first invite, so a single-computer user never sees it.
+
+Still open, settled by measurement rather than by a choice: the CLI start-time budget and the readiness target for
+Synesis's own overhead (both after the baseline is measured), and which further harnesses get adapters first.
