@@ -959,6 +959,52 @@ Today membership is `replication.properties` on each computer; join requests liv
 6. **The third computer:** a Podman container with the Linux build and the VM's Claude and Codex sign-ins (owner's
    answer 14), with host networking. If the VM cannot reach it over QUIC, a clone of the VM instead.
 
+Decided while building step 6 (designer, 2026-10-18; each open to the owner):
+
+7. **Membership is a projection like the others.** A new stage, `MembershipProjection`, applies the membership
+   entries in each computer's applied order. Whether an entry counts is judged by the same rules on the writer's own
+   append and on arrival (`AppendAdmission`), and one that fails counts for nothing, as in step 4. A project with no
+   `PROJECT_SHARED` is not shared: membership checks nothing there. The owner's statements come from one log, so they
+   meet nothing; the only two lines that can cross are the old owner's and a recovery change (item 12).
+8. **The entries** (wire codes 83 to 89): `PROJECT_SHARED` {owner public key, recovery public key or none}, written
+   once by the owner's computer, whose node key it names; `JOIN_REQUESTED` {request, joiner node}, written by
+   the member that holds the joiner's session (the session was authenticated with the joiner's key, and nothing needs
+   the key itself, so a step-5 migration can write one for a member whose key it never saw); `JOIN_ANSWERED` {request, joiner, accepted or declined,
+   revision}; `JOIN_POLICY_SET` {OWNER_ONLY or ANY_MEMBER, revision}; `MEMBER_REMOVED` {node, the head of its log the
+   owner had seen, revision}; `MEMBER_CARD` {the member's retained invitation}; `OWNER_CHANGED` {owner public key,
+   recovery public key or none, revision, the recovery key's signature or none}. The revision is the number of owner
+   statements applied before it; a statement is written at the revision its writer holds, so an old one cannot be
+   replayed later.
+9. **Who may write what.** `JOIN_REQUESTED` and `MEMBER_CARD`: any member. `JOIN_ANSWERED`: the owner; under
+   `ANY_MEMBER` also any member, accepting only (a decline is the owner's). `JOIN_POLICY_SET` and `MEMBER_REMOVED`:
+   the owner. `OWNER_CHANGED`: the owner, or any member carrying a valid recovery signature over the project, the
+   action, the new keys and the revision. A request is answered once; the first valid answer applied stands.
+10. **Members and logs.** The members are the owner and every accepted joiner not removed. A computer serves and pulls
+    only members; it copies every log of anyone who was ever a member, so a removed computer's log stays complete. An
+    entry of a removed computer's log after the head its removal names counts for nothing. One the computer had
+    already applied before the removal reached it stays applied there (an applied entry is a fact, as in step 4); the
+    removal also ends the removed computer's lanes everywhere, so its claims are freed the same on every computer.
+11. **The recovery key.** 256 random bits, shown once as 24 BIP-39 English words (the standard list, 2048 words with a
+    checksum), stored nowhere. The words give back the bits; SHA-256 over a fixed domain and the bits gives the 32-byte
+    Ed25519 seed. `project share` prints the words. A project shared before step 6 gets no recovery key from its
+    migration (nothing is shown to a person there); running `project share` again on the owner's computer then writes
+    an `OWNER_CHANGED` with the same owner and a new recovery key, and prints its words. The same command rotates it.
+12. **Recovery.** `project recover` on any member asks for the 24 words and writes `OWNER_CHANGED` naming that
+    computer's node key as the owner's. The old owner's statements written after that change, at its revision or
+    later, count for nothing wherever they arrive after it; any applied earlier stay (NOT BUILT: undoing them).
+13. **Everyone pulls from everyone.** The leader and member sides become one shared side: it serves the members and
+    pulls each member it is connected to. Each member writes a `MEMBER_CARD` with its retained invitation, and dials
+    every other member's card it does not hold a session with. Two members that cannot reach each other still get each
+    other's entries through any member both reach, because every member serves every log it holds.
+14. **`replication.properties`** is written as `role=shared` and an optional `code.remote`. A step-5 file is migrated
+    at the server's start: an owner's (`role=leader`) writes `PROJECT_SHARED` (no recovery key) and accepts each listed
+    member; a member's (`role=member`) keeps its inviter as the first computer it dials and waits for the owner's
+    entries. Compatibility 10.
+15. **Before the owner's entries arrive.** A computer that holds no `PROJECT_SHARED` has no members to go by. It
+    trusts the computers it dialed with an invitation (the `dial` lines of `replication.peers`): it pulls from them and
+    keeps a copy of every log they serve, as a step-5 member did. Once `PROJECT_SHARED` and its acceptance arrive,
+    membership decides. A computer that has neither shared nor dialed serves no one.
+
 ### Step 7: Disputes, takeovers and the trash
 
 1. **Disputes:** both reviewers are told in their next answer and woken (ADR-0099); a reviewer's new verdict replaces

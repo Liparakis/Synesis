@@ -16,6 +16,8 @@ import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionProjection;
 import org.synesis.coordination.domain.task.CoordinationProjection;
 import org.synesis.coordination.domain.task.TaskCompletionProjection;
+import org.synesis.coordination.domain.membership.MembershipProjection;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
 import org.synesis.coordination.exception.CoordinationStateException;
@@ -56,6 +58,7 @@ final class Projections implements ProjectionView {
     private final ContractProjection contracts = new ContractProjection();
     private final OperatorRequestProjection operatorRequests = new OperatorRequestProjection();
     private final ConversationProjection conversations = new ConversationProjection();
+    private final MembershipProjection membership;
 
     /**
      * Every projection above, in validation and application order; the one place a new projection is registered.
@@ -75,11 +78,14 @@ final class Projections implements ProjectionView {
                     (event, revision) -> contracts.apply(event)),
             new Stage((event, mode, revision) -> operatorRequests.validate(event, mode),
                     (event, revision) -> operatorRequests.apply(event)),
-            new Stage(conversations::validate, conversations::apply));
+            new Stage(conversations::validate, conversations::apply),
+            new Stage((event, mode, revision) -> membership().validate(event, mode),
+                    (event, revision) -> membership().apply(event)));
 
 
     Projections(ProjectId project) {
         this.project = CoordinationNullException.requireNonNull(project, "project");
+        this.membership = new MembershipProjection(project.value());
     }
 
     /**
@@ -141,6 +147,11 @@ final class Projections implements ProjectionView {
         for (Stage stage : stages) {
             stage.apply().accept(event, revision);
         }
+        // A removed computer's lane announced before its removal may arrive after it: it ends as its removal ended the
+        // others, so every computer frees the same claims whatever the order (ADR-0098 step 6, designer item 10).
+        if (event.type() == PredictionEventType.WORK_INTENT_ANNOUNCED && membership.removedHead(event.actorNodeId()).isPresent()) {
+            collaboration.endLanesOf(event.actorNodeId());
+        }
     }
 
     @Override
@@ -181,6 +192,10 @@ final class Projections implements ProjectionView {
 
     OperatorRequestProjection operatorRequests() {
         return operatorRequests;
+    }
+
+    MembershipProjection membership() {
+        return membership;
     }
 
     ConversationProjection conversations() {

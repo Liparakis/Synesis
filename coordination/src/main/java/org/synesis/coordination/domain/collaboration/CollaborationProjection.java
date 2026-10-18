@@ -135,6 +135,17 @@ public final class CollaborationProjection {
         }
     }
 
+    /**
+     * Ends every lane of a removed computer's agents: its open work ends with its membership, the same on every
+     * computer, so its claims are freed everywhere (ADR-0098 step 6, owner's answer 8).
+     *
+     * @param node the removed computer
+     */
+    public synchronized void endLanesOf(String node) {
+        intents.values().stream().filter(intent -> introducingNode(intent.participantIdentity()).map(node::equals).orElse(false))
+                .map(WorkIntent::identity).toList().forEach(this::endLane);
+    }
+
     /** Removes a lane from the active ones and remembers that it ended. */
     private WorkIntent endLane(WorkIntentId id) {
         WorkIntent ended = intents.remove(id);
@@ -213,6 +224,8 @@ public final class CollaborationProjection {
                             event.createdAtEpochMillis());
             case CLAIM_HANDOFF_ACCEPTED -> handoff(CollaborationCodec.decodeHandoff(event.payload()));
             case REPAIR_LANE_CREATED -> repair(RepairLanePayload.decode(event.payload()));
+            case MEMBER_REMOVED -> endLanesOf(org.synesis.coordination.domain.membership.MembershipEntries.MemberRemoved
+                    .decode(event.payload()).nodeId());
             case COMPLETION_UNWOUND -> unwind(CompletionUnwoundPayload.decode(event.payload()));
             case PARTICIPANT_ABANDONED, PARTICIPANT_SUSPENDED ->
                     suspended(new ParticipantId(CollaborationCodec.decodeHeartbeat(event.payload())));

@@ -815,6 +815,15 @@ public final class PredictionEventStore implements ProjectionView {
     }
 
     /**
+     * Returns who belongs to the project, as the membership entries say (ADR-0098 step 6).
+     *
+     * @return membership projection
+     */
+    public org.synesis.coordination.domain.membership.MembershipProjection membershipProjection() {
+        return projections.membership();
+    }
+
+    /**
      * Counts the entries recorded under a coordination directory without replaying them: this computer's own and
      * every copy it holds. It grows whenever an entry is written or arrives, which is what its readers watch for.
      *
