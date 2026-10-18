@@ -36,26 +36,26 @@ class EventLogScanTest {
     private static final String INVALID_LOG = "invalid coordination event log";
 
     /**
-     * Two processes read the same head and both append. Neither event may be lost: before, the
-     * later durable move replaced the earlier writer's file, and an announced lane vanished from
-     * the log although its agent had been told it was accepted.
+     * Another writer takes the sequence first. Since ADR-0098 step 4 every writer of this build holds the order lock
+     * across the placement, so the only such writer is one of a build before the lock. Neither event may be lost:
+     * before, the later durable move replaced the earlier writer's file, and an announced lane vanished from the log
+     * although its agent had been told it was accepted.
      */
     @Test
     void appendThatLosesItsSequenceToAnotherWriterKeepsBothEvents(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();
         NodeIdentity requester = NodeIdentity.generate();
         NodeIdentity owner = NodeIdentity.generate();
-        PredictionEventStore first = new PredictionEventStore(temp, project);
-        PredictionEventStore second = new PredictionEventStore(temp, project);
+        Path older = temp.resolve("older-build");
+        appendRequest(new PredictionEventStore(older, project), requester, owner, "req_TEST1234567890ABCDR2");
+        Path olderEntry = older.resolve("events").resolve(String.format("%020d.sce", 1L));
+        Path current = temp.resolve("current");
+        PredictionEventStore first = new PredictionEventStore(current, project);
         boolean[] raced = {false};
         PredictionEventStore.setTestFaultInjector(reached -> {
             if (reached == PredictionEventStore.AppendBoundary.BEFORE_DURABLE_MOVE && !raced[0]) {
                 raced[0] = true;
-                try {
-                    appendRequest(second, requester, owner, "req_TEST1234567890ABCDR2");
-                } catch (Exception failure) {
-                    throw new java.io.IOException(failure);
-                }
+                Files.copy(olderEntry, current.resolve("events").resolve(olderEntry.getFileName()));
             }
         });
         try {
@@ -64,9 +64,10 @@ class EventLogScanTest {
             PredictionEventStore.clearTestFaultInjector();
         }
 
-        PredictionEventStore replayed = new PredictionEventStore(temp, project);
+        PredictionEventStore replayed = new PredictionEventStore(current, project);
         assertEquals(2L, replayed.headSequence());
         assertEquals(2, replayed.capabilityRequestProjection().records().size());
+        assertEquals(List.of("self 1", "self 2"), Files.readAllLines(current.resolve("applied.order")));
     }
 
     @Test
@@ -253,7 +254,13 @@ class EventLogScanTest {
         assertEquals(INVALID_LOG, assertThrows(CoordinationException.class, () -> new PredictionEventStore(root, projectId)).getMessage(), "a gap");
         Files.write(middle, middleBytes);
 
+        // The applied order names the entry, so a log that lost its head is contradictory state, not a shorter log.
         Files.delete(head);
+        assertEquals(INVALID_LOG, assertThrows(CoordinationException.class, () -> new PredictionEventStore(root, projectId)).getMessage(),
+                "a log shorter than the applied order is not served from memory");
+
+        // Without the lines naming it, a shorter log is just a shorter log, and nothing is served from memory.
+        Files.write(root.resolve("applied.order"), "self 1\nself 2\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         assertEquals(2L, new PredictionEventStore(root, projectId).headSequence(), "a shorter log is not served from memory");
     }
 

@@ -67,8 +67,8 @@ final class ReplicationSide implements AutoCloseable {
     }
 
     /**
-     * Attaches the session when its peer is the leader (for a member) or a member (for the leader); any other peer is
-     * left unserved.
+     * Attaches the session when its peer is the leader (for a member); the leader side takes every session and serves
+     * a peer only while its settings name it.
      */
     void attach(PeerSession session) {
         MemberReplication asMember = member;
@@ -79,7 +79,8 @@ final class ReplicationSide implements AutoCloseable {
             return;
         }
         LeaderReplication asLeader = leader;
-        if (asLeader != null && asLeader.isMember(session.remoteNodeId())) {
+        if (asLeader != null) {
+            // A node accepted later is served from then on, over this session (ADR-0098 step 4).
             asLeader.attach(session);
         }
     }

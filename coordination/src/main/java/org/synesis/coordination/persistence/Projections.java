@@ -58,14 +58,20 @@ final class Projections implements ProjectionView {
      * Every projection above, in validation and application order; the one place a new projection is registered.
      */
     private final List<Stage> stages = List.of(
-            new Stage(prediction::validate, prediction::apply),
-            new Stage(coordination::validate, coordination::apply),
+            new Stage((event, mode, revision) -> prediction.validate(event, mode),
+                    (event, revision) -> prediction.apply(event)),
+            new Stage((event, mode, revision) -> coordination.validate(event, mode),
+                    (event, revision) -> coordination.apply(event)),
             new Stage(capabilityRequests::validate, capabilityRequests::apply),
-            new Stage(taskCompletion::validate, taskCompletion::apply),
+            new Stage((event, mode, revision) -> taskCompletion.validate(event, mode),
+                    (event, revision) -> taskCompletion.apply(event)),
             new Stage(collaboration::validate, collaboration::apply),
-            new Stage(workGroups::validate, workGroups::apply),
-            new Stage(contracts::validate, contracts::apply),
-            new Stage(operatorRequests::validate, operatorRequests::apply),
+            new Stage((event, mode, revision) -> workGroups.validate(event, mode),
+                    (event, revision) -> workGroups.apply(event)),
+            new Stage((event, mode, revision) -> contracts.validate(event, mode),
+                    (event, revision) -> contracts.apply(event)),
+            new Stage((event, mode, revision) -> operatorRequests.validate(event, mode),
+                    (event, revision) -> operatorRequests.apply(event)),
             new Stage(conversations::validate, conversations::apply));
 
     /**
@@ -80,13 +86,19 @@ final class Projections implements ProjectionView {
     /**
      * Refuses this computer's own new entry when any rule refuses it. Nothing is changed.
      *
-     * @param event  the signed entry about to be written
-     * @param leader whether this computer is the owner's, which may act for any participant until ADR-0098 step 5
+     * @param event    the signed entry about to be written
+     * @param leader   whether this computer is the owner's, which may act for any participant until ADR-0098 step 5
+     * @param revision the local revision the entry would take
      * @throws IOException with the refusal code
      */
-    void check(PredictionEvent event, boolean leader) throws IOException {
+    void check(PredictionEvent event, boolean leader, long revision) throws IOException {
+        if (!leader && event.type().leaderOnly()) {
+            // Only the owner's computer merges until ADR-0098 step 5; a member's entry of this type would count for
+            // nothing everywhere else.
+            throw new CoordinationException("EVENT_TYPE_LEADER_ONLY");
+        }
         for (Stage stage : stages) {
-            stage.validate().accept(event, ApplyMode.CHECK);
+            stage.validate().accept(event, ApplyMode.CHECK, revision);
         }
         // Last, so a rule of one projection answers first. It reads every projection and applies nothing.
         leaderEntry = leader;
@@ -103,15 +115,16 @@ final class Projections implements ProjectionView {
      *
      * @param event          a verified entry of another computer's log
      * @param signedByLeader whether the owner's computer signed it
+     * @param revision       the local revision the entry takes if it applies
      * @return how it was taken
      * @throws IOException when the entry passed its trial and still failed to apply, which is a defect here
      */
-    Arrival arrive(PredictionEvent event, boolean signedByLeader) throws IOException {
+    Arrival arrive(PredictionEvent event, boolean signedByLeader, long revision) throws IOException {
         leaderEntry = signedByLeader;
         try {
             AppendAdmission.checkArrival(event, this);
             for (Stage stage : stages) {
-                stage.validate().accept(event, ApplyMode.ARRIVAL);
+                stage.validate().accept(event, ApplyMode.ARRIVAL, revision);
             }
         } catch (MissingReferenceException waiting) {
             return new Arrival(waiting.code(), true);
@@ -122,19 +135,20 @@ final class Projections implements ProjectionView {
         } finally {
             leaderEntry = false;
         }
-        apply(event);
+        apply(event, revision);
         return Arrival.APPLIED;
     }
 
     /**
      * Applies an entry already judged: this computer's own after its check, or one in its applied order.
      *
-     * @param event the entry
+     * @param event    the entry
+     * @param revision its local revision
      * @throws IOException when a projection cannot apply it
      */
-    void apply(PredictionEvent event) throws IOException {
+    void apply(PredictionEvent event, long revision) throws IOException {
         for (Stage stage : stages) {
-            stage.apply().accept(event);
+            stage.apply().accept(event, revision);
         }
     }
 
@@ -190,13 +204,13 @@ final class Projections implements ProjectionView {
     @FunctionalInterface
     private interface Judge {
 
-        void accept(PredictionEvent event, ApplyMode mode) throws IOException;
+        void accept(PredictionEvent event, ApplyMode mode, long revision) throws IOException;
     }
 
     @FunctionalInterface
     private interface Transition {
 
-        void accept(PredictionEvent event) throws IOException;
+        void accept(PredictionEvent event, long revision) throws IOException;
     }
 
     /**

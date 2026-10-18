@@ -71,7 +71,7 @@ class CoordinationLogLocationTest {
     }
 
     @Test
-    void aMemberComputerReportsItsRoleAndAnAgentProcessOpeningItsLogCannotAppendLocally() throws Exception {
+    void aMemberComputerReportsItsRoleAndAnAgentProcessOpeningItsLogAppendsToItsOwnLog() throws Exception {
         ReplicationSettings.member("sl1-leader").write(location.coordinationDirectory());
 
         Result status = CliHarness.run(tmp.resolve("cli-profile"), "coordination", "status", "--project", project);
@@ -80,14 +80,13 @@ class CoordinationLogLocationTest {
         assertTrue(status.stdout().contains("REPLICATION_ROLE=member"), status.toString());
         assertTrue(status.stdout().contains("REPLICATION_LEADER=sl1-leader"), status.toString());
         assertTrue(status.stdout().contains("REPLICATION_STATE=NO_COORDINATION_SERVER"), status.toString());
-        // The path every agent's process takes: the project location opens the log, the role comes from the file.
-        java.io.IOException refusal = org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class, this::agentAppends);
-        assertEquals("LEADER_UNREACHABLE", refusal.getMessage());
-        assertEquals(0, PredictionEventStore.recordedEvents(location.coordinationDirectory()));
+        // The path every agent's process takes: the project location opens the log, the role comes from the file. A member appends to its own log, connected or not (ADR-0098, step 4).
+        agentAppends();
+        assertEquals(1, PredictionEventStore.recordedEvents(location.coordinationDirectory()));
     }
 
     @Test
-    void aMemberComputersServerRelaysOnLoopbackWhileItRunsAndLeavesNothingBehind() throws Exception {
+    void aMemberComputersServerRunsOnLoopbackAndAnAgentAppendsToItsOwnLogWithNoLeaderReachable() throws Exception {
         Path coordination = location.coordinationDirectory();
         ReplicationSettings.member("sl1-leader").write(coordination);
         java.util.concurrent.CompletableFuture<Result> served = java.util.concurrent.CompletableFuture.supplyAsync(
@@ -100,16 +99,15 @@ class CoordinationLogLocationTest {
         }
         assertTrue(Files.exists(endpointFile), "the member server must record where it listens");
 
-        // An agent's process with no Link session behind the server is told, at once, that the leader is unreachable.
-        java.io.IOException refusal = org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class, this::agentAppends);
-        assertEquals("LEADER_UNREACHABLE", refusal.getMessage());
+        // An agent's process with no Link session behind the server still appends: its own log needs no leader.
+        agentAppends();
         Result status = CliHarness.run(tmp.resolve("cli-profile"), "coordination", "status", "--project", project);
         assertTrue(status.stdout().contains("REPLICATION_STATE=DISCONNECTED"), status.toString());
 
         assertEquals(0, served.get(30, java.util.concurrent.TimeUnit.SECONDS).exit());
         assertTrue(Files.notExists(endpointFile));
         assertTrue(Files.notExists(coordination.resolve("replication.status")));
-        assertEquals(0, PredictionEventStore.recordedEvents(coordination));
+        assertEquals(1, PredictionEventStore.recordedEvents(coordination), "the entry is the member's own and stays");
     }
 
     @Test

@@ -3,7 +3,6 @@ package org.synesis.coordination.persistence;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -11,27 +10,26 @@ import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
- * What a project's coordination log is on this computer: the leader that decides every entry, or a member that
- * proposes entries to the leader and keeps a copy (ADR-0098). A log with no role registered is a leader, which is
- * every log today.
+ * What this computer is in a shared project: the owner's computer, which merges every lane until ADR-0098 step 5,
+ * or a member that leaves merging to it. Since step 4 both append to their own log alone; the role decides only who
+ * merges and whose entries keep the owner's exemption from attribution. A log with no role registered is the
+ * owner's, which is every log of a project on one computer.
  *
  * <p>The role of a computer is kept in {@link ReplicationSettings}, so that every process that opens the log
- * resolves the same one: a member's log, opened by an agent's own process, reaches the leader through its
- * computer's coordination server ({@link LoopbackExchange}) and never appends on its own. A file that cannot be
- * read is a role that refuses every append and every pull ({@link #refusing}); it is never taken for a leader.
- * Tests may register a role in memory instead; that takes precedence.</p>
+ * resolves the same one. A file that cannot be read is a role that refuses every append ({@link #refusing}); it is
+ * never taken for the owner's. Tests may register a role in memory instead; that takes precedence.</p>
  *
- * @param leaderNodeId the leader's node, for a member; null for the leader
- * @param channel      the connection to the leader, for a member; null for the leader
+ * @param leaderNodeId the owner's computer, for a member; null for the owner's computer itself
+ * @param refusal      the code every append fails with, for a role whose settings cannot be read; null otherwise
  */
-public record ReplicationRole(String leaderNodeId, LeaderChannel channel) {
+public record ReplicationRole(String leaderNodeId, String refusal) {
 
     private static final ReplicationRole LEADER = new ReplicationRole(null, null);
 
     private static final ConcurrentHashMap<Path, ReplicationRole> ROLES = new ConcurrentHashMap<>();
 
     /**
-     * The role of a log nobody registered: it decides its own entries.
+     * The role of a log nobody registered: the owner's computer.
      *
      * @return the leader role
      */
@@ -40,45 +38,33 @@ public record ReplicationRole(String leaderNodeId, LeaderChannel channel) {
     }
 
     /**
-     * A member of the project led by another computer.
+     * A member of the project whose owner's computer is another.
      *
-     * @param leaderNodeId the leader's node
-     * @param channel      the connection to the leader
+     * @param leaderNodeId the owner's computer
      * @return the member role
      */
-    public static ReplicationRole memberOf(String leaderNodeId, LeaderChannel channel) {
-        return new ReplicationRole(CoordinationNullException.requireNonNull(leaderNodeId, "leader node ID"),
-                CoordinationNullException.requireNonNull(channel, "leader channel"));
+    public static ReplicationRole memberOf(String leaderNodeId) {
+        return new ReplicationRole(CoordinationNullException.requireNonNull(leaderNodeId, "leader node ID"), null);
     }
 
     /**
-     * A role that fails closed: every proposal is refused with the code and every pull fails with it. It is what a
-     * log resolves to when its settings cannot be read, so it can neither decide nor propose.
+     * A role that fails closed: every append is refused with the code. It is what a log resolves to when its
+     * settings cannot be read, so it neither merges nor writes.
      *
-     * @param code the code every append and pull fails with
+     * @param code the code every append fails with
      * @return the refusing role
      */
     static ReplicationRole refusing(String code) {
-        return memberOf("unknown", new LeaderChannel() {
-            @Override
-            public ProposalOutcome propose(byte[] encodedEvent) {
-                return new ProposalOutcome.Refused(code);
-            }
-
-            @Override
-            public List<byte[]> pull(long after, int maxEntries, int maxBytes) throws IOException {
-                throw new CoordinationException(code);
-            }
-        });
+        return new ReplicationRole("unknown", CoordinationNullException.requireNonNull(code, "code"));
     }
 
     /**
-     * Tells whether this log proposes to a leader instead of deciding.
+     * Tells whether this computer leaves merging to another.
      *
      * @return true for a member
      */
     public boolean isMember() {
-        return channel != null;
+        return leaderNodeId != null;
     }
 
     /**
@@ -107,6 +93,7 @@ public record ReplicationRole(String leaderNodeId, LeaderChannel channel) {
      * @throws IOException when the folder cannot be resolved
      */
     static ReplicationRole of(Path coordinationRoot, UUID projectId) throws IOException {
+        CoordinationNullException.requireNonNull(projectId, "project ID");
         Path key = key(coordinationRoot);
         ReplicationRole registered = ROLES.get(key);
         if (registered != null) {
@@ -117,8 +104,7 @@ public record ReplicationRole(String leaderNodeId, LeaderChannel channel) {
             if (settings.isEmpty() || !settings.get().isMember()) {
                 return LEADER;
             }
-            return memberOf(settings.get().leaderNodeId(),
-                    new ExchangeLeaderChannel(projectId, new LoopbackExchange(key)));
+            return memberOf(settings.get().leaderNodeId());
         } catch (CoordinationException invalid) {
             return refusing(invalid.code());
         }

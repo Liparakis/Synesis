@@ -45,7 +45,9 @@ final class CodexWakeCoordinator implements AutoCloseable {
     CodexWakeCoordinator(ProjectLocation location, CodexWakeAdmissionService.LifecycleDispatcher dispatcher) {
         Path runtimeRoot = CodexWakeAdmissionService.runtimeRoot(location);
         this.projectRoot = location.root();
-        this.eventsDirectory = location.coordinationDirectory().resolve("events").toAbsolutePath().normalize();
+        // Every entry that takes effect here, this computer's own or another computer's, gets a line in
+        // applied.order beside events/ (ADR-0098 step 4), so the coordination folder is what is watched.
+        this.eventsDirectory = location.coordinationDirectory().toAbsolutePath().normalize();
         this.admissionService = new CodexWakeAdmissionService(dispatcher, runtimeRoot.resolve("wake-admissions.json"));
         this.scanAction = () -> this.admissionService.scan(this.projectRoot);
         this.thread = new Thread(this::run, "synesis-codex-wake-relay");
@@ -121,7 +123,8 @@ final class CodexWakeCoordinator implements AutoCloseable {
                         return true;
                     }
                     Object context = event.context();
-                    return context != null && context.toString().endsWith(".sce");
+                    return context != null && (context.toString().endsWith(".sce")
+                            || context.toString().equals("applied.order"));
                 });
                 if (!key.reset()) {
                     lastDiagnostic = "coordination_watch_key_invalid";

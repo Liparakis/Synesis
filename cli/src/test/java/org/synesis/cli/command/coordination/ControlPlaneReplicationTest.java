@@ -1,7 +1,6 @@
 package org.synesis.cli.command.coordination;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -169,6 +168,15 @@ final class ControlPlaneReplicationTest {
         PredictionEventStore store() throws Exception {
             return new PredictionEventStore(coordination, projectId);
         }
+
+        /** How many entries have taken effect here, its own and those of copies; -1 while the log cannot be read. */
+        int applied() {
+            try {
+                return store().events().size();
+            } catch (Exception unreadable) {
+                return -1;
+            }
+        }
     }
 
     private WorkIntent lane(String participant, String path) {
@@ -203,7 +211,7 @@ final class ControlPlaneReplicationTest {
 
         assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-b", "src/b.py")).acquired());
 
-        assertEquals(2, leader.store().events().size());
+        await(() -> leader.applied() == 2);
         assertTrue(leader.store().events().stream().allMatch(event -> event.actorNodeId().equals(memberNode.nodeId())));
         // The leader's own entry reaches the member by the notice the attached session carries, well before the 15 s pull.
         assertTrue(new WorkIntentService(leader.store(), leaderNode).announce(lane("agt-a", "src/a.py")).acquired());
@@ -237,7 +245,7 @@ final class ControlPlaneReplicationTest {
         await(() -> connectedOnLeader(leader, memberNode)
                 && LeaderReplication.recordedMembers(leader.coordination).orElseThrow().get(memberNode.nodeId()).since().isAfter(firstConnected));
         assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-c", "src/c.py")).acquired());
-        assertEquals(4, leader.store().events().size());
+        await(() -> leader.applied() == 4);
         assertTrue(ReplicationJournal.lastDisconnect(member.coordination).orElseThrow().startsWith("REMOTE_REQUEST "));
         assertTrue(ReplicationJournal.lastDisconnect(leader.coordination).orElseThrow().startsWith("LOCAL_REQUEST "));
         assertEquals(2, ReplicationJournal.read(member.coordination).stream().filter(line -> line.contains(" CONNECTED ")).count());
@@ -289,7 +297,7 @@ final class ControlPlaneReplicationTest {
 
         await(() -> hasUsableSessionOtherThan(member, before) && restarted.hasPeer());
         assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-c", "src/c.py")).acquired());
-        assertEquals(4, restarted.store().events().size());
+        await(() -> restarted.applied() == 4);
         assertTrue(journaled(restarted, "DIAL_RESUMED"));
     }
 
@@ -311,7 +319,7 @@ final class ControlPlaneReplicationTest {
 
         await(() -> hasUsableSessionOtherThan(leader, before) && restarted.hasPeer());
         assertTrue(new WorkIntentService(restarted.store(), memberNode).announce(lane("agt-c", "src/c.py")).acquired());
-        assertEquals(2, leader.store().events().size());
+        await(() -> leader.applied() == 2);
         assertTrue(journaled(restarted, "HOST_RESUMED"));
     }
 
@@ -491,16 +499,18 @@ final class ControlPlaneReplicationTest {
         member.post("join", Map.of("inviteUri", invitation.get("inviteUri")));
         await(() -> member.hasPeer() && leader.hasPeer());
 
-        IOException refused = assertThrows(IOException.class, () -> new WorkIntentService(member.store(), memberNode).announce(lane("agt-b", "src/b.py")));
-        assertEquals("PROPOSER_NOT_A_MEMBER", refused.getMessage());
+        // The member always writes its own log; the leader takes copies only from a node its settings name.
+        assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-b", "src/b.py")).acquired());
+        settle();
+        assertEquals(0, PredictionEventStore.recordedEvents(leader.coordination), "a node the settings do not name gets nothing from the leader");
 
         ReplicationSettings.leader(Set.of(memberNode.nodeId())).write(leader.coordination);
-        assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-b", "src/b.py")).acquired());
-        assertEquals(2, leader.store().events().size());
+        assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-c", "src/c.py")).acquired());
+        await(() -> leader.applied() == 4);
 
         ReplicationSettings.leader(Set.of()).write(leader.coordination);
-        IOException removed = assertThrows(IOException.class, () -> new WorkIntentService(member.store(), memberNode).announce(lane("agt-c", "src/c.py")));
-        assertEquals("PROPOSER_NOT_A_MEMBER", removed.getMessage());
-        assertEquals(2, leader.store().events().size());
+        assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-d", "src/d.py")).acquired());
+        settle();
+        assertEquals(4, leader.store().events().size(), "a removed node's later entries do not reach the leader");
     }
 }

@@ -231,7 +231,8 @@ public final class CoordinationService {
      */
     public synchronized List<PredictionEvent> replayAfter(EventSequence sequence) {
         long cursor = CoordinationNullException.requireNonNull(sequence, "event sequence").value();
-        return fresh().events().stream().filter(event -> event.sequence() > cursor).toList();
+        // A cursor is a local revision: a position in this computer's applied order (ADR-0098 step 4).
+        return fresh().eventsAfter(cursor);
     }
 
     /**

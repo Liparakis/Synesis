@@ -76,6 +76,20 @@ public final class ProjectAppendLock implements AutoCloseable {
     }
 
     /**
+     * Takes another named lock file of a project, waiting up to ten seconds. The event store holds
+     * {@code order.lock} this way around the short work of one append or one batch of arriving entries
+     * (ADR-0098 step 4); it is always taken after {@code append.lock}, never before.
+     *
+     * @param root project coordination root
+     * @param name lock file name beside {@code append.lock}
+     * @return lock handle
+     * @throws IOException when the lock cannot be acquired in time or the thread is interrupted
+     */
+    static ProjectAppendLock acquireNamed(Path root, String name) throws IOException {
+        return acquireFile(root, name, 10_000_000_000L, false);
+    }
+
+    /**
      * Takes the named lock file of a project once, without waiting.
      *
      * @param root project coordination root

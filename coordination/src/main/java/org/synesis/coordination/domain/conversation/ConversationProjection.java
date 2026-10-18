@@ -46,10 +46,22 @@ public final class ConversationProjection {
      * @throws IOException if the event is malformed
      */
     public synchronized void apply(PredictionEvent event) throws IOException {
+        apply(event, event.sequence());
+    }
+
+    /**
+     * Applies an event at a local revision, its position in this computer's applied order (ADR-0098 step 4). The
+     * revision, not the entry's sequence in its own log, is what the fences of this projection compare with.
+     *
+     * @param event    event to apply
+     * @param revision the event's local revision
+     * @throws IOException when the event is malformed or refused
+     */
+    public synchronized void apply(PredictionEvent event, long revision) throws IOException {
         CoordinationNullException.requireNonNull(event, "event");
         switch (event.type()) {
-            case CONVERSATION_MESSAGE_SENT -> send(ConversationMessage.decodeSent(event));
-            case CONVERSATION_MESSAGES_DELIVERED -> deliver(ConversationMessage.decodeDelivered(event.payload()), event.sequence());
+            case CONVERSATION_MESSAGE_SENT -> send(ConversationMessage.decodeSent(event, revision));
+            case CONVERSATION_MESSAGES_DELIVERED -> deliver(ConversationMessage.decodeDelivered(event.payload()), revision);
             default -> {
             }
         }
@@ -73,7 +85,19 @@ public final class ConversationProjection {
      * @throws IOException if the event is malformed
      */
     public synchronized void validate(PredictionEvent event, ApplyMode mode) throws IOException {
-        new ConversationProjection(this, mode).apply(event);
+        validate(event, mode, event.sequence());
+    }
+
+    /**
+     * Applies an event at a local revision to a copy of this projection, judged as {@code mode} says.
+     *
+     * @param event    signed event
+     * @param mode     how the event is judged
+     * @param revision the local revision the event takes
+     * @throws IOException if the event is malformed
+     */
+    public synchronized void validate(PredictionEvent event, ApplyMode mode, long revision) throws IOException {
+        new ConversationProjection(this, mode).apply(event, revision);
     }
 
     /**

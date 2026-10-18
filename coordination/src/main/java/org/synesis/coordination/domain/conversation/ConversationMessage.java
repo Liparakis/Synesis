@@ -134,6 +134,11 @@ public record ConversationMessage(UUID id, UUID senderLineageId, List<UUID> memb
     }
 
     static ConversationMessage decodeSent(PredictionEvent event) throws IOException {
+        return decodeSent(event, event.sequence());
+    }
+
+    /** Decodes a sent message whose position is a local revision (ADR-0098 step 4). */
+    static ConversationMessage decodeSent(PredictionEvent event, long revision) throws IOException {
         try {
             DataInputStream in = open(event.payload(), MAGIC_SENT);
             UUID id = readUuid(in);
@@ -146,7 +151,7 @@ public record ConversationMessage(UUID id, UUID senderLineageId, List<UUID> memb
             for (int index = 0; index < count; index++) {
                 members.add(readUuid(in));
             }
-            ConversationMessage message = new ConversationMessage(id, sender, members, TEXT.readText(in), event.sequence(), event.createdAtEpochMillis());
+            ConversationMessage message = new ConversationMessage(id, sender, members, TEXT.readText(in), revision, event.createdAtEpochMillis());
             requireEnd(in);
             return message;
         } catch (RuntimeException | EOFException failure) {

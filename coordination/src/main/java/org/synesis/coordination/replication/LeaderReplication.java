@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.security.GeneralSecurityException;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
@@ -16,7 +15,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
@@ -24,26 +22,22 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
-import org.synesis.coordination.persistence.LeaderEndpoint;
-import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.LoopbackExchange;
 import org.synesis.coordination.persistence.ProposalOutcome;
 import org.synesis.coordination.persistence.ReplicationCodec;
 import org.synesis.coordination.persistence.ReplicationMessage;
 import org.synesis.coordination.persistence.ReplicationSettings;
+import org.synesis.coordination.transport.http.CoordinationHttpServer;
 import org.synesis.link.session.PeerSession;
 
 /**
- * The leader computer's side of the replication protocol on Link (ADR-0098 step 2): answers members'
- * proposals and pulls, and tells every attached member when the log's head moves.
+ * The owner computer's side of the replication protocol on Link (ADR-0098): exchanges logs with every attached
+ * member through a {@link LogExchange}, which serves every log this computer holds and pulls each member's.
  *
  * <p>The sender of a request is the authenticated Link session's remote node, handed in by Link, and never a field
- * of the message. A node that is not in the member set gets nothing: its proposals are refused by
- * {@link LeaderEndpoint} and its pulls here. The seam for a session is {@link #attach}; the product flow that
- * produces authenticated sessions is a later step.</p>
- *
- * <p>The head is watched by counting event files, because the log is also appended by other processes of the
- * leader computer (agents' MCP servers) that this object never sees. A notice is advisory: a member that misses
- * one pulls anyway at its next interval.</p>
+ * of the message. A node that is not in the member set gets nothing. Since step 4 nothing is proposed: every computer
+ * appends to its own log, and a step-2 proposal is answered {@code REPLICATION_REQUEST_UNSUPPORTED}. The seam for a
+ * session is {@link #attach}.</p>
  *
  * <p>Whether each current member has an attached session, and since when, is written to {@value #MEMBERS_FILE} for
  * {@code synesis coordination status}, the leader's counterpart of a member's {@code replication.status}. Only a
@@ -58,15 +52,6 @@ public final class LeaderReplication implements AutoCloseable {
      */
     public static final String MEMBERS_FILE = "replication.members";
 
-    /**
-     * How often the log is checked for a head that moved since the last notice.
-     */
-    private static final long NOTICE_CHECK_MILLIS = 200;
-    /**
-     * Largest page of a pull answer, so one answer stays well inside the Link payload bound and one operation
-     * deadline on a slow uplink.
-     */
-    private static final int MAX_PAGE_BYTES = 256 * 1024;
     private static final System.Logger LOGGER = System.getLogger(LeaderReplication.class.getName());
 
     /**
@@ -96,14 +81,13 @@ public final class LeaderReplication implements AutoCloseable {
 
     private final Path root;
     private final UUID projectId;
-    private final LeaderEndpoint endpoint;
+    private final LogExchange exchange;
+    private volatile CoordinationHttpServer served;
     private final Supplier<Set<String>> members;
     private final Runnable afterMemberEntry;
     private final Map<String, PeerSession> sessions = new ConcurrentHashMap<>();
-    private final Map<String, Long> noticed = new ConcurrentHashMap<>();
     private final Map<String, MemberConnection> connections = new ConcurrentHashMap<>();
     private final Instant started = Instant.now();
-    private final ExecutorService requests = Executors.newCachedThreadPool(daemon("synesis-replication-leader"));
     private final ScheduledExecutorService notices = Executors.newSingleThreadScheduledExecutor(
             daemon("synesis-replication-notice"));
 
@@ -147,9 +131,7 @@ public final class LeaderReplication implements AutoCloseable {
         this.root = CoordinationNullException.requireNonNull(root, "root");
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.members = CoordinationNullException.requireNonNull(members, "members");
-        this.endpoint = new LeaderEndpoint(root, projectId, members);
-        notices.scheduleWithFixedDelay(this::noticeAll, NOTICE_CHECK_MILLIS, NOTICE_CHECK_MILLIS,
-                TimeUnit.MILLISECONDS);
+        this.exchange = new LogExchange(root, projectId, node -> members.get().contains(node), afterMemberEntry);
         notices.execute(this::writeConnections);
     }
 
@@ -263,29 +245,41 @@ public final class LeaderReplication implements AutoCloseable {
             if (!ReplicationCodec.looksLike(payload)) {
                 return CompletableFuture.completedFuture(refusal("REPLICATION_REQUEST_UNSUPPORTED"));
             }
-            // Blocking work (the append lock, reading the log) must not run on the Link event loop.
-            return CompletableFuture.supplyAsync(() -> serve(remoteNodeId, payload), requests);
+            try {
+                ReplicationMessage message = ReplicationCodec.decode(payload);
+                if (LogExchange.serves(message)) {
+                    return exchange.serve(remoteNodeId, message);
+                }
+            } catch (CoordinationException malformed) {
+                return CompletableFuture.completedFuture(refusal(malformed.code()));
+            }
+            // A proposal of a step-2 member: since step 4 every computer appends to its own log.
+            return CompletableFuture.completedFuture(refusal("REPLICATION_REQUEST_UNSUPPORTED"));
         };
     }
 
     /**
-     * Attaches the authenticated session of a member, so it is told when the head moves.
+     * Attaches an authenticated session, so logs are exchanged over it.
      *
-     * @param session an authenticated, control-ready session whose remote node is a member
-     * @throws IllegalArgumentException when the remote node is not a member
+     * <p>A session of a node the settings do not name yet is kept by the exchange, which serves it nothing and pulls
+     * nothing from it until the settings name it: a joiner the owner accepts later, over the session it already
+     * holds, needs no redial (ADR-0098 step 4). Only a member's session is recorded as a member's connection.</p>
+     *
+     * @param session an authenticated, control-ready session
      */
     public void attach(PeerSession session) {
         if (!isMember(session.remoteNodeId())) {
-            throw new IllegalArgumentException("session peer is not a member");
+            exchange.attach(session);
+            return;
         }
         String node = session.remoteNodeId();
         // One lock over the session map and the record, so the end of an old session cannot be recorded after the
         // attach of its successor.
         synchronized (connections) {
             sessions.put(node, session);
-            noticed.remove(node);
             recordConnection(node, MemberConnection.State.CONNECTED);
         }
+        exchange.attach(session);
         session.terminalCompletion().whenComplete((ignored, failure) -> {
             synchronized (connections) {
                 // A session replaced by a newer one to the same member does not make that member disconnected.
@@ -323,78 +317,69 @@ public final class LeaderReplication implements AutoCloseable {
             }
             Path temporary = root.resolve(MEMBERS_FILE + ".tmp");
             Files.write(temporary, lines, StandardCharsets.UTF_8);
-            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            for (int attempt = 1; ; attempt++) {
+                try {
+                    Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                    break;
+                } catch (java.nio.file.AccessDeniedException beingRead) {
+                    // Windows refuses to replace a file another process has open for a moment; the next state must
+                    // still be recorded, or a reader keeps an old one.
+                    if (attempt >= 20) {
+                        throw beingRead;
+                    }
+                    java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(25L));
+                }
+            }
         } catch (IOException | RuntimeException unwritable) {
             // The file explains the replication; it must not stop it.
             LOGGER.log(System.Logger.Level.WARNING, "Could not record the members' connections.", unwritable);
         }
     }
 
-    private byte[] serve(String sender, byte[] payload) {
-        try {
-            return switch (ReplicationCodec.decode(payload)) {
-                case ReplicationMessage.Propose propose -> propose(sender, propose);
-                case ReplicationMessage.Pull pull -> pull(sender, pull);
-                default -> refusal("REPLICATION_REQUEST_UNSUPPORTED");
-            };
-        } catch (CoordinationException malformed) {
-            return refusal(malformed.code());
-        } catch (IOException | GeneralSecurityException transientFailure) {
-            // No answer: the member sends the same bytes again, which the leader recognises.
-            throw new java.util.concurrent.CompletionException(transientFailure);
-        }
-    }
-
-    private byte[] propose(String sender, ReplicationMessage.Propose propose)
-            throws IOException, GeneralSecurityException {
-        if (!propose.project().equals(projectId)) {
-            return ReplicationCodec.encode(new ReplicationMessage.Outcome(
-                    new ProposalOutcome.Refused("PROPOSAL_PROJECT_MISMATCH")));
-        }
-        ProposalOutcome outcome = endpoint.accept(propose.event(), sender);
-        if (outcome instanceof ProposalOutcome.Accepted) {
-            notices.execute(this::noticeAll);
-            try {
-                afterMemberEntry.run();
-            } catch (RuntimeException hookFailed) {
-                // The entry is on the log and the member must be told so; the hook's owner retries on its own.
-            }
-        }
-        return ReplicationCodec.encode(new ReplicationMessage.Outcome(outcome));
-    }
-
-    private byte[] pull(String sender, ReplicationMessage.Pull pull) throws IOException, GeneralSecurityException {
-        if (!isMember(sender)) {
-            return refusal("PROPOSER_NOT_A_MEMBER");
-        }
-        if (!pull.project().equals(projectId)) {
-            return refusal("PROPOSAL_PROJECT_MISMATCH");
-        }
-        List<byte[]> entries = endpoint.entriesAfter(pull.after(), pull.maxEntries(),
-                Math.min(pull.maxBytes(), MAX_PAGE_BYTES));
-        return ReplicationCodec.encode(new ReplicationMessage.Entries(entries));
-    }
-
     private static byte[] refusal(String code) {
         return ReplicationCodec.encode(new ReplicationMessage.Outcome(new ProposalOutcome.Refused(code)));
     }
 
-    private void noticeAll() {
-        if (sessions.isEmpty()) {
-            return;
+    /**
+     * Makes this object the relay of a loopback coordination server and records where it listens, so that the
+     * agents' processes of this computer can have their claims checked with the connected members.
+     *
+     * @param server a started loopback server of this computer
+     * @throws IOException when the endpoint cannot be recorded
+     */
+    public void serve(CoordinationHttpServer server) throws IOException {
+        served = server;
+        server.relay(this::relay);
+        String host = server.address().getAddress().getHostAddress();
+        Files.writeString(root.resolve(LoopbackExchange.ENDPOINT_FILE),
+                (host.contains(":") ? "[" + host + "]" : host) + ":" + server.address().getPort() + "\n",
+                StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Answers one request of an agent's process: the check of a claim it appended.
+     *
+     * @param request an encoded request
+     * @return the encoded answer; never throws
+     */
+    public byte[] relay(byte[] request) {
+        try {
+            if (ReplicationCodec.decode(request) instanceof ReplicationMessage.ClaimSeen seen) {
+                return exchange.checkClaim(seen);
+            }
+        } catch (CoordinationException malformed) {
+            return refusal(malformed.code());
         }
-        long head = PredictionEventStore.recordedEvents(root);
-        sessions.forEach((node, session) -> {
-            if (!isMember(node) || !Sessions.live(session) || noticed.getOrDefault(node, -1L) == head) {
-                return;
-            }
-            noticed.put(node, head);
-            try {
-                session.requestApplication(ReplicationCodec.encode(new ReplicationMessage.Notice(projectId, head)));
-            } catch (IllegalStateException unusable) {
-                noticed.remove(node);
-            }
-        });
+        return refusal("REPLICATION_REQUEST_UNSUPPORTED");
+    }
+
+    /**
+     * The exchange this side runs, for the claim lock between connected computers.
+     *
+     * @return the exchange
+     */
+    public LogExchange exchange() {
+        return exchange;
     }
 
     /**
@@ -403,8 +388,17 @@ public final class LeaderReplication implements AutoCloseable {
      */
     @Override
     public void close() {
+        CoordinationHttpServer server = served;
+        if (server != null) {
+            server.relay(null);
+            try {
+                Files.deleteIfExists(root.resolve(LoopbackExchange.ENDPOINT_FILE));
+            } catch (IOException stuck) {
+                LOGGER.log(System.Logger.Level.WARNING, "Could not remove the replication endpoint.", stuck);
+            }
+        }
+        exchange.close();
         notices.shutdownNow();
-        requests.shutdownNow();
         try {
             // A write still running must not put the file back after it is removed.
             notices.awaitTermination(1, TimeUnit.SECONDS);

@@ -22,6 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,11 +34,6 @@ import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
-import org.synesis.coordination.domain.identity.EventSequence;
-import org.synesis.coordination.domain.identity.NodeId;
-import org.synesis.coordination.domain.identity.PredictionId;
-import org.synesis.coordination.domain.identity.ProjectId;
-import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProposalOutcome;
@@ -53,7 +49,7 @@ import org.synesis.link.session.SessionCloseReason;
 
 /**
  * A leader and a member computer, each with its own project root, node identity and coordination server, joined by
- * a real authenticated QUIC Link session on loopback (ADR-0098 step 2, slice 2). The processes of the member's
+ * a real authenticated QUIC Link session on loopback (ADR-0098 step 4). The processes of the member's
  * agents are the stores opened here: they know their role only from the persisted settings file.
  */
 @Timeout(120)
@@ -115,7 +111,12 @@ final class LinkReplicationTest {
         final PeerSession memberSession;
 
         Computers(Set<String> members) throws Exception {
-            leaderSide = closing(new LeaderReplication(leaderRoot, project, members));
+            this(members, () -> {
+            });
+        }
+
+        Computers(Set<String> members, Runnable afterArrivals) throws Exception {
+            leaderSide = closing(new LeaderReplication(leaderRoot, project, members, afterArrivals));
             memberSide = closing(MemberReplication.open(memberRoot, project));
             server(leaderRoot, leader);
             memberSide.serve(server(memberRoot, member));
@@ -164,20 +165,18 @@ final class LinkReplicationTest {
         assertTrue(condition.getAsBoolean(), "condition not reached in " + seconds + " s");
     }
 
-    private static void assertSameLog(PredictionEventStore left, PredictionEventStore right) {
-        assertEquals(left.events().size(), right.events().size());
-        for (int index = 0; index < left.events().size(); index++) {
-            assertArrayEquals(left.events().get(index).encoded(), right.events().get(index).encoded());
+    /** Whether a fresh store over the folder holds this many entries that took effect; false while it cannot open. */
+    private boolean applied(Path root, int count) {
+        try {
+            return store(root).events().size() == count;
+        } catch (Exception busy) {
+            return false;
         }
     }
 
-    private byte[] proposalAtLeaderHead(PredictionEventType type, UUID prediction, byte[] payload, NodeIdentity signer)
-            throws Exception {
-        List<PredictionEvent> events = store(leaderRoot).events();
-        byte[] digest = events.isEmpty() ? new byte[32] : events.getLast().digest();
-        return PredictionEvent.create(new ProjectId(project), new PredictionId(prediction),
-                new EventSequence(events.size() + 1L), type, new NodeId(signer.nodeId()), payload, digest, signer,
-                System.currentTimeMillis()).encoded();
+    private static List<String> encodedSet(PredictionEventStore store) {
+        return store.events().stream().map(event -> java.util.HexFormat.of().formatHex(event.encoded())).sorted()
+                .toList();
     }
 
     private ReplicationMessage sendFromMember(Computers computers, ReplicationMessage request) throws Exception {
@@ -185,21 +184,40 @@ final class LinkReplicationTest {
                 .toCompletableFuture().get(10, TimeUnit.SECONDS));
     }
 
+    private ReplicationMessage sendFromLeader(Computers computers, ReplicationMessage request) throws Exception {
+        return ReplicationCodec.decode(computers.leaderSession.requestApplication(ReplicationCodec.encode(request))
+                .toCompletableFuture().get(10, TimeUnit.SECONDS));
+    }
+
+    private static ReplicationMessage refused(String code) {
+        return new ReplicationMessage.Outcome(new ProposalOutcome.Refused(code));
+    }
+
     @Test
-    void aClaimMadeByAProcessThatOnlyKnowsThePersistedRoleLandsOnTheLeaderAndTheLeadersLaterEntryReachesTheMember()
+    void aClaimMadeOfflineIsPulledByTheLeaderOnceConnectedAndTheLeadersLaterEntryReachesTheMember()
             throws Exception {
         Computers computers = new Computers(Set.of(member.nodeId()));
-        computers.attach();
         WorkIntent lane = lane(project, UUID.randomUUID(), "agt-b", "src/b.py");
 
-        // The service is the one a leader uses; this store resolved its role from replication.properties.
+        // The service is the one a leader uses; this store resolved its role from replication.properties, and no
+        // session exists yet: the entry goes to the member's own log and nothing waits for the leader.
         assertTrue(new WorkIntentService(store(memberRoot), member).announce(lane).acquired());
+        assertEquals(0, PredictionEventStore.recordedEvents(leaderRoot));
+        assertEquals(2, store(memberRoot).events().size());
 
+        computers.attach();
+        await(() -> PredictionEventStore.recordedEvents(leaderRoot) == 2, 8);
+
+        await(() -> applied(leaderRoot, 2), 8);
         PredictionEventStore onLeader = store(leaderRoot);
-        assertEquals(2, onLeader.events().size());
         assertTrue(onLeader.events().stream().allMatch(event -> event.actorNodeId().equals(member.nodeId())));
         assertEquals(PredictionEventType.WORK_INTENT_ANNOUNCED, onLeader.events().getLast().type());
-        assertSameLog(onLeader, store(memberRoot));
+        for (long sequence = 1; sequence <= 2; sequence++) {
+            String name = String.format("%020d.sce", sequence);
+            assertArrayEquals(Files.readAllBytes(memberRoot.resolve("events").resolve(name)),
+                    Files.readAllBytes(leaderRoot.resolve("peers").resolve(member.nodeId()).resolve("events")
+                            .resolve(name)));
+        }
         assertTrue(onLeader.events().stream().allMatch(event -> {
             try {
                 return event.verify();
@@ -212,122 +230,132 @@ final class LinkReplicationTest {
         WorkIntent leaders = lane(project, UUID.randomUUID(), "agt-a", "src/a.py");
         assertTrue(new WorkIntentService(store(leaderRoot), leader).announce(leaders).acquired());
         await(() -> PredictionEventStore.recordedEvents(memberRoot) == 4, 8);
-        assertSameLog(store(leaderRoot), store(memberRoot));
-        assertEquals(MemberReplication.State.CONNECTED, computers.memberSide.state());
+        await(() -> applied(memberRoot, 4), 8);
+        assertEquals(encodedSet(store(leaderRoot)), encodedSet(store(memberRoot)));
+        assertEquals(LogExchange.State.CONNECTED, computers.memberSide.exchange().state(leader.nodeId()));
+        await(() -> computers.memberSide.state() == MemberReplication.State.CONNECTED, 8);
         assertEquals("CONNECTED", MemberReplication.recordedState(memberRoot).orElseThrow());
     }
 
     @Test
-    void aClaimOverlappingTheLeadersIsRefusedAcrossTheLinkAndNothingIsPlacedOnEitherLog() throws Exception {
+    void aMemberThatHasTheLeadersClaimRefusesAnOverlappingOneAndNothingReachesEitherLog() throws Exception {
         Computers computers = new Computers(Set.of(member.nodeId()));
         computers.attach();
         WorkIntent held = lane(project, UUID.randomUUID(), "agt-a", "src/shared.py");
         assertTrue(new WorkIntentService(store(leaderRoot), leader).announce(held).acquired());
+        await(() -> applied(memberRoot, 2), 8);
         WorkIntent overlapping = lane(project, held.group().value(), "agt-b", "src/shared.py");
 
         IOException refusal = assertThrows(IOException.class,
                 () -> store(memberRoot).append(overlapping.intentId(), PredictionEventType.WORK_INTENT_ANNOUNCED,
                         member.nodeId(), CollaborationCodec.encodeIntent(overlapping), member));
-        assertEquals("OVERLAPPING_CLAIM", refusal.getMessage());
 
-        // The leader decides the same when the member's entry reaches it at the leader's head.
-        byte[] atHead = proposalAtLeaderHead(PredictionEventType.WORK_INTENT_ANNOUNCED, overlapping.intentId(),
-                CollaborationCodec.encodeIntent(overlapping), member);
-        assertEquals(new ReplicationMessage.Outcome(new ProposalOutcome.Refused("OVERLAPPING_CLAIM")),
-                sendFromMember(computers, new ReplicationMessage.Propose(project, atHead)));
-        assertEquals(2, store(leaderRoot).events().size());
+        assertEquals("OVERLAPPING_CLAIM", refusal.getMessage());
+        assertEquals(0L, store(memberRoot).logHeads().get(PredictionEventStore.OWN_LOG));
+        assertEquals(2, PredictionEventStore.recordedEvents(leaderRoot));
     }
 
     @Test
-    void theLeaderTakesTheSenderFromTheSessionNotFromTheEntry() throws Exception {
+    void aProposalOfAStepTwoMemberIsAnsweredUnsupportedAndNothingIsPlaced() throws Exception {
         Computers computers = new Computers(Set.of(member.nodeId()));
         computers.attach();
-        NodeIdentity stranger = new IdentityBootstrap(leaderProfile.resolveSibling("stranger")).loadOrCreate().identity();
-        WorkIntent lane = lane(project, UUID.randomUUID(), "agt-x", "src/x.py");
-        byte[] signedByStranger = proposalAtLeaderHead(PredictionEventType.WORK_INTENT_ANNOUNCED, lane.intentId(),
-                CollaborationCodec.encodeIntent(lane), stranger);
+        byte[] entry = {1, 2, 3};
 
-        assertEquals(new ReplicationMessage.Outcome(new ProposalOutcome.Refused("PROPOSAL_SENDER_MISMATCH")),
-                sendFromMember(computers, new ReplicationMessage.Propose(project, signedByStranger)));
+        assertEquals(refused("REPLICATION_REQUEST_UNSUPPORTED"),
+                sendFromMember(computers, new ReplicationMessage.Propose(project, entry)));
+        assertEquals(refused("REPLICATION_REQUEST_UNSUPPORTED"),
+                ReplicationCodec.decode(computers.memberSide.relay(ReplicationCodec.encode(
+                        new ReplicationMessage.Propose(project, entry)))));
         assertEquals(0, PredictionEventStore.recordedEvents(leaderRoot));
     }
 
     @Test
-    void aNodeThatIsNotAMemberGetsNeitherItsProposalsNorTheLogAndCannotBeAttached() throws Exception {
+    void theLeaderAnswersWhatItHoldsUnderItsNodeIdToAdmittedNodes() throws Exception {
+        Computers computers = new Computers(Set.of(member.nodeId()));
+        computers.attach();
+        assertTrue(new WorkIntentService(store(leaderRoot), leader)
+                .announce(lane(project, UUID.randomUUID(), "agt-a", "src/a.py")).acquired());
+
+        // The leader's own log is named by its node ID in the heads it answers, never by a local alias.
+        ReplicationMessage heads = sendFromMember(computers, new ReplicationMessage.Heads(project));
+        assertTrue(heads instanceof ReplicationMessage.HeadList list && list.heads().get(leader.nodeId()) == 2L,
+                heads.toString());
+        ReplicationMessage page = sendFromMember(computers,
+                new ReplicationMessage.Pull(project, leader.nodeId(), 0, 10, 100_000));
+        assertEquals(2, ((ReplicationMessage.Entries) page).entries().size());
+        assertEquals(List.of(), ((ReplicationMessage.Entries) sendFromMember(computers,
+                new ReplicationMessage.Pull(project, leader.nodeId(), 2, 10, 100_000))).entries());
+        // A log it does not hold is an empty page.
+        assertEquals(List.of(), ((ReplicationMessage.Entries) sendFromMember(computers,
+                new ReplicationMessage.Pull(project, "sl1-nobody", 0, 10, 100_000))).entries());
+    }
+
+    @Test
+    void aNodeThatIsNotAMemberKeepsItsSessionButGetsNeitherTheHeadsNorTheLogsAndIsNotRecordedAsAMember() throws Exception {
         Computers computers = new Computers(Set.of("sl1-someone-else"));
-        assertThrows(IllegalArgumentException.class, () -> computers.leaderSide.attach(computers.leaderSession));
-        WorkIntent lane = lane(project, UUID.randomUUID(), "agt-b", "src/b.py");
-        byte[] own = proposalAtLeaderHead(PredictionEventType.WORK_INTENT_ANNOUNCED, lane.intentId(),
-                CollaborationCodec.encodeIntent(lane), member);
+        // The session is kept for a joiner the owner accepts later; it is served nothing until the settings name it.
+        computers.leaderSide.attach(computers.leaderSession);
+        assertFalse(computers.leaderSide.isMember(member.nodeId()));
+        assertTrue(recorded(member.nodeId()).isEmpty());
+        assertTrue(new WorkIntentService(store(leaderRoot), leader)
+                .announce(lane(project, UUID.randomUUID(), "agt-a", "src/a.py")).acquired());
 
-        assertEquals(new ReplicationMessage.Outcome(new ProposalOutcome.Refused("PROPOSER_NOT_A_MEMBER")),
-                sendFromMember(computers, new ReplicationMessage.Propose(project, own)));
-        assertEquals(new ReplicationMessage.Outcome(new ProposalOutcome.Refused("PROPOSER_NOT_A_MEMBER")),
-                sendFromMember(computers, new ReplicationMessage.Pull(project, 0, 10, 1000)));
-        assertEquals(0, PredictionEventStore.recordedEvents(leaderRoot));
+        assertEquals(refused("PROPOSER_NOT_A_MEMBER"), sendFromMember(computers, new ReplicationMessage.Heads(project)));
+        assertEquals(refused("PROPOSER_NOT_A_MEMBER"),
+                sendFromMember(computers, new ReplicationMessage.Pull(project, leader.nodeId(), 0, 10, 1000)));
+        assertEquals(refused("PROPOSER_NOT_A_MEMBER"),
+                sendFromMember(computers, new ReplicationMessage.Notice(project, 5)));
+        assertEquals(2, PredictionEventStore.recordedEvents(leaderRoot));
+        assertEquals(0, PredictionEventStore.recordedEvents(memberRoot));
     }
 
     @Test
-    void anotherProjectsRequestsAreRefusedAndNoticesFromANonLeaderAreNotActedOn() throws Exception {
+    void anotherProjectsRequestsAreRefusedAndWhatAMembersHandlerDoesNotServeIsUnsupported() throws Exception {
         Computers computers = new Computers(Set.of(member.nodeId()));
         computers.attach();
         UUID other = UUID.randomUUID();
 
-        assertEquals(new ReplicationMessage.Outcome(new ProposalOutcome.Refused("PROPOSAL_PROJECT_MISMATCH")),
-                sendFromMember(computers, new ReplicationMessage.Pull(other, 0, 10, 1000)));
-        // A notice goes leader to member only: the leader refuses one, and so does a member for the wrong project.
-        assertEquals(new ReplicationMessage.Outcome(new ProposalOutcome.Refused("REPLICATION_REQUEST_UNSUPPORTED")),
-                sendFromMember(computers, new ReplicationMessage.Notice(project, 5)));
-        byte[] wrongProject = computers.leaderSession.requestApplication(
-                ReplicationCodec.encode(new ReplicationMessage.Notice(other, 5))).toCompletableFuture()
-                .get(10, TimeUnit.SECONDS);
-        assertEquals(new ReplicationMessage.Outcome(new ProposalOutcome.Refused("REPLICATION_REQUEST_UNSUPPORTED")),
-                ReplicationCodec.decode(wrongProject));
+        assertEquals(refused("PROPOSAL_PROJECT_MISMATCH"),
+                sendFromMember(computers, new ReplicationMessage.Pull(other, member.nodeId(), 0, 10, 1000)));
+        assertEquals(refused("PROPOSAL_PROJECT_MISMATCH"), sendFromMember(computers, new ReplicationMessage.Heads(other)));
+        // A notice only makes a pull happen; one for another project is heard and ignored.
+        assertEquals(new ReplicationMessage.Noticed(), sendFromMember(computers, new ReplicationMessage.Notice(other, 5)));
+        assertEquals(new ReplicationMessage.Noticed(),
+                sendFromLeader(computers, new ReplicationMessage.Notice(project, 5)));
+        assertEquals(refused("REPLICATION_REQUEST_UNSUPPORTED"),
+                sendFromLeader(computers, new ReplicationMessage.Propose(project, new byte[] {1})));
+        // The member's loopback relay serves nothing since step 4.
+        assertEquals(refused("REPLICATION_REQUEST_UNSUPPORTED"), ReplicationCodec.decode(
+                computers.memberSide.relay(ReplicationCodec.encode(new ReplicationMessage.Heads(project)))));
     }
 
     @Test
-    void aMemberWithNoLeaderSessionRefusesAtOnceAndNeverAppendsLocally() throws Exception {
+    void aMemberWithNoLeaderSessionAppendsToItsOwnLogAtOnce() throws Exception {
         // The member's coordination server is up and relays, but no Link session was ever attached.
         MemberReplication replication = closing(MemberReplication.open(memberRoot, project));
         replication.serve(server(memberRoot, member));
         WorkIntent lane = lane(project, UUID.randomUUID(), "agt-b", "src/b.py");
 
         long started = System.nanoTime();
-        IOException refusal = assertThrows(IOException.class,
-                () -> new WorkIntentService(store(memberRoot), member).announce(lane));
+        assertTrue(new WorkIntentService(store(memberRoot), member).announce(lane).acquired());
 
-        assertEquals("LEADER_UNREACHABLE", refusal.getMessage());
-        assertTrue(TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - started) < 5, "must not wait for a timeout");
-        assertEquals(0, PredictionEventStore.recordedEvents(memberRoot));
+        assertTrue(TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - started) < 5, "must not wait for a leader");
+        assertEquals(2, store(memberRoot).events().size());
+        assertEquals(MemberReplication.State.DISCONNECTED, replication.state());
     }
 
     @Test
-    void aMemberProcessWithNoCoordinationServerOrAStaleEndpointRefusesAndNeverAppendsLocally() throws Exception {
+    void aMemberProcessWithNoCoordinationServerAppendsToItsOwnLogToo() throws Exception {
         WorkIntent lane = lane(project, UUID.randomUUID(), "agt-b", "src/b.py");
-        IOException noServer = assertThrows(IOException.class,
-                () -> new WorkIntentService(store(memberRoot), member).announce(lane));
-        assertEquals("LEADER_UNREACHABLE", noServer.getMessage());
 
-        // A server that crashed left its endpoint behind: nothing listens there any more.
-        int closedPort;
-        try (java.net.ServerSocket socket = new java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {
-            closedPort = socket.getLocalPort();
-        }
-        Files.writeString(memberRoot.resolve("replication.endpoint"), "127.0.0.1:" + closedPort + "\n");
-        IOException stale = assertThrows(IOException.class,
-                () -> new WorkIntentService(store(memberRoot), member).announce(lane));
-        assertEquals("LEADER_UNREACHABLE", stale.getMessage());
+        assertTrue(new WorkIntentService(store(memberRoot), member).announce(lane).acquired());
 
-        // An endpoint that is not loopback is never connected to.
-        Files.writeString(memberRoot.resolve("replication.endpoint"), "203.0.113.7:48123\n");
-        IOException elsewhere = assertThrows(IOException.class,
-                () -> new WorkIntentService(store(memberRoot), member).announce(lane));
-        assertEquals("LEADER_UNREACHABLE", elsewhere.getMessage());
-        assertEquals(0, PredictionEventStore.recordedEvents(memberRoot));
+        assertEquals(2, PredictionEventStore.recordedEvents(memberRoot));
+        assertFalse(Files.exists(memberRoot.resolve("replication.endpoint")));
     }
 
     @Test
-    void aLostSessionRefusesTheNextProposalAsUnreachableWithoutWaiting() throws Exception {
+    void aLostSessionDoesNotStopAMembersAppends() throws Exception {
         Computers computers = new Computers(Set.of(member.nodeId()));
         computers.attach();
         computers.leaderSession.closeGracefully(SessionCloseReason.LOCAL_REQUEST).toCompletableFuture()
@@ -335,11 +363,11 @@ final class LinkReplicationTest {
         await(() -> computers.memberSession.terminalCompletion().toCompletableFuture().isDone(), 10);
         WorkIntent lane = lane(project, UUID.randomUUID(), "agt-b", "src/b.py");
 
-        IOException refusal = assertThrows(IOException.class,
-                () -> new WorkIntentService(store(memberRoot), member).announce(lane));
+        long started = System.nanoTime();
+        assertTrue(new WorkIntentService(store(memberRoot), member).announce(lane).acquired());
 
-        assertEquals("LEADER_UNREACHABLE", refusal.getMessage());
-        assertEquals(0, PredictionEventStore.recordedEvents(memberRoot));
+        assertTrue(TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - started) < 5, "must not wait for a session");
+        assertEquals(2, store(memberRoot).events().size());
         assertEquals(0, PredictionEventStore.recordedEvents(leaderRoot));
     }
 
@@ -381,22 +409,23 @@ final class LinkReplicationTest {
     }
 
     @Test
-    void aLogThatDiffersFromTheLeadersStopsThePullingAndTheProposalsLoudly() throws Exception {
+    void aCopyThatDiffersFromTheLeadersLogStopsThePullingLoudlyAndNothingMoreIsPlaced() throws Exception {
         Computers computers = new Computers(Set.of(member.nodeId()));
         computers.attach();
         UUID group = UUID.randomUUID();
         assertTrue(new WorkIntentService(store(leaderRoot), leader)
                 .announce(lane(project, group, "agt-a", "src/a.py")).acquired());
         await(() -> PredictionEventStore.recordedEvents(memberRoot) == 2, 8);
-        // The member's second entry becomes another valid entry the leader never wrote.
+        // The member's copy of the leader's second entry becomes another valid entry the leader never wrote.
         Path scratch = temp.resolve("scratch/coordination");
+        Path copy = memberRoot.resolve("peers").resolve(leader.nodeId()).resolve("events");
         Files.createDirectories(scratch.resolve("events"));
         String first = String.format("%020d.sce", 1);
         String second = String.format("%020d.sce", 2);
-        Files.copy(memberRoot.resolve("events").resolve(first), scratch.resolve("events").resolve(first));
-        assertTrue(new WorkIntentService(new PredictionEventStore(scratch, project), member)
+        Files.copy(copy.resolve(first), scratch.resolve("events").resolve(first));
+        assertTrue(new WorkIntentService(new PredictionEventStore(scratch, project), leader)
                 .announce(lane(project, group, "agt-z", "src/z.py")).acquired());
-        Files.copy(scratch.resolve("events").resolve(second), memberRoot.resolve("events").resolve(second),
+        Files.copy(scratch.resolve("events").resolve(second), copy.resolve(second),
                 java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         assertTrue(new WorkIntentService(store(leaderRoot), leader)
                 .announce(lane(project, group, "agt-c", "src/c.py")).acquired());
@@ -404,10 +433,8 @@ final class LinkReplicationTest {
         await(() -> computers.memberSide.state() == MemberReplication.State.DIVERGED, 8);
 
         assertEquals("DIVERGED", MemberReplication.recordedState(memberRoot).orElseThrow());
-        WorkIntent lane = lane(project, group, "agt-b", "src/b.py");
-        IOException refusal = assertThrows(IOException.class,
-                () -> new WorkIntentService(store(memberRoot), member).announce(lane));
-        assertEquals("LEADER_LOG_DIVERGED", refusal.getMessage());
+        assertEquals(LogExchange.State.DIVERGED, computers.memberSide.exchange().state(leader.nodeId()));
+        assertEquals(2, PredictionEventStore.recordedEvents(memberRoot), "nothing more is placed in the diverged copy");
     }
 
     @Test
@@ -429,5 +456,35 @@ final class LinkReplicationTest {
         MemberReplication other = closing(new MemberReplication(memberRoot, project, "sl1-not-the-leader"));
         assertThrows(IllegalArgumentException.class, () -> other.attach(computers.memberSession));
         assertFalse(other.state() == MemberReplication.State.CONNECTED);
+    }
+
+    @Test
+    void theOwnersHookRunsAfterAMembersEntriesArrivedAndNotWhenNothingDid() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        Computers computers = new Computers(Set.of(member.nodeId()), calls::incrementAndGet);
+        computers.attach();
+        await(() -> computers.leaderSide.exchange().state(member.nodeId()) == LogExchange.State.CONNECTED, 8);
+        assertEquals(0, calls.get(), "a pull that placed nothing is not news");
+
+        assertTrue(new WorkIntentService(store(memberRoot), member)
+                .announce(lane(project, UUID.randomUUID(), "agt-b", "src/b.py")).acquired());
+
+        await(() -> calls.get() >= 1, 10);
+        assertEquals(2, PredictionEventStore.recordedEvents(leaderRoot));
+    }
+
+    @Test
+    void aHookThatFailsDoesNotUndoTheCopyOrStopTheExchange() throws Exception {
+        Computers computers = new Computers(Set.of(member.nodeId()), () -> {
+            throw new IllegalStateException("the merge driver is down");
+        });
+        computers.attach();
+
+        assertTrue(new WorkIntentService(store(memberRoot), member)
+                .announce(lane(project, UUID.randomUUID(), "agt-b", "src/b.py")).acquired());
+
+        await(() -> PredictionEventStore.recordedEvents(leaderRoot) == 2, 10);
+        await(() -> applied(leaderRoot, 2), 10);
+        assertEquals(LogExchange.State.CONNECTED, computers.leaderSide.exchange().state(member.nodeId()));
     }
 }

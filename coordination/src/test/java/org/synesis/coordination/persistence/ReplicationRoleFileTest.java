@@ -6,20 +6,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.net.ConnectException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.link.identity.NodeIdentity;
 
@@ -31,18 +29,10 @@ final class ReplicationRoleFileTest {
 
     private final UUID project = UUID.randomUUID();
     private NodeIdentity self;
-    private Path registered;
 
     @BeforeEach
     void setUp() throws Exception {
         self = NodeIdentity.generate();
-    }
-
-    @AfterEach
-    void tearDown() throws Exception {
-        if (registered != null) {
-            ReplicationRole.register(registered, ReplicationRole.leader());
-        }
     }
 
     private WorkIntent lane(String path) {
@@ -76,17 +66,31 @@ final class ReplicationRoleFileTest {
     }
 
     @Test
-    void aMemberFileMakesEveryOpenProposeAndNothingIsAppendedWithoutAServer(@TempDir Path root) throws Exception {
+    void aMemberFileMakesEveryOpenAMemberThatAppendsToItsOwnLogWithNoLeaderToReach(@TempDir Path root)
+            throws Exception {
         ReplicationSettings.member("sl1-leader").write(root);
 
-        IOException refusal = assertThrows(IOException.class, () -> announce(root));
+        announce(root);
 
-        assertEquals("LEADER_UNREACHABLE", refusal.getMessage());
+        assertEquals(2, PredictionEventStore.recordedEvents(root));
+        assertTrue(new PredictionEventStore(root, project).isReplicationMember());
+        assertEquals(2, new PredictionEventStore(root, project).events().size());
+    }
+
+    @Test
+    void aMemberFileKeepsLeaderOnlyTypesOutOfTheMembersOwnLog(@TempDir Path root) throws Exception {
+        ReplicationSettings.member("sl1-leader").write(root);
+        PredictionEventStore store = new PredictionEventStore(root, project);
+
+        IOException refusal = assertThrows(IOException.class, () -> store.append(UUID.randomUUID(),
+                PredictionEventType.TASK_INTEGRATED, self.nodeId(), new byte[] {1}, self));
+
+        assertEquals("EVENT_TYPE_LEADER_ONLY", refusal.getMessage());
         assertEquals(0, PredictionEventStore.recordedEvents(root));
     }
 
     @Test
-    void aFileThatCannotBeUnderstoodRefusesEveryAppendAndPullAndIsNeverALeader(@TempDir Path root) throws Exception {
+    void aFileThatCannotBeUnderstoodRefusesEveryAppendAndIsNeverALeader(@TempDir Path root) throws Exception {
         for (String text : List.of("", "\n", "role=leader", "role=boss\n", "role=member\n", "role=member\nleader=\n",
                 "role=member\nleader=a b\n", "role=member\nleader=a\nleader=b\n", "role=member\nleader=a\nmember=b\n",
                 "role=leader\nleader=a\n", "role=leader\nmember=a\nmember=a\n", "leader=a\nrole=member\n",
@@ -98,8 +102,7 @@ final class ReplicationRoleFileTest {
 
             assertEquals(ReplicationSettings.INVALID, refusal.getMessage(), text);
             assertEquals(0, PredictionEventStore.recordedEvents(root), text);
-            assertEquals(ReplicationSettings.INVALID, assertThrows(CoordinationException.class,
-                    () -> new PredictionEventStore(root, project).pullFromLeader()).code(), text);
+            assertTrue(new PredictionEventStore(root, project).isReplicationMember(), text);
             assertThrows(CoordinationException.class, () -> ReplicationSettings.read(root), text);
         }
     }
@@ -137,25 +140,5 @@ final class ReplicationRoleFileTest {
         try (var files = Files.list(root)) {
             assertEquals(List.of(ReplicationSettings.FILE), files.map(path -> path.getFileName().toString()).toList());
         }
-    }
-
-    @Test
-    void aProposalSentTwiceThenReportedUnreachableIsAnUnknownOutcomeNotAnUnreachableLeader(@TempDir Path root)
-            throws Exception {
-        AtomicInteger sends = new AtomicInteger();
-        registered = root;
-        ReplicationRole.register(root, ReplicationRole.memberOf("sl1-leader",
-                new ExchangeLeaderChannel(project, request -> {
-                    if (sends.incrementAndGet() == 1) {
-                        throw new IOException("connection reset after the request left");
-                    }
-                    throw new ConnectException("session gone");
-                })));
-
-        IOException refusal = assertThrows(IOException.class, () -> announce(root));
-
-        assertEquals("LEADER_OUTCOME_UNKNOWN", refusal.getMessage());
-        assertEquals(2, sends.get());
-        assertEquals(0, PredictionEventStore.recordedEvents(root));
     }
 }

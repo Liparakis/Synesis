@@ -179,6 +179,9 @@ final class CoordinationServerLauncher {
                 serverRef.set(server);
                 if (memberReplication != null) {
                     memberReplication.serve(server);
+                } else if (leaderReplication != null) {
+                    // Its agents' claims are checked with the connected members through this server (ADR-0098 step 4).
+                    leaderReplication.serve(server);
                 }
                 Thread parentWatcher = parentPid > 0 ? parentWatcher(parentPid) : null;
                 String endpoint = "http://" + hostForUrl(server.address().getHostString()) + ":" + server.address().getPort();

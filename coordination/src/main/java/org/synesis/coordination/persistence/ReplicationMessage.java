@@ -1,14 +1,15 @@
 package org.synesis.coordination.persistence;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.synesis.link.transport.control.ApplicationStreamCodec;
 
 /**
- * What a member and its leader say to each other (ADR-0098 step 2), and what a process says to its own computer's
- * coordination server over loopback. {@link ReplicationCodec} is the wire form.
+ * What two computers of a project say to each other about their logs (ADR-0098 step 4), and what a process says to
+ * its own computer's coordination server over loopback. {@link ReplicationCodec} is the wire form.
  *
- * <p>A requester never states who it is: the leader takes the sender from the authenticated Link session.</p>
+ * <p>A requester never states who it is: the other side takes the sender from the authenticated Link session.</p>
  */
 public sealed interface ReplicationMessage {
 
@@ -33,7 +34,18 @@ public sealed interface ReplicationMessage {
     int MAX_CODE_BYTES = 64;
 
     /**
-     * A member proposes one signed entry.
+     * Longest node ID naming a log, in UTF-8 bytes.
+     */
+    int MAX_NODE_BYTES = 128;
+
+    /**
+     * Most logs one {@link HeadList} names: a handful of computers, with room.
+     */
+    int MAX_LOGS = 256;
+
+    /**
+     * A member proposes one signed entry. Step 2 only: from compatibility 8 every computer appends to its own log and
+     * nothing is proposed, so it is answered {@code REPLICATION_REQUEST_UNSUPPORTED}.
      *
      * @param project the project the entry belongs to
      * @param event   the entry exactly as it would be placed
@@ -43,25 +55,73 @@ public sealed interface ReplicationMessage {
     }
 
     /**
-     * A member asks for the entries after its head.
+     * Asks for the entries of one log after a sequence.
      *
      * @param project    the project
-     * @param after      the member's head sequence
+     * @param log        the node whose log is wanted: the answering computer's own or a copy it holds
+     * @param after      the requester's head of that log
      * @param maxEntries most entries wanted
      * @param maxBytes   soft bound on the encoded size of the entries
      */
-    record Pull(UUID project, long after, int maxEntries, int maxBytes) implements ReplicationMessage {
+    record Pull(UUID project, String log, long after, int maxEntries, int maxBytes) implements ReplicationMessage {
 
     }
 
     /**
-     * The leader tells a member that its head moved.
+     * Tells a peer that a log this computer holds grew.
      *
      * @param project the project
-     * @param head    the leader's head sequence
+     * @param head    how many entries this computer holds in all; advisory
      */
     record Notice(UUID project, long head) implements ReplicationMessage {
 
+    }
+
+    /**
+     * Asks which logs the other computer holds, and how far.
+     *
+     * @param project the project
+     */
+    record Heads(UUID project) implements ReplicationMessage {
+
+    }
+
+    /**
+     * A claim this computer just appended, sent to a connected computer before the claiming agent is answered
+     * (ADR-0098 step 4, "Claims are locks wherever they can be checked"). An agent's process sends the same message
+     * to its own computer's server over loopback, which asks every connected computer.
+     *
+     * @param project the project
+     * @param entry   the signed {@code WORK_INTENT_ANNOUNCED} entry exactly as placed
+     */
+    record ClaimSeen(UUID project, byte[] entry) implements ReplicationMessage {
+
+    }
+
+    /**
+     * The answer to {@link ClaimSeen}.
+     *
+     * @param code empty when nothing objects; {@code OVERLAPPING_CLAIM} when the claim must give way
+     */
+    record ClaimAnswer(String code) implements ReplicationMessage {
+
+    }
+
+    /**
+     * The answer to {@link Heads}.
+     *
+     * @param heads each log's last sequence, by the node whose log it is
+     */
+    record HeadList(Map<String, Long> heads) implements ReplicationMessage {
+
+        /**
+         * Copies the heads.
+         *
+         * @param heads each log's last sequence, by node
+         */
+        public HeadList {
+            heads = Map.copyOf(heads);
+        }
     }
 
     /**

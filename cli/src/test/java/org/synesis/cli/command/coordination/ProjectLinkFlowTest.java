@@ -300,8 +300,8 @@ final class ProjectLinkFlowTest {
             }
         });
         assertEquals(friend.node.nodeId(), owner.joinRequests().getFirst().get("nodeId"));
-        assertFalse(announces(friend, lane("agt-f", "src/before.py")), "a member proposal before the owner accepted is refused");
-        assertEquals(0, PredictionEventStore.recordedEvents(ownerProject.coordinationDirectory()));
+        assertTrue(announces(friend, lane("agt-f", "src/before.py")), "a member appends to its own log whether or not the owner accepted it");
+        assertEquals(0, PredictionEventStore.recordedEvents(ownerProject.coordinationDirectory()), "nothing of the friend's reached the owner, which does not serve a node it has not accepted");
         assertTrue(ReplicationSettings.read(ownerProject.coordinationDirectory()).isEmpty());
 
         Response accepted = owner.post("accept-join", Map.of("nodeId", friend.node.nodeId()));
@@ -311,8 +311,10 @@ final class ProjectLinkFlowTest {
         assertEquals(List.of(), owner.joinRequests());
         await(() -> MemberReplication.recordedState(friendProject.coordinationDirectory()).filter("CONNECTED"::equals).isPresent());
 
-        assertTrue(announces(friend, lane("agt-f", "src/after.py")), "the member's proposal is accepted once the owner accepted");
-        assertEquals(2, owner.store().events().size());
+        assertTrue(announces(friend, lane("agt-f", "src/after.py")));
+        int friendEntries = friend.store().events().size();
+        await(() -> PredictionEventStore.recordedEvents(ownerProject.coordinationDirectory()) == friendEntries);
+        assertEquals(friendEntries, owner.store().events().size(), "the owner holds byte-identical copies of everything the friend appended, before and after it accepted");
         assertTrue(owner.store().events().stream().allMatch(event -> event.actorNodeId().equals(friend.node.nodeId())));
         assertTrue(Files.readString(ownerProject.coordinationDirectory().resolve("replication.peers")).contains(friend.node.nodeId()), "recorded for a restart");
     }
@@ -343,7 +345,8 @@ final class ProjectLinkFlowTest {
         await(() -> owner.owner.get().sessions().isEmpty());
         Thread.sleep(3_500);
         assertTrue(owner.owner.get().sessions().isEmpty(), "the friend's redial is not admitted: its invitation is used up and it is no member");
-        assertFalse(announces(friend, lane("agt-f", "src/declined.py")));
+        assertTrue(announces(friend, lane("agt-f", "src/declined.py")), "the friend still writes its own log");
+        assertEquals(0, PredictionEventStore.recordedEvents(ownerProject.coordinationDirectory()), "none of it reached the owner");
         assertEquals(404, owner.post("accept-join", Map.of("nodeId", friend.node.nodeId())).status());
     }
 

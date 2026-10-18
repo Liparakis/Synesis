@@ -1,21 +1,17 @@
 package org.synesis.coordination.persistence;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.FileTime;
 import java.security.GeneralSecurityException;
 import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
 import org.synesis.coordination.domain.collaboration.CollaborationProjection;
@@ -23,11 +19,11 @@ import org.synesis.coordination.domain.collaboration.ProjectionView;
 import org.synesis.coordination.domain.collaboration.WorkGroupProjection;
 import org.synesis.coordination.domain.contract.ContractProjection;
 import org.synesis.coordination.domain.conversation.ConversationProjection;
-import org.synesis.coordination.domain.operator.OperatorRequestProjection;
 import org.synesis.coordination.domain.identity.EventSequence;
 import org.synesis.coordination.domain.identity.NodeId;
 import org.synesis.coordination.domain.identity.PredictionId;
 import org.synesis.coordination.domain.identity.ProjectId;
+import org.synesis.coordination.domain.operator.OperatorRequestProjection;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.prediction.PredictionProjection;
@@ -39,9 +35,20 @@ import org.synesis.coordination.exception.CoordinationSecurityException;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
- * Crash-safe per-project event store. Each event is one immutable file; the directory is the append-only log and
- * projection replay is
- * deterministic.
+ * Crash-safe per-project event store: this computer's own log, the copies of the other computers' logs, and the
+ * order in which this computer applied them (ADR-0098 step 4).
+ *
+ * <p>This computer appends only to its own log, {@code events/}, one immutable file per entry, as a single computer
+ * always did. The copy of another computer's log is {@code peers/<node>/events/}, byte-identical to its writer's,
+ * placed by this computer's coordination server as it arrives. {@code applied.order} records the order in which
+ * entries took effect here ({@link AppliedOrder}); every process that opens the store replays that order, so the
+ * projections are deterministic, and a line's position is the entry's local revision, which every reader that used
+ * "the sequence" as a cursor uses ({@link #headSequence()}, {@link #events()}, {@link #unchangedSince}).</p>
+ *
+ * <p>An own entry is judged by every rule before it is written ({@link Projections#check}). An entry of another
+ * computer is a signed fact, judged only by the rules that make it count for nothing, and held back while it names
+ * something not seen yet ({@link ArrivalOrder}). Lines are written under {@code order.lock}, held only around
+ * in-memory work and the writes of one append or one batch of arrivals, never across a Git or process call.</p>
  */
 public final class PredictionEventStore implements ProjectionView {
 
@@ -50,10 +57,18 @@ public final class PredictionEventStore implements ProjectionView {
      * JVM test.
      */
     private static volatile TestFaultInjector testFaultInjector;
+
     /**
-     * Directory containing the immutable, sequence-numbered event files.
+     * How often one append is made again after another writer took its sequence.
      */
-    private final Path eventsDirectory;
+    private static final int MAX_APPEND_ATTEMPTS = 8;
+
+    /**
+     * Most entries of one log taken under one hold of the order lock, so a long catch-up never keeps an agent's
+     * append waiting for long.
+     */
+    private static final int ARRIVALS_PER_ROUND = 256;
+
     /**
      * Root used to derive sibling durable coordination state.
      */
@@ -63,47 +78,50 @@ public final class PredictionEventStore implements ProjectionView {
      */
     private final UUID projectId;
     /**
-     * How often one append is made again after another writer took its sequence.
-     */
-    private static final int MAX_APPEND_ATTEMPTS = 8;
-
-    /**
-     * Age beyond which a temporary event file can only have been abandoned by a writer that died.
-     */
-    private static final Duration ABANDONED_TEMPORARY_AGE = Duration.ofMinutes(1);
-
-    /**
-     * How often a proposal with no answer is sent again before its outcome is reported unknown.
-     */
-    private static final int MAX_PROPOSAL_SENDS = 3;
-
-    /**
-     * Largest page a member asks the leader for, in entries and in encoded bytes.
-     */
-    private static final int PULL_PAGE_ENTRIES = 256;
-    private static final int PULL_PAGE_BYTES = 1 << 18;
-
-    /**
      * Clock used for newly appended event timestamps.
      */
     private final Clock clock;
     /**
-     * Whether this log decides its own entries or proposes them to a leader.
+     * Whether this computer is the owner's, which merges every lane until ADR-0098 step 5, or a member.
      */
     private final ReplicationRole role;
     /**
-     * Set while {@link #admit} judges a member's proposal, so the admission rules know the entry is not the
-     * leader's own.
+     * This computer's own log.
      */
-    private boolean admittingProposal;
+    private final LogFolder own;
     /**
-     * Every projection of this log, and how an entry is judged and applied.
+     * The copies of the other computers' logs, by node, as found under {@code peers/}.
+     */
+    private final Map<String, LogFolder> peers = new TreeMap<>();
+    /**
+     * The order in which entries took effect here.
+     */
+    private final AppliedOrder order;
+    /**
+     * Every projection of this copy, and how an entry is judged and applied.
      */
     private final Projections projections;
     /**
-     * Events replayed into this instance's in-memory projections.
+     * Entries that took effect, in local order: the entry at index {@code n} has local revision {@code n + 1}.
      */
     private final List<PredictionEvent> events = new ArrayList<>();
+    /**
+     * Arriving entries that counted for nothing, with the rule each broke, in the order they were judged.
+     */
+    private final List<AppliedOrder.Line> voided = new ArrayList<>();
+    /**
+     * The highest sequence of each log that has been taken here, applied or counted for nothing.
+     */
+    private final Map<String, Long> taken = new HashMap<>();
+    /**
+     * Own entries applied in memory that have no line yet: written before step 4, or by an append still being made
+     * or cut short. They always follow every line, and the next writer gives them their lines.
+     */
+    private int unlinedOwn;
+    /**
+     * The first held entry of each log, as the last batch of arrivals left it.
+     */
+    private List<ArrivalOrder.Waiting> waiting = List.of();
 
     /**
      * Opens or creates a project event store and replays its existing log.
@@ -128,14 +146,16 @@ public final class PredictionEventStore implements ProjectionView {
      */
     public PredictionEventStore(Path root, UUID projectId, Clock clock) throws IOException, GeneralSecurityException {
         this.rootDirectory = CoordinationNullException.requireNonNull(root, "root");
-        this.eventsDirectory = CoordinationNullException.requireNonNull(root, "root").resolve("events");
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.clock = CoordinationNullException.requireNonNull(clock, "clock");
         this.projections = new Projections(new ProjectId(this.projectId));
-        Files.createDirectories(eventsDirectory);
+        this.own = new LogFolder(root.resolve("events"), this.projectId, null);
+        this.order = new AppliedOrder(root);
+        Step2Archive.openOnce(root);
+        Files.createDirectories(own.directory());
         this.role = ReplicationRole.of(root, this.projectId);
-        cleanupTemporaryFiles();
-        load();
+        own.cleanupTemporaryFiles();
+        refresh();
     }
 
     /**
@@ -157,9 +177,9 @@ public final class PredictionEventStore implements ProjectionView {
     /**
      * Invokes the test-only hook at the selected append boundary.
      *
-     * @throws IOException when payload validation or durable I/O fails
+     * @throws IOException when the hook simulates a failure
      */
-    private static void invokeFaultInjector(AppendBoundary boundary) throws IOException {
+    static void faultAt(AppendBoundary boundary) throws IOException {
         TestFaultInjector injector = testFaultInjector;
         if (injector != null) {
             injector.hit(boundary);
@@ -167,7 +187,12 @@ public final class PredictionEventStore implements ProjectionView {
     }
 
     /**
-     * Appends a signed event after validating sequence, hash chain, and state transition.
+     * Appends a signed entry to this computer's own log after every rule accepted it.
+     *
+     * <p>A caller may hold a long-lived store while another process appends through a fresh instance. The append
+     * takes the order lock and catches up with every line first, so the entry is judged against everything this
+     * computer has applied and not against what this instance saw when it opened. No append waits on another
+     * computer (ADR-0098 step 4).</p>
      *
      * @param predictionId prediction identifier
      * @param type         event type
@@ -175,268 +200,173 @@ public final class PredictionEventStore implements ProjectionView {
      * @param payload      canonical event payload
      * @param signer       node signing identity
      * @return the persisted event
-     * @throws IOException              when the event cannot be persisted
+     * @throws IOException              when the event is refused or cannot be persisted
      * @throws GeneralSecurityException when signing or verification fails
      */
-    public synchronized PredictionEvent append(UUID predictionId, PredictionEventType type, String actorNodeId, byte[] payload, NodeIdentity signer) throws IOException, GeneralSecurityException {
+    public synchronized PredictionEvent append(UUID predictionId, PredictionEventType type, String actorNodeId,
+            byte[] payload, NodeIdentity signer) throws IOException, GeneralSecurityException {
         CoordinationNullException.requireNonNull(predictionId, "prediction ID");
-        // A caller may hold a long-lived store while another connection appends through a fresh
-        // instance. Reading the durable head brings this instance's projections up to it first, so
-        // the event is validated against the log it will be placed on and not against what this
-        // instance saw when it opened. Without that, a rule would be checked on stale state.
-        //
-        // Reading the head and placing the file are not one step across processes, and not every
-        // appender holds the project append lock. A sequence another writer took in between is
-        // never replaced: this append is made again on the new head, after catching up again.
-        //
-        // A member does not decide where its entry goes. It builds and checks the entry as above, then the
-        // leader places it (invariant 1); only an entry the leader accepted is placed here, as the same bytes.
-        for (int attempt = 1; ; attempt++) {
-            Head durableHead = durableHead();
-            long sequence = durableHead.sequence() + 1L;
-            PredictionEvent event = createEvent(predictionId, type, actorNodeId, payload, signer, durableHead, sequence);
-            if (!event.verify()) {
-                throw new CoordinationSecurityException("event signature verification failed");
-            }
-            validateProjections(event);
-            try {
-                if (role.isMember()) {
-                    if (!leaderAccepts(event)) {
-                        if (attempt >= MAX_APPEND_ATTEMPTS) {
-                            throw new CoordinationException("event append lost its sequence to other writers");
-                        }
-                        pullFromLeader();
-                        continue;
-                    }
-                    placeCommitted(event);
-                } else {
-                    persistEvent(event, sequence);
+        if (role.refusal() != null) {
+            throw new CoordinationException(role.refusal());
+        }
+        try (ProjectAppendLock lock = ProjectAppendLock.acquireNamed(rootDirectory, AppliedOrder.LOCK)) {
+            requireHeld(lock);
+            for (int attempt = 1; ; attempt++) {
+                refresh();
+                lineOwnLeftovers();
+                List<PredictionEvent> ownEntries = own.verified();
+                long sequence = ownEntries.size() + 1L;
+                byte[] previous = ownEntries.isEmpty() ? new byte[32] : ownEntries.getLast().digest();
+                PredictionEvent event = PredictionEvent.create(new ProjectId(projectId),
+                        new PredictionId(predictionId),
+                        new EventSequence(sequence),
+                        type,
+                        new NodeId(actorNodeId),
+                        CoordinationNullException.requireNonNull(payload, "payload"),
+                        previous,
+                        signer,
+                        clock.millis());
+                if (!event.verify()) {
+                    throw new CoordinationSecurityException("event signature verification failed");
                 }
-            } catch (FileAlreadyExistsException taken) {
-                if (attempt >= MAX_APPEND_ATTEMPTS) {
-                    throw new CoordinationException("event append lost its sequence to other writers");
+                long revision = events.size() + 1L;
+                projections.check(event, !role.isMember(), revision);
+                try {
+                    own.place(event);
+                } catch (FileAlreadyExistsException taken) {
+                    // A writer of a build before the order lock; never replaced.
+                    if (attempt >= MAX_APPEND_ATTEMPTS) {
+                        throw new CoordinationException("event append lost its sequence to other writers");
+                    }
+                    continue;
+                }
+                order.append(List.of(new AppliedOrder.Line(AppliedOrder.SELF, sequence, "")));
+                take(AppliedOrder.SELF, event);
+                faultAt(AppendBoundary.AFTER_PROJECTION);
+                return event;
+            }
+        }
+    }
+
+    /**
+     * Places entries of another computer's log, as received, and applies every entry that can be applied now.
+     *
+     * <p>The whole batch is checked first: each new entry must be this project's, the next of that log, chained to
+     * its predecessor, and signed by {@code node}; an entry already held must be byte-identical. If any is not,
+     * nothing is placed and the copy is reported as diverged: a copy is never repaired by guessing. Placed entries
+     * then wait their turn ({@link ArrivalOrder}); an entry that names something not seen yet waits, with the rest
+     * of its log, until what it names arrives, from this or another log.</p>
+     *
+     * @param node    the computer whose log it is; never this computer
+     * @param entries encoded entries of that log in sequence order
+     * @return how many entries were new to the copy
+     * @throws IOException              with {@code LOG_COPY_DIVERGED} on a gap, a digest mismatch, a bad signature,
+     *                                  another signer or a differing entry
+     * @throws GeneralSecurityException when signature verification fails
+     */
+    public synchronized int placeCopies(String node, List<byte[]> entries) throws IOException, GeneralSecurityException {
+        LogFolder copy = peer(CoordinationNullException.requireNonNull(node, "node"));
+        List<PredictionEvent> held = copy.verified();
+        long sequence = held.isEmpty() ? 0L : held.getLast().sequence();
+        byte[] digest = held.isEmpty() ? new byte[32] : held.getLast().digest();
+        List<PredictionEvent> fresh = new ArrayList<>();
+        for (byte[] encoded : entries) {
+            PredictionEvent event;
+            try {
+                event = PredictionEvent.decode(encoded);
+            } catch (CoordinationException malformed) {
+                throw new CoordinationException("LOG_COPY_DIVERGED", malformed);
+            }
+            if (event.sequence() <= held.size()) {
+                if (!java.util.Arrays.equals(held.get((int) event.sequence() - 1).encoded(), encoded)) {
+                    throw new CoordinationException("LOG_COPY_DIVERGED");
                 }
                 continue;
             }
-            applyProjections(event);
-            return event;
+            if (!copy.follows(event, sequence, digest)) {
+                throw new CoordinationException("LOG_COPY_DIVERGED");
+            }
+            fresh.add(event);
+            sequence = event.sequence();
+            digest = event.digest();
         }
+        for (PredictionEvent event : fresh) {
+            copy.placeCopy(event);
+        }
+        takeArrivals();
+        return fresh.size();
     }
 
     /**
-     * Creates the next event from the durable head and caller-provided event data.
+     * Applies every placed entry of another computer's log that can be applied now, and records each in the
+     * applied order. Run by the coordination server after placing copies, and on its start, for entries placed
+     * before a restart.
      *
-     * @param predictionId prediction identifier
-     * @param type         event type
-     * @param actorNodeId  actor node identifier
-     * @param payload      canonical event payload
-     * @param signer       node signing identity
-     * @param durableHead  latest durable sequence and digest
-     * @param sequence     next event sequence
-     * @return signed event for the next sequence
-     * @throws GeneralSecurityException when event signing fails
+     * @return how many entries were taken
+     * @throws IOException              when the logs or the order cannot be read or written
+     * @throws GeneralSecurityException when a signature cannot be checked
      */
-    private PredictionEvent createEvent(UUID predictionId, PredictionEventType type, String actorNodeId, byte[] payload, NodeIdentity signer, Head durableHead, long sequence) throws GeneralSecurityException {
-        return PredictionEvent.create(new ProjectId(projectId),
-                new PredictionId(predictionId),
-                new EventSequence(sequence),
-                type,
-                new NodeId(actorNodeId),
-                CoordinationNullException.requireNonNull(payload, "payload"),
-                durableHead.digest(),
-                signer,
-                clock.millis());
-    }
-
-    /**
-     * Checks that every event projection accepts the same transition before persistence.
-     *
-     * @param event signed event under append validation
-     * @throws IOException when any projection rejects the transition
-     */
-    private void validateProjections(PredictionEvent event) throws IOException {
-        projections.check(event, !role.isMember() && !admittingProposal);
-    }
-
-    /**
-     * Persists one encoded event through a forced temporary file that is then given its durable
-     * name. The name is only ever given to a sequence nobody holds: a hard link fails when the name
-     * exists, where a move would replace another writer's event.
-     *
-     * @param event    validated signed event
-     * @param sequence durable event sequence
-     * @throws FileAlreadyExistsException when another writer already holds the sequence
-     * @throws IOException                when the durable file write or placement fails
-     */
-    private void persistEvent(PredictionEvent event, long sequence) throws IOException {
-        Path target = eventFile(sequence);
-        Path temporary = eventsDirectory.resolve(target.getFileName() + ".tmp-" + UUID.randomUUID());
-        try {
-            try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
-                ByteBuffer encoded = ByteBuffer.wrap(event.encoded());
-                while (encoded.hasRemaining()) {
-                    if (channel.write(encoded) <= 0) {
-                        throw new CoordinationException("event append write made no progress");
+    public synchronized int takeArrivals() throws IOException, GeneralSecurityException {
+        int total = 0;
+        try (ProjectAppendLock lock = ProjectAppendLock.acquireNamed(rootDirectory, AppliedOrder.LOCK)) {
+            requireHeld(lock);
+            while (true) {
+                refresh();
+                lineOwnLeftovers();
+                // Copies placed before a restart are found on disk, not only those placed by this instance.
+                discoverPeers();
+                Map<String, List<PredictionEvent>> pending = new LinkedHashMap<>();
+                for (Map.Entry<String, LogFolder> peer : peers.entrySet()) {
+                    List<PredictionEvent> copy = peer.getValue().verified();
+                    int from = (int) (long) taken.getOrDefault(peer.getKey(), 0L);
+                    if (from < copy.size()) {
+                        pending.put(peer.getKey(), copy.subList(from, Math.min(copy.size(), from + ARRIVALS_PER_ROUND)));
                     }
                 }
-                channel.force(true);
-            }
-            invokeFaultInjector(AppendBoundary.BEFORE_DURABLE_MOVE);
-            try {
-                Files.createLink(target, temporary);
-            } catch (FileAlreadyExistsException taken) {
-                throw taken;
-            } catch (UnsupportedOperationException | IOException noHardLinks) {
-                // A file system without hard links. A move without options fails as well when
-                // the name exists.
-                Files.move(temporary, target);
-            }
-            invokeFaultInjector(AppendBoundary.AFTER_DURABLE_MOVE);
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
-    }
-
-    /**
-     * Applies a durably persisted event to every in-memory projection.
-     *
-     * @param event durably persisted signed event
-     * @throws IOException when replaying the event into a projection fails
-     */
-    private void applyProjections(PredictionEvent event) throws IOException {
-        replay(event);
-        invokeFaultInjector(AppendBoundary.AFTER_PROJECTION);
-    }
-
-    /**
-     * Applies one verified event to every projection and records it in the in-memory log.
-     *
-     * @throws IOException when a projection rejects the event
-     */
-    private void replay(PredictionEvent event) throws IOException {
-        projections.apply(event);
-        events.add(event);
-    }
-
-    private Path eventFile(long sequence) {
-        return eventsDirectory.resolve(String.format("%020d.sce", sequence));
-    }
-
-    /**
-     * Sends a member's entry to the leader and reads the answer.
-     *
-     * <p>A proposal with no answer is sent again as the same bytes, which the leader recognises, up to
-     * {@link #MAX_PROPOSAL_SENDS} times. After that the entry may or may not be on the leader's log, nothing is
-     * placed here, and the next pull settles it.</p>
-     *
-     * @return true when the leader holds the entry; false when its head moved and the entry must be built again
-     * @throws IOException with the leader's refusal code, {@code LEADER_UNREACHABLE} or {@code LEADER_OUTCOME_UNKNOWN}
-     */
-    private boolean leaderAccepts(PredictionEvent event) throws IOException {
-        byte[] encoded = event.encoded();
-        for (int sends = 1; ; sends++) {
-            switch (role.channel().propose(encoded)) {
-                case ProposalOutcome.Accepted accepted -> {
-                    if (accepted.sequence() != event.sequence()) {
-                        throw new CoordinationException("LEADER_LOG_DIVERGED");
+                ArrivalOrder.Round round = ArrivalOrder.take(projections, pending,
+                        role.isMember() ? role.leaderNodeId() : null, events.size());
+                List<AppliedOrder.Line> lines = new ArrayList<>();
+                for (ArrivalOrder.Taken entry : round.taken()) {
+                    lines.add(new AppliedOrder.Line(entry.log(), entry.event().sequence(), entry.code()));
+                    // Applied to the projections by the round; what is left is the bookkeeping.
+                    if (entry.code().isEmpty()) {
+                        events.add(entry.event());
+                    } else {
+                        voided.add(lines.getLast());
                     }
-                    return true;
+                    taken.put(entry.log(), entry.event().sequence());
                 }
-                case ProposalOutcome.HeadMoved moved -> {
-                    return false;
-                }
-                case ProposalOutcome.Refused refused -> throw new CoordinationException(refused.code());
-                // An earlier send may have arrived, so after one "nothing was sent" is no longer true.
-                case ProposalOutcome.Unreachable unreachable -> throw new CoordinationException(
-                        sends > 1 ? "LEADER_OUTCOME_UNKNOWN" : "LEADER_UNREACHABLE");
-                case ProposalOutcome.NoAnswer noAnswer -> {
-                    if (sends >= MAX_PROPOSAL_SENDS) {
-                        throw new CoordinationException("LEADER_OUTCOME_UNKNOWN");
-                    }
+                order.append(lines);
+                waiting = round.waiting();
+                total += lines.size();
+                if (lines.isEmpty() || !morePending()) {
+                    return total;
                 }
             }
         }
     }
 
     /**
-     * Places an entry the leader holds. A file already there must be the same bytes, as a pull that ran meanwhile
-     * would have left; anything else means the two logs differ.
+     * Returns the encoded entries of one log after a sequence, as this computer holds them, for another computer
+     * catching up. Any computer serves every log it holds: each entry is signed by its writer.
      *
-     * @throws IOException with {@code LEADER_LOG_DIVERGED} when another entry holds the sequence
-     */
-    private void placeCommitted(PredictionEvent event) throws IOException {
-        try {
-            persistEvent(event, event.sequence());
-        } catch (FileAlreadyExistsException taken) {
-            if (!Arrays.equals(Files.readAllBytes(eventFile(event.sequence())), event.encoded())) {
-                throw new CoordinationException("LEADER_LOG_DIVERGED");
-            }
-        }
-    }
-
-    /**
-     * Decides a member's proposal on the leader's log: the leader's side of {@link LeaderEndpoint#accept}. The
-     * caller holds the project append lock, opened this store after taking it, and has checked who sent the entry.
-     *
-     * @param event the member's signed entry, signature already verified
-     * @return the outcome; the entry is placed only for {@link ProposalOutcome.Accepted} after a first send
-     * @throws IOException              when durable I/O fails
-     * @throws GeneralSecurityException when signature verification of the existing log fails
-     */
-    synchronized ProposalOutcome admit(PredictionEvent event) throws IOException, GeneralSecurityException {
-        if (role.isMember()) {
-            throw new CoordinationException("MEMBER_CANNOT_DECIDE");
-        }
-        if (!event.projectId().equals(projectId)) {
-            return new ProposalOutcome.Refused("PROPOSAL_PROJECT_MISMATCH");
-        }
-        Head head = durableHead();
-        if (event.sequence() <= head.sequence()) {
-            // A resend of an entry the leader already holds is answered like the first send.
-            boolean identical = Arrays.equals(events.get((int) event.sequence() - 1).encoded(), event.encoded());
-            return identical ? new ProposalOutcome.Accepted(event.sequence())
-                    : new ProposalOutcome.HeadMoved(head.sequence());
-        }
-        if (event.sequence() != head.sequence() + 1L || !Arrays.equals(event.previousDigest(), head.digest())) {
-            return new ProposalOutcome.HeadMoved(head.sequence());
-        }
-        admittingProposal = true;
-        try {
-            validateProjections(event);
-        } catch (CoordinationException refusal) {
-            return new ProposalOutcome.Refused(refusal.code());
-        } catch (RuntimeException malformed) {
-            return new ProposalOutcome.Refused("PROPOSAL_PAYLOAD_INVALID");
-        } finally {
-            admittingProposal = false;
-        }
-        try {
-            persistEvent(event, event.sequence());
-        } catch (FileAlreadyExistsException taken) {
-            return new ProposalOutcome.HeadMoved(head.sequence());
-        }
-        applyProjections(event);
-        return new ProposalOutcome.Accepted(event.sequence());
-    }
-
-    /**
-     * Returns the encoded entries after a sequence, for a member catching up.
-     *
-     * @param sequence   the caller's head sequence
+     * @param log        {@link #OWN_LOG} or the node whose copy is wanted
+     * @param sequence   the caller's head of that log
      * @param maxEntries most entries to return, at least one
      * @param maxBytes   soft bound on the encoded size; one entry is returned even if it is larger
-     * @return entries from {@code sequence + 1} in order; empty when the caller is current
+     * @return entries from {@code sequence + 1} in order; empty when the caller is current or the log is unknown
      * @throws IOException              when the log cannot be read
      * @throws GeneralSecurityException when a signature cannot be checked
      */
-    public synchronized List<byte[]> entriesAfter(long sequence, int maxEntries, int maxBytes)
+    public synchronized List<byte[]> entriesAfter(String log, long sequence, int maxEntries, int maxBytes)
             throws IOException, GeneralSecurityException {
-        durableHead();
+        LogFolder folder = OWN_LOG.equals(log) ? own : existingPeer(log);
+        List<PredictionEvent> held = folder == null ? List.of() : folder.verified();
         List<byte[]> page = new ArrayList<>();
         int bytes = 0;
-        for (int index = (int) Math.max(sequence, 0L); index < events.size() && page.size() < Math.max(maxEntries, 1);
+        for (int index = (int) Math.max(sequence, 0L); index < held.size() && page.size() < Math.max(maxEntries, 1);
                 index++) {
-            byte[] encoded = events.get(index).encoded();
+            byte[] encoded = held.get(index).encoded();
             if (!page.isEmpty() && bytes + encoded.length > maxBytes) {
                 break;
             }
@@ -447,55 +377,67 @@ public final class PredictionEventStore implements ProjectionView {
     }
 
     /**
-     * Places and applies the leader's entries that this log does not hold yet.
+     * Returns this computer's own entries after a sequence.
      *
-     * <p>The whole batch is checked first: each new entry must be this project's, the next sequence, chained to
-     * its predecessor's digest and correctly signed, and an entry already held must be byte-identical. If any is
-     * not, nothing is placed and the log is reported as diverged; a member never repairs its copy by guessing.
-     * Entries are placed exactly as received, so both logs hold the same files.</p>
-     *
-     * @param entries encoded entries in sequence order
-     * @return how many entries were new
-     * @throws IOException              with {@code LEADER_LOG_DIVERGED} on a gap, a digest mismatch, a bad
-     *                                  signature or a differing entry
-     * @throws GeneralSecurityException when signature verification fails
+     * @param sequence   the caller's head of this computer's log
+     * @param maxEntries most entries to return, at least one
+     * @param maxBytes   soft bound on the encoded size
+     * @return entries in order
+     * @throws IOException              when the log cannot be read
+     * @throws GeneralSecurityException when a signature cannot be checked
      */
-    public synchronized int applyCommitted(List<byte[]> entries) throws IOException, GeneralSecurityException {
-        Head head = durableHead();
-        long sequence = head.sequence();
-        byte[] digest = head.digest();
-        List<PredictionEvent> fresh = new ArrayList<>();
-        for (byte[] encoded : entries) {
-            PredictionEvent event;
-            try {
-                event = PredictionEvent.decode(encoded);
-            } catch (CoordinationException malformed) {
-                throw new CoordinationException("LEADER_LOG_DIVERGED", malformed);
-            }
-            if (event.sequence() <= head.sequence()) {
-                if (!Arrays.equals(events.get((int) event.sequence() - 1).encoded(), encoded)) {
-                    throw new CoordinationException("LEADER_LOG_DIVERGED");
-                }
-                continue;
-            }
-            if (!event.projectId().equals(projectId) || event.sequence() != sequence + 1L
-                    || !Arrays.equals(event.previousDigest(), digest) || !event.verify()) {
-                throw new CoordinationException("LEADER_LOG_DIVERGED");
-            }
-            fresh.add(event);
-            sequence = event.sequence();
-            digest = event.digest();
-        }
-        for (PredictionEvent event : fresh) {
-            placeCommitted(event);
-            applyProjections(event);
-        }
-        return fresh.size();
+    public List<byte[]> entriesAfter(long sequence, int maxEntries, int maxBytes)
+            throws IOException, GeneralSecurityException {
+        return entriesAfter(OWN_LOG, sequence, maxEntries, maxBytes);
     }
 
     /**
-     * Tells whether this log is a member's copy, which proposes its entries to a leader, and not the leader's own.
-     * A log whose replication settings cannot be read counts as a member's, as it does for appends.
+     * The name {@link #entriesAfter(String, long, int, int)} and {@link #logHeads()} give this computer's own log.
+     */
+    public static final String OWN_LOG = AppliedOrder.SELF;
+
+    /**
+     * Returns the head of every log this computer holds: its own under {@link #OWN_LOG}, and each copy under its
+     * node.
+     *
+     * @return each log's last sequence
+     * @throws IOException              when a log cannot be read
+     * @throws GeneralSecurityException when a signature cannot be checked
+     */
+    public synchronized Map<String, Long> logHeads() throws IOException, GeneralSecurityException {
+        discoverPeers();
+        Map<String, Long> heads = new TreeMap<>();
+        heads.put(OWN_LOG, (long) own.verified().size());
+        for (Map.Entry<String, LogFolder> peer : peers.entrySet()) {
+            heads.put(peer.getKey(), (long) peer.getValue().verified().size());
+        }
+        return heads;
+    }
+
+    /**
+     * Returns what this copy could not take as written: entries of other computers that counted for nothing, with
+     * the rule each broke, and the first entry of each log that waits for something it names, with its code.
+     * {@code synesis log problems} shows them.
+     *
+     * @return one line per problem, {@code <node> <sequence> <code>} or {@code <node> <sequence> waiting <code>}
+     * @throws IOException              when the logs cannot be read
+     * @throws GeneralSecurityException when a signature cannot be checked
+     */
+    public synchronized List<String> problems() throws IOException, GeneralSecurityException {
+        refresh();
+        List<String> problems = new ArrayList<>();
+        for (AppliedOrder.Line line : voided) {
+            problems.add(line.log() + " " + line.sequence() + " " + line.code());
+        }
+        for (ArrivalOrder.Waiting held : waiting) {
+            problems.add(held.log() + " " + held.sequence() + " waiting " + held.code());
+        }
+        return List.copyOf(problems);
+    }
+
+    /**
+     * Tells whether this computer is a member, which leaves merging to the owner's computer until ADR-0098 step 5.
+     * A log whose replication settings cannot be read counts as a member's, so it never merges.
      *
      * @return true for a member
      */
@@ -504,84 +446,147 @@ public final class PredictionEventStore implements ProjectionView {
     }
 
     /**
-     * Brings a member's copy up to the leader's log, a page at a time.
+     * Brings the projections up to every line of the applied order, then applies own entries that have no line
+     * yet. The lines are read again after the own log is listed: a line is always written before the own entry
+     * that follows it in the order is placed, so a line missed by the first read is seen by the second.
      *
-     * @return how many entries were new
-     * @throws IOException              with {@code LEADER_UNREACHABLE} or {@code LEADER_LOG_DIVERGED}
-     * @throws GeneralSecurityException when signature verification fails
+     * @throws IOException              when payload validation or durable I/O fails
+     * @throws GeneralSecurityException when signing or signature verification fails
      */
-    public synchronized int pullFromLeader() throws IOException, GeneralSecurityException {
-        if (!role.isMember()) {
-            throw new CoordinationException("NOT_A_MEMBER");
+    private void refresh() throws IOException, GeneralSecurityException {
+        List<PredictionEvent> ownEntries;
+        do {
+            readLines();
+            ownEntries = own.verified();
+        } while (readLines() > 0);
+        long ownTaken = taken.getOrDefault(AppliedOrder.SELF, 0L);
+        for (int index = (int) ownTaken; index < ownEntries.size(); index++) {
+            take(AppliedOrder.SELF, ownEntries.get(index));
+            unlinedOwn++;
         }
-        return pullFrom(role.channel());
     }
 
     /**
-     * Brings a member's copy up to the leader's log through a given channel, a page at a time. The member's
-     * coordination server uses it with its own Link channel; a process that opened the log reaches the server
-     * through {@link #pullFromLeader()}.
+     * Applies the lines written since the last read.
      *
-     * @param channel the connection to the leader
-     * @return how many entries were new
-     * @throws IOException              with {@code LEADER_UNREACHABLE} or {@code LEADER_LOG_DIVERGED}
-     * @throws GeneralSecurityException when signature verification fails
+     * @return how many lines were new
      */
-    public synchronized int pullFrom(LeaderChannel channel) throws IOException, GeneralSecurityException {
-        int applied = 0;
-        while (true) {
-            List<byte[]> page = channel.pull(durableHead().sequence(), PULL_PAGE_ENTRIES, PULL_PAGE_BYTES);
-            int fresh = page.isEmpty() ? 0 : applyCommitted(page);
-            if (fresh == 0) {
-                return applied;
+    private int readLines() throws IOException, GeneralSecurityException {
+        List<AppliedOrder.Line> lines = order.readNew();
+        for (AppliedOrder.Line line : lines) {
+            if (line.log().equals(AppliedOrder.SELF) && line.sequence() <= taken.getOrDefault(AppliedOrder.SELF, 0L)) {
+                // An own entry applied before its line was written; the line confirms its place.
+                if (unlinedOwn == 0) {
+                    throw new CoordinationException("invalid coordination event log");
+                }
+                unlinedOwn--;
+                continue;
             }
-            applied += fresh;
+            if (unlinedOwn > 0) {
+                // Every writer gives unlined own entries their lines before any other line.
+                throw new CoordinationException("invalid coordination event log");
+            }
+            record(line, entry(line));
         }
+        return lines.size();
     }
 
     /**
-     * Removes temporary event files that a writer left behind before its durable move.
-     *
-     * <p>Every open runs this, readers included, and holds no lock, so a temporary file may belong
-     * to another process that is appending right now. Such a file exists for milliseconds. Only
-     * one older than {@link #ABANDONED_TEMPORARY_AGE} is removed, and one that cannot be inspected
-     * or deleted is left alone: it is being written or has just been moved, and reading the log
-     * never looks at it.</p>
-     *
-     * @throws IOException when the events directory cannot be listed
+     * Writes the lines of own entries applied without one, so that they keep their place before any line written
+     * now. The caller holds the order lock and has caught up.
      */
-    private void cleanupTemporaryFiles() throws IOException {
-        FileTime abandonedBefore = FileTime.from(Instant.now().minus(ABANDONED_TEMPORARY_AGE));
-        try (var stream = Files.list(eventsDirectory)) {
-            for (Path file : stream.filter(path -> path.getFileName().toString().contains(".sce.tmp-")).toList()) {
+    private void lineOwnLeftovers() throws IOException {
+        if (unlinedOwn == 0) {
+            return;
+        }
+        long ownTaken = taken.getOrDefault(AppliedOrder.SELF, 0L);
+        List<AppliedOrder.Line> lines = new ArrayList<>();
+        for (long sequence = ownTaken - unlinedOwn + 1; sequence <= ownTaken; sequence++) {
+            lines.add(new AppliedOrder.Line(AppliedOrder.SELF, sequence, ""));
+        }
+        order.append(lines);
+        unlinedOwn = 0;
+    }
+
+    private static void requireHeld(ProjectAppendLock lock) throws CoordinationException {
+        if (!lock.isHeld()) {
+            throw new CoordinationException("event append lock unavailable");
+        }
+    }
+
+    /** Applies one entry of the order that took effect, or records one that counted for nothing. */
+    private void record(AppliedOrder.Line line, PredictionEvent event) throws IOException {
+        if (line.applied()) {
+            take(line.log(), event);
+        } else {
+            voided.add(line);
+            taken.put(line.log(), line.sequence());
+        }
+    }
+
+    /** Applies an entry that took effect at the next local revision. */
+    private void take(String log, PredictionEvent event) throws IOException {
+        projections.apply(event, events.size() + 1L);
+        events.add(event);
+        taken.put(log, event.sequence());
+    }
+
+    /** Returns the entry a line names, which its log must hold. */
+    private PredictionEvent entry(AppliedOrder.Line line) throws IOException, GeneralSecurityException {
+        LogFolder folder = line.log().equals(AppliedOrder.SELF) ? own : peer(line.log());
+        List<PredictionEvent> held = folder.verified();
+        if (line.sequence() > held.size() || line.sequence() != taken.getOrDefault(line.log(), 0L) + 1L) {
+            throw new CoordinationException("invalid coordination event log");
+        }
+        return held.get((int) line.sequence() - 1);
+    }
+
+    private boolean morePending() throws IOException, GeneralSecurityException {
+        for (Map.Entry<String, LogFolder> peer : peers.entrySet()) {
+            if (taken.getOrDefault(peer.getKey(), 0L) < peer.getValue().verified().size()
+                    && waiting.stream().noneMatch(held -> held.log().equals(peer.getKey()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private LogFolder peer(String node) throws CoordinationException {
+        if (node.isEmpty() || node.equals(AppliedOrder.SELF) || !node.chars().allMatch(c -> Character.isLetterOrDigit(c)
+                || c == '-' || c == '_')) {
+            throw new CoordinationException("LOG_COPY_NODE_INVALID");
+        }
+        return peers.computeIfAbsent(node, name -> new LogFolder(peersDirectory().resolve(name).resolve("events"),
+                projectId, name));
+    }
+
+    private LogFolder existingPeer(String node) throws IOException {
+        discoverPeers();
+        return peers.get(node);
+    }
+
+    private void discoverPeers() throws IOException {
+        Path directory = peersDirectory();
+        if (!Files.isDirectory(directory)) {
+            return;
+        }
+        try (var listing = Files.list(directory)) {
+            for (Path candidate : listing.filter(Files::isDirectory).toList()) {
                 try {
-                    if (Files.getLastModifiedTime(file).compareTo(abandonedBefore) < 0) {
-                        Files.deleteIfExists(file);
-                    }
-                } catch (IOException inFlight) {
-                    // Not ours to remove.
+                    peer(candidate.getFileName().toString());
+                } catch (CoordinationException notANode) {
+                    // A folder that cannot be a node's copy is not one.
                 }
             }
         }
     }
 
-    /**
-     * Returns the verified durable event-log head, after applying to this instance's projections every verified event
-     * it has not applied yet.
-     *
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
-     */
-    private synchronized Head durableHead() throws IOException, GeneralSecurityException {
-        return scan(event -> {
-            if (event.sequence() > events.size()) {
-                replay(event);
-            }
-        });
+    private Path peersDirectory() {
+        return rootDirectory.resolve("peers");
     }
 
     /**
-     * Returns all verified events in sequence order.
+     * Returns every entry that took effect, in local order.
      *
      * @return immutable event list
      */
@@ -590,9 +595,19 @@ public final class PredictionEventStore implements ProjectionView {
     }
 
     /**
-     * Returns the current project sequence.
+     * Returns the entries that took effect after a local revision, in local order.
      *
-     * @return current head sequence
+     * @param revision a local revision, such as a reader's cursor
+     * @return immutable list of the entries at revisions {@code revision + 1} onward
+     */
+    public synchronized List<PredictionEvent> eventsAfter(long revision) {
+        return List.copyOf(events.subList((int) Math.min(Math.max(revision, 0L), events.size()), events.size()));
+    }
+
+    /**
+     * Returns this copy's local revision: how many entries took effect here.
+     *
+     * @return current head revision
      */
     public synchronized long headSequence() {
         return events.size();
@@ -609,14 +624,14 @@ public final class PredictionEventStore implements ProjectionView {
      * change no claim, grant, snapshot, or capability state, so they do not make the envelope
      * stale; any other event appended after {@code revision} does.</p>
      *
-     * @param revision head sequence observed when the envelope was projected
+     * @param revision head revision observed when the envelope was projected
      * @return true when no event that changes state has been appended since that revision
      */
     public synchronized boolean unchangedSince(long revision) {
         if (revision < 0L || revision > events.size()) {
             return false;
         }
-        // The event with sequence n is stored at index n - 1.
+        // The event with revision n is stored at index n - 1.
         for (int index = (int) revision; index < events.size(); index++) {
             if (!events.get(index).type().recordsNoStateChange()) {
                 return false;
@@ -725,25 +740,6 @@ public final class PredictionEventStore implements ProjectionView {
     }
 
     /**
-     * Counts the events recorded under a coordination directory without replaying them. It is the
-     * head a store opened there would report.
-     *
-     * @param root coordination directory
-     * @return the number of recorded events; zero when nothing is recorded or the directory cannot be read
-     */
-    public static long recordedEvents(Path root) {
-        Path events = CoordinationNullException.requireNonNull(root, "root").resolve("events");
-        if (!Files.isDirectory(events)) {
-            return 0L;
-        }
-        try (java.util.stream.Stream<Path> files = Files.list(events)) {
-            return files.filter(path -> path.getFileName().toString().endsWith(".sce")).count();
-        } catch (IOException unreadable) {
-            return 0L;
-        }
-    }
-
-    /**
      * Returns the replayed conversation projection.
      *
      * @return conversation projection
@@ -753,83 +749,26 @@ public final class PredictionEventStore implements ProjectionView {
     }
 
     /**
-     * Replays sequence-ordered durable events and rebuilds the in-memory projections.
+     * Counts the entries recorded under a coordination directory without replaying them: this computer's own and
+     * every copy it holds. It grows whenever an entry is written or arrives, which is what its readers watch for.
      *
-     * @throws IOException              when payload validation or durable I/O fails
-     * @throws GeneralSecurityException when signing or signature verification fails
+     * @param root coordination directory
+     * @return the number of recorded entries; zero when nothing is recorded or the directory cannot be read
      */
-    private void load() throws IOException, GeneralSecurityException {
-        durableHead();
-    }
-
-    /**
-     * Walks the durable log in file-name order, requiring each event to belong to this project, follow its
-     * predecessor's sequence and digest, and carry a valid signature, and hands each such event to {@code visitor}.
-     *
-     * @param visitor receives every verified event, in order
-     * @return sequence and digest of the last event, or zero and an all-zero digest for an empty log
-     * @throws IOException              when an event is undecodable, out of chain, or the visitor fails
-     * @throws GeneralSecurityException when signing or signature verification fails
-     */
-    private Head scan(Transition visitor) throws IOException, GeneralSecurityException {
-        List<Path> files;
-        try (var stream = Files.list(eventsDirectory)) {
-            files = stream.filter(path -> path.getFileName().toString().endsWith(".sce")).sorted(Comparator.comparing(path -> path.getFileName().toString())).toList();
-        }
-        Path real = eventsDirectory.toRealPath();
-        List<PredictionEvent> verified = new ArrayList<>(VerifiedEventPrefixes.recall(real, projectId));
-        if (!stillHolds(verified, files)) {
-            VerifiedEventPrefixes.forget(real, projectId);
-            verified.clear();
-        }
-        long sequence = 0L;
-        byte[] digest = new byte[32];
-        for (PredictionEvent known : verified) {
-            visitor.accept(known);
-            sequence = known.sequence();
-            digest = known.digest();
-        }
-        try {
-            for (Path file : files.subList(verified.size(), files.size())) {
-                PredictionEvent event = PredictionEvent.decode(Files.readAllBytes(file));
-                if (!event.projectId().equals(projectId) || event.sequence() != sequence + 1L || !Arrays.equals(event.previousDigest(), digest) || !event.verify()) {
-                    throw new CoordinationException("invalid coordination event log");
+    public static long recordedEvents(Path root) {
+        Path coordination = CoordinationNullException.requireNonNull(root, "root");
+        long count = new LogFolder(coordination.resolve("events"), null, null).count();
+        Path copies = coordination.resolve("peers");
+        if (Files.isDirectory(copies)) {
+            try (var listing = Files.list(copies)) {
+                for (Path node : listing.toList()) {
+                    count += new LogFolder(node.resolve("events"), null, null).count();
                 }
-                verified.add(event);
-                visitor.accept(event);
-                sequence = event.sequence();
-                digest = event.digest();
-            }
-        } finally {
-            VerifiedEventPrefixes.remember(real, projectId, verified);
-        }
-        return new Head(sequence, digest);
-    }
-
-    /**
-     * Checks that the directory still holds the files of a remembered verified prefix: the first files are
-     * exactly sequences one to the prefix length, and the last of them still has the bytes that were verified.
-     * Anything else (a file missing, renamed, added in the middle, or replaced at the head) makes the prefix
-     * untrusted and the caller verifies the whole log again.
-     */
-    private static boolean stillHolds(List<PredictionEvent> prefix, List<Path> files) throws IOException {
-        if (prefix.isEmpty()) {
-            return true;
-        }
-        if (files.size() < prefix.size()) {
-            return false;
-        }
-        for (int index = 0; index < prefix.size(); index++) {
-            if (!files.get(index).getFileName().toString().equals(String.format("%020d.sce", index + 1L))) {
-                return false;
+            } catch (IOException unreadable) {
+                // Counted as far as it could be read.
             }
         }
-        PredictionEvent head = prefix.get(prefix.size() - 1);
-        try {
-            return Arrays.equals(Files.readAllBytes(files.get(prefix.size() - 1)), head.encoded());
-        } catch (java.nio.file.NoSuchFileException vanished) {
-            return false;
-        }
+        return count;
     }
 
     /**
@@ -852,21 +791,5 @@ public final class PredictionEventStore implements ProjectionView {
          * @throws IOException simulated process failure
          */
         void hit(AppendBoundary boundary) throws IOException;
-    }
-
-    /**
-     * One event action, given every verified event of a log in order.
-     */
-    @FunctionalInterface
-    private interface Transition {
-
-        void accept(PredictionEvent event) throws IOException;
-    }
-
-    /**
-     * Represents the durable event-log head used for append validation.
-     */
-    private record Head(long sequence, byte[] digest) {
-
     }
 }

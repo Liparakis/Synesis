@@ -21,7 +21,7 @@ import org.synesis.coordination.domain.prediction.PredictionEvent;
  */
 final class VerifiedEventPrefixes {
 
-    private static final int MAX_LOGS = 8;
+    private static final int MAX_LOGS = 64;
 
     private static final Map<Key, List<PredictionEvent>> PREFIXES = new LinkedHashMap<>(16, 0.75f, true) {
         @Override

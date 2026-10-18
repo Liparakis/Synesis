@@ -156,6 +156,18 @@ public final class CollaborationProjection {
      * @throws IOException malformed transition
      */
     public synchronized void apply(PredictionEvent event) throws IOException {
+        apply(event, event.sequence());
+    }
+
+    /**
+     * Applies an event at a local revision, its position in this computer's applied order (ADR-0098 step 4). The
+     * revision, not the entry's sequence in its own log, is what the fences of this projection compare with.
+     *
+     * @param event    event to apply
+     * @param revision the event's local revision
+     * @throws IOException when the event is malformed or refused
+     */
+    public synchronized void apply(PredictionEvent event, long revision) throws IOException {
         CoordinationNullException.requireNonNull(event, "event");
         switch (event.type()) {
             case WORK_INTENT_ANNOUNCED -> {
@@ -165,7 +177,7 @@ public final class CollaborationProjection {
             case WORK_INTENT_SCOPE_EXTENDED -> extendScope(WorkIntentScopeExtension.decode(event.payload()));
             case WORK_INTENT_RELEASED -> {
                 if (CollaborationCodec.isNoChangeCompletion(event.payload())) {
-                    complete(CollaborationCodec.decodeNoChangeCompletion(event.payload()), event.sequence());
+                    complete(CollaborationCodec.decodeNoChangeCompletion(event.payload()), revision);
                 } else {
                     release(new WorkIntentId(CollaborationCodec.decodeRelease(event.payload())));
                 }
@@ -194,13 +206,13 @@ public final class CollaborationProjection {
             case INTEGRATION_VALIDATION_REFUSED -> validationRefused(ValidationRefusalPayload.decode(event.payload()));
             case PROVIDER_SESSION_TERMINALIZED ->
                     sessionFences.terminalize(ProviderSessionTerminalPayload.decode(event.payload()),
-                            event.sequence(), mode.checking());
+                            revision, mode.checking());
             default -> {
             }
         }
         recordIntroducer(event);
         if (!event.type().recordsNoStateChange()) {
-            lastStateChangeSequence = event.sequence();
+            lastStateChangeSequence = revision;
         }
     }
 
@@ -251,7 +263,19 @@ public final class CollaborationProjection {
      * @throws IOException when the event is refused, or names something not seen yet
      */
     public synchronized void validate(PredictionEvent event, ApplyMode mode) throws IOException {
-        new CollaborationProjection(this, mode).apply(event);
+        validate(event, mode, event.sequence());
+    }
+
+    /**
+     * Applies an event at a local revision to a copy of this projection, judged as {@code mode} says.
+     *
+     * @param event    event to judge
+     * @param mode     how the event is judged
+     * @param revision the local revision the event takes
+     * @throws IOException when the event is refused, or names something not seen yet
+     */
+    public synchronized void validate(PredictionEvent event, ApplyMode mode, long revision) throws IOException {
+        new CollaborationProjection(this, mode).apply(event, revision);
     }
 
     /**

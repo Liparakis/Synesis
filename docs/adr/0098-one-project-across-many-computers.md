@@ -715,6 +715,20 @@ Decided while building step 4 (designer, 2026-10-18; each open to the owner):
     steps; two revisions of one contract number; a capability request whose requester was continued on another
     computer before the request arrived. Each applies without throwing; which of the two stands depends on the
     order.
+19. **The claim lock, made exact.** Item 4 alone lets two claims both stand: B asks A before A has claimed, A then
+    claims and asks B while B's check still runs, and B's node is the higher, so A is not refused, and neither is B.
+    So a computer that is asked about an overlapping claim while its own is being checked, by a computer with a lower
+    node ID, gives its own claim way when its check ends. The question is `CLAIM_SEEN` (the signed claim entry) and
+    the answer `CLAIM_ANSWER` (empty, or `OVERLAPPING_CLAIM`), on Link between computers and on the loopback route
+    from an agent's process to its computer's server. The check runs after the append lock is released, since it
+    waits on other computers, and a claim that gives way is released by its own computer's entry before the agent
+    is answered. A computer with no connected computer, or whose server is not running, asks nobody: the claim
+    stands. An overlap with a lane of the claimant's own computer is not counted again, since its own append checked
+    it; an overlap with a third computer's lane that the asked computer holds is.
+20. **Readers of the local revision.** `headSequence()`, `events()`, `eventsAfter`, `unchangedSince`, the dashboard's
+    event stream and the conversation cursors count local revisions. The legacy `synesis events follow` stream
+    still names each entry by its own log's sequence, so in a shared project its cursor is per log; it is left for
+    later with that limit.
 
 ### Step 5: Each computer merges its own lanes
 

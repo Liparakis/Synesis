@@ -7,12 +7,13 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.synesis.coordination.domain.identity.WireFormat;
 import org.synesis.coordination.exception.CoordinationException;
 
 /**
  * Wire form of {@link ReplicationMessage}, version 1: {@code "SRL1"}, a version byte, a kind byte and the fields
- * of that kind, big-endian. Every length is checked before allocation and no byte may be left over. The layout
+ * of that kind, big-endian. A pull names the log it wants since compatibility 8 (ADR-0098 step 4). Every length is checked before allocation and no byte may be left over. The layout
  * is in {@code docs/protocol/WIRE_FORMAT.md}.
  */
 public final class ReplicationCodec {
@@ -23,6 +24,8 @@ public final class ReplicationCodec {
     private static final int PROPOSE = 1;
     private static final int PULL = 2;
     private static final int NOTICE = 3;
+    private static final int HEADS = 4;
+    private static final int CLAIM_SEEN = 5;
     private static final int ACCEPTED = 16;
     private static final int HEAD_MOVED = 17;
     private static final int REFUSED = 18;
@@ -30,6 +33,8 @@ public final class ReplicationCodec {
     private static final int NO_ANSWER = 20;
     private static final int ENTRIES = 21;
     private static final int NOTICED = 22;
+    private static final int HEAD_LIST = 23;
+    private static final int CLAIM_ANSWER = 24;
 
     private ReplicationCodec() {
     }
@@ -65,6 +70,7 @@ public final class ReplicationCodec {
                 case ReplicationMessage.Pull pull -> {
                     out.writeByte(PULL);
                     WireFormat.writeUuid(out, pull.project());
+                    writeNode(out, pull.log());
                     out.writeLong(pull.after());
                     out.writeInt(pull.maxEntries());
                     out.writeInt(pull.maxBytes());
@@ -83,6 +89,35 @@ public final class ReplicationCodec {
                     }
                 }
                 case ReplicationMessage.Noticed noticed -> out.writeByte(NOTICED);
+                case ReplicationMessage.Heads heads -> {
+                    out.writeByte(HEADS);
+                    WireFormat.writeUuid(out, heads.project());
+                }
+                case ReplicationMessage.ClaimSeen seen -> {
+                    out.writeByte(CLAIM_SEEN);
+                    WireFormat.writeUuid(out, seen.project());
+                    writeEntry(out, seen.entry());
+                }
+                case ReplicationMessage.ClaimAnswer answer -> {
+                    byte[] code = answer.code().getBytes(StandardCharsets.UTF_8);
+                    if (code.length > ReplicationMessage.MAX_CODE_BYTES) {
+                        throw new IllegalArgumentException("claim answer code out of bounds");
+                    }
+                    out.writeByte(CLAIM_ANSWER);
+                    out.writeByte(code.length);
+                    out.write(code);
+                }
+                case ReplicationMessage.HeadList list -> {
+                    if (list.heads().size() > ReplicationMessage.MAX_LOGS) {
+                        throw new IllegalArgumentException("too many logs");
+                    }
+                    out.writeByte(HEAD_LIST);
+                    out.writeShort(list.heads().size());
+                    for (Map.Entry<String, Long> head : new java.util.TreeMap<>(list.heads()).entrySet()) {
+                        writeNode(out, head.getKey());
+                        out.writeLong(head.getValue());
+                    }
+                }
             }
         });
         if (encoded.length > ReplicationMessage.MAX_BYTES) {
@@ -109,7 +144,7 @@ public final class ReplicationCodec {
             }
             ReplicationMessage message = switch (in.readUnsignedByte()) {
                 case PROPOSE -> new ReplicationMessage.Propose(WireFormat.readUuid(in), readEntry(in));
-                case PULL -> new ReplicationMessage.Pull(WireFormat.readUuid(in), nonNegative(in.readLong()),
+                case PULL -> new ReplicationMessage.Pull(WireFormat.readUuid(in), readNode(in), nonNegative(in.readLong()),
                         bounded(in.readInt(), 1, ReplicationMessage.MAX_ENTRIES),
                         bounded(in.readInt(), 1, ReplicationMessage.MAX_BYTES));
                 case NOTICE -> new ReplicationMessage.Notice(WireFormat.readUuid(in), nonNegative(in.readLong()));
@@ -120,6 +155,10 @@ public final class ReplicationCodec {
                 case NO_ANSWER -> outcome(new ProposalOutcome.NoAnswer());
                 case ENTRIES -> readEntries(in);
                 case NOTICED -> new ReplicationMessage.Noticed();
+                case HEADS -> new ReplicationMessage.Heads(WireFormat.readUuid(in));
+                case CLAIM_SEEN -> new ReplicationMessage.ClaimSeen(WireFormat.readUuid(in), readEntry(in));
+                case CLAIM_ANSWER -> readClaimAnswer(in);
+                case HEAD_LIST -> readHeads(in);
                 default -> throw invalid(null);
             };
             if (in.available() != 0) {
@@ -204,6 +243,45 @@ public final class ReplicationCodec {
             throw invalid(null);
         }
         return new String(code, StandardCharsets.UTF_8);
+    }
+
+    private static void writeNode(DataOutputStream out, String node) throws IOException {
+        byte[] bytes = node.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length == 0 || bytes.length > ReplicationMessage.MAX_NODE_BYTES) {
+            throw new IllegalArgumentException("node ID out of bounds");
+        }
+        out.writeByte(bytes.length);
+        out.write(bytes);
+    }
+
+    private static String readNode(DataInputStream in) throws IOException {
+        int length = bounded(in.readUnsignedByte(), 1, ReplicationMessage.MAX_NODE_BYTES);
+        byte[] node = in.readNBytes(length);
+        if (node.length != length) {
+            throw invalid(null);
+        }
+        return new String(node, StandardCharsets.UTF_8);
+    }
+
+    private static ReplicationMessage.ClaimAnswer readClaimAnswer(DataInputStream in) throws IOException {
+        int length = bounded(in.readUnsignedByte(), 0, ReplicationMessage.MAX_CODE_BYTES);
+        byte[] code = in.readNBytes(length);
+        if (code.length != length) {
+            throw invalid(null);
+        }
+        return new ReplicationMessage.ClaimAnswer(new String(code, StandardCharsets.UTF_8));
+    }
+
+    private static ReplicationMessage.HeadList readHeads(DataInputStream in) throws IOException {
+        int count = bounded(in.readUnsignedShort(), 0, ReplicationMessage.MAX_LOGS);
+        Map<String, Long> heads = new java.util.LinkedHashMap<>();
+        for (int index = 0; index < count; index++) {
+            String node = readNode(in);
+            if (heads.put(node, nonNegative(in.readLong())) != null) {
+                throw invalid(null);
+            }
+        }
+        return new ReplicationMessage.HeadList(heads);
     }
 
     private static ReplicationMessage.Entries readEntries(DataInputStream in) throws IOException {

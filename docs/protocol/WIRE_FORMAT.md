@@ -200,49 +200,66 @@ terminal streams are rejected without publishing or reviving a session.
 
 ## Project log replication protocol `SRL1`
 
-Compatibility `5`. Carried as the opaque payload of one Link application stream
-between a project leader and a member (ADR-0098 step 2), and as the body of the
-loopback `POST /replication` route of a member computer's coordination server,
-which relays a local process's request over the Link session. One request, one
-answer per stream. Big-endian, strict: every length is checked before
-allocation, nothing may follow the last field, and a message is at most
-524,288 bytes (the Link application payload bound).
+Compatibility `8` (ADR-0098 step 4; until compatibility `7` a pull carried no
+log, and members proposed their entries). Carried as the opaque payload of one
+Link application stream between two computers of a project, and as the body
+of the loopback `POST /replication` route of a computer's coordination server.
+One request, one answer per stream. Big-endian, strict: every length is
+checked before allocation, nothing may follow the last field, and a message is
+at most 524,288 bytes (the Link application payload bound).
 
 Header, all messages: `SRL1` (4 bytes), version `1` (1 byte), kind (1 byte).
+A *node* is a length u8 `1..128` and that many UTF-8 bytes of a node ID.
 
 | Kind | Name | Direction | Fields after the header |
 |-----:|------|-----------|-------------------------|
-|  `1` | PROPOSE | member to leader | project UUID (16), entry length u32 `1..81920`, entry bytes: one signed log entry exactly as it would be placed |
-|  `2` | PULL | member to leader | project UUID (16), after u64 (member's head sequence), max entries u32 `1..1024`, max bytes u32 `1..524288` (soft) |
-|  `3` | NOTICE | leader to member | project UUID (16), head u64 |
-| `16` | ACCEPTED | answer to PROPOSE | sequence u64 of the entry on the leader's log |
-| `17` | HEAD_MOVED | answer to PROPOSE | leader's head u64; nothing was placed |
-| `18` | REFUSED | answer to PROPOSE, PULL, NOTICE | code length u8 `1..64`, code (UTF-8); nothing was placed |
-| `19` | UNREACHABLE | made by a relay | none: the request was not sent |
-| `20` | NO_ANSWER | made by a relay | none: the request may have been sent and was lost |
+|  `1` | PROPOSE | (step 2 only) | project UUID (16), entry length u32 `1..81920`, entry bytes. Since compatibility `8` it is answered `REFUSED REPLICATION_REQUEST_UNSUPPORTED` |
+|  `2` | PULL | either way | project UUID (16), log node, after u64 (the requester's head of that log), max entries u32 `1..1024`, max bytes u32 `1..524288` (soft) |
+|  `3` | NOTICE | either way | project UUID (16), head u64: how many entries the sender holds in all; advisory |
+|  `4` | HEADS | either way | project UUID (16) |
+| `16` | ACCEPTED | (step 2 only) | sequence u64 |
+| `17` | HEAD_MOVED | (step 2 only) | head u64 |
+| `18` | REFUSED | answer to any request | code length u8 `1..64`, code (UTF-8) |
+| `19` | UNREACHABLE | (step 2 only) | none |
+| `20` | NO_ANSWER | (step 2 only) | none |
 | `21` | ENTRIES | answer to PULL | count u16 `0..1024`, then per entry length u32 `1..81920` and bytes, in sequence order |
 | `22` | NOTICED | answer to NOTICE | none |
+| `23` | HEAD_LIST | answer to HEADS | count u16 `0..256`, then per log: node, head u64; nodes sorted, none twice |
 
-- **Who sent it is never a field.** The leader takes the sender from the
-  authenticated Link session (`PeerSession.remoteNodeId`) and requires it to
-  be the signer of a proposed entry and a member of the project. A pull from a
-  node that is not a member is `REFUSED PROPOSER_NOT_A_MEMBER`.
-- **A pull page** holds at most the requested entries and about 256 KiB (the
-  leader caps `max bytes` there), plus at least one entry when one exists.
-- **A proposal sent again** carries the same bytes; the leader answers an entry
-  it already holds as `ACCEPTED` with its sequence. A relay that cannot get an
-  answer reports NO_ANSWER and the log sends the same bytes again, up to three
-  times, then reports `LEADER_OUTCOME_UNKNOWN`.
-- **Refusal codes** are the leader's: the codes a local append gives
-  (`OVERLAPPING_CLAIM`, ...), `PROPOSAL_SENDER_MISMATCH`, `PROPOSER_NOT_A_MEMBER`,
-  `EVENT_TYPE_LEADER_ONLY`, `PROPOSAL_PROJECT_MISMATCH`,
-  `PROPOSAL_SIGNATURE_INVALID`, `PROPOSAL_MALFORMED`,
-  `REPLICATION_REQUEST_UNSUPPORTED`, `REPLICATION_MESSAGE_INVALID`.
-- **Notices are advisory.** A member also pulls every 15 seconds, which keeps
+- **Every computer writes only its own log** and holds byte-identical copies of
+  the others' (ADR-0098 step 4). A computer answers HEADS with every log it
+  holds, its own under its own node ID, and PULL with the entries of the named
+  log after `after`, its own or a copy: each entry is signed by its writer, so
+  any computer may serve any log. The puller places them in
+  `peers/<node>/events/` only if they continue its copy's chain and are signed
+  by that node, else it reports `LOG_COPY_DIVERGED` and stops pulling that log.
+  It never pulls its own log.
+- **Who sent it is never a field.** The answering side takes the sender from
+  the authenticated Link session (`PeerSession.remoteNodeId`) and serves only a
+  node it admits: the owner's computer its members, a member the owner's
+  computer. Anyone else is `REFUSED PROPOSER_NOT_A_MEMBER`.
+- **A pull page** holds at most the requested entries and about 256 KiB, plus
+  at least one entry when one exists.
+- **Notices are advisory.** A computer also pulls every 15 seconds, which keeps
   the path through a home router open.
+- **Refusal codes:** `PROPOSER_NOT_A_MEMBER`, `PROPOSAL_PROJECT_MISMATCH`,
+  `REPLICATION_REQUEST_UNSUPPORTED`, `REPLICATION_MESSAGE_INVALID`.
 
 Local files of a computer, never sent to a peer, in the coordination folder
 beside `events/`:
+
+- `peers/<node>/events/%020d.sce`: the copy of another computer's log, the
+  same files as the writer's.
+- `applied.order`: one line per entry, in the order it took effect on this
+  computer, appended and never rewritten: `self <sequence>` for this
+  computer's own log, `<node> <sequence>` for a copy, and a third field, the
+  rule's code, for an arriving entry that counted for nothing. A line's
+  position among the lines without a code is the entry's local revision. A
+  line without its newline is ignored, and removed by the next writer, which
+  holds `order.lock`.
+- `events-step2/` and `replication.properties.step2`: the log and the role
+  file of a project shared with a step-2 build, kept as an archive by the
+  first open of a step-4 build; the project then starts a fresh log.
 
 - `replication.properties`: `role=member` then `leader=<node ID>`, or
   `role=leader` then any number of `member=<node ID>`. Either form may carry one

@@ -110,9 +110,11 @@ final class ControlPlaneEventStream {
                     durableCheckAt = nextDurableCheck();
                     List<PredictionEvent> appended = coordination.replayAfter(delivered);
                     for (PredictionEvent event : appended) {
+                        // The local revision, the cursor of every reader (ADR-0098 step 4), not the entry's
+                        // position in its own log.
+                        delivered++;
                         String eventType = uiEventType(event.type());
-                        writeEvent(output, eventType, Long.toString(event.sequence()), ordered("apiVersion", API_VERSION, "sequence", event.sequence(), "type", eventType));
-                        delivered = event.sequence();
+                        writeEvent(output, eventType, Long.toString(delivered), ordered("apiVersion", API_VERSION, "sequence", delivered, "type", eventType));
                     }
                     if (!appended.isEmpty()) {
                         keepaliveAt = nextKeepalive();

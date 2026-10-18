@@ -37,6 +37,8 @@ public final class CapabilityRequestProjection {
     private final Map<CapabilityRequestHandle, ImplementationRevision> latestRevision = new LinkedHashMap<>();
     private final Map<CapabilityRequestHandle, ValidationContextRecord> validationContexts = new LinkedHashMap<>();
     private final ApplyMode mode;
+    /** The local revision of the event being applied; a contract revision is named by it. */
+    private long revision;
 
     /**
      * Creates an empty capability request projection.
@@ -66,7 +68,20 @@ public final class CapabilityRequestProjection {
      * @throws IOException when an event payload is malformed
      */
     public synchronized void apply(PredictionEvent event) throws IOException {
+        apply(event, event.sequence());
+    }
+
+    /**
+     * Applies an event at a local revision, its position in this computer's applied order (ADR-0098 step 4). The
+     * revision, not the entry's sequence in its own log, is what the fences of this projection compare with.
+     *
+     * @param event    event to apply
+     * @param revision the event's local revision
+     * @throws IOException when the event is malformed or refused
+     */
+    public synchronized void apply(PredictionEvent event, long revision) throws IOException {
         CoordinationNullException.requireNonNull(event, "event");
+        this.revision = revision;
         switch (event.type()) {
             case CAPABILITY_REQUEST_CREATED -> processCreated(event);
             case CAPABILITY_REQUEST_CONTRACT_REVISED -> processRevised(event);
@@ -103,7 +118,19 @@ public final class CapabilityRequestProjection {
      * @throws IOException when the event payload or state transition is invalid
      */
     public synchronized void validate(PredictionEvent event, ApplyMode mode) throws IOException {
-        new CapabilityRequestProjection(this, mode).apply(event);
+        validate(event, mode, event.sequence());
+    }
+
+    /**
+     * Applies an event at a local revision to a copy of this projection, judged as {@code mode} says.
+     *
+     * @param event    event to validate
+     * @param mode     how the event is judged
+     * @param revision the local revision the event takes
+     * @throws IOException when the event payload or state transition is invalid
+     */
+    public synchronized void validate(PredictionEvent event, ApplyMode mode, long revision) throws IOException {
+        new CapabilityRequestProjection(this, mode).apply(event, revision);
     }
 
     /**
@@ -391,7 +418,7 @@ public final class CapabilityRequestProjection {
                 payload.reason(),
                 event.createdAtEpochMillis(),
                 event.createdAtEpochMillis(),
-                event.sequence());
+                revision);
         records.put(handleKey, rec);
     }
 
@@ -421,7 +448,7 @@ public final class CapabilityRequestProjection {
                         payload.contract(),
                         payload.reason(),
                         event.createdAtEpochMillis(),
-                        event.sequence()));
+                        revision));
     }
 
     /**

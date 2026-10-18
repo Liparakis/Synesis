@@ -20,8 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import org.synesis.coordination.domain.prediction.PredictionEventType;
-import org.synesis.coordination.persistence.LeaderChannel;
-import org.synesis.coordination.persistence.ProposalOutcome;
 import org.synesis.coordination.persistence.ReplicationRole;
 
 import org.synesis.workspace.agent.AgentReason;
@@ -131,17 +129,7 @@ class IntegrationOutsideAppendLockTest {
         project.publish(lane, "snap_1", 1, "src/f.txt", "one\n");
         Path coordination = root.resolve(".synesis/coordination");
         String head = project.head();
-        ReplicationRole.register(coordination, ReplicationRole.memberOf("leader-node", new LeaderChannel() {
-            @Override
-            public ProposalOutcome propose(byte[] encodedEvent) {
-                return new ProposalOutcome.Refused("TEST_NO_LEADER");
-            }
-
-            @Override
-            public List<byte[]> pull(long after, int maxEntries, int maxBytes) {
-                return List.of();
-            }
-        }));
+        ReplicationRole.register(coordination, ReplicationRole.memberOf("leader-node"));
         try {
             AgentResponse asMember = project.pump();
 

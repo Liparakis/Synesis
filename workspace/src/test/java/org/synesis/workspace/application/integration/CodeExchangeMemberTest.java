@@ -9,8 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.GeneralSecurityException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -24,9 +22,7 @@ import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.TaskCompletionState;
-import org.synesis.coordination.persistence.LeaderChannel;
-import org.synesis.coordination.persistence.LeaderEndpoint;
-import org.synesis.coordination.persistence.ProposalOutcome;
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationRole;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.link.identity.IdentityBootstrap;
@@ -55,50 +51,6 @@ import org.synesis.workspace.test.TestGit;
  */
 class CodeExchangeMemberTest {
 
-    /** The in-process link to the leader, noting what the code remote held each time an entry was proposed. */
-    private static final class RecordingChannel implements LeaderChannel {
-
-        private final LeaderEndpoint endpoint;
-        private final String sender;
-        private final Path remote;
-        final List<String> proposed = new ArrayList<>();
-        final List<String> refsHeld = new ArrayList<>();
-
-        RecordingChannel(LeaderEndpoint endpoint, String sender, Path remote) {
-            this.endpoint = endpoint;
-            this.sender = sender;
-            this.remote = remote;
-        }
-
-        @Override
-        public ProposalOutcome propose(byte[] encodedEvent) throws IOException {
-            proposed.add(PredictionEvent.decode(encodedEvent).type().name());
-            refsHeld.add(TestGit.output(remote, "for-each-ref", "--format=%(refname)", "refs/synesis"));
-            try {
-                return endpoint.accept(encodedEvent, sender);
-            } catch (GeneralSecurityException failure) {
-                throw new IOException(failure);
-            }
-        }
-
-        @Override
-        public List<byte[]> pull(long after, int maxEntries, int maxBytes) throws IOException {
-            try {
-                return endpoint.entriesAfter(after, maxEntries, maxBytes);
-            } catch (GeneralSecurityException failure) {
-                throw new IOException(failure);
-            }
-        }
-
-        boolean proposed(PredictionEventType type) {
-            return proposed.contains(type.name());
-        }
-
-        String refsHeldWhenProposing(PredictionEventType type) {
-            return refsHeld.get(proposed.indexOf(type.name()));
-        }
-    }
-
     @TempDir
     Path temp;
 
@@ -108,7 +60,6 @@ class CodeExchangeMemberTest {
     private Path memberRoot;
     private ProjectLocation member;
     private NodeIdentity memberIdentity;
-    private RecordingChannel channel;
     private Path memberCoordination;
     private final ProviderSessionBindingService bindings = new ProviderSessionBindingService();
 
@@ -138,14 +89,37 @@ class CodeExchangeMemberTest {
         ReplicationRole.register(memberCoordination, ReplicationRole.leader());
     }
 
-    /** Both computers get their replication settings; the member's log proposes to the leader's in process. */
+    /** Both computers get their replication settings; the member is a member of the leader's computer. */
     private void replicate() throws Exception {
         ReplicationSettings.leader(Set.of(memberIdentity.nodeId())).withCodeRemote("origin").write(leader.root.resolve(".synesis/coordination"));
         ReplicationSettings.member(leader.identity.nodeId()).withCodeRemote("origin").write(memberCoordination);
-        channel = new RecordingChannel(new LeaderEndpoint(leader.root.resolve(".synesis/coordination"), leader.location.projectId(), Set.of(memberIdentity.nodeId())),
-                memberIdentity.nodeId(), remote);
-        ReplicationRole.register(memberCoordination, ReplicationRole.memberOf(leader.identity.nodeId(), channel));
+        ReplicationRole.register(memberCoordination, ReplicationRole.memberOf(leader.identity.nodeId()));
         ProviderTestSupport.install(member, "codex");
+    }
+
+    private PredictionEventStore memberStore() throws Exception {
+        return new PredictionEventStore(memberCoordination, leader.location.projectId());
+    }
+
+    /** What the member appended to its own log, in order. */
+    private List<PredictionEventType> memberAppended() throws Exception {
+        List<PredictionEventType> types = new java.util.ArrayList<>();
+        for (byte[] encoded : memberStore().entriesAfter(0, 10_000, Integer.MAX_VALUE)) {
+            types.add(PredictionEvent.decode(encoded).type());
+        }
+        return types;
+    }
+
+    /** Each computer receives byte-identical copies of the other's log, until neither has anything new. */
+    private void exchangeLogs() throws Exception {
+        PredictionEventStore leaderStore = leader.store();
+        PredictionEventStore memberStore = memberStore();
+        for (int round = 0; round < 3; round++) {
+            long memberHeld = leaderStore.logHeads().getOrDefault(memberIdentity.nodeId(), 0L);
+            leaderStore.placeCopies(memberIdentity.nodeId(), memberStore.entriesAfter(memberHeld, 10_000, Integer.MAX_VALUE));
+            long leaderHeld = memberStore.logHeads().getOrDefault(leader.identity.nodeId(), 0L);
+            memberStore.placeCopies(leader.identity.nodeId(), leaderStore.entriesAfter(leaderHeld, 10_000, Integer.MAX_VALUE));
+        }
     }
 
     private Path startLane(String connection, String path) throws Exception {
@@ -179,11 +153,16 @@ class CodeExchangeMemberTest {
 
         AgentResponse finished = finish("m-1");
 
-        assertTrue(channel.proposed(PredictionEventType.COMPLETION_PREPARED), finished.toJson());
-        assertTrue(channel.refsHeldWhenProposing(PredictionEventType.COMPLETION_PREPARED).contains("refs/synesis/prepared/"),
-                "the prepared commit was on the remote before its entry was proposed");
-        assertTrue(channel.refsHeldWhenProposing(PredictionEventType.TASK_SNAPSHOT_CREATED).contains("refs/synesis/snapshots/"),
-                "the snapshot commit was on the remote before its entry was proposed");
+        assertTrue(memberAppended().contains(PredictionEventType.COMPLETION_PREPARED), finished.toJson());
+        assertTrue(memberAppended().contains(PredictionEventType.TASK_SNAPSHOT_CREATED), finished.toJson());
+        assertEquals(0, leader.count(PredictionEventType.COMPLETION_PREPARED), "nothing reached the leader before the logs were exchanged");
+        String refs = remoteRefs();
+        assertTrue(refs.contains("refs/synesis/prepared/"), "the prepared commit is on the remote the leader fetches from");
+        assertTrue(refs.contains("refs/synesis/snapshots/"), "the snapshot commit is on the remote the leader fetches from");
+
+        exchangeLogs();
+
+        assertEquals(1, leader.count(PredictionEventType.COMPLETION_PREPARED), "the leader received the member's entry in a byte-identical copy");
         String snapshotId = leader.store().taskCompletionProjection().allSnapshots().getFirst().snapshotId();
         String snapshotCommit = leader.store().taskCompletionProjection().allSnapshots().getFirst().commitSha();
         assertFalse(commitInLeaderClone(snapshotCommit), "the leader's clone does not hold the member's commit yet");
@@ -197,6 +176,7 @@ class CodeExchangeMemberTest {
         assertEquals(leader.head(), TestGit.output(remote, "rev-parse", "refs/heads/" + branch), "the leader published the control branch");
 
         // The merged lane was the group's only one, so the group completed; new work starts a new group.
+        exchangeLogs();
         Path next = startLane("m-2", "src/b.txt", java.util.UUID.randomUUID());
 
         assertEquals(leader.head(), TestGit.output(memberRoot, "rev-parse", "HEAD"), "the member's checkout followed the leader");
@@ -205,19 +185,19 @@ class CodeExchangeMemberTest {
     }
 
     @Test
-    void aRemoteThatRefusesThePushStopsTheCompletionBeforeAnythingIsProposed() throws Exception {
+    void aRemoteThatRefusesThePushStopsTheCompletionBeforeAnythingIsAppended() throws Exception {
         replicate();
         startLane("m-1", "src/a.txt");
         TestGit.run(memberRoot, "remote", "set-url", "origin", temp.resolve("gone.git").toString());
-        int proposedBefore = channel.proposed.size();
+        int appendedBefore = memberAppended().size();
 
         AgentResponse finished = finish("m-1");
 
         assertEquals(AgentStatus.BLOCKED, finished.status(), finished.toJson());
         assertTrue(finished.toJson().contains("CODE_REMOTE_UNAVAILABLE"), finished.toJson());
-        assertFalse(channel.proposed(PredictionEventType.COMPLETION_PREPARED));
-        assertFalse(channel.proposed(PredictionEventType.TASK_SNAPSHOT_CREATED));
-        assertEquals(proposedBefore, channel.proposed.size(), "no entry was proposed");
+        assertFalse(memberAppended().contains(PredictionEventType.COMPLETION_PREPARED));
+        assertEquals(appendedBefore, memberAppended().size(), "no entry was appended");
+        exchangeLogs();
         assertEquals(0, leader.count(PredictionEventType.COMPLETION_PREPARED));
     }
 
@@ -260,7 +240,7 @@ class CodeExchangeMemberTest {
 
         assertEquals(AgentStatus.BLOCKED, finished.status(), finished.toJson());
         assertTrue(finished.toJson().contains("CODE_REMOTE_NOT_CONFIGURED"), finished.toJson());
-        assertFalse(channel.proposed(PredictionEventType.COMPLETION_PREPARED));
+        assertFalse(memberAppended().contains(PredictionEventType.COMPLETION_PREPARED));
         assertEquals("", remoteRefs());
     }
 

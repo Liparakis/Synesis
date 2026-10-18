@@ -5,6 +5,7 @@ import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import org.synesis.coordination.domain.collaboration.ReviewAdmissionRules;
 import org.synesis.coordination.domain.collaboration.ClaimConflict;
 import org.synesis.coordination.domain.collaboration.ClaimResult;
@@ -18,10 +19,12 @@ import org.synesis.coordination.domain.collaboration.WorkIntentScopeExtension;
 import org.synesis.coordination.domain.identity.ClaimEpoch;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.WorkIntentId;
+import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
+import org.synesis.coordination.persistence.ClaimLock;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
 
@@ -64,7 +67,8 @@ final class LaneClaimService {
         if (!store.projectId().equals(intent.projectId())) {
             throw new CoordinationArgumentException("intent project mismatch");
         }
-        return appends.call(current -> {
+        AtomicReference<PredictionEvent> announced = new AtomicReference<>();
+        ClaimResult result = appends.call(current -> {
             List<ClaimConflict> conflicts = current.collaborationProjection().conflicts(intent.selectors());
             if (!conflicts.isEmpty()) {
                 return new ClaimResult(false, intent, conflicts);
@@ -88,13 +92,40 @@ final class LaneClaimService {
                         CollaborationCodec.encodeWorkGroup(group),
                         signer);
             }
-            current.append(intent.identity().value(),
+            announced.set(current.append(intent.identity().value(),
                     PredictionEventType.WORK_INTENT_ANNOUNCED,
                     signer.nodeId(),
                     CollaborationCodec.encodeIntent(intent),
-                    signer);
+                    signer));
             return new ClaimResult(true, intent, List.of());
         });
+        if (announced.get() != null) {
+            lockBetweenComputers(intent, announced.get());
+        }
+        return result;
+    }
+
+    /**
+     * Asks the connected computers whether the claim may stand, outside the append lock: the question waits on
+     * other computers, a few seconds at most. A claim that must give way is released by this computer's own entry
+     * and its agent is told {@code OVERLAPPING_CLAIM} before it may write (ADR-0098 step 4, designer item 4).
+     */
+    private void lockBetweenComputers(WorkIntent intent, PredictionEvent claim)
+            throws IOException, GeneralSecurityException {
+        String refusal = ClaimLock.confirm(store.rootDirectory(), store.projectId(), claim);
+        if (refusal.isEmpty()) {
+            return;
+        }
+        appends.run(current -> {
+            if (current.collaborationProjection().intent(intent.identity()).isPresent()) {
+                current.append(intent.identity().value(),
+                        PredictionEventType.WORK_INTENT_RELEASED,
+                        signer.nodeId(),
+                        CollaborationCodec.encodeRelease(intent.identity().value()),
+                        signer);
+            }
+        });
+        throw new CoordinationException(refusal);
     }
 
     /**
