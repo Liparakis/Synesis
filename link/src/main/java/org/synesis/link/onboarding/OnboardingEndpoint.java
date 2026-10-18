@@ -138,6 +138,18 @@ final class OnboardingEndpoint implements AutoCloseable {
   }
 
   /**
+   * As above, with the invitation counting as used from the start when {@code invitationUsed}: a
+   * member card, which only returning peers reach (ADR-0098 step 6).
+   */
+  static OnboardingEndpoint openServer(NodeIdentity identity, String expectedPeer, UUID sessionId,
+      byte[] capability, PeerSession.ApplicationStreamHandler applicationHandler,
+      InetSocketAddress stunServer, Predicate<String> returning, Consumer<PeerSession> returned,
+      ReplayGuard retainedReplay, boolean invitationUsed) throws Exception {
+    return openServer(identity, expectedPeer, sessionId, capability, applicationHandler, stunServer,
+        returning, returned, 0, invitationUsed, retainedReplay);
+  }
+
+  /**
    * Opens the listening side of a host that restarted: the same UDP {@code port}, and an admission
    * whose invitation counts as already used, so the peers {@code returning} names (and nobody else)
    * connect without one. The capability is random and told to no one, so no invitation can open it.

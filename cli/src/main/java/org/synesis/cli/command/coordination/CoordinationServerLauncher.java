@@ -19,6 +19,7 @@ import org.synesis.cli.ui.StaticResourceHandler;
 import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationCard;
 import org.synesis.coordination.persistence.ReplicationPeers;
 import org.synesis.coordination.persistence.ReplicationReplay;
 import org.synesis.coordination.persistence.ReplicationSettings;
@@ -159,6 +160,8 @@ final class CoordinationServerLauncher {
                             }
                         }
                     });
+            // Every member hosts its card and dials the others' (ADR-0098 step 6, "Links").
+            var memberLinks = new MemberLinks(linkOwner, leaderReplication.membership().orElseThrow(), membership, node.nodeId());
             var readModel = new ControlPlaneReadModel(location, service, runtime.providerService(), new DoctorService(), new LinkNetworkProjection(linkOwner), projectRegistry);
             var serverRef = new java.util.concurrent.atomic.AtomicReference<CoordinationHttpServer>();
             var control = new ControlPlaneHttpHandler(readModel, service, linkOwner, eventHub, new ControlPlaneHttpHandler.SelectionGateway() {
@@ -194,6 +197,7 @@ final class CoordinationServerLauncher {
             // The replication side is listed last so it stops first: it answers on the sessions the link owner holds.
             try (control;
                     linkOwner;
+                    memberLinks;
                     var lifecycleHost = new ProjectRuntimeHost(location, node);
                     var server = new CoordinationHttpServer(service, new InetSocketAddress(host, port), lifecycleHost.handler(), control, new StaticResourceHandler());
                     side) {
@@ -202,6 +206,7 @@ final class CoordinationServerLauncher {
                 // Its agents' claims are checked with the connected members through this server (ADR-0098 step 4).
                 leaderReplication.serve(server);
                 side.serveCode(server);
+                memberLinks.start();
                 Thread parentWatcher = parentPid > 0 ? parentWatcher(parentPid) : null;
                 String endpoint = "http://" + hostForUrl(server.address().getHostString()) + ":" + server.address().getPort();
                 try {
@@ -272,6 +277,7 @@ final class CoordinationServerLauncher {
         peers.dialed().values().forEach(owner::resumeDialing);
         if (hostingMayResume) {
             peers.hosted().forEach(owner::resumeHosting);
+            ReplicationCard.read(coordination).ifPresent(card -> owner.resumeCard(card.port(), card.link()));
             return owner;
         }
         try {
@@ -322,6 +328,11 @@ final class CoordinationServerLauncher {
             @Override
             public void hosted(int port, String nodeId) {
                 save(() -> ReplicationPeers.rememberHosted(coordination, port, nodeId));
+            }
+
+            @Override
+            public void card(int port, String link) {
+                save(() -> new ReplicationCard(port, link).write(coordination));
             }
 
             private void save(PeersWrite write) {

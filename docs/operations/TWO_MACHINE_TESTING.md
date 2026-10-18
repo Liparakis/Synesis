@@ -42,10 +42,16 @@ access tokens, or absolute personal paths.
 
 ## Two computers, one project
 
-This is the flow for one project that runs on two computers (ADR-0098): computer A (the owner) is the leader and keeps the
-authoritative log; computer B (the friend) is a member, runs its own agents, and sends each entry to A. Code moves between the
-two computers over Link (ADR-0098 step 3); no Git remote is needed. A Git remote both can reach, if there is one, is an
-optional mirror.
+This is the flow for one project that runs on two or more computers (ADR-0098): computer A (the owner) shares the
+project; computer B (the friend) joins it. Since step 6 every computer writes its own log and keeps a copy of everyone
+else's, who belongs to the project is written in the logs (`PROJECT_SHARED`, `JOIN_REQUESTED`, `JOIN_ANSWERED`,
+`MEMBER_REMOVED`, ...), and each member dials every other member it can reach. Code moves between the computers over
+Link (ADR-0098 step 3); no Git remote is needed. A Git remote they can reach, if there is one, is an optional mirror.
+
+`synesis project share` on A shares the project and prints `RECOVERY_WORDS=` once: 24 words that are stored nowhere.
+Write them down; with them `synesis project recover` (which reads them from standard input) makes any member computer
+the owner's, for example when A is lost. `project share --new-recovery-key` replaces them. A project shared by inviting
+alone, or migrated from before step 6, has no recovery key until `project share` is run on the owner's computer.
 
 **One link does it.** The commands print `KEY=VALUE` lines; run each one in the project directory, or give
 `--project <directory>`.
@@ -56,8 +62,8 @@ optional mirror.
    `CODE_REMOTE_URL=<url>` (the configured `code.remote`, or the project's only Git remote; never credentials, and only
    an `https://`, `ssh://` or `user@host:path` address). A project with several remotes and none configured, no remote, or
    a remote that is a local path or a network share prints `CODE_REMOTE_URL=NONE` and a `NOTE=`: code then moves
-   over Link only, with no mirror. On a computer that is a member, `link invite` makes
-   the plain connection invitation (no project link), as in the topology below. The command waits for B.
+   over Link only, with no mirror. Any member may invite the same way (since step 6): it holds the joiner and records its
+   request, and the owner accepts it. The command waits for B.
 2. **B (the friend) opens the link.** Click it (the installer's `synesis://` handler opens the browser UI with the link
    filled in, on the installation's home workspace if B knows no project yet; the UI first shows the inviter, the project,
    the code remote URL and the expiry, and B presses **Join**), or paste it into the **Join from an invitation** box on the UI's Projects page or Network view, or run
@@ -90,19 +96,23 @@ optional mirror.
    on it until A's person accepts it. The Network view lists `<node> wants to join <project>` with **Accept** and
    **Decline**; or run `synesis link requests`, then `synesis link accept <node ID>` or `synesis link decline <node ID>`.
    Accepting makes A the leader, adds B as a member, sets `code.remote` to the remote the link named, if any, as a mirror,
-   and starts serving B at once; a link with no URL is accepted the same way, and code moves over Link. Declining closes B's session. A request ends when the
-   invitation it used expires (ten minutes), and requests are not kept across a restart of A's runtime: B asks again
-   with a new invitation.
+   and starts serving B at once; a link with no URL is accepted the same way, and code moves over Link. Declining closes B's session.
+   Since step 6 the request is an entry (`JOIN_REQUESTED`, written by the computer that holds B's session) and the
+   answer too (`JOIN_ANSWERED`), so every member sees a waiting request and it outlives a restart. Only the owner
+   answers, unless the owner ran `synesis project join-policy ANY_MEMBER`, after which any member may accept (a decline
+   stays the owner's).
 4. **Two networks.** If B does not connect within a few seconds, B's UI (and `synesis link join`) shows an answer link
    (`ANSWER_LINK=synesis://answer/...`). Give it to A: paste it into the answer box of the Network view, or
    `synesis link answer <OPERATION_ID printed by invite> "<ANSWER_LINK>"` (ADR-0097 says which networks get through).
    Or A starts with the router-port option, which asks the router to forward a port.
 
-`synesis project share`, `add-member`, `remove-member` and `follow` stay for scripts and for removing a member
-(`remove-member` on A stops serving a member; its earlier entries stay). The other documented way in is the old one
-(`share`, `identity show`, `add-member`, `follow --leader`, then `link invite --expect` / `link join`); the one link
-replaces it. `follow` and `share` stop the project's runtime if the installation daemon runs one
-(`RUNTIME_STOPPED=true`); the link does not need a restart.
+`synesis project add-member <node>` lets a computer in by name (a request and its acceptance at once), and
+`synesis project remove-member <node>` on the owner's computer removes one (`MEMBER_REMOVED`): its lanes end on every
+computer, its entries after that point count for nothing, and it is no longer dialed or admitted. `follow` stays for
+scripts; the one link replaces it. `follow` and `share` stop the project's runtime if the installation daemon runs one
+(`RUNTIME_STOPPED=true`); the link does not need a restart. Before step 6 the owner's member list was in
+`replication.properties`; a coordination server of this build moves it into the log once when it starts, and the file
+then says only `role=shared` (and `code.remote`, if any).
 
 `link invite` and `link join` end with `LINK_STATE=CONNECTED` and `PEER_NODE_ID=<the other computer>`, or
 `LINK_STATE=WAITING` when `--wait-seconds` (default 300) ran out and `LINK_STATE=FAILED` when the invitation ended
@@ -111,10 +121,18 @@ without a session, followed by `LINK_FAILURE=<reason>` and `LINK_FAILURE_DETAIL=
 returned `WAITING` keeps dialing in the project's runtime until the invitation expires, so the answer can still be
 pasted after it. `CONNECTED` means the session exists, not that A accepted it. The connection stays with the project's
 runtime after the command ends. Once A has accepted, B pulls A's log and sends its entries to A, and A merges B's lanes
-without an agent of its own. `synesis coordination status` on B shows `REPLICATION_STATE`. On A it shows one line per
-member, `REPLICATION_MEMBER=<node> STATE=CONNECTED since=<time>` while that member's session is up and
-`STATE=DISCONNECTED since=<time>` after it ended (or, for a member that has not connected since A's coordination server
-started, since that start). `STATE=NO_COORDINATION_SERVER` means A's coordination server is not running.
+without an agent of its own. `synesis coordination status` shows, on every computer of a shared project,
+`REPLICATION_ROLE=shared`, `REPLICATION_OWNER=<node>`, `REPLICATION_RECOVERY_KEY=SET|NONE`, one line per member,
+`REPLICATION_MEMBER=<node> STATE=CONNECTED since=<time>` while that member's session is up, `STATE=DISCONNECTED
+since=<time>` after it ended (or, for a member that has not connected since this coordination server started, since that
+start) and `STATE=THIS_COMPUTER` for itself, and `JOIN_REQUEST=<node> inviter=<node>` for each waiting request.
+`STATE=NO_COORDINATION_SERVER` means this computer's coordination server is not running.
+
+**Every member dials every other.** Each member hosts one retained invitation of its own listener, its member card,
+and publishes it in its log (`MEMBER_CARD`); every 15 seconds it dials the card of each member it holds no session with
+(of two members the one with the lower node ID first, the other after a minute). So the members keep working together
+when the owner's computer is off, and two that cannot reach each other still get each other's entries through any
+member both reach. The card's port is kept in `replication.card` and listened on again after a restart.
 
 **A dropped link redials by itself.** The computer that ran `link join` (the one that dialed) dials the other again when
 the session ends, at the endpoints of the invitation it used, one second later and then every 2, 4, 8, 16, 30 seconds

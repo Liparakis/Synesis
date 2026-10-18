@@ -97,6 +97,15 @@ public final class MembershipView {
     }
 
     /**
+     * Whether this computer belongs to a shared project now: it then hosts a card and dials the others'.
+     *
+     * @return whether it is a member
+     */
+    public boolean belongs() {
+        return membership().filter(MembershipProjection::shared).map(found -> found.members().contains(self)).orElse(false);
+    }
+
+    /**
      * The owner's computer, once the project is shared.
      *
      * @return its node ID, or empty

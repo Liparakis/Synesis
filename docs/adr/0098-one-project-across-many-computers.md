@@ -1017,6 +1017,16 @@ Decided while building step 6 (designer, 2026-10-18; each open to the owner):
     whether a recovery key is set, each member's connection and the waiting requests.
 18. **Before a lane, a joined computer follows `main`.** What a step-5 member did from its settings file, a computer
     that is not the owner (as the log says) now does: it brings its checkout to the newest copy it can reach.
+19. **Member cards.** A member's card is a retained invitation of its own listener whose invitation counts as used
+    from the start: the listener admits any node the membership names, without a capability, so every member may dial
+    the same card again and again, expired or not, and nobody else gets in with it (a joiner comes in by an
+    invitation made for it). A card whose link names another computer than its writer is not dialed, and a newer card
+    of a member replaces the dial of its older one. Each computer hosts
+    one card once it belongs, publishes it (`MEMBER_CARD`, written again only when it changes), keeps its port in
+    `replication.card`, and listens on that port again after a restart. Every 15 s it dials the card of each member
+    it holds no session with; of two members the lower node ID dials first, and the other dials too after 60 s
+    without a session, so a pair reachable in one direction only is still linked. A dial then redials on its own for
+    as long as the member is one.
 
 ### Step 7: Disputes, takeovers and the trash
 
