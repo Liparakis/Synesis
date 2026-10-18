@@ -12,9 +12,11 @@ import java.util.UUID;
 import org.synesis.coordination.domain.identity.LaneGrantId;
 import org.synesis.coordination.domain.identity.SnapshotId;
 import org.synesis.coordination.domain.identity.WorkGroupId;
+import org.synesis.coordination.domain.prediction.ApplyMode;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
+import org.synesis.coordination.exception.MissingReferenceException;
 
 /**
  * Rebuilds logical work groups and single-use lane grants from signed events.
@@ -28,14 +30,22 @@ public final class WorkGroupProjection {
     private final Set<LaneGrantId> supersededGrants = new HashSet<>();
     private final Set<LaneGrantId> revokedGrants = new HashSet<>();
     private final Map<LaneGrantId, ReviewValidationPayload> validations = new LinkedHashMap<>();
+    /**
+     * The node whose creation each group holds, or none for a group an announcement put here before any creation
+     * (a log written before groups were created). Two computers apart may both create the first lane's group.
+     */
+    private final Map<WorkGroupId, String> creators = new LinkedHashMap<>();
+    private final ApplyMode mode;
 
     /**
      * Creates an empty projection.
      */
     public WorkGroupProjection() {
+        mode = ApplyMode.REPLAY;
     }
 
-    private WorkGroupProjection(WorkGroupProjection source) {
+    private WorkGroupProjection(WorkGroupProjection source, ApplyMode mode) {
+        this.mode = mode;
         groups.putAll(source.groups);
         grants.putAll(source.grants);
         consumedGrants.addAll(source.consumedGrants);
@@ -43,6 +53,7 @@ public final class WorkGroupProjection {
         supersededGrants.addAll(source.supersededGrants);
         revokedGrants.addAll(source.revokedGrants);
         validations.putAll(source.validations);
+        creators.putAll(source.creators);
     }
 
     /**
@@ -54,7 +65,7 @@ public final class WorkGroupProjection {
     public synchronized void apply(PredictionEvent event) throws IOException {
         CoordinationNullException.requireNonNull(event, "event");
         switch (event.type()) {
-            case WORK_GROUP_CREATED -> create(CollaborationCodec.decodeWorkGroup(event.payload()));
+            case WORK_GROUP_CREATED -> create(CollaborationCodec.decodeWorkGroup(event.payload()), event.actorNodeId());
             case LANE_GRANT_ISSUED -> issue(CollaborationCodec.decodeLaneGrant(event.payload()));
             case LANE_GRANT_CONSUMED -> consume(CollaborationCodec.decodeLaneGrant(event.payload()).identity());
             case LANE_REVOKED -> revoke(CollaborationCodec.decodeLaneGrant(event.payload()).identity());
@@ -77,6 +88,11 @@ public final class WorkGroupProjection {
             }
             case WORK_INTENT_ANNOUNCED -> {
                 WorkIntent intent = CollaborationCodec.decodeIntent(event.payload());
+                if (mode == ApplyMode.ARRIVAL && !groups.containsKey(intent.group())) {
+                    // The announcing computer creates a group it has not seen, before the announcement; a group
+                    // missing here was created in another log that has not arrived.
+                    throw new MissingReferenceException("WORK_GROUP_NOT_FOUND");
+                }
                 groups.putIfAbsent(intent.group(),
                         new WorkGroup(intent.workGroupId(),
                                 intent.projectId(),
@@ -98,8 +114,19 @@ public final class WorkGroupProjection {
      * @throws IOException invalid transition
      */
     public synchronized void validate(PredictionEvent event) throws IOException {
-        WorkGroupProjection copy = new WorkGroupProjection(this);
-        copy.apply(event);
+        validate(event, ApplyMode.CHECK);
+    }
+
+    /**
+     * Applies an event to a copy of this projection, judged as {@code mode} says (ADR-0100, "Every rule an arriving
+     * entry can reach").
+     *
+     * @param event event to judge
+     * @param mode  how the event is judged
+     * @throws IOException when the event is refused, or names something not seen yet
+     */
+    public synchronized void validate(PredictionEvent event, ApplyMode mode) throws IOException {
+        new WorkGroupProjection(this, mode).apply(event);
     }
 
     /**
@@ -289,11 +316,24 @@ public final class WorkGroupProjection {
      *
      * @throws IOException when payload validation or durable I/O fails
      */
-    private void create(WorkGroup group) throws IOException {
-        if (groups.containsKey(group.identity())) {
-            throw new CoordinationException("WORK_GROUP_EXISTS");
+    private void create(WorkGroup group, String creator) throws IOException {
+        WorkGroup existing = groups.get(group.identity());
+        if (existing != null) {
+            if (mode.checking()) {
+                throw new CoordinationException("WORK_GROUP_EXISTS");
+            }
+            // Two computers apart created one group (ADR-0100, "Every rule an arriving entry can reach"): the
+            // creation of the lower node gives its goal and policy, in either order, and what happened to the group
+            // since stays.
+            String held = creators.get(group.identity());
+            if (held != null && held.compareTo(creator) <= 0) {
+                return;
+            }
+            group = new WorkGroup(group.workGroupId(), group.projectId(), group.goal(), group.acceptance(),
+                    existing.version(), existing.status(), group.reviewPolicy());
         }
         groups.put(group.identity(), group);
+        creators.put(group.identity(), creator);
     }
 
     /**
@@ -306,7 +346,7 @@ public final class WorkGroupProjection {
             throw new CoordinationException("LANE_GRANT_EXISTS");
         }
         if (!groups.containsKey(grant.group())) {
-            throw new CoordinationException("WORK_GROUP_NOT_FOUND");
+            throw new MissingReferenceException("WORK_GROUP_NOT_FOUND");
         }
         grants.put(grant.identity(), grant);
     }
@@ -395,9 +435,10 @@ public final class WorkGroupProjection {
     private void consume(LaneGrantId id) throws IOException {
         LaneGrant grant = grants.get(id);
         if (grant == null) {
-            throw new CoordinationException("LANE_GRANT_NOT_FOUND");
+            throw new MissingReferenceException("LANE_GRANT_NOT_FOUND");
         }
-        if (revokedGrants.contains(id) || (grant.singleUse() && consumedGrants.contains(id))) {
+        if (mode.checking() && (revokedGrants.contains(id) || (grant.singleUse() && consumedGrants.contains(id)))) {
+            // Off this computer's own append, a consumption and a revocation from two computers are both kept.
             throw new CoordinationException("LANE_GRANT_REPLAYED");
         }
         consumedGrants.add(id);
@@ -411,7 +452,7 @@ public final class WorkGroupProjection {
      */
     private void revoke(LaneGrantId grantId) throws IOException {
         if (!grants.containsKey(grantId)) {
-            throw new CoordinationException("LANE_GRANT_NOT_FOUND");
+            throw new MissingReferenceException("LANE_GRANT_NOT_FOUND");
         }
         revokedGrants.add(grantId);
     }
@@ -424,7 +465,19 @@ public final class WorkGroupProjection {
     private void status(WorkGroup update) throws IOException {
         WorkGroup current = groups.get(update.identity());
         if (current == null) {
-            throw new CoordinationException("WORK_GROUP_NOT_FOUND");
+            throw new MissingReferenceException("WORK_GROUP_NOT_FOUND");
+        }
+        if (!mode.checking()) {
+            // A newer version replaces an older one, and a second change of one version counts as the first, with
+            // COMPLETED over any other status (ADR-0098 step 4, designer item 16). Only the version and the status
+            // move: what the group is stays as its creation gave it.
+            boolean newer = update.version() > current.version();
+            boolean outranks = update.version() == current.version() && rank(update.status()) > rank(current.status());
+            if (newer || outranks) {
+                groups.put(update.identity(), new WorkGroup(current.workGroupId(), current.projectId(), current.goal(),
+                        current.acceptance(), update.version(), update.status(), current.reviewPolicy()));
+            }
+            return;
         }
         if (update.version() != current.version() + 1) {
             throw new CoordinationException("WORK_GROUP_VERSION_STALE");
@@ -433,6 +486,11 @@ public final class WorkGroupProjection {
             throw new CoordinationException("WORK_GROUP_REVIEW_POLICY_IMMUTABLE");
         }
         groups.put(update.identity(), update);
+    }
+
+    /** Which of two statuses written for one version stands: COMPLETED, then the later in declaration order. */
+    private static int rank(WorkGroup.Status status) {
+        return status == WorkGroup.Status.COMPLETED ? Integer.MAX_VALUE : status.ordinal();
     }
 
     /**
@@ -444,7 +502,7 @@ public final class WorkGroupProjection {
         LaneGrantId grantId = payload.grantIdentity();
         LaneGrant grant = grants.get(grantId);
         if (grant == null) {
-            throw new CoordinationException("LANE_GRANT_NOT_FOUND");
+            throw new MissingReferenceException("LANE_GRANT_NOT_FOUND");
         }
         if (continuationGrants.contains(grantId)) {
             throw new CoordinationException("REVIEW_SELF_APPROVAL_FORBIDDEN");
@@ -452,7 +510,7 @@ public final class WorkGroupProjection {
         if (!consumedGrants.contains(grantId)) {
             throw new CoordinationException("LANE_GRANT_NOT_CONSUMED");
         }
-        if (supersededGrants.contains(grantId)) {
+        if (mode.checking() && supersededGrants.contains(grantId)) {
             throw new CoordinationException("REVIEW_GRANT_SUPERSEDED");
         }
         if (!grant.group().equals(payload.workGroupIdentity()) || !grant.targetIntent()
@@ -462,7 +520,7 @@ public final class WorkGroupProjection {
             throw new CoordinationException("REVIEW_GRANT_BINDING_MISMATCH");
         }
         ReviewValidationPayload previous = validations.get(grantId);
-        if (previous != null && !previous.equals(payload)) {
+        if (mode.checking() && previous != null && !previous.equals(payload)) {
             throw new CoordinationException("REVIEW_DECISION_CONFLICT");
         }
         validations.put(grantId, payload);

@@ -6,7 +6,7 @@ import java.io.Serial;
 /**
  * Coded coordination rejection or malformed durable coordination data.
  */
-public final class CoordinationException extends IOException {
+public class CoordinationException extends IOException {
 
     @Serial
     private static final long serialVersionUID = 1L;

@@ -685,19 +685,36 @@ Decided while building step 4 (designer, 2026-10-18; each open to the owner):
     own log that have no line yet (a log written before step 4, or an append cut short) apply after every line, in
     their own order, and the next writer gives them their lines; so a project on one computer changes nothing.
 13. **Marks of delivery are local.** `CONVERSATION_MESSAGES_DELIVERED` names a position in its writer's local order,
-    which means nothing on another computer, so a mark from another log has no effect there. Each computer delivers
-    to its own agents.
-14. **Attribution on arrival.** An arriving entry acting for a participant that another node introduced counts for
-    nothing (`PARTICIPANT_NOT_OWNED_BY_SIGNER`). One acting for a participant not seen yet also counts for nothing,
-    because the signer's own introduction would already have been applied, its log being copied in order. The
-    exception is an entry of the owner's computer, which keeps its exemption until step 5: it waits for the
-    participant. Leader-only types from another computer count for nothing (`EVENT_TYPE_LEADER_ONLY`).
+    which means nothing on another computer. Its bound is judged only by its writer, and on another computer it is
+    read only for the writer's own lanes, which nothing there delivers to. Each computer delivers to its own agents.
+14. **Attribution on arrival** is today's rule, judged again: an arriving entry acting for a participant that
+    another node introduced counts for nothing (`PARTICIPANT_NOT_OWNED_BY_SIGNER`), except an entry signed by the
+    owner's computer, which keeps its exemption until step 5. One acting for a participant not seen at all applies,
+    as it did on its writer: a participant's introduction comes before its own computer's entries for it, in the
+    same log, so only a faulty build can act first. Leader-only types from another computer count for nothing
+    (`EVENT_TYPE_LEADER_ONLY`). A self-review counts for nothing once the snapshot it names has arrived.
 15. **Two answers to one coordination request** (a review request answered by its first target and by the lane that
     took it over): both are kept, and the answer of the lower node ID is the request's status.
 16. **Work-group status:** a newer version replaces an older one, and a second change of the same version counts as
-    the first; at one version COMPLETED wins over any other status. **Operator requests:** two raises for one
-    condition are one request, known by the lower request ID; answers are kept per writing node, a node's new answer
-    replaces its own, and two different answers keep the request open.
+    the first; at one version COMPLETED wins over any other status, then the later status in declaration order. Only
+    the version and the status move: two creations of one group (two computers apart claiming the first lane of one
+    goal) give the group the goal and review policy of the lower node's creation, in either order. **Operator
+    requests:** every condition Synesis raises is about the computer that raises it (its control checkout, its
+    integration pass), so "one open request per condition" is judged on that computer's own raise, and raises from
+    two computers are two requests. This narrows ADR-0100 row 6, whose "two raises for one condition count as one"
+    assumed one shared condition. Answers are kept per writing node; a node's new answer replaces its own, and two
+    different answers keep the request open.
+17. **Review verdicts** are kept per reviewing participant. Each computer still refuses a second verdict on its own
+    append, as today; on arrival both stand. Every reviewer accepted gives `REVIEW_ACCEPTED`, every one rejected
+    `REVIEW_REJECTED`, and different verdicts `REVIEW_DISPUTED` (a new state, counted as refused, so it is never
+    merged). An integration written by the owner's computer stands over any verdict, and a validation refusal over
+    every verdict but an integration, so the final state does not depend on which arrived first.
+18. **Known order dependence left for later** (rare, and each needs a design of its own): a participant's lifecycle
+    when its own computer and a taker both write about it (suspended against detached, ADR-0100 doubt on lifecycle
+    states); two prediction steps that are siblings (`ACCEPTED_EXACT` against `CONTRACT_REVISED`) or two terminal
+    steps; two revisions of one contract number; a capability request whose requester was continued on another
+    computer before the request arrived. Each applies without throwing; which of the two stands depends on the
+    order.
 
 ### Step 5: Each computer merges its own lanes
 

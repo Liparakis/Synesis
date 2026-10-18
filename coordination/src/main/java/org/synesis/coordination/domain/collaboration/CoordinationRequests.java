@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import org.synesis.coordination.domain.identity.RequestId;
 import org.synesis.coordination.exception.CoordinationException;
+import org.synesis.coordination.exception.MissingReferenceException;
 
 /**
  * Coordination requests and acknowledged inbox items, owned by a {@link CollaborationProjection}. The checks that
@@ -17,6 +18,8 @@ final class CoordinationRequests {
 
     private final Map<RequestId, CoordinationRequest> requests = new LinkedHashMap<>();
     private final Set<RequestId> acknowledgedInboxItems = new HashSet<>();
+    /** The node whose answer each resolved request holds. */
+    private final Map<RequestId, String> answeredBy = new LinkedHashMap<>();
 
     CoordinationRequests() {
     }
@@ -24,6 +27,7 @@ final class CoordinationRequests {
     CoordinationRequests(CoordinationRequests source) {
         requests.putAll(source.requests);
         acknowledgedInboxItems.addAll(source.acknowledgedInboxItems);
+        answeredBy.putAll(source.answeredBy);
     }
 
     List<CoordinationRequest> all() {
@@ -43,19 +47,33 @@ final class CoordinationRequests {
     /**
      * Applies an authorized response to the matching pending coordination request.
      *
+     * <p>Off this computer's own append, two answers to one request (its first target and the lane that took it
+     * over) both stand, and the answer of the lower node is the request's status, in either order (ADR-0098 step
+     * 4, designer item 15).</p>
+     *
+     * @param response the answer
+     * @param answerer node that wrote the answer
+     * @param checking whether this computer's own new answer is being judged
      * @throws IOException when the request is unknown or already resolved differently
      */
-    void respond(CoordinationResponsePayload response) throws IOException {
+    void respond(CoordinationResponsePayload response, String answerer, boolean checking) throws IOException {
         CoordinationRequest current = requests.get(response.request());
         if (current == null) {
-            throw new CoordinationException("REQUEST_NOT_FOUND");
+            throw new MissingReferenceException("REQUEST_NOT_FOUND");
         }
         if (current.status() != CoordinationRequest.Status.PENDING) {
             if (current.status() == response.status()) {
                 return;
             }
-            throw new CoordinationException("REQUEST_ALREADY_RESOLVED");
+            if (checking) {
+                throw new CoordinationException("REQUEST_ALREADY_RESOLVED");
+            }
+            String held = answeredBy.get(current.identity());
+            if (held != null && held.compareTo(answerer) <= 0) {
+                return;
+            }
         }
+        answeredBy.put(current.identity(), answerer);
         requests.put(current.identity(),
                 new CoordinationRequest(current.requestId(),
                         current.projectId(),

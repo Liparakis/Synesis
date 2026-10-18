@@ -188,7 +188,7 @@ only on malformed bytes: UNREACHABLE for a verified entry of the same compatibil
 | Site | Code | Class | On arrival |
 | --- | --- | --- | --- |
 | OR:92 | `OPERATOR_REQUEST_EXISTS` | UNREACHABLE | random id |
-| OR:95 | `OPERATOR_REQUEST_ALREADY_OPEN` | BOTH | row 6: two raises for one condition are one request |
+| OR:95 | `OPERATOR_REQUEST_ALREADY_OPEN` | WRITER | a condition Synesis raises is its own computer's, so raises from two computers are two requests (ADR-0098 step 4, designer item 16) |
 | OR:103 | `OPERATOR_REQUEST_NOT_OPEN` | PARK when unknown, BOTH when answered | row 6: two different answers keep it open; a new answer replaces its answerer's own |
 
 **Capabilities, contracts, tasks, predictions, conversations**
@@ -219,7 +219,7 @@ only on malformed bytes: UNREACHABLE for a verified entry of the same compatibil
 
 | Site | Code | Class | On arrival |
 | --- | --- | --- | --- |
-| ParticipantAttribution:66 | `PARTICIPANT_NOT_OWNED_BY_SIGNER` | NOTHING | row 3, with the owner computer's exemption until ADR-0098 step 5; an entry of the owner's computer for a participant not seen yet is parked |
+| ParticipantAttribution:66 | `PARTICIPANT_NOT_OWNED_BY_SIGNER` | NOTHING | row 3, with the owner computer's exemption until ADR-0098 step 5 (designer item 14) |
 | the leader-only types (`prediction/PredictionEventType.java:396-403`) from another computer | `EVENT_TYPE_LEADER_ONLY` | NOTHING | until step 5 |
 | AppendAdmission:278, :281, :102 | `REVIEW_SELF_APPROVAL_FORBIDDEN`, `REVIEW_SNAPSHOT_MISMATCH` (reviewer is the producer) | NOTHING | row 5; parked until the snapshot arrives |
 | AppendAdmission:168, :351, ReviewAdmissionRules:103, WorkIntent:384 | `REVIEW_SELF_NOT_ALLOWED`, `INTENT_OWNER_MISMATCH` | NOTHING | row 5 |

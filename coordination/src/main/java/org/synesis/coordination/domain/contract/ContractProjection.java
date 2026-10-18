@@ -8,8 +8,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.prediction.ApplyMode;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.exception.CoordinationException;
+import org.synesis.coordination.exception.MissingReferenceException;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
@@ -27,17 +29,20 @@ public final class ContractProjection {
     private final Map<UUID, ContractRecord> contracts = new LinkedHashMap<>();
     private final Map<String, ContractBinding> bindings = new LinkedHashMap<>();
     private final Map<UUID, ContractChangeRequest> changeRequests = new LinkedHashMap<>();
+    private final ApplyMode mode;
 
     /**
      * Creates an empty replay projection.
      */
     public ContractProjection() {
+        mode = ApplyMode.REPLAY;
     }
 
-    private ContractProjection(ContractProjection source) {
+    private ContractProjection(ContractProjection source, ApplyMode mode) {
         contracts.putAll(source.contracts);
         bindings.putAll(source.bindings);
         changeRequests.putAll(source.changeRequests);
+        this.mode = mode;
     }
 
     /**
@@ -66,7 +71,19 @@ public final class ContractProjection {
      * @throws IOException if the event violates contract invariants
      */
     public synchronized void validate(PredictionEvent event) throws IOException {
-        new ContractProjection(this).apply(event);
+        validate(event, ApplyMode.CHECK);
+    }
+
+    /**
+     * Applies an event to a copy of this projection, judged as {@code mode} says (ADR-0100, "Every rule an arriving
+     * entry can reach").
+     *
+     * @param event signed event
+     * @param mode  how the event is judged
+     * @throws IOException if the event violates contract invariants, or names a contract or request not seen yet
+     */
+    public synchronized void validate(PredictionEvent event, ApplyMode mode) throws IOException {
+        new ContractProjection(this, mode).apply(event);
     }
 
     /**
@@ -182,18 +199,31 @@ public final class ContractProjection {
 
     private void publish(ContractRecord published) throws IOException {
         ContractRecord prior = contracts.get(published.contractId());
-        if (prior == null ? published.revision() != 1 : published.revision() != prior.revision() + 1) {
+        long expected = prior == null ? 1 : prior.revision() + 1;
+        if (!mode.checking() && published.revision() > expected) {
+            // An earlier revision, written by the lane this one continues, has not arrived.
+            throw new MissingReferenceException("CONTRACT_REVISION_STALE");
+        }
+        if (mode.checking() && published.revision() != expected) {
             throw new CoordinationException("CONTRACT_REVISION_STALE");
         }
         if (prior != null && !prior.ownerLineageId().equals(published.ownerLineageId())) {
             throw new CoordinationException("CONTRACT_OWNED_BY_ANOTHER_LANE");
         }
         if (prior != null && prior.state() != ContractRecord.State.ACTIVE) {
-            throw new CoordinationException("CONTRACT_FROZEN");
+            if (mode.checking()) {
+                throw new CoordinationException("CONTRACT_FROZEN");
+            }
+            // The lane ended before this revision arrived: an ended contract stays as it ended.
+            return;
+        }
+        if (published.revision() < expected) {
+            // Two revisions of one number, from a lane and its successor: the first applied here stays.
+            return;
         }
         boolean covered = contracts.values().stream()
                 .anyMatch(other -> !other.contractId().equals(published.contractId()) && other.state() == ContractRecord.State.ACTIVE && published.paths().stream().anyMatch(other::covers));
-        if (covered) {
+        if (covered && mode.checking()) {
             throw new CoordinationException("CONTRACT_PATH_ALREADY_COVERED");
         }
         contracts.put(published.contractId(), published);
@@ -201,7 +231,11 @@ public final class ContractProjection {
 
     private void bind(ContractBinding binding) throws IOException {
         ContractRecord contract = contracts.get(binding.contractId());
-        if (contract == null || contract.state() != ContractRecord.State.ACTIVE || contract.revision() != binding.revision()) {
+        if (!mode.checking() && (contract == null || contract.revision() < binding.revision())) {
+            throw new MissingReferenceException("CONTRACT_REVISION_STALE");
+        }
+        if (mode.checking() && (contract == null || contract.state() != ContractRecord.State.ACTIVE
+                || contract.revision() != binding.revision())) {
             throw new CoordinationException("CONTRACT_REVISION_STALE");
         }
         bindings.put(binding.handle(), binding);
@@ -216,14 +250,25 @@ public final class ContractProjection {
 
     private void answerChange(ContractCodec.ChangeAnswer answer) throws IOException {
         ContractChangeRequest request = changeRequests.get(answer.id());
+        if (request == null && !mode.checking()) {
+            throw new MissingReferenceException("CONTRACT_CHANGE_REQUEST_NOT_OPEN");
+        }
         if (request == null || request.state() != ContractChangeRequest.State.OPEN) {
-            throw new CoordinationException("CONTRACT_CHANGE_REQUEST_NOT_OPEN");
+            if (mode.checking()) {
+                throw new CoordinationException("CONTRACT_CHANGE_REQUEST_NOT_OPEN");
+            }
+            // Ended by a lane's end that arrived first: the first ending applied here stays.
+            return;
         }
         switch (answer.answer()) {
             case ACCEPTED -> {
                 // Accepted means a revision covers it, and that revision has to exist.
                 boolean covers = contracts.values().stream()
-                        .anyMatch(contract -> contract.ownerLineageId().equals(request.ownerLineageId()) && contract.covers(request.path()) && contract.revision() == answer.revision());
+                        .anyMatch(contract -> contract.ownerLineageId().equals(request.ownerLineageId()) && contract.covers(request.path())
+                                && (mode.checking() ? contract.revision() == answer.revision() : contract.revision() >= answer.revision()));
+                if (!covers && !mode.checking()) {
+                    throw new MissingReferenceException("CONTRACT_REVISION_STALE");
+                }
                 if (!covers) {
                     throw new CoordinationException("CONTRACT_REVISION_STALE");
                 }

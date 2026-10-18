@@ -18,7 +18,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import org.synesis.coordination.domain.capability.CapabilityRequestProjection;
-import org.synesis.coordination.domain.collaboration.AppendAdmission;
 import org.synesis.coordination.domain.collaboration.CollaborationProjection;
 import org.synesis.coordination.domain.collaboration.ProjectionView;
 import org.synesis.coordination.domain.collaboration.WorkGroupProjection;
@@ -98,57 +97,9 @@ public final class PredictionEventStore implements ProjectionView {
      */
     private boolean admittingProposal;
     /**
-     * Projection for prediction-specific state.
+     * Every projection of this log, and how an entry is judged and applied.
      */
-    private final PredictionProjection projection = new PredictionProjection();
-    /**
-     * Projection for task and coordination state.
-     */
-    private final CoordinationProjection coordinationProjection = new CoordinationProjection();
-    /**
-     * Projection for capability-request state.
-     */
-    private final CapabilityRequestProjection capabilityRequestProjection = new CapabilityRequestProjection();
-    /**
-     * Projection for completion and terminal outcome state.
-     */
-    private final TaskCompletionProjection taskCompletionProjection = new TaskCompletionProjection();
-    /**
-     * Projection for collaboration request and response state.
-     */
-    private final CollaborationProjection collaborationProjection = new CollaborationProjection();
-    /**
-     * Projection for work-group membership and handoff state.
-     */
-    private final WorkGroupProjection workGroupProjection = new WorkGroupProjection();
-    /**
-     * Projection for contract binding and publication state.
-     */
-    private final ContractProjection contractProjection = new ContractProjection();
-    /**
-     * Projection for operator requests.
-     */
-    private final OperatorRequestProjection operatorRequestProjection = new OperatorRequestProjection();
-    /**
-     * Projection for what lanes said to each other.
-     */
-    private final ConversationProjection conversationProjection = new ConversationProjection();
-    /**
-     * Every projection above, in validation and application order; the one place a new projection is registered.
-     */
-    private final List<Stage> stages = List.of(
-            new Stage(projection::validate, projection::apply),
-            new Stage(coordinationProjection::validate, coordinationProjection::apply),
-            new Stage(capabilityRequestProjection::validate, capabilityRequestProjection::apply),
-            new Stage(taskCompletionProjection::validate, taskCompletionProjection::apply),
-            new Stage(collaborationProjection::validate, collaborationProjection::apply),
-            new Stage(workGroupProjection::validate, workGroupProjection::apply),
-            new Stage(contractProjection::validate, contractProjection::apply),
-            new Stage(operatorRequestProjection::validate, operatorRequestProjection::apply),
-            new Stage(conversationProjection::validate, conversationProjection::apply),
-            // Last, so a rule of one projection answers first. It reads every projection and applies nothing.
-            new Stage(event -> AppendAdmission.check(event, this), event -> {
-            }));
+    private final Projections projections;
     /**
      * Events replayed into this instance's in-memory projections.
      */
@@ -180,6 +131,7 @@ public final class PredictionEventStore implements ProjectionView {
         this.eventsDirectory = CoordinationNullException.requireNonNull(root, "root").resolve("events");
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.clock = CoordinationNullException.requireNonNull(clock, "clock");
+        this.projections = new Projections(new ProjectId(this.projectId));
         Files.createDirectories(eventsDirectory);
         this.role = ReplicationRole.of(root, this.projectId);
         cleanupTemporaryFiles();
@@ -303,9 +255,7 @@ public final class PredictionEventStore implements ProjectionView {
      * @throws IOException when any projection rejects the transition
      */
     private void validateProjections(PredictionEvent event) throws IOException {
-        for (Stage stage : stages) {
-            stage.validate().accept(event);
-        }
+        projections.check(event, !role.isMember() && !admittingProposal);
     }
 
     /**
@@ -364,9 +314,7 @@ public final class PredictionEventStore implements ProjectionView {
      * @throws IOException when a projection rejects the event
      */
     private void replay(PredictionEvent event) throws IOException {
-        for (Stage stage : stages) {
-            stage.apply().accept(event);
-        }
+        projections.apply(event);
         events.add(event);
     }
 
@@ -695,11 +643,6 @@ public final class PredictionEventStore implements ProjectionView {
         return new ProjectId(projectId);
     }
 
-    @Override
-    public boolean leaderEntry() {
-        return !role.isMember() && !admittingProposal;
-    }
-
     /**
      * Returns the project-local store root for coordinated refreshes.
      *
@@ -715,7 +658,7 @@ public final class PredictionEventStore implements ProjectionView {
      * @return live projection
      */
     public PredictionProjection projection() {
-        return projection;
+        return projections.prediction();
     }
 
     /**
@@ -724,7 +667,7 @@ public final class PredictionEventStore implements ProjectionView {
      * @return coordination projection
      */
     public CoordinationProjection coordinationProjection() {
-        return coordinationProjection;
+        return projections.coordination();
     }
 
     /**
@@ -733,7 +676,7 @@ public final class PredictionEventStore implements ProjectionView {
      * @return capability request projection
      */
     public CapabilityRequestProjection capabilityRequestProjection() {
-        return capabilityRequestProjection;
+        return projections.capabilityRequests();
     }
 
     /**
@@ -742,7 +685,7 @@ public final class PredictionEventStore implements ProjectionView {
      * @return task completion projection
      */
     public TaskCompletionProjection taskCompletionProjection() {
-        return taskCompletionProjection;
+        return projections.taskCompletionProjection();
     }
 
     /**
@@ -751,7 +694,7 @@ public final class PredictionEventStore implements ProjectionView {
      * @return live collaboration projection
      */
     public CollaborationProjection collaborationProjection() {
-        return collaborationProjection;
+        return projections.collaborationProjection();
     }
 
     /**
@@ -760,7 +703,7 @@ public final class PredictionEventStore implements ProjectionView {
      * @return work-group projection
      */
     public WorkGroupProjection workGroupProjection() {
-        return workGroupProjection;
+        return projections.workGroupProjection();
     }
 
     /**
@@ -769,7 +712,7 @@ public final class PredictionEventStore implements ProjectionView {
      * @return contract projection
      */
     public ContractProjection contractProjection() {
-        return contractProjection;
+        return projections.contracts();
     }
 
     /**
@@ -778,7 +721,7 @@ public final class PredictionEventStore implements ProjectionView {
      * @return operator request projection
      */
     public OperatorRequestProjection operatorRequestProjection() {
-        return operatorRequestProjection;
+        return projections.operatorRequests();
     }
 
     /**
@@ -806,7 +749,7 @@ public final class PredictionEventStore implements ProjectionView {
      * @return conversation projection
      */
     public ConversationProjection conversationProjection() {
-        return conversationProjection;
+        return projections.conversations();
     }
 
     /**
@@ -912,19 +855,12 @@ public final class PredictionEventStore implements ProjectionView {
     }
 
     /**
-     * One event action a projection performs, either validating a transition or applying it.
+     * One event action, given every verified event of a log in order.
      */
     @FunctionalInterface
     private interface Transition {
 
         void accept(PredictionEvent event) throws IOException;
-    }
-
-    /**
-     * The validation and application entry points of one projection.
-     */
-    private record Stage(Transition validate, Transition apply) {
-
     }
 
     /**

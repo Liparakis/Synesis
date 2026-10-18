@@ -20,9 +20,11 @@ import org.synesis.coordination.domain.identity.WorkerId;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.integration.IntegrationAttemptRecord;
 import org.synesis.coordination.domain.integration.ValidationRefusalPayload;
+import org.synesis.coordination.domain.prediction.ApplyMode;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
+import org.synesis.coordination.exception.MissingReferenceException;
 
 /**
  * Deterministic task completion and integration projection over the shared event sequence.
@@ -47,20 +49,29 @@ public final class TaskCompletionProjection {
     private final Map<SnapshotId, TaskCompletionState> integrationPriorStates = new LinkedHashMap<>();
     /** Why each snapshot the project's validation command refused was refused, in the order recorded. */
     private final Map<SnapshotId, ValidationRefusalPayload> validationRefusals = new LinkedHashMap<>();
+    /**
+     * Each snapshot's verdicts, by the reviewing participant. Only the reviewers' own computers write them, so on
+     * another computer two may meet in either order (ADR-0100 row 4).
+     */
+    private final Map<SnapshotId, Map<String, String>> verdicts = new LinkedHashMap<>();
+    private final ApplyMode mode;
 
     /**
      * Creates an empty task completion projection.
      */
     public TaskCompletionProjection() {
         attempts = new IntegrationAttemptLedger();
+        mode = ApplyMode.REPLAY;
     }
 
     /**
      * Copy constructor for non-mutating validation.
      *
      * @param source source projection
+     * @param mode   how the copy judges the event it is given
      */
-    private TaskCompletionProjection(TaskCompletionProjection source) {
+    private TaskCompletionProjection(TaskCompletionProjection source, ApplyMode mode) {
+        this.mode = mode;
         taskStates.putAll(source.taskStates);
         source.snapshotsByTask.forEach((taskId, history) -> snapshotsByTask.put(taskId, List.copyOf(history)));
         snapshotsById.putAll(source.snapshotsById);
@@ -70,6 +81,7 @@ public final class TaskCompletionProjection {
         preparedByRevision.putAll(source.preparedByRevision);
         integrationPriorStates.putAll(source.integrationPriorStates);
         validationRefusals.putAll(source.validationRefusals);
+        source.verdicts.forEach((snapshot, byReviewer) -> verdicts.put(snapshot, new LinkedHashMap<>(byReviewer)));
     }
 
     /**
@@ -86,8 +98,13 @@ public final class TaskCompletionProjection {
      * {@code reviewSatisfied}, computed by the caller because each path accepts a different set of prior states,
      * must hold.
      */
-    private static void requireIntegrable(TaskCompletionState current, boolean reviewSatisfied, String rejectedCode)
+    private void requireIntegrable(TaskCompletionState current, boolean reviewSatisfied, String rejectedCode)
             throws CoordinationException {
+        if (!mode.checking()) {
+            // The integrating computer judged it on its own view; an integration is a fact, since main only moves
+            // forward (ADR-0100, "Every rule an arriving entry can reach").
+            return;
+        }
         if (current.refused()) {
             throw new CoordinationException(rejectedCode);
         }
@@ -97,9 +114,14 @@ public final class TaskCompletionProjection {
     }
 
     /**
-     * Resolves the snapshots of an integration payload that this projection knows; unknown ids are skipped.
+     * Resolves the snapshots of an integration payload that this projection knows; unknown ids are skipped, except
+     * on arrival, where a snapshot of another log that has not arrived holds the entry back.
      */
-    private List<TaskSnapshotRecord> knownSnapshots(IntegrationAttemptPayload payload) {
+    private List<TaskSnapshotRecord> knownSnapshots(IntegrationAttemptPayload payload) throws MissingReferenceException {
+        if (mode == ApplyMode.ARRIVAL && payload.taskSnapshotIds().stream()
+                .anyMatch(snapshotId -> !snapshotsById.containsKey(new SnapshotId(snapshotId)))) {
+            throw new MissingReferenceException("INTEGRATION_SNAPSHOT_NOT_FOUND");
+        }
         return payload.taskSnapshotIds().stream()
                 .map(snapshotId -> snapshotsById.get(new SnapshotId(snapshotId)))
                 .filter(Objects::nonNull)
@@ -150,7 +172,19 @@ public final class TaskCompletionProjection {
      * @throws IOException malformed or invalid transition
      */
     public synchronized void validate(PredictionEvent event) throws IOException {
-        new TaskCompletionProjection(this).apply(event);
+        validate(event, ApplyMode.CHECK);
+    }
+
+    /**
+     * Applies an event to a copy of this projection, judged as {@code mode} says (ADR-0100, "Every rule an arriving
+     * entry can reach").
+     *
+     * @param event event to judge
+     * @param mode  how the event is judged
+     * @throws IOException when the event is refused, or names something not seen yet
+     */
+    public synchronized void validate(PredictionEvent event, ApplyMode mode) throws IOException {
+        new TaskCompletionProjection(this, mode).apply(event);
     }
 
     /**
@@ -549,17 +583,28 @@ public final class TaskCompletionProjection {
                 preparedPayload.laneIdentity(),
                 preparedPayload.claimEpochIdentity());
         CompletionPreparedPayload current = preparedByRevision.get(key);
-        if (current == null || !current.equals(payload.prepared())) {
-            throw new CoordinationException("COMPLETION_PREPARATION_MISMATCH");
+        if (current == null) {
+            // The preparation is the old lane owner's entry, the unwinding its replacement's.
+            throw new MissingReferenceException("COMPLETION_PREPARATION_MISMATCH");
         }
-        if (!snapshotsByTask.getOrDefault(preparedPayload.taskIdentity(), List.of()).isEmpty()) {
+        if (!current.equals(payload.prepared())) {
+            if (mode.checking()) {
+                throw new CoordinationException("COMPLETION_PREPARATION_MISMATCH");
+            }
+            return;
+        }
+        boolean published = !snapshotsByTask.getOrDefault(preparedPayload.taskIdentity(), List.of()).isEmpty();
+        if (published && mode.checking()) {
             throw new CoordinationException("PUBLISHED_COMPLETION_CANNOT_UNWIND");
         }
         preparedByRevision.remove(key);
-        if (prepared.get(preparedPayload.taskIdentity()).equals(preparedPayload)) {
+        if (preparedPayload.equals(prepared.get(preparedPayload.taskIdentity()))) {
             prepared.remove(preparedPayload.taskIdentity());
         }
-        taskStates.put(preparedPayload.taskIdentity(), TaskCompletionState.ACTIVE);
+        if (!published) {
+            // A snapshot published meanwhile on another computer keeps the task's state, in either order.
+            taskStates.put(preparedPayload.taskIdentity(), TaskCompletionState.ACTIVE);
+        }
     }
 
     /**
@@ -616,6 +661,9 @@ public final class TaskCompletionProjection {
         // Historical standalone review records remain replayable. New review
         // admission validates the exact snapshot before appending this event.
         if (snapshot == null) {
+            if (mode == ApplyMode.ARRIVAL) {
+                throw new MissingReferenceException("REVIEW_SNAPSHOT_NOT_FOUND");
+            }
             return;
         }
         if (!snapshot.taskIdentity().equals(payload.taskIdentity()) || !snapshot.provenance().workGroupIdentity()
@@ -625,13 +673,49 @@ public final class TaskCompletionProjection {
             throw new CoordinationException("REVIEW_SNAPSHOT_BINDING_MISMATCH");
         }
         TaskCompletionState current = snapshotStates.get(snapshot.snapshotIdentity());
-        if (current == TaskCompletionState.REVIEW_ACCEPTED || current.refused()
-                || current == TaskCompletionState.INTEGRATED) {
+        if (mode.checking() && (current == TaskCompletionState.REVIEW_ACCEPTED || current.refused()
+                || current == TaskCompletionState.INTEGRATED)) {
             throw new CoordinationException("REVIEW_DECISION_ALREADY_RECORDED");
         }
-        TaskCompletionState next = "ACCEPTED".equals(payload.result()) ? TaskCompletionState.REVIEW_ACCEPTED
-                : TaskCompletionState.REVIEW_REJECTED;
-        setSnapshotState(snapshot, next);
+        Map<String, String> given = verdicts.computeIfAbsent(snapshot.snapshotIdentity(), id -> new LinkedHashMap<>());
+        given.put(payload.targetParticipant(), payload.result());
+        if (current == TaskCompletionState.INTEGRATED || current == TaskCompletionState.VALIDATION_REFUSED) {
+            // An integration and a validation refusal are facts no verdict takes back.
+            return;
+        }
+        TaskCompletionState reviewed = reviewState(given);
+        if (reviewed.refused() || isReviewState(current)) {
+            forceSnapshotState(snapshot, reviewed);
+        }
+    }
+
+    /**
+     * The review state a set of verdicts gives: accepted when every reviewer accepted, rejected when every one
+     * rejected, disputed when they differ (ADR-0098 designer item 3).
+     */
+    private static TaskCompletionState reviewState(Map<String, String> byReviewer) {
+        long accepted = byReviewer.values().stream().filter("ACCEPTED"::equals).count();
+        if (accepted == byReviewer.size()) {
+            return TaskCompletionState.REVIEW_ACCEPTED;
+        }
+        return accepted == 0 ? TaskCompletionState.REVIEW_REJECTED : TaskCompletionState.REVIEW_DISPUTED;
+    }
+
+    private static boolean isReviewState(TaskCompletionState state) {
+        return state == TaskCompletionState.REVIEW_PENDING || state == TaskCompletionState.REVIEW_ACCEPTED
+                || state == TaskCompletionState.REVIEW_REJECTED || state == TaskCompletionState.REVIEW_DISPUTED;
+    }
+
+    /**
+     * Returns the verdicts of a snapshot whose reviewers disagree (ADR-0100 row 4).
+     *
+     * @param snapshotId snapshot identity
+     * @return each reviewer's verdict when they differ; empty when there is one verdict or they agree
+     */
+    public synchronized Map<String, String> reviewDispute(SnapshotId snapshotId) {
+        Map<String, String> given = verdicts.getOrDefault(CoordinationNullException.requireNonNull(snapshotId,
+                "snapshot ID"), Map.of());
+        return given.values().stream().distinct().count() > 1 ? Map.copyOf(given) : Map.of();
     }
 
     /**
@@ -686,6 +770,10 @@ public final class TaskCompletionProjection {
         for (TaskSnapshotRecord snapshot : knownSnapshots(payload)) {
             TaskCompletionState state = pending ? integrationPriorStates.remove(snapshot.snapshotIdentity())
                     : TaskCompletionState.INTEGRATION_FAILED;
+            if (pending && verdicts.containsKey(snapshot.snapshotIdentity())) {
+                // The verdicts held now, which may have grown while the attempt ran on another computer.
+                state = reviewState(verdicts.get(snapshot.snapshotIdentity()));
+            }
             if (state == null) {
                 state = snapshot.reviewRequired() ? TaskCompletionState.REVIEW_ACCEPTED
                         : TaskCompletionState.INTEGRATION_PENDING;
@@ -708,12 +796,20 @@ public final class TaskCompletionProjection {
         ValidationRefusalPayload payload = ValidationRefusalPayload.decode(event.payload());
         TaskSnapshotRecord snapshot = snapshotsById.get(payload.snapshotIdentity());
         if (snapshot == null) {
-            throw new CoordinationException("VALIDATION_REFUSAL_SNAPSHOT_UNKNOWN");
+            throw new MissingReferenceException("VALIDATION_REFUSAL_SNAPSHOT_UNKNOWN");
         }
         if (!snapshot.taskId().equals(payload.taskId()) || !snapshot.provenance().workGroupId()
                 .equals(payload.workGroupId()) || !snapshot.provenance().authorityLineageId()
                 .equals(payload.authorityLineageId()) || snapshot.provenance().claimEpoch() != payload.claimEpoch()) {
             throw new CoordinationException("VALIDATION_REFUSAL_SNAPSHOT_BINDING_MISMATCH");
+        }
+        if (!mode.checking()) {
+            // The integrating computer refused it on its own view. Only an integration outranks the refusal.
+            if (snapshotStates.get(snapshot.snapshotIdentity()) != TaskCompletionState.INTEGRATED) {
+                forceSnapshotState(snapshot, TaskCompletionState.VALIDATION_REFUSED);
+            }
+            validationRefusals.put(snapshot.snapshotIdentity(), payload);
+            return;
         }
         if (!isIntegrationEligibleState(snapshotStates.get(snapshot.snapshotIdentity()))) {
             throw new CoordinationException("VALIDATION_REFUSAL_SNAPSHOT_NOT_ELIGIBLE");
@@ -801,6 +897,7 @@ public final class TaskCompletionProjection {
         TaskSnapshotPayload payload = TaskSnapshotPayload.decode(event.payload());
         TaskSnapshotRecord snapshot = snapshotsById.get(payload.snapshotIdentity());
         if (snapshot == null) {
+            requireArrived();
             taskStates.put(payload.taskIdentity(), TaskCompletionState.INTEGRATED);
             return;
         }
@@ -809,7 +906,7 @@ public final class TaskCompletionProjection {
                 !snapshot.reviewRequired() || current == TaskCompletionState.REVIEW_ACCEPTED
                         || integrationPriorStates.get(snapshot.snapshotIdentity()) == TaskCompletionState.REVIEW_ACCEPTED,
                 "REJECTED_SNAPSHOT_CANNOT_INTEGRATE");
-        setSnapshotState(snapshot, TaskCompletionState.INTEGRATED);
+        integrated(snapshot);
     }
 
     /**
@@ -831,6 +928,7 @@ public final class TaskCompletionProjection {
         }
         TaskSnapshotRecord snapshot = snapshotsById.get(payload.snapshotIdentity());
         if (snapshot == null) {
+            requireArrived();
             taskStates.put(payload.taskIdentity(), TaskCompletionState.INTEGRATED);
             return;
         }
@@ -839,7 +937,7 @@ public final class TaskCompletionProjection {
                 !snapshot.reviewRequired() || current == TaskCompletionState.INTEGRATED
                         || current == TaskCompletionState.REVIEW_ACCEPTED,
                 REVIEW_ACCEPTANCE_REQUIRED);
-        setSnapshotState(snapshot, TaskCompletionState.INTEGRATED);
+        integrated(snapshot);
     }
 
     /**
@@ -849,6 +947,40 @@ public final class TaskCompletionProjection {
         List<TaskSnapshotRecord> history = snapshotsByTask.get(CoordinationNullException.requireNonNull(taskId,
                 "task ID"));
         return history == null || history.isEmpty() ? Optional.empty() : Optional.of(history.getLast());
+    }
+
+    /**
+     * On arrival, holds back an integration entry whose snapshot, in its producer's log, has not arrived. On this
+     * computer's own append and on replay such an entry keeps today's meaning: a task integrated before snapshots.
+     */
+    private void requireArrived() throws MissingReferenceException {
+        if (mode == ApplyMode.ARRIVAL) {
+            throw new MissingReferenceException("INTEGRATION_SNAPSHOT_NOT_FOUND");
+        }
+    }
+
+    /**
+     * Records that a snapshot reached the control branch. On this computer's own append the gate above has already
+     * refused a refused snapshot; an integration written by another computer stands whatever this one saw first.
+     */
+    private void integrated(TaskSnapshotRecord snapshot) {
+        if (mode.checking()) {
+            setSnapshotState(snapshot, TaskCompletionState.INTEGRATED);
+        } else {
+            forceSnapshotState(snapshot, TaskCompletionState.INTEGRATED);
+        }
+    }
+
+    /**
+     * Sets a snapshot's state even over a refused one: the outcome of facts that meet from two computers, which
+     * must not depend on which arrived first.
+     */
+    private void forceSnapshotState(TaskSnapshotRecord snapshot, TaskCompletionState state) {
+        snapshotStates.put(snapshot.snapshotIdentity(), state);
+        if (latestSnapshot(snapshot.taskIdentity()).map(latest -> latest.snapshotIdentity()
+                .equals(snapshot.snapshotIdentity())).orElse(false)) {
+            taskStates.put(snapshot.taskIdentity(), state);
+        }
     }
 
     /**

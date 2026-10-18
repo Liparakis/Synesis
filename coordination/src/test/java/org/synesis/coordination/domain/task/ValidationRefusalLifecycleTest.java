@@ -267,10 +267,11 @@ final class ValidationRefusalLifecycleTest {
         store.append(UUID.randomUUID(), PredictionEventType.REVIEW_VALIDATION_RECORDED, identity.nodeId(),
                 new ReviewValidationPayload(second.grantId(), groupId, laneId, "agt-reviewer-2", 1, taskId, "snap_s1",
                         "REJECTED", "needs work", "agt-owner").encode(), identity);
-        assertEquals(TaskCompletionState.REVIEW_REJECTED, stateOf(store, "snap_s1"));
+        // Two reviewers' different verdicts are a dispute, which counts as rejected (ADR-0100 row 4).
+        assertEquals(TaskCompletionState.REVIEW_DISPUTED, stateOf(store, "snap_s1"));
         attemptFailedPending(store, "att_1", "snap_s1");
 
-        assertEquals(TaskCompletionState.REVIEW_REJECTED, stateOf(store, "snap_s1"));
+        assertEquals(TaskCompletionState.REVIEW_DISPUTED, stateOf(store, "snap_s1"));
         assertTrue(store.taskCompletionProjection().eligibleSnapshots().isEmpty());
     }
 
@@ -293,10 +294,10 @@ final class ValidationRefusalLifecycleTest {
     }
 
     @Test
-    void onlyTheTwoRefusedStatesAreRefused() {
+    void onlyTheThreeRefusedStatesAreRefused() {
         for (TaskCompletionState state : TaskCompletionState.values()) {
             boolean expected = state == TaskCompletionState.REVIEW_REJECTED
-                    || state == TaskCompletionState.VALIDATION_REFUSED;
+                    || state == TaskCompletionState.REVIEW_DISPUTED || state == TaskCompletionState.VALIDATION_REFUSED;
             assertEquals(expected, state.refused(), state.name());
         }
         assertFalse(TaskCompletionState.INTEGRATION_FAILED.refused());

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.synesis.coordination.domain.prediction.ApplyMode;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
@@ -23,16 +24,19 @@ public final class ConversationProjection {
 
     private final List<ConversationMessage> messages = new ArrayList<>();
     private final Map<UUID, Long> delivered = new HashMap<>();
+    private final ApplyMode mode;
 
     /**
      * Creates an empty replay projection.
      */
     public ConversationProjection() {
+        mode = ApplyMode.REPLAY;
     }
 
-    private ConversationProjection(ConversationProjection source) {
+    private ConversationProjection(ConversationProjection source, ApplyMode mode) {
         messages.addAll(source.messages);
         delivered.putAll(source.delivered);
+        this.mode = mode;
     }
 
     /**
@@ -58,7 +62,18 @@ public final class ConversationProjection {
      * @throws IOException if the event is malformed
      */
     public synchronized void validate(PredictionEvent event) throws IOException {
-        new ConversationProjection(this).apply(event);
+        validate(event, ApplyMode.CHECK);
+    }
+
+    /**
+     * Applies an event to a copy of this projection, judged as {@code mode} says.
+     *
+     * @param event signed event
+     * @param mode  how the event is judged
+     * @throws IOException if the event is malformed
+     */
+    public synchronized void validate(PredictionEvent event, ApplyMode mode) throws IOException {
+        new ConversationProjection(this, mode).apply(event);
     }
 
     /**
@@ -118,9 +133,13 @@ public final class ConversationProjection {
         messages.add(sent);
     }
 
-    /** A mark can only cover what is already in the log, and never moves back. */
+    /**
+     * A mark can only cover what is already in the log, and never moves back. The mark counts in its writer's local
+     * order, so the bound is the writer's to judge; a mark from another computer is about that computer's own lanes
+     * and is read only for them (ADR-0098 step 4, designer item 13).
+     */
     private void deliver(ConversationMessage.Delivered mark, long sequence) throws IOException {
-        if (mark.through() < 0 || mark.through() >= sequence) {
+        if (mode.checking() && (mark.through() < 0 || mark.through() >= sequence)) {
             throw new CoordinationException("CONVERSATION_DELIVERY_AHEAD_OF_LOG");
         }
         delivered.merge(mark.lineageId(), mark.through(), Math::max);

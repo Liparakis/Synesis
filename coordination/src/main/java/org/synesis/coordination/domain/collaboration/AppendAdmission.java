@@ -7,12 +7,14 @@ import org.synesis.coordination.domain.identity.LaneGrantId;
 import org.synesis.coordination.domain.identity.SnapshotId;
 import org.synesis.coordination.domain.integration.ImplementationEventPayload;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.CompletionPreparedPayload;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
 import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.exception.CoordinationException;
+import org.synesis.coordination.exception.MissingReferenceException;
 
 /**
  * The rules that decide who may claim, act, review, finish or cancel, checked against the projections before an
@@ -266,6 +268,35 @@ public final class AppendAdmission {
     private static void groupStatusChanged(WorkGroup update) throws IOException {
         if (update.status() == WorkGroup.Status.ACTIVE) {
             throw new CoordinationException("GROUP_STATUS_INVALID");
+        }
+    }
+
+    /**
+     * Judges an entry that arrived from another computer's log (ADR-0098 step 4). Its writer judged every rule
+     * above against its own view, so only the rules an honest build never breaks are judged again, the ones that
+     * make an entry count for nothing (ADR-0100 rows 3 and 5): a type only the owner's computer writes, an entry
+     * acting for another node's participant, and a self-review.
+     *
+     * @param event signed entry of another computer's log
+     * @param view  projections as they stand before the entry; {@link ProjectionView#leaderEntry()} tells whether
+     *              the owner's computer signed it
+     * @throws IOException with the code of the rule broken, or a
+     *                     {@link org.synesis.coordination.exception.MissingReferenceException} when the snapshot a
+     *                     review names has not arrived
+     */
+    public static void checkArrival(PredictionEvent event, ProjectionView view) throws IOException {
+        if (event.type().leaderOnly() && !view.leaderEntry()) {
+            throw new CoordinationException("EVENT_TYPE_LEADER_ONLY");
+        }
+        ParticipantAttribution.require(event, view);
+        if (event.type() == PredictionEventType.REVIEW_VALIDATION_RECORDED) {
+            ReviewValidationPayload review = ReviewValidationPayload.decode(event.payload());
+            TaskSnapshotRecord snapshot = view.taskCompletionProjection().findSnapshotById(review.snapshotIdentity())
+                    .orElseThrow(() -> new MissingReferenceException("REVIEW_SNAPSHOT_NOT_FOUND"));
+            if (snapshot.provenance().participant().equals(review.targetParticipant())
+                    || review.sourceParticipant().equals(review.targetParticipant())) {
+                throw new CoordinationException("REVIEW_SELF_APPROVAL_FORBIDDEN");
+            }
         }
     }
 

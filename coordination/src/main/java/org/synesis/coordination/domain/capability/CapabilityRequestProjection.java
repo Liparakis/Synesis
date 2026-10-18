@@ -14,9 +14,11 @@ import org.synesis.coordination.domain.integration.ImplementationRevisionRecord;
 import org.synesis.coordination.domain.integration.ValidationContextRecord;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.LaneContinuation;
+import org.synesis.coordination.domain.prediction.ApplyMode;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
+import org.synesis.coordination.exception.MissingReferenceException;
 
 /**
  * Deterministic capability request projection over the shared event sequence.
@@ -34,23 +36,27 @@ public final class CapabilityRequestProjection {
     private final Map<ImplementationRevisionKey, ImplementationRevisionRecord> implementations = new LinkedHashMap<>();
     private final Map<CapabilityRequestHandle, ImplementationRevision> latestRevision = new LinkedHashMap<>();
     private final Map<CapabilityRequestHandle, ValidationContextRecord> validationContexts = new LinkedHashMap<>();
+    private final ApplyMode mode;
 
     /**
      * Creates an empty capability request projection.
      */
     public CapabilityRequestProjection() {
+        mode = ApplyMode.REPLAY;
     }
 
     /**
      * Copy constructor for non-mutating validation.
      *
      * @param source source projection
+     * @param mode   how the copy judges the event it is given
      */
-    private CapabilityRequestProjection(CapabilityRequestProjection source) {
+    private CapabilityRequestProjection(CapabilityRequestProjection source, ApplyMode mode) {
         records.putAll(source.records);
         implementations.putAll(source.implementations);
         latestRevision.putAll(source.latestRevision);
         validationContexts.putAll(source.validationContexts);
+        this.mode = mode;
     }
 
     /**
@@ -83,8 +89,21 @@ public final class CapabilityRequestProjection {
      * @throws IOException when the event payload or state transition is invalid
      */
     public synchronized void validate(PredictionEvent event) throws IOException {
-        CapabilityRequestProjection candidate = new CapabilityRequestProjection(this);
-        candidate.apply(event);
+        validate(event, ApplyMode.CHECK);
+    }
+
+    /**
+     * Applies an event to a copy of this projection, judged as {@code mode} says (ADR-0100, "Every rule an arriving
+     * entry can reach"). Off this computer's own append, an entry naming a request or a revision not seen yet waits
+     * for it, a superseded request absorbs what arrives after it, and a verdict or an acceptance on an older
+     * revision than the one held is history with no effect.
+     *
+     * @param event event to validate
+     * @param mode  how the event is judged
+     * @throws IOException when the event payload or state transition is invalid
+     */
+    public synchronized void validate(PredictionEvent event, ApplyMode mode) throws IOException {
+        new CapabilityRequestProjection(this, mode).apply(event);
     }
 
     /**
@@ -390,6 +409,9 @@ public final class CapabilityRequestProjection {
         CapabilityRequestRecord current = requireRequest(payload,
                 CapabilityLifecycleState::bindsLanes,
                 "TERMINAL_CAPABILITY_REQUEST_CANNOT_BE_REVISED");
+        if (current == null) {
+            return;
+        }
         if (!payload.state().isUnderNegotiation()) {
             throw new CoordinationException("INVALID_CAPABILITY_CONTRACT_REVISION_STATE");
         }
@@ -413,7 +435,15 @@ public final class CapabilityRequestProjection {
         CapabilityRequestRecord current = requireRequest(payload,
                 CapabilityLifecycleState::isUnderNegotiation,
                 "STALE_CAPABILITY_REQUEST_ACCEPTANCE");
+        if (current == null) {
+            return;
+        }
         if (!current.contract().isEquivalent(payload.contract())) {
+            if (!mode.checking()) {
+                // The owner revised the contract while the requester accepted the one before (ADR-0100 row 10):
+                // the revision stands and the acceptance of the older one has no effect, in either order.
+                return;
+            }
             throw new CoordinationException("CAPABILITY_CONTRACT_REVISION_MISMATCH");
         }
         records.put(payload.handle(),
@@ -457,7 +487,18 @@ public final class CapabilityRequestProjection {
             throw new CoordinationException("CAPABILITY_LINEAGE_MISMATCH");
         }
         ImplementationRevision latest = latestRevision.get(handleKey);
-        if (!current.state().acceptsImplementation()) {
+        int expectedRevision = latest == null ? 1 : latest.value() + 1;
+        if (!mode.checking()) {
+            if (current.state() == CapabilityLifecycleState.SUPERSEDED || payload.revisionNumber() < expectedRevision) {
+                // Ended, or a revision this computer already holds: the first one applied here stays.
+                return;
+            }
+            if (payload.revisionNumber() > expectedRevision || (!current.state().hasAcceptedContract()
+                    && !current.state().acceptsImplementation())) {
+                // The acceptance, or an earlier revision, is in a log that has not arrived.
+                throw new MissingReferenceException("CAPABILITY_REQUEST_NOT_ACCEPTED");
+            }
+        } else if (!current.state().acceptsImplementation()) {
             // An owner that revised its files publishes again to a request it had already published
             // to, and the requester validates the new commit (ADR-0089). The same commit again would
             // only discard a validation, so it is refused.
@@ -465,9 +506,10 @@ public final class CapabilityRequestProjection {
             if (!current.state().hasAcceptedContract() || published == null || published.commitSha().equals(payload.commitSha())) {
                 throw new CoordinationException("CAPABILITY_REQUEST_NOT_ACCEPTED");
             }
+        }
+        if (!current.state().acceptsImplementation()) {
             validationContexts.remove(handleKey);
         }
-        int expectedRevision = latest == null ? 1 : latest.value() + 1;
         if (payload.revisionNumber() != expectedRevision) {
             throw new CoordinationException("CAPABILITY_IMPLEMENTATION_REVISION_STALE");
         }
@@ -512,7 +554,9 @@ public final class CapabilityRequestProjection {
         ImplementationEventPayload payload = ImplementationEventPayload.decode(event.payload());
         CapabilityRequestHandle handleKey = payload.handle();
         CapabilityRequestRecord current = requireRecord(handleKey);
-        requireCurrentImplementation(current, payload, CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE, CapabilityLifecycleState.VALIDATING);
+        if (!requireCurrentImplementation(current, payload, CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE, CapabilityLifecycleState.VALIDATING)) {
+            return;
+        }
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.VALIDATING,
                 null,
                 null,
@@ -539,7 +583,9 @@ public final class CapabilityRequestProjection {
         ImplementationEventPayload payload = ImplementationEventPayload.decode(event.payload());
         CapabilityRequestHandle handleKey = payload.handle();
         CapabilityRequestRecord current = requireRecord(handleKey);
-        requireCurrentImplementation(current, payload, CapabilityLifecycleState.VALIDATING);
+        if (!requireCurrentImplementation(current, payload, CapabilityLifecycleState.VALIDATING)) {
+            return;
+        }
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.VALIDATED,
                 null,
                 null,
@@ -558,7 +604,9 @@ public final class CapabilityRequestProjection {
         ImplementationEventPayload payload = ImplementationEventPayload.decode(event.payload());
         CapabilityRequestHandle handleKey = payload.handle();
         CapabilityRequestRecord current = requireRecord(handleKey);
-        requireCurrentImplementation(current, payload, CapabilityLifecycleState.VALIDATING);
+        if (!requireCurrentImplementation(current, payload, CapabilityLifecycleState.VALIDATING)) {
+            return;
+        }
         String reason =
                 payload.validationReason().isBlank() ? "Revision required by requester" : payload.validationReason();
         CapabilityRequestRecord updated = current.withUpdate(CapabilityLifecycleState.IMPLEMENTING,
@@ -572,19 +620,24 @@ public final class CapabilityRequestProjection {
     private CapabilityRequestRecord requireRecord(CapabilityRequestHandle handle) throws IOException {
         CapabilityRequestRecord current = records.get(handle);
         if (current == null) {
-            throw new CoordinationException("CAPABILITY_REQUEST_NOT_FOUND");
+            throw new MissingReferenceException("CAPABILITY_REQUEST_NOT_FOUND");
         }
         return current;
     }
 
     /**
      * Looks up the request a contract event names, fences its contract revision, then requires its state to be
-     * one the event may leave; the checks run in this order because it decides which error a caller sees.
+     * one the event may leave; the checks run in this order because it decides which error a caller sees. The
+     * fence and the state are the writer's to judge: off this computer's own append, a request no longer in a
+     * state the event may leave returns {@code null}, and the event has no effect.
      */
     private CapabilityRequestRecord requireRequest(CapabilityRequestPayload payload,
             Predicate<CapabilityLifecycleState> allowedFrom,
             String staleCode) throws IOException {
         CapabilityRequestRecord current = requireRecord(payload.handle());
+        if (!mode.checking()) {
+            return allowedFrom.test(current.state()) ? current : null;
+        }
         requireExpectedContractRevision(current, payload);
         if (!allowedFrom.test(current.state())) {
             throw new CoordinationException(staleCode);
@@ -599,7 +652,7 @@ public final class CapabilityRequestProjection {
         }
     }
 
-    private void requireCurrentImplementation(CapabilityRequestRecord current,
+    private boolean requireCurrentImplementation(CapabilityRequestRecord current,
             ImplementationEventPayload payload,
             CapabilityLifecycleState... allowedStates) throws IOException {
         boolean stateAllowed = false;
@@ -608,12 +661,21 @@ public final class CapabilityRequestProjection {
         }
         ImplementationRevision latest = latestRevision.get(current.handle());
         ImplementationRevisionRecord implementation = latest == null ? null : implementations.get(new ImplementationRevisionKey(current.handle(), latest));
+        if (!mode.checking()) {
+            if (latest == null || latest.value() < payload.revisionNumber()) {
+                // The owner's publication of the revision this verdict names has not arrived.
+                throw new MissingReferenceException("CAPABILITY_VALIDATION_STALE");
+            }
+            // A verdict on an older revision, or on a request that ended, is history (ADR-0100 row 10).
+            return stateAllowed && latest.value() == payload.revisionNumber();
+        }
         if (!stateAllowed || latest == null || implementation == null || latest.value() != payload.revisionNumber()
                 || !current.authorityLineageId().equals(payload.authorityLineageId())
                 || !implementation.authorityLineageId().equals(payload.authorityLineageId())
                 || !implementation.commitSha().equals(payload.commitSha())) {
             throw new CoordinationException("CAPABILITY_VALIDATION_STALE");
         }
+        return true;
     }
 
     /** Transfers actionable capability actors as part of the signed lane continuation event. */

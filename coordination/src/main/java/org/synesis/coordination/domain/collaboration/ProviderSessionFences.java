@@ -33,22 +33,27 @@ final class ProviderSessionFences {
     }
 
     /**
-     * Fences a provider session using its exact optimistic revision and terminal evidence.
+     * Fences a provider session using its exact optimistic revision and terminal evidence. The revision and the
+     * conflicts are judged on this computer's own append only: off it, a session is terminal once any entry says so,
+     * and a participant once any of its sessions is.
      *
+     * @param payload       the fence
+     * @param eventSequence local revision of the entry
+     * @param checking      whether this computer's own new entry is being judged
      * @throws IOException when the revision is stale or the evidence conflicts with an earlier fence
      */
-    void terminalize(ProviderSessionTerminalPayload payload, long eventSequence) throws IOException {
-        if (payload.validatedRevision() != eventSequence - 1L) {
+    void terminalize(ProviderSessionTerminalPayload payload, long eventSequence, boolean checking) throws IOException {
+        if (checking && payload.validatedRevision() != eventSequence - 1L) {
             throw new CoordinationException("TERMINAL_REVISION_STALE");
         }
         ProviderSessionTerminalPayload previous = terminalSessions.get(payload.sessionIdentity());
         if (previous != null) {
-            if (!previous.equals(payload)) {
+            if (checking && !previous.equals(payload)) {
                 throw new CoordinationException("TERMINAL_SESSION_CONFLICT");
             }
             return;
         }
-        if (isParticipantTerminal(payload.participantIdentity())) {
+        if (checking && isParticipantTerminal(payload.participantIdentity())) {
             throw new CoordinationException("TERMINAL_PARTICIPANT_CONFLICT");
         }
         terminalSessions.put(payload.sessionIdentity(), payload);

@@ -9,9 +9,11 @@ import org.synesis.coordination.domain.command.CoordinationCommand;
 import org.synesis.coordination.domain.identity.CapabilityId;
 import org.synesis.coordination.domain.identity.TaskId;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
+import org.synesis.coordination.domain.prediction.ApplyMode;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
+import org.synesis.coordination.exception.MissingReferenceException;
 
 /**
  * Deterministic task and ownership projection over the shared event sequence.
@@ -20,11 +22,13 @@ public final class CoordinationProjection {
 
     private final Map<TaskId, CoordinationTaskView> tasks = new LinkedHashMap<>();
     private final Map<CapabilityId, OwnershipClaim> ownership = new LinkedHashMap<>();
+    private final ApplyMode mode;
 
     /**
      * Creates an empty coordination projection.
      */
     public CoordinationProjection() {
+        mode = ApplyMode.REPLAY;
     }
 
     /**
@@ -32,9 +36,10 @@ public final class CoordinationProjection {
      *
      * @param source current source intent
      */
-    private CoordinationProjection(CoordinationProjection source) {
+    private CoordinationProjection(CoordinationProjection source, ApplyMode mode) {
         tasks.putAll(source.tasks);
         ownership.putAll(source.ownership);
+        this.mode = mode;
     }
 
     /**
@@ -70,8 +75,19 @@ public final class CoordinationProjection {
      * @throws IOException when the event payload or state transition is invalid
      */
     public synchronized void validate(PredictionEvent event) throws IOException {
-        CoordinationProjection candidate = new CoordinationProjection(this);
-        candidate.apply(event);
+        validate(event, ApplyMode.CHECK);
+    }
+
+    /**
+     * Applies an event to a copy of this projection, judged as {@code mode} says (ADR-0100, "Every rule an arriving
+     * entry can reach").
+     *
+     * @param event event to validate
+     * @param mode  how the event is judged
+     * @throws IOException when the event payload or state transition is invalid, or names a task not seen yet
+     */
+    public synchronized void validate(PredictionEvent event, ApplyMode mode) throws IOException {
+        new CoordinationProjection(this, mode).apply(event);
     }
 
     /**
@@ -168,10 +184,19 @@ public final class CoordinationProjection {
      */
     private void claimTask(PredictionEvent event) throws IOException {
         TaskClaim claim = TaskClaim.decode(commandPayload(event));
-        CoordinationTaskView current = task(claim.taskIdentity()).orElseThrow(() -> new CoordinationException(
+        CoordinationTaskView current = task(claim.taskIdentity()).orElseThrow(() -> new MissingReferenceException(
                 "TASK_NOT_FOUND"));
-        if (current.ownerNodeId() != null || !claim.taskId().equals(event.predictionId())) {
+        if (!claim.taskId().equals(event.predictionId())) {
             throw new CoordinationException("TASK_ALREADY_CLAIMED");
+        }
+        if (current.ownerNodeId() != null) {
+            if (mode.checking()) {
+                throw new CoordinationException("TASK_ALREADY_CLAIMED");
+            }
+            // Two computers claimed it apart (ADR-0100 row 9): the lower node keeps it, in either order.
+            if (current.ownerNodeId().compareTo(claim.ownerNodeId()) <= 0) {
+                return;
+            }
         }
         tasks.put(claim.taskIdentity(), new CoordinationTaskView(current.task(), claim));
     }
@@ -184,7 +209,7 @@ public final class CoordinationProjection {
      */
     private void releaseTask(PredictionEvent event) throws IOException {
         TaskId taskId = new TaskId(event.predictionId());
-        CoordinationTaskView current = task(taskId).orElseThrow(() -> new CoordinationException("TASK_NOT_FOUND"));
+        CoordinationTaskView current = task(taskId).orElseThrow(() -> new MissingReferenceException("TASK_NOT_FOUND"));
         tasks.put(taskId, new CoordinationTaskView(current.task(), null));
     }
 
@@ -196,7 +221,7 @@ public final class CoordinationProjection {
      */
     private void claimOwnership(PredictionEvent event) throws IOException {
         OwnershipClaim claim = OwnershipClaim.decode(commandPayload(event));
-        CoordinationTaskView task = task(claim.taskIdentity()).orElseThrow(() -> new CoordinationException(
+        CoordinationTaskView task = task(claim.taskIdentity()).orElseThrow(() -> new MissingReferenceException(
                 "TASK_NOT_FOUND"));
         if (!claim.taskIdentity().value().equals(event.predictionId()) || task.ownerNode()
                 .filter(claim.ownerNode()::equals).isEmpty()) {
@@ -205,7 +230,13 @@ public final class CoordinationProjection {
         CapabilityId capability = claim.capabilityIdentity();
         OwnershipClaim current = ownership.get(capability);
         if (current != null && !current.ownerNodeId().equals(claim.ownerNodeId())) {
-            throw new CoordinationException("OWNERSHIP_CONFLICT");
+            if (mode.checking()) {
+                throw new CoordinationException("OWNERSHIP_CONFLICT");
+            }
+            // Two computers claimed it apart: the lower node keeps it, in either order.
+            if (current.ownerNodeId().compareTo(claim.ownerNodeId()) < 0) {
+                return;
+            }
         }
         ownership.put(capability, claim);
     }

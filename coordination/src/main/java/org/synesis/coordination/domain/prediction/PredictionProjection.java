@@ -1,6 +1,7 @@
 package org.synesis.coordination.domain.prediction;
 
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -9,6 +10,7 @@ import java.util.UUID;
 import org.synesis.coordination.domain.identity.PredictionId;
 import org.synesis.coordination.exception.CoordinationNullException;
 import org.synesis.coordination.exception.CoordinationStateException;
+import org.synesis.coordination.exception.MissingReferenceException;
 
 /**
  * Deterministic in-memory projection of prediction events.
@@ -110,10 +112,72 @@ public final class PredictionProjection {
      */
     public synchronized void apply(PredictionEvent event) {
         CoordinationNullException.requireNonNull(event, "event");
-        PredictionState next = validate(event);
+        PredictionState next;
+        try {
+            next = next(event, ApplyMode.REPLAY);
+        } catch (MissingReferenceException unreachable) {
+            throw new CoordinationStateException(unreachable.code());
+        }
         if (next != null) {
             states.put(event.predictionIdentity(), next);
         }
+    }
+
+    /**
+     * Judges an event as {@code mode} says without mutating the projection (ADR-0100, "Every rule an arriving
+     * entry can reach"). Off this computer's own append, a step written by the other party while this one was
+     * already past it keeps the state, a terminal state absorbs later steps, and a step whose predecessor has not
+     * arrived waits for it.
+     *
+     * @param event event to judge
+     * @param mode  how the event is judged
+     * @throws IOException {@link MissingReferenceException} when an earlier step has not arrived
+     */
+    public synchronized void validate(PredictionEvent event, ApplyMode mode) throws IOException {
+        next(event, mode);
+    }
+
+    private PredictionState next(PredictionEvent event, ApplyMode mode) throws MissingReferenceException {
+        if (mode.checking()) {
+            return validate(event);
+        }
+        try {
+            return validate(event);
+        } catch (CoordinationStateException refused) {
+            PredictionState current = states.get(event.predictionIdentity());
+            PredictionState predecessor = predecessor(event.type());
+            if (current == null || (predecessor != null && current.ordinal() < predecessor.ordinal()
+                    && !terminal(current))) {
+                if (mode == ApplyMode.ARRIVAL) {
+                    throw new MissingReferenceException("PREDICTION_STEP_NOT_SEEN");
+                }
+                throw refused;
+            }
+            if (event.type() == PredictionEventType.PREDICTION_CREATED) {
+                throw refused;
+            }
+            return current;
+        }
+    }
+
+    private static boolean terminal(PredictionState state) {
+        return state == PredictionState.RETIRED || state == PredictionState.INVALIDATED
+                || state == PredictionState.REJECTED || state == PredictionState.EXPIRED;
+    }
+
+    /** The earliest state a step can follow, or null for a step allowed from any state that is not terminal. */
+    private static PredictionState predecessor(PredictionEventType type) {
+        return switch (type) {
+            case PREDICTION_ROUTED -> PredictionState.PROPOSED;
+            case REQUEST_RECEIVED -> PredictionState.ROUTED;
+            case ACCEPTED_EXACT, ACCEPTED_EQUIVALENT, CONTRACT_REVISED -> PredictionState.RECEIVED;
+            case IMPLEMENTATION_STARTED -> PredictionState.ACCEPTED_EXACT;
+            case PATCH_READY -> PredictionState.IMPLEMENTING;
+            case CAPABILITY_AVAILABLE -> PredictionState.PATCH_READY;
+            case VALIDATION_STARTED -> PredictionState.AVAILABLE;
+            case SPECULATION_RETIRED -> PredictionState.VALIDATING;
+            default -> null;
+        };
     }
 
     /**

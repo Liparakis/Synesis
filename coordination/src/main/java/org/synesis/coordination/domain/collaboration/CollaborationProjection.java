@@ -16,11 +16,13 @@ import org.synesis.coordination.domain.identity.SnapshotReference;
 import org.synesis.coordination.domain.identity.WorkGroupId;
 import org.synesis.coordination.domain.identity.WorkIntentId;
 import org.synesis.coordination.domain.integration.ValidationRefusalPayload;
+import org.synesis.coordination.domain.prediction.ApplyMode;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.CompletionUnwoundPayload;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
+import org.synesis.coordination.exception.MissingReferenceException;
 
 /**
  * Deterministic projection of active work intents and resource claims.
@@ -28,6 +30,12 @@ import org.synesis.coordination.exception.CoordinationNullException;
 public final class CollaborationProjection {
 
     private final Map<WorkIntentId, WorkIntent> intents = new LinkedHashMap<>();
+    /**
+     * Every lane that was released, completed, continued, cancelled or dropped, by id. An entry of another computer
+     * about such a lane applies with no effect; only a lane never seen holds an entry back (ADR-0098 step 4,
+     * designer item 11).
+     */
+    private final Set<WorkIntentId> endedIntents = new LinkedHashSet<>();
     /** Each lane that has ended, by lineage, as it was then. Kept only to say who a past lane was. */
     private final Map<UUID, WorkIntent> endedLanes = new LinkedHashMap<>();
     private final CoordinationRequests requests;
@@ -44,6 +52,7 @@ public final class CollaborationProjection {
      * fresh across heartbeats, which record liveness only, and goes stale on anything else.
      */
     private long lastStateChangeSequence;
+    private final ApplyMode mode;
 
     /**
      * Creates an empty collaboration projection.
@@ -51,10 +60,13 @@ public final class CollaborationProjection {
     public CollaborationProjection() {
         requests = new CoordinationRequests();
         sessionFences = new ProviderSessionFences();
+        mode = ApplyMode.REPLAY;
     }
 
-    private CollaborationProjection(CollaborationProjection source) {
+    private CollaborationProjection(CollaborationProjection source, ApplyMode mode) {
+        this.mode = mode;
         intents.putAll(source.intents);
+        endedIntents.addAll(source.endedIntents);
         endedLanes.putAll(source.endedLanes);
         requests = new CoordinationRequests(source.requests);
         noChangeCompletions.putAll(source.noChangeCompletions);
@@ -76,6 +88,35 @@ public final class CollaborationProjection {
         if (participant.state() == Participant.State.REVOKED) {
             throw new CoordinationException("SESSION_EPOCH_FENCED");
         }
+    }
+
+    /**
+     * Returns the active lane an entry names. On this computer's own append a lane that is not active refuses the
+     * entry with {@code code}, as before. Off it, a lane that ended here gives {@code null}, and the entry has no
+     * effect on it: a late entry of a computer that was away about a lane already taken over or released. A lane
+     * never seen holds the entry back until it arrives.
+     *
+     * @throws IOException with {@code code}, or a {@link MissingReferenceException} with it
+     */
+    private WorkIntent laneNamed(WorkIntentId id, String code) throws IOException {
+        WorkIntent lane = intents.get(id);
+        if (lane != null) {
+            return lane;
+        }
+        if (mode.checking()) {
+            throw new CoordinationException(code);
+        }
+        if (endedIntents.contains(id)) {
+            return null;
+        }
+        throw new MissingReferenceException(code);
+    }
+
+    /** Removes a lane from the active ones and remembers that it ended. */
+    private WorkIntent endLane(WorkIntentId id) {
+        WorkIntent ended = intents.remove(id);
+        endedIntents.add(id);
+        return ended;
     }
 
     /**
@@ -130,7 +171,8 @@ public final class CollaborationProjection {
                 }
             }
             case COORDINATION_REQUESTED -> request(CollaborationCodec.decodeRequest(event.payload()));
-            case COORDINATION_RESPONDED -> requests.respond(CollaborationCodec.decodeResponse(event.payload()));
+            case COORDINATION_RESPONDED -> requests.respond(CollaborationCodec.decodeResponse(event.payload()),
+                    event.actorNodeId(), mode.checking());
             case PARTICIPANT_HEARTBEAT ->
                     heartbeat(new ParticipantId(CollaborationCodec.decodeHeartbeat(event.payload())),
                             event.createdAtEpochMillis());
@@ -152,7 +194,7 @@ public final class CollaborationProjection {
             case INTEGRATION_VALIDATION_REFUSED -> validationRefused(ValidationRefusalPayload.decode(event.payload()));
             case PROVIDER_SESSION_TERMINALIZED ->
                     sessionFences.terminalize(ProviderSessionTerminalPayload.decode(event.payload()),
-                            event.sequence());
+                            event.sequence(), mode.checking());
             default -> {
             }
         }
@@ -197,7 +239,19 @@ public final class CollaborationProjection {
      * @throws IOException invalid transition
      */
     public synchronized void validate(PredictionEvent event) throws IOException {
-        new CollaborationProjection(this).apply(event);
+        validate(event, ApplyMode.CHECK);
+    }
+
+    /**
+     * Applies an event to a copy of this projection, judged as {@code mode} says (ADR-0100, "Every rule an arriving
+     * entry can reach").
+     *
+     * @param event event to judge
+     * @param mode  how the event is judged
+     * @throws IOException when the event is refused, or names something not seen yet
+     */
+    public synchronized void validate(PredictionEvent event, ApplyMode mode) throws IOException {
+        new CollaborationProjection(this, mode).apply(event);
     }
 
     /**
@@ -502,10 +556,23 @@ public final class CollaborationProjection {
      */
     private void extendScope(WorkIntentScopeExtension extension) throws IOException {
         WorkIntent amended = extension.intent();
-        WorkIntent current = intents.get(amended.identity());
+        WorkIntent current = laneNamed(amended.identity(), "INTENT_NOT_FOUND");
         if (current == null) {
-            throw new CoordinationException("INTENT_NOT_FOUND");
+            return;
         }
+        if (mode.checking()) {
+            requireLawfulExtension(extension, current);
+        }
+        intents.put(amended.identity(), amended);
+        refreshParticipant(amended.participantIdentity(), Participant.State.ACTIVE, amended);
+    }
+
+    /**
+     * The extension rules, judged on the writer's own computer against its own view (ADR-0100, "Every rule an
+     * arriving entry can reach"). Off it, an extension that overlaps another computer's lane stands beside it.
+     */
+    private void requireLawfulExtension(WorkIntentScopeExtension extension, WorkIntent current) throws IOException {
+        WorkIntent amended = extension.intent();
         if (current.version() != extension.expectedClaimEpoch()) {
             throw new CoordinationException("CLAIM_EPOCH_STALE");
         }
@@ -526,8 +593,6 @@ public final class CollaborationProjection {
         if (!conflicts(amended.selectors(), current.identity()).isEmpty()) {
             throw new CoordinationException("OVERLAPPING_CLAIM");
         }
-        intents.put(amended.identity(), amended);
-        refreshParticipant(amended.participantIdentity(), Participant.State.ACTIVE, amended);
     }
 
     private static boolean sameLaneIdentity(WorkIntent current, WorkIntent amended) {
@@ -546,14 +611,16 @@ public final class CollaborationProjection {
      * @throws IOException when payload validation or durable I/O fails
      */
     private void announce(WorkIntent intent) throws IOException {
-        if (isParticipantTerminal(intent.participantIdentity())) {
+        if (mode.checking() && isParticipantTerminal(intent.participantIdentity())) {
             throw new CoordinationException("SESSION_TERMINAL");
         }
         Participant existing = participantHistory.get(intent.participantIdentity());
         if (existing != null && existing.state() == Participant.State.REVOKED) {
             throw new CoordinationException("SESSION_EPOCH_FENCED");
         }
-        if (intents.containsKey(intent.identity()) || !conflicts(intent.selectors()).isEmpty()) {
+        // A claim is a lock where it can be checked: on this computer's own append. Two claims made on two
+        // computers apart both stand, and conflicts() reports the overlap to both agents (ADR-0100 row 1).
+        if (intents.containsKey(intent.identity()) || mode.checking() && !conflicts(intent.selectors()).isEmpty()) {
             throw new CoordinationException("OVERLAPPING_CLAIM");
         }
         intents.put(intent.identity(), intent);
@@ -568,10 +635,10 @@ public final class CollaborationProjection {
      * @throws IOException when payload validation or durable I/O fails
      */
     private void release(WorkIntentId id) throws IOException {
-        WorkIntent released = intents.remove(CoordinationNullException.requireNonNull(id, "intent ID"));
-        if (released == null) {
-            throw new CoordinationException("INTENT_NOT_FOUND");
+        if (laneNamed(CoordinationNullException.requireNonNull(id, "intent ID"), "INTENT_NOT_FOUND") == null) {
+            return;
         }
+        WorkIntent released = endLane(id);
         endedLanes.put(released.authorityLineageId(), released);
         refreshParticipant(released.participantIdentity(), Participant.State.COMPLETED, null);
     }
@@ -612,11 +679,13 @@ public final class CollaborationProjection {
      */
     private void repair(RepairLanePayload payload) throws IOException {
         WorkIntentId sourceIdentity = payload.sourceIntentIdentity();
-        WorkIntent source = intents.get(sourceIdentity);
-        if (source == null) {
-            throw new CoordinationException("REPAIR_SOURCE_NOT_FOUND");
-        }
+        WorkIntent source = laneNamed(sourceIdentity, "REPAIR_SOURCE_NOT_FOUND");
         WorkIntent target = payload.targetIntent();
+        if (source == null) {
+            // The source ended here before its repair arrived; the repair lane still stands.
+            announce(target);
+            return;
+        }
         if (target.status() != WorkIntent.Status.ANNOUNCED) {
             throw new CoordinationException("REPAIR_TARGET_NOT_ANNOUNCED");
         }
@@ -630,6 +699,20 @@ public final class CollaborationProjection {
                 .equals(target.participantIdentity())) {
             throw new CoordinationException("REPAIR_TARGET_MUST_BE_DISTINCT");
         }
+        if (mode.checking()) {
+            requireLawfulRepairScope(payload, source, target);
+        }
+
+        // The event is validated against this projection before it is written.
+        // Removing the source and announcing the target in this one projection
+        // transition guarantees that no replayed state exposes an unowned gap.
+        release(sourceIdentity);
+        announce(target);
+    }
+
+    /** The scope and epoch rules of a repair lane, judged on the writer's own computer against its own view. */
+    private void requireLawfulRepairScope(RepairLanePayload payload, WorkIntent source, WorkIntent target)
+            throws IOException {
         if (!source.selectors().equals(target.selectors())) {
             throw new CoordinationException("REPAIR_SCOPE_MISMATCH");
         }
@@ -646,12 +729,6 @@ public final class CollaborationProjection {
                         .equals(target.participantIdentity()))) {
             throw new CoordinationException("REPAIR_TARGET_ALREADY_ACTIVE");
         }
-
-        // The event is validated against this projection before it is written.
-        // Removing the source and announcing the target in this one projection
-        // transition guarantees that no replayed state exposes an unowned gap.
-        release(sourceIdentity);
-        announce(target);
     }
 
     /**
@@ -662,11 +739,16 @@ public final class CollaborationProjection {
     private void unwind(CompletionUnwoundPayload payload) throws IOException {
         WorkIntent replacement = payload.replacementIntent();
         WorkIntent current = intents.get(replacement.identity());
-        if (current == null || current.status() != WorkIntent.Status.ANNOUNCED) {
+        if (!mode.checking() && current == null) {
+            // The replacement is the writer's own lane: missing here means another computer's entry ended it,
+            // and an unwinding does not bring it back.
+            return;
+        }
+        if (mode.checking() && (current == null || current.status() != WorkIntent.Status.ANNOUNCED)) {
             throw new CoordinationException("UNWIND_SOURCE_NOT_ACTIVE");
         }
-        if (!current.participant().equals(replacement.participant()) || replacement.version() <= current.version()
-                || !current.selectors().equals(replacement.selectors())) {
+        if (mode.checking() && (!current.participant().equals(replacement.participant())
+                || replacement.version() <= current.version() || !current.selectors().equals(replacement.selectors()))) {
             throw new CoordinationException("UNWIND_EPOCH_OR_SCOPE_MISMATCH");
         }
         intents.put(replacement.identity(), replacement);
@@ -684,13 +766,13 @@ public final class CollaborationProjection {
      * @throws IOException when payload validation or durable I/O fails
      */
     private void request(CoordinationRequest request) throws IOException {
-        if (isParticipantTerminal(request.requesterIdentity()) || isParticipantTerminal(request.targetIdentity())) {
+        if (mode.checking() && (isParticipantTerminal(request.requesterIdentity())
+                || isParticipantTerminal(request.targetIdentity()))) {
             throw new CoordinationException("SESSION_TERMINAL");
         }
         requests.requireAbsent(request);
-        if (!intents.containsKey(request.conflictingIntent())) {
-            throw new CoordinationException("INTENT_NOT_FOUND");
-        }
+        // A request about a lane that ended here still stands: it is the requester's fact, and it reads no lane.
+        laneNamed(request.conflictingIntent(), "INTENT_NOT_FOUND");
         requests.add(request);
     }
 
@@ -703,16 +785,22 @@ public final class CollaborationProjection {
         if (!"REJECTED".equals(validation.result())) {
             return;
         }
-        WorkIntent current = intents.get(new WorkIntentId(validation.targetIntentId()));
+        WorkIntentId target = new WorkIntentId(validation.targetIntentId());
+        WorkIntent current = intents.get(target);
         // Keep historical review records replayable when an older event log
         // already terminalized its lane before recording the decision. New
         // reviewed completion rejects this condition at the service boundary;
         // an active exact lane is the only state that creates a continuation.
         if (current == null) {
+            if (mode == ApplyMode.ARRIVAL && !endedIntents.contains(target)) {
+                throw new MissingReferenceException("REVIEW_TARGET_STALE");
+            }
             return;
         }
-        requireLaneAsRefused(current, validation.workGroupId(), validation.sourceParticipant(), validation.taskId(),
-                validation.claimEpoch(), "REVIEW_TARGET_STALE");
+        if (mode.checking()) {
+            requireLaneAsRefused(current, validation.workGroupId(), validation.sourceParticipant(),
+                    validation.taskId(), validation.claimEpoch(), "REVIEW_TARGET_STALE");
+        }
         reopenForCorrection(current, false);
     }
 
@@ -732,12 +820,14 @@ public final class CollaborationProjection {
      * @throws IOException when payload validation or durable I/O fails
      */
     private void validationRefused(ValidationRefusalPayload refusal) throws IOException {
-        WorkIntent current = intents.get(new WorkIntentId(refusal.targetIntentId()));
+        WorkIntent current = laneNamed(new WorkIntentId(refusal.targetIntentId()), "VALIDATION_REFUSAL_TARGET_STALE");
         if (current == null) {
-            throw new CoordinationException("VALIDATION_REFUSAL_TARGET_STALE");
+            return;
         }
-        requireLaneAsRefused(current, refusal.workGroupId(), refusal.participant(), refusal.taskId(),
-                refusal.targetIntentVersion(), "VALIDATION_REFUSAL_TARGET_STALE");
+        if (mode.checking()) {
+            requireLaneAsRefused(current, refusal.workGroupId(), refusal.participant(), refusal.taskId(),
+                    refusal.targetIntentVersion(), "VALIDATION_REFUSAL_TARGET_STALE");
+        }
         if (refusal.targetIntentVersion() == refusal.claimEpoch()) {
             reopenForCorrection(current, true);
         }
@@ -809,15 +899,15 @@ public final class CollaborationProjection {
      * @throws IOException when payload validation or durable I/O fails
      */
     private void handoff(ClaimHandoff handoff) throws IOException {
-        WorkIntent current = intents.get(handoff.intent());
+        WorkIntent current = laneNamed(handoff.intent(), "INTENT_NOT_FOUND");
         if (current == null) {
-            throw new CoordinationException("INTENT_NOT_FOUND");
+            return;
         }
-        if (current.version() != handoff.expectedVersion()) {
+        if (mode.checking() && current.version() != handoff.expectedVersion()) {
             throw new CoordinationException("CLAIM_EPOCH_STALE");
         }
         Participant target = participantHistory.get(handoff.targetParticipant());
-        if (target == null || target.state() != Participant.State.ACTIVE) {
+        if (target == null || mode.checking() && target.state() != Participant.State.ACTIVE) {
             throw new CoordinationException("HANDOFF_TARGET_NOT_ACTIVE");
         }
         WorkIntent transferred = current.nextVersion().withParticipant(handoff.target());
@@ -841,7 +931,7 @@ public final class CollaborationProjection {
     private void suspended(ParticipantId participant) throws IOException {
         Participant current = participantHistory.get(participant);
         if (current == null) {
-            throw new CoordinationException("PARTICIPANT_NOT_FOUND");
+            throw new MissingReferenceException("PARTICIPANT_NOT_FOUND");
         }
         rejectRevoked(current);
         participantHistory.put(participant, current.withState(Participant.State.SUSPENDED));
@@ -856,10 +946,14 @@ public final class CollaborationProjection {
         ParticipantId participantId = recovery.participantId();
         Participant current = participantHistory.get(participantId);
         if (current == null) {
-            throw new CoordinationException("PARTICIPANT_NOT_FOUND");
+            throw new MissingReferenceException("PARTICIPANT_NOT_FOUND");
         }
         if (current.state() != Participant.State.SUSPENDED && current.state() != Participant.State.RECOVERY_HELD) {
-            throw new CoordinationException("RECOVERY_NOT_SUSPENDED");
+            if (mode.checking()) {
+                throw new CoordinationException("RECOVERY_NOT_SUSPENDED");
+            }
+            // Another computer's entry moved the participant on (a takeover detached it): the hold is history.
+            return;
         }
         participantHistory.put(participantId,
                 current.withState(Participant.State.RECOVERY_HELD)
@@ -876,14 +970,23 @@ public final class CollaborationProjection {
         if (isParticipantTerminal(continuation.targetOwner())) {
             throw new CoordinationException("SESSION_TERMINAL");
         }
-        WorkIntent source = requireRecoverySource(continuation);
         WorkIntent target = continuation.targetIntent();
-        validateContinuationTarget(source, target, continuation);
-        validateContinuationClaimOverlap(source, target);
+        WorkIntent source = laneNamed(continuation.sourceIntent(), "CONTINUATION_SOURCE_NOT_FOUND");
+        if (source != null && mode.checking()) {
+            requireRecoverySource(continuation, source);
+            validateContinuationTarget(source, target, continuation);
+            validateContinuationClaimOverlap(source, target);
+        }
         if (intents.containsKey(target.identity())) {
             throw new CoordinationException("CONTINUATION_TARGET_EXISTS");
         }
-        intents.remove(source.identity());
+        if (source == null) {
+            // Two takers of one lane, on computers apart: both successors stand and meet at main (ADR-0100 row 8).
+            intents.put(target.identity(), target);
+            refreshParticipant(continuation.targetOwner(), Participant.State.ACTIVE, target);
+            return;
+        }
+        endLane(source.identity());
         intents.put(target.identity(), target);
         successorIntents.put(source.identity(), target.identity());
         requests.retargetReviews(source, target, continuation);
@@ -892,15 +995,14 @@ public final class CollaborationProjection {
     }
 
     /**
-     * Resolves and validates the exact recovery-held source lane for a continuation.
+     * Validates the exact recovery-held source lane for a continuation, on the taker's own computer.
      *
      * @param continuation proposed successor transition
-     * @return authenticated source intent
-     * @throws IOException when the source is absent, stale, or not recovery-held
+     * @param source       the active lane the continuation names
+     * @throws IOException when the source is not its owner's, stale, or not recovery-held
      */
-    private WorkIntent requireRecoverySource(LaneContinuation continuation) throws IOException {
-        WorkIntent source = intents.get(continuation.sourceIntent());
-        if (source == null || !source.participantIdentity().equals(continuation.sourceOwner())) {
+    private void requireRecoverySource(LaneContinuation continuation, WorkIntent source) throws IOException {
+        if (!source.participantIdentity().equals(continuation.sourceOwner())) {
             throw new CoordinationException("CONTINUATION_SOURCE_NOT_FOUND");
         }
         if (!source.claimEpoch().equals(continuation.claimEpoch())) {
@@ -910,7 +1012,6 @@ public final class CollaborationProjection {
         if (sourceParticipant == null || sourceParticipant.state() != Participant.State.RECOVERY_HELD) {
             throw new CoordinationException("RECOVERY_NOT_HELD");
         }
-        return source;
     }
 
     /**
@@ -947,7 +1048,10 @@ public final class CollaborationProjection {
      * Removes every intent the participant owns.
      */
     private void dropIntentsOf(ParticipantId participant) {
-        intents.values().stream().filter(intent -> intent.participantIdentity().equals(participant)).forEach(intent -> endedLanes.put(intent.authorityLineageId(), intent));
+        intents.values().stream().filter(intent -> intent.participantIdentity().equals(participant)).forEach(intent -> {
+            endedLanes.put(intent.authorityLineageId(), intent);
+            endedIntents.add(intent.identity());
+        });
         intents.entrySet().removeIf(entry -> entry.getValue().participantIdentity().equals(participant));
     }
 
@@ -959,7 +1063,7 @@ public final class CollaborationProjection {
     private void cancelled(ParticipantId participant) throws IOException {
         Participant current = participantHistory.get(participant);
         if (current == null) {
-            throw new CoordinationException("PARTICIPANT_NOT_FOUND");
+            throw new MissingReferenceException("PARTICIPANT_NOT_FOUND");
         }
         rejectRevoked(current);
         participantHistory.put(participant, current.withState(Participant.State.CANCELLED).withClaims(List.of()));
@@ -974,7 +1078,7 @@ public final class CollaborationProjection {
     private void detached(ParticipantId participant) throws IOException {
         Participant current = participantHistory.get(participant);
         if (current == null) {
-            throw new CoordinationException("PARTICIPANT_NOT_FOUND");
+            throw new MissingReferenceException("PARTICIPANT_NOT_FOUND");
         }
         rejectRevoked(current);
         participantHistory.put(participant, current.withState(Participant.State.DETACHED).withClaims(List.of()));
@@ -989,28 +1093,29 @@ public final class CollaborationProjection {
     private void complete(NoChangeCompletion completion, long eventSequence) throws IOException {
         NoChangeCompletion previous = noChangeCompletions.get(completion.intentIdentity());
         if (previous != null) {
-            if (!previous.equals(completion)) {
+            if (mode.checking() && !previous.equals(completion)) {
                 throw new CoordinationException("NO_CHANGE_COMPLETION_CONFLICT");
             }
             return;
         }
         // Logs written before heartbeats were tolerated always satisfy this with equality at
         // eventSequence - 1, so they replay unchanged.
-        if (completion.expectedRevision() >= eventSequence || completion.expectedRevision() < lastStateChangeSequence) {
+        if (mode.checking() && (completion.expectedRevision() >= eventSequence
+                || completion.expectedRevision() < lastStateChangeSequence)) {
             throw new CoordinationException("COMPLETION_REVISION_STALE");
         }
-        WorkIntent current = intents.get(completion.intentIdentity());
+        WorkIntent current = laneNamed(completion.intentIdentity(), "INTENT_NOT_FOUND");
         if (current == null) {
-            throw new CoordinationException("INTENT_NOT_FOUND");
+            return;
         }
-        if (!current.workGroupId().equals(completion.workGroupId()) || !current.participant()
+        if (mode.checking() && (!current.workGroupId().equals(completion.workGroupId()) || !current.participant()
                 .equals(completion.participant()) || !current.provider().equals(completion.provider())
                 || !current.authorityLineageId().equals(completion.authorityLineageId())
                 || current.version() != completion.claimEpoch() || !current.baseCommit()
-                .equals(completion.workspaceCommit())) {
+                .equals(completion.workspaceCommit()))) {
             throw new CoordinationException("NO_CHANGE_COMPLETION_BINDING_MISMATCH");
         }
-        intents.remove(completion.intentIdentity());
+        endLane(completion.intentIdentity());
         endedLanes.put(current.authorityLineageId(), current);
         noChangeCompletions.put(completion.intentIdentity(), completion);
         refreshParticipant(current.participantIdentity(), Participant.State.COMPLETED, null);

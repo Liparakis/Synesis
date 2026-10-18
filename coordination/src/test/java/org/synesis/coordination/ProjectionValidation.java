@@ -16,8 +16,12 @@ import org.synesis.coordination.domain.task.CoordinationProjection;
 import org.synesis.coordination.domain.task.TaskCompletionProjection;
 
 /**
- * Checks, for every event projection, that validating an event neither changes the projection nor decides
- * differently from applying the same event to an identical copy.
+ * Checks, for every event projection, that validating an event never changes the projection, and that whatever
+ * validation accepts, applying the same event to an identical copy accepts too.
+ *
+ * <p>Validation judges this computer's own new entry by every rule; applying takes an entry already judged, which
+ * may have been judged on another computer against another view (ADR-0098 step 4), so applying refuses less. Before
+ * step 4 the two were the same function and this check required them to decide alike.</p>
  */
 public final class ProjectionValidation {
 
@@ -96,7 +100,7 @@ public final class ProjectionValidation {
 
     /**
      * Replays {@code log} into each projection. Before each event, and again for every event once the whole log
-     * is applied, validation must leave the projection unchanged and end the way applying to a copy ends.
+     * is applied, validation must leave the projection unchanged, and an event it accepts must apply to a copy.
      *
      * @param log the signed events of one project, in order
      */
@@ -123,7 +127,9 @@ public final class ProjectionValidation {
         String validated = outcome(() -> subject.validate().run(live, event));
         assertEquals(before, subject.state().apply(live), subject.name() + " changed by validate");
         String applied = outcome(() -> subject.apply().run(twin, event));
-        assertEquals(applied, validated, subject.name() + " validate differs from apply on a copy");
+        if (validated.equals("accepted")) {
+            assertEquals("accepted", applied, subject.name() + " validate accepts what apply on a copy refuses");
+        }
     }
 
     private static <P> P replay(Subject<P> subject, List<PredictionEvent> events) throws Exception {

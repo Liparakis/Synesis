@@ -70,6 +70,12 @@ public enum TaskCompletionState {
     REVIEW_REJECTED("review_rejected"),
 
     /**
+     * Two reviewers recorded different verdicts on the snapshot, each on its own computer (ADR-0100 row 4). It counts
+     * as rejected until one of them records a new verdict, so it is not integrated and its lane owes a correction.
+     */
+    REVIEW_DISPUTED("review_disputed"),
+
+    /**
      * The project's validation command failed on an integration candidate that ended with this
      * snapshot. Like a rejected snapshot it is permanently ineligible for integration and its
      * lane publishes a correction, but no reviewer decided it and it makes nothing review-required.
@@ -137,7 +143,7 @@ public enum TaskCompletionState {
      * @return true for a snapshot that never integrates and is answered by a later revision
      */
     public boolean refused() {
-        return this == REVIEW_REJECTED || this == VALIDATION_REFUSED;
+        return this == REVIEW_REJECTED || this == REVIEW_DISPUTED || this == VALIDATION_REFUSED;
     }
 
     /**

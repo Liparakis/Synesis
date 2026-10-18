@@ -224,6 +224,11 @@ public record OperatorRequest(String id, String condition, String raisedBy, Stri
         return new OperatorRequest(id, condition, raisedBy, summary, evidence, failurePoint, State.CLOSED, because);
     }
 
+    /** The request open again: two computers answered it differently (ADR-0100 row 6). */
+    OperatorRequest reopened() {
+        return new OperatorRequest(id, condition, raisedBy, summary, evidence, failurePoint, State.OPEN, "");
+    }
+
     /** Keeps evidence within the wire bound by its bytes, since tool output is not ours to size. */
     private static String bounded(String text) {
         String value = text == null ? "" : text;
