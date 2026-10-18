@@ -56,57 +56,58 @@ final class ProtocolWireCompatibilityTest {
   private static final String INVITER_PUBLIC_KEY =
       "302a300506032b657003210079b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664";
   private static final String SLB3_V4 =
-      "0009684ee1800258101112131415161718191a1b79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0"
-      + "e3910bad0496640104cb007107113435a7fed77089035074ab0d8fc8dbdc7b22d7638f15481e5b9a41f70572bf"
-      + "fc5f94dfb5e1ae411f4faf36d7429e1ec6849b522c0b5e6077a0968c8deecde2210a";
+      "000a684ee1800258101112131415161718191a1b79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0"
+      + "e3910bad0496640104cb0071071134fe61f58982d7ccb488dbf2532ebd9301981194d4b53720511a76812b756c"
+      + "12ef3f0439325a654dc5c8f51f939453e9d6883437bbb6680ba0f90034c5eb60e109";
   private static final String SLB3_V4_LINK =
-      "synesis://join/SLB3-AAloTuGAAlgQERITFBUWFxgZGht5tVYuj-ZU-UB4sRLoqYunkB-FOuaVvtfg45ELrQSW"
-      + "ZAEEywBxBxE0Naf-13CJA1B0qw2PyNvceyLXY48VSB5bmkH3BXK__F-U37XhrkEfT68210KeHsaEm1IsC15gd6CW"
-      + "jI3uzeIhCg";
+      "synesis://join/SLB3-AApoTuGAAlgQERITFBUWFxgZGht5tVYuj-ZU-UB4sRLoqYunkB-FOuaVvtfg45ELrQSWZA"
+      + "EEywBxBxE0_mH1iYLXzLSI2_JTLr2TAZgRlNS1NyBRGnaBK3VsEu8_BDkyWmVNxcj1H5OUU-nWiDQ3u7ZoC6D5ADTF"
+      + "62DhCQ";
   private static final String SLB3_V6 =
-      "0009684ee1800258101112131415161718191a1b79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0"
-      + "e3910bad049664011020010db80000000000000000000000071135be4f0ae76d4bcab375c11c8511d6a98f79ff"
-      + "d82368a1387a53c79ccb304fe1bf621118714f0517b43bcbe54640531127603bbff312535c0d014f5cee349e4f"
-      + "06";
+      "000a684ee1800258101112131415161718191a1b79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0"
+      + "e3910bad049664011020010db800000000000000000000000711352897400ec774b5c3a787aa595cc0a9d89ac0"
+      + "c4020f0faaf4bcf0f4dfb48d2ef95df05e0721c0907c45ae0c5422f70083aedba45eebf57d3a1e000baaee10c7"
+      + "02";
   private static final String SLB3_V6_LINK =
-      "synesis://join/SLB3-AAloTuGAAlgQERITFBUWFxgZGht5tVYuj-ZU-UB4sRLoqYunkB-FOuaVvtfg45ELrQSW"
-      + "ZAEQIAENuAAAAAAAAAAAAAAABxE1vk8K521LyrN1wRyFEdapj3n_2CNooTh6U8ecyzBP4b9iERhxTwUXtDvL5UZA"
-      + "UxEnYDu_8xJTXA0BT1zuNJ5PBg";
+      "synesis://join/SLB3-AApoTuGAAlgQERITFBUWFxgZGht5tVYuj-ZU-UB4sRLoqYunkB-FOuaVvtfg45ELrQSWZA"
+      + "EQIAENuAAAAAAAAAAAAAAABxE1KJdADsd0tcOnh6pZXMCp2JrAxAIPD6r0vPD037SNLvld8F4HIcCQfEWuDFQi9wCD"
+      + "rtukXuv1fToeAAuq7hDHAg";
   private static final String SLB3_BOTH =
-      "0009684ee1800258101112131415161718191a1b79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0"
-      + "e3910bad049664021020010db8000000000000000000000007113504cb00710711346aaba7712aa9b63e6573eb"
-      + "5de338dc9cc12202f9dbdafad0d515a0de86f29d28cff5f39c9d469b8249d08c6770dbe4704dd3b8a3f439ec47"
-      + "31f7e63505159902";
+      "000a684ee1800258101112131415161718191a1b79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0"
+      + "e3910bad049664021020010db8000000000000000000000007113504cb00710711346b0ffc5d3f9f8d01d02569"
+      + "c7550d6c5901ec683d447df9fe305bddb78eca191ef4b89529b62fa106acd3f9d63ab8b88f734931a0dae78541"
+      + "12e769c4eb734808";
   private static final String SLB3_BOTH_LINK =
-      "synesis://join/SLB3-AAloTuGAAlgQERITFBUWFxgZGht5tVYuj-ZU-UB4sRLoqYunkB-FOuaVvtfg45ELrQSW"
-      + "ZAIQIAENuAAAAAAAAAAAAAAABxE1BMsAcQcRNGqrp3EqqbY-ZXPrXeM43JzBIgL529r60NUVoN6G8p0oz_XznJ1G"
-      + "m4JJ0IxncNvkcE3TuKP0OexHMffmNQUVmQI";
+      "synesis://join/SLB3-AApoTuGAAlgQERITFBUWFxgZGht5tVYuj-ZU-UB4sRLoqYunkB-FOuaVvtfg45ELrQSWZA"
+      + "IQIAENuAAAAAAAAAAAAAAABxE1BMsAcQcRNGsP_F0_n40B0CVpx1UNbFkB7Gg9RH35_jBb3beOyhke9LiVKbYvoQas"
+      + "0_nWOri4j3NJMaDa54VBEudpxOtzSAg";
   private static final String SLB3_SESSION = "081c0309-93ab-6c7d-42d7-4289e1152220";
-  private static final String SLA3 = "000900112233445566778899aabbccddeeff0104cb0071071134";
+  private static final String SLA3 =
+      "000a00112233445566778899aabbccddeeff0104cb0071071134";
   private static final String SLA3_LINK =
-      "synesis://answer/SLA3-AAkAESIzRFVmd4iZqrvM3e7_AQTLAHEHETQ";
+      "synesis://answer/SLA3-AAoAESIzRFVmd4iZqrvM3e7_AQTLAHEHETQ";
   /** A project link over {@link #SLB3_V4}: project 0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0 and a code remote URL. */
   private static final String SLP1 =
-      "00090f1e2d3c4b5a69788796a5b4c3d2e1f00000000067b64b000754d4c0002168747470733a2f2f6578616d70"
-      + "6c652e746573742f6f72672f7265706f2e676974007c0009684ee1800258101112131415161718191a1b79b556"
-      + "2e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad0496640104cb007107113435a7fed770890350"
-      + "74ab0d8fc8dbdc7b22d7638f15481e5b9a41f70572bffc5f94dfb5e1ae411f4faf36d7429e1ec6849b522c0b5e"
-      + "6077a0968c8deecde2210a905d58da1e8b8658e0c164777081b6d21c6d7f3a96152250c94cffd2192bbc75cfb0"
-      + "cf7e14027e093b01ba93543ff46f91c11d72ca6c2b441371bb5574e75200";
+      "000a0f1e2d3c4b5a69788796a5b4c3d2e1f00000000067b64b000754d4c0002168747470733a2f2f6578616d70"
+      + "6c652e746573742f6f72672f7265706f2e676974007c000a684ee1800258101112131415161718191a1b79b556"
+      + "2e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad0496640104cb0071071134fe61f58982d7ccb4"
+      + "88dbf2532ebd9301981194d4b53720511a76812b756c12ef3f0439325a654dc5c8f51f939453e9d6883437bbb6"
+      + "680ba0f90034c5eb60e10908860be3d9e53ac436c6c3c995d17e090e5d05d038869b31402dcbbe5a883cb6239c"
+      + "d7109616191cc0b313af426011a78ed8473610260337eb8ed1f9daca8a01";
   private static final String SLP1_LINK =
-      "synesis://project/SLP1-AAkPHi08S1ppeIeWpbTD0uHwAAAAAGe2SwAHVNTAACFodHRwczovL2V4YW1wbGUud"
-      + "GVzdC9vcmcvcmVwby5naXQAfAAJaE7hgAJYEBESExQVFhcYGRobebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC"
-      + "60ElmQBBMsAcQcRNDWn_tdwiQNQdKsNj8jb3Hsi12OPFUgeW5pB9wVyv_xflN-14a5BH0-vNtdCnh7GhJtSLAteY"
-      + "HegloyN7s3iIQqQXVjaHouGWODBZHdwgbbSHG1_OpYVIlDJTP_SGSu8dc-wz34UAn4JOwG6k1Q_9G-RwR1yymwrR"
-      + "BNxu1V051IA";
+      "synesis://project/SLP1-AAoPHi08S1ppeIeWpbTD0uHwAAAAAGe2SwAHVNTAACFodHRwczovL2V4YW1wbGUudGV"
+      + "zdC9vcmcvcmVwby5naXQAfAAKaE7hgAJYEBESExQVFhcYGRobebVWLo_mVPlAeLES6KmLp5AfhTrmlb7X4OORC60El"
+      + "mQBBMsAcQcRNP5h9YmC18y0iNvyUy69kwGYEZTUtTcgURp2gSt1bBLvPwQ5MlplTcXI9R-TlFPp1og0N7u2aAug-QA"
+      + "0xetg4QkIhgvj2eU6xDbGw8mV0X4JDl0F0DiGmzFALcu-Wog8tiOc1xCWFhkcwLMTr0JgEaeO2Ec2ECYDN-uO0fnay"
+      + "ooB";
   /** A project link with no code remote URL over {@link #SLB3_V6}. */
   private static final String SLP1_NO_URL =
-      "00090f1e2d3c4b5a69788796a5b4c3d2e1f00000000067b64b000754d4c0000000880009684ee1800258101112"
+      "000a0f1e2d3c4b5a69788796a5b4c3d2e1f00000000067b64b000754d4c000000088000a684ee1800258101112"
       + "131415161718191a1b79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad04966401102001"
-      + "0db80000000000000000000000071135be4f0ae76d4bcab375c11c8511d6a98f79ffd82368a1387a53c79ccb30"
-      + "4fe1bf621118714f0517b43bcbe54640531127603bbff312535c0d014f5cee349e4f0634c8b621eb9752d3549f"
-      + "0b87f871d52961336b65b6112914a10b0eeef660d3f2054740a94a6a6b54eb959d5abca47608d1cbbface017c5"
-      + "ab1b7a9e9ce9d7b602";
+      + "0db800000000000000000000000711352897400ec774b5c3a787aa595cc0a9d89ac0c4020f0faaf4bcf0f4dfb4"
+      + "8d2ef95df05e0721c0907c45ae0c5422f70083aedba45eebf57d3a1e000baaee10c70200ec8779ccfb94176cb0"
+      + "8fe75c8aa14efe2216aea478eb0a3b448a1d04dfad37d25453ec0df0210e752f4a7f45fa8a3a056a453d69da76"
+      + "2596cc2b8a4975d10c";
   private static final String TRANSCRIPT =
       "534c54310100000e73796e657369732d6c696e6b2f3100112233445566778899aabbccddeeff00000000000000"
       + "0100000000000000020020202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f0020"
@@ -129,7 +130,7 @@ final class ProtocolWireCompatibilityTest {
       + "30dd9c8c50b1bddedb0e515a8daedc66cea28c8f9357e49188218307f714e621249232db68eb8d7f60df66d028"
       + "a0fff0a6b90b5ba6f01366ab05";
   private static final String ENVELOPE =
-      "534c48310100090002010101000174534c54310100000e73796e657369732d6c696e6b2f3100112233445566778899"
+      "534c483101000a0002010101000174534c54310100000e73796e657369732d6c696e6b2f3100112233445566778899"
       + "aabbccddeeff000000000000000100000000000000020020202122232425262728292a2b2c2d2e2f3031323334"
       + "35363738393a3b3c3d3e3f0020606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
       + "0010707172737475767778797a7b7c7d7e7f0044736c312d343230326231346664653833333332613366373232"
@@ -272,7 +273,7 @@ final class ProtocolWireCompatibilityTest {
               .encodeToString(unhex(vector[0])));
 
       assertEquals(vector[0], hex(invitation.encoded()));
-      assertTrue(vector[0].startsWith("0009"));
+      assertTrue(vector[0].startsWith("000a"));
       if (vector[1] != null) {
         assertEquals(vector[1], invitation.shareLink());
       }
@@ -347,7 +348,7 @@ final class ProtocolWireCompatibilityTest {
 
   @Test
   void handshakeEnvelopeKeepsCanonicalBytesAndListsVersionsNewestFirst() throws Exception {
-    String bytes = "534c4831" + "01" + "0009" + "00" + "02" + "0101" + "0100" + lp(2, TRANSCRIPT)
+    String bytes = "534c4831" + "01" + "000a" + "00" + "02" + "0101" + "0100" + lp(2, TRANSCRIPT)
         + lp(2, PROOF);
     HandshakeEnvelope envelope = HandshakeEnvelope.decode(unhex(bytes));
 
@@ -365,9 +366,9 @@ final class ProtocolWireCompatibilityTest {
 
   @Test
   void compatibilityNumberLeadsEveryInvitationAnswerAndEnvelope() throws Exception {
-    assertEquals("0009", hex(unhex(SLB3_V4)).substring(0, 4));
-    assertEquals("0009", SLA3.substring(0, 4));
-    assertEquals(9, HandshakeEnvelope.peekCompatibility(unhex(ENVELOPE)));
+    assertEquals("000a", hex(unhex(SLB3_V4)).substring(0, 4));
+    assertEquals("000a", SLA3.substring(0, 4));
+    assertEquals(10, HandshakeEnvelope.peekCompatibility(unhex(ENVELOPE)));
     assertEquals(LinkCompatibility.CURRENT, HandshakeEnvelope.decode(unhex(ENVELOPE)).compatibility());
     assertEquals(-1, HandshakeEnvelope.peekCompatibility(unhex("534c4831")));
   }
@@ -378,13 +379,13 @@ final class ProtocolWireCompatibilityTest {
     older[1] = 3;
     IncompatibleVersionException invitation = assertThrows(IncompatibleVersionException.class,
         () -> CompactBootstrapInvitation.decodeMinimized(older));
-    assertEquals(new LinkCompatibility.Mismatch("invitation", 9, 3), invitation.mismatch());
-    byte[] newerJunk = {0, 10, 1, 2, 3};
-    assertEquals(10, assertThrows(IncompatibleVersionException.class,
+    assertEquals(new LinkCompatibility.Mismatch("invitation", 10, 3), invitation.mismatch());
+    byte[] newerJunk = {0, 11, 1, 2, 3};
+    assertEquals(11, assertThrows(IncompatibleVersionException.class,
         () -> CompactBootstrapInvitation.decodeMinimized(newerJunk)).mismatch().remote());
     byte[] answer = unhex(SLA3);
     answer[1] = 7;
-    assertEquals(new LinkCompatibility.Mismatch("answer", 9, 7),
+    assertEquals(new LinkCompatibility.Mismatch("answer", 10, 7),
         assertThrows(IncompatibleVersionException.class, () -> CompactAnswer.decode(answer))
             .mismatch());
   }
@@ -404,8 +405,8 @@ final class ProtocolWireCompatibilityTest {
     String incompatible = "534c463101" + String.format("%02x",
         HandshakeFailureCode.INCOMPATIBLE_VERSION.ordinal()) + "0003";
     assertEquals(incompatible, hex(HandshakeFailure.incompatible(3).encoded()));
-    assertEquals(new LinkCompatibility.Mismatch("connection", 9, 3),
-        HandshakeFailure.decode(unhex(incompatible)).exception(9).mismatch());
+    assertEquals(new LinkCompatibility.Mismatch("connection", 10, 3),
+        HandshakeFailure.decode(unhex(incompatible)).exception(10).mismatch());
     assertThrows(IOException.class, () -> HandshakeFailure.decode(truncated(incompatible)));
     assertThrows(IOException.class,
         () -> HandshakeFailure.decode(withTrailingByte(incompatible)));
