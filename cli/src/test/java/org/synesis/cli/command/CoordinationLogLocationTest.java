@@ -101,24 +101,49 @@ class CoordinationLogLocationTest {
 
         // An agent's process with no Link session behind the server still appends: its own log needs no leader.
         agentAppends();
-        Result status = CliHarness.run(tmp.resolve("cli-profile"), "coordination", "status", "--project", project);
-        assertTrue(status.stdout().contains("REPLICATION_STATE=DISCONNECTED"), status.toString());
-
         assertEquals(0, served.get(30, java.util.concurrent.TimeUnit.SECONDS).exit());
         assertTrue(Files.notExists(endpointFile));
         assertTrue(Files.notExists(coordination.resolve("replication.status")));
         assertEquals(1, PredictionEventStore.recordedEvents(coordination), "the entry is the member's own and stays");
+        assertEquals("role=member\nleader=sl1-leader\n", Files.readString(coordination.resolve(ReplicationSettings.FILE)).replace("\r\n", "\n"),
+                "a step-5 member that never dialed its leader keeps its file: the migration waits for a link");
+    }
+
+    /**
+     * Step 6 replaced {@code MemberReplication}, which recorded {@code replication.status}, by the shared side, which
+     * records {@code replication.members}. {@code coordination status} still reads the old file for a {@code role=member}
+     * file, so a running server of a legacy member (set up by {@code project follow}) is reported as not running.
+     */
+    @Test
+    void aLegacyMemberFileStatusShowsItsConnectionWhileTheServerRuns() throws Exception {
+        Path coordination = location.coordinationDirectory();
+        ReplicationSettings.member("sl1-leader").write(coordination);
+        java.util.concurrent.CompletableFuture<Result> served = java.util.concurrent.CompletableFuture.supplyAsync(
+                () -> CliHarness.run(tmp.resolve("cli-profile"), "coordination", "serve", "--project", project, "--port", "0",
+                        "--duration-seconds", "6"));
+        Path endpointFile = coordination.resolve("replication.endpoint");
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(20);
+        while (!Files.exists(endpointFile) && System.nanoTime() < deadline) {
+            Thread.sleep(25);
+        }
+        Result status = CliHarness.run(tmp.resolve("cli-profile"), "coordination", "status", "--project", project);
+        assertTrue(status.stdout().contains("REPLICATION_STATE=DISCONNECTED"), status.toString());
+        assertEquals(0, served.get(30, java.util.concurrent.TimeUnit.SECONDS).exit());
     }
 
     @Test
-    void aLeaderComputerReportsEachMembersConnectionWhileItsServerRunsAndLeavesNothingBehind() throws Exception {
+    void aStepFiveLeaderComputerIsMigratedWhenItsServerStartsAndReportsEachMembersConnectionWhileItRunsAndLeavesNothingBehind() throws Exception {
         Path coordination = location.coordinationDirectory();
-        ReplicationSettings.leader(java.util.Set.of("sl1-member-b", "sl1-member-a")).write(coordination);
+        String own = location.loadOrCreateIdentity().nodeId();
+        List<String> ids = java.util.stream.Stream.of(NodeIdentity.generate().nodeId(), NodeIdentity.generate().nodeId()).sorted().toList();
+        String first = ids.get(0);
+        String second = ids.get(1);
+        ReplicationSettings.leader(java.util.Set.of(second, first)).write(coordination);
         Result stopped = CliHarness.run(tmp.resolve("cli-profile"), "coordination", "status", "--project", project);
         assertEquals(0, stopped.exit(), stopped.toString());
         assertTrue(stopped.stdout().contains("REPLICATION_ROLE=leader"), stopped.toString());
-        assertEquals(List.of("REPLICATION_MEMBER=sl1-member-a STATE=NO_COORDINATION_SERVER",
-                "REPLICATION_MEMBER=sl1-member-b STATE=NO_COORDINATION_SERVER"), memberLines(stopped), stopped.toString());
+        assertEquals(List.of("REPLICATION_MEMBER=" + first + " STATE=NO_COORDINATION_SERVER",
+                "REPLICATION_MEMBER=" + second + " STATE=NO_COORDINATION_SERVER"), memberLines(stopped), stopped.toString());
 
         java.util.concurrent.CompletableFuture<Result> served = java.util.concurrent.CompletableFuture.supplyAsync(
                 () -> CliHarness.run(tmp.resolve("cli-profile"), "coordination", "serve", "--project", project, "--port", "0",
@@ -128,13 +153,17 @@ class CoordinationLogLocationTest {
         while (!Files.exists(membersFile) && System.nanoTime() < deadline) {
             Thread.sleep(25);
         }
-        assertTrue(Files.exists(membersFile), "the leader server must record its members' connections");
+        assertTrue(Files.exists(membersFile), "the server must record its members' connections");
 
+        // The server moved the step-5 file into the log (ADR-0098 step 6): the members are read from there now, the owner among them.
         Result running = CliHarness.run(tmp.resolve("cli-profile"), "coordination", "status", "--project", project);
+        assertTrue(running.stdout().contains("REPLICATION_ROLE=shared"), running.toString());
+        assertTrue(running.stdout().contains("REPLICATION_OWNER=" + own), running.toString());
         List<String> members = memberLines(running);
-        assertEquals(2, members.size(), running.toString());
-        assertTrue(members.get(0).matches("REPLICATION_MEMBER=sl1-member-a STATE=DISCONNECTED since=\\S+Z"), running.toString());
-        assertTrue(members.get(1).matches("REPLICATION_MEMBER=sl1-member-b STATE=DISCONNECTED since=\\S+Z"), running.toString());
+        assertEquals(3, members.size(), running.toString());
+        List<String> others = members.stream().filter(line -> !line.startsWith("REPLICATION_MEMBER=" + own)).sorted().toList();
+        assertTrue(others.get(0).matches("REPLICATION_MEMBER=" + first + " STATE=DISCONNECTED since=\\S+Z"), running.toString());
+        assertTrue(others.get(1).matches("REPLICATION_MEMBER=" + second + " STATE=DISCONNECTED since=\\S+Z"), running.toString());
 
         assertEquals(0, served.get(30, java.util.concurrent.TimeUnit.SECONDS).exit());
         assertTrue(Files.notExists(membersFile));

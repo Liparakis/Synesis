@@ -1004,6 +1004,19 @@ Decided while building step 6 (designer, 2026-10-18; each open to the owner):
     trusts the computers it dialed with an invitation (the `dial` lines of `replication.peers`): it pulls from them and
     keeps a copy of every log they serve, as a step-5 member did. Once `PROJECT_SHARED` and its acceptance arrive,
     membership decides. A computer that has neither shared nor dialed serves no one.
+16. **One side, one gateway.** `LeaderReplication` is now every computer's side (its member list read from a
+    `MembershipView` of the log); `MemberReplication` is no longer run, and `becomeMember` changes nothing, because the
+    joiner's inviter is recorded as dialed before it is called. The class keeps its name for now; renaming it is left
+    to the simplification after step 7 (ADR-0101).
+17. **Joining and the commands.** A computer that holds a joiner writes `JOIN_REQUESTED` at once (sharing its project
+    first if it never was), so the request outlives the process and every member sees it; `link accept` writes the
+    acceptance, `link decline` the owner's decline. Every computer's invitation is a project link. `project share`
+    writes `PROJECT_SHARED` and prints the recovery words once; `project add-member` lets a node in by name (a request
+    and its acceptance at once) and `project remove-member` writes `MEMBER_REMOVED`. `project follow` still writes a
+    step-5 member file, which stays trusted until the computer joins by a link. `coordination status` prints the owner,
+    whether a recovery key is set, each member's connection and the waiting requests.
+18. **Before a lane, a joined computer follows `main`.** What a step-5 member did from its settings file, a computer
+    that is not the owner (as the log says) now does: it brings its checkout to the newest copy it can reach.
 
 ### Step 7: Disputes, takeovers and the trash
 

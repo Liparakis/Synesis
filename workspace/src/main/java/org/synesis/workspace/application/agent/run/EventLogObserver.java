@@ -311,8 +311,10 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
      */
     private static OptionalLong otherComputerConnectedSince(java.nio.file.Path coordination) {
         try {
-            java.util.Set<String> peers = ReplicationSettings.read(coordination).map(settings -> settings.isMember() ? java.util.Set.of(settings.leaderNodeId()) : settings.members())
-                    .orElse(java.util.Set.of());
+            // The computers the replication side records connections for: the other members since ADR-0098 step 6.
+            java.util.Set<String> peers = ReplicationSettings.read(coordination).map(settings -> settings.isMember() ? java.util.Set.of(settings.leaderNodeId())
+                    : settings.shared() ? org.synesis.coordination.replication.LeaderReplication.recordedMembers(coordination).map(java.util.Map::keySet)
+                            .orElse(java.util.Set.of()) : settings.members()).orElse(java.util.Set.of());
             return ReplicationJournal.connectedSince(coordination).entrySet().stream().filter(session -> peers.contains(session.getKey()))
                     .mapToLong(session -> session.getValue().toEpochMilli()).max();
         } catch (IOException unreadable) {

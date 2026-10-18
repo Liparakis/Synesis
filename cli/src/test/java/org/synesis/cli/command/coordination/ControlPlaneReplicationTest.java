@@ -30,6 +30,8 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
 import org.synesis.coordination.application.CoordinationService;
+import org.synesis.coordination.application.MembershipService;
+import org.synesis.coordination.application.SharedSettingsMigration;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
@@ -38,7 +40,6 @@ import org.synesis.coordination.persistence.ReplicationPeers;
 import org.synesis.coordination.persistence.ReplicationReplay;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.replication.LeaderReplication;
-import org.synesis.coordination.replication.MemberReplication;
 import org.synesis.coordination.replication.ReplicationJournal;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
 
@@ -105,17 +106,26 @@ final class ControlPlaneReplicationTest {
         final LinkRuntimeOwner owner;
         private final List<AutoCloseable> mine = new ArrayList<>();
 
+        /**
+         * @param settings the step-5 file to start with: a leader's names the members its log is given at start (the
+         *                 launcher's migration), a member's names the leader it trusts until the owner's entries
+         *                 arrive; {@code null} for a restart, which keeps the folder as it is
+         */
         Computer(String name, NodeIdentity node, ReplicationSettings settings) throws Exception {
             Path root = temp.resolve(name);
             Path synesis = root.resolve(".synesis");
             Path profile = synesis.resolve("local/profile");
             this.node = node;
             this.coordination = synesis.resolve("coordination");
-            settings.write(coordination);
-            MemberReplication member = settings.isMember() ? MemberReplication.open(coordination, projectId) : null;
-            LeaderReplication leader = settings.isMember() ? null : LeaderReplication.open(coordination, projectId);
-            // The side closes the member or leader side it holds.
-            ReplicationSide side = own(new ReplicationSide(coordination, projectId, root, member, settings.leaderNodeId(), leader, null));
+            if (settings != null) {
+                settings.write(coordination);
+            }
+            // As the launcher starts: a step-5 file moves into the log, and every computer plays the same shared side.
+            SharedSettingsMigration.migrate(coordination, new PredictionEventStore(coordination, projectId), node);
+            LeaderReplication leader = LeaderReplication.shared(coordination, projectId, node.nodeId(), () -> {
+            });
+            // The side closes the shared side it holds.
+            ReplicationSide side = own(new ReplicationSide(coordination, projectId, root, node.nodeId(), leader, null));
             ControlPlaneEventHub eventHub = new ControlPlaneEventHub();
             this.owner = own(CoordinationServerLauncher.linkOwner(new Onboarding(profile.resolve("link"), eventHub::publish), node, eventHub,
                     new ProjectIdentity(projectId, createdAt), side, new ReplicationJournal(coordination), coordination, null));
@@ -125,9 +135,7 @@ final class ControlPlaneReplicationTest {
             ControlPlaneHttpHandler control = own(new ControlPlaneHttpHandler(readModel, service, owner, eventHub, ControlPlaneHttpHandler.SelectionGateway.UNAVAILABLE, null));
             CoordinationHttpServer server = own(new CoordinationHttpServer(service, new InetSocketAddress("127.0.0.1", 0), null, control));
             server.start();
-            if (member != null) {
-                member.serve(server);
-            }
+            leader.serve(server);
             side.serveCode(server);
             this.endpoint = URI.create("http://127.0.0.1:" + server.address().getPort());
             this.commandToken = control.runtimeCommandToken();
@@ -199,11 +207,32 @@ final class ControlPlaneReplicationTest {
         assertTrue(condition.getAsBoolean(), "condition not reached");
     }
 
-    /** The leader invites the member, the member joins, and the member's side reports a pull from the leader. */
+    /** The leader invites the member, the member joins, and the member's side reports its session with the leader. */
     private void connect(Computer leader, Computer member) throws Exception {
         Map<String, Object> invitation = leader.post("invite", Map.of("expectedPeer", member.node.nodeId()));
         member.post("join", Map.of("inviteUri", invitation.get("inviteUri")));
-        await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
+        await(() -> connectedOn(member, leader.node));
+    }
+
+    /** The entries of {@code author} that took effect in {@code holder}'s log, its own or copied; -1 while the log cannot be read. */
+    private static long entriesOf(Computer holder, NodeIdentity author) {
+        try {
+            return holder.store().events().stream().filter(event -> event.actorNodeId().equals(author.nodeId())).count();
+        } catch (Exception unreadable) {
+            return -1;
+        }
+    }
+
+    /** The owner's computer removes a member by an entry of its log, as {@code synesis project remove-member} does. */
+    private void remove(Computer owner, NodeIdentity member) throws Exception {
+        new MembershipService(owner.store(), owner.node).remove(member.nodeId());
+    }
+
+    /** The owner's computer lets a member in by entries of its log, as {@code synesis project add-member} does. */
+    private void add(Computer owner, NodeIdentity member) throws Exception {
+        MembershipService membership = new MembershipService(owner.store(), owner.node);
+        membership.requestJoin(member.nodeId());
+        membership.answer(member.nodeId(), true);
     }
 
     @Test
@@ -216,11 +245,13 @@ final class ControlPlaneReplicationTest {
 
         assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-b", "src/b.py")).acquired());
 
-        await(() -> leader.applied() == 2);
-        assertTrue(leader.store().events().stream().allMatch(event -> event.actorNodeId().equals(memberNode.nodeId())));
-        // The leader's own entry reaches the member by the notice the attached session carries, well before the 15 s pull.
+        await(() -> entriesOf(leader, memberNode) == 2);
+        // The leader's own entries (its membership entries from the migration at start, and now a lane) reach the member
+        // by the notice the attached session carries, well before the 15 s pull.
         assertTrue(new WorkIntentService(leader.store(), leaderNode).announce(lane("agt-a", "src/a.py")).acquired());
-        await(() -> PredictionEventStore.recordedEvents(member.coordination) == 4);
+        await(() -> entriesOf(member, leaderNode) == entriesOf(leader, leaderNode));
+        assertEquals(leader.store().events().size(), member.store().events().size(), "each holds the other's entries and its own");
+        assertEquals(leaderNode.nodeId(), member.store().membershipProjection().owner().orElseThrow(), "the member learned the owner from the log");
     }
 
     /**
@@ -236,8 +267,8 @@ final class ControlPlaneReplicationTest {
         Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
         Map<String, Object> invitation = member.post("invite", Map.of("expectedPeer", leaderNode.nodeId()));
         leader.post("join", Map.of("inviteUri", invitation.get("inviteUri")));
-        await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
-        await(() -> connectedOnLeader(leader, memberNode));
+        await(() -> connectedOn(member, leaderNode));
+        await(() -> connectedOn(leader, memberNode));
         Instant firstConnected = LeaderReplication.recordedMembers(leader.coordination).orElseThrow().get(memberNode.nodeId()).since();
         assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-b", "src/b.py")).acquired());
         List<PeerSession> firstSessions = List.copyOf(leader.owner.get().sessions());
@@ -247,18 +278,19 @@ final class ControlPlaneReplicationTest {
         await(() -> leader.owner.get().sessions().stream().anyMatch(session -> !firstSessions.contains(session) && session.isUsable())
                 && member.owner.get().sessions().stream().anyMatch(PeerSession::isUsable));
         // The leader says the member is connected again, from the redialed session's start.
-        await(() -> connectedOnLeader(leader, memberNode)
+        await(() -> connectedOn(leader, memberNode)
                 && LeaderReplication.recordedMembers(leader.coordination).orElseThrow().get(memberNode.nodeId()).since().isAfter(firstConnected));
         assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-c", "src/c.py")).acquired());
-        await(() -> leader.applied() == 4);
+        await(() -> entriesOf(leader, memberNode) == 4);
         assertTrue(ReplicationJournal.lastDisconnect(member.coordination).orElseThrow().startsWith("REMOTE_REQUEST "));
         assertTrue(ReplicationJournal.lastDisconnect(leader.coordination).orElseThrow().startsWith("LOCAL_REQUEST "));
         assertEquals(2, ReplicationJournal.read(member.coordination).stream().filter(line -> line.contains(" CONNECTED ")).count());
     }
 
-    private static boolean connectedOnLeader(Computer leader, NodeIdentity member) {
-        return LeaderReplication.recordedMembers(leader.coordination)
-                .map(members -> members.get(member.nodeId())).filter(found -> found.state() == LeaderReplication.MemberConnection.State.CONNECTED).isPresent();
+    /** Whether {@code holder} records a live session with {@code other}. */
+    private static boolean connectedOn(Computer holder, NodeIdentity other) {
+        return LeaderReplication.recordedMembers(holder.coordination)
+                .map(members -> members.get(other.nodeId())).filter(found -> found.state() == LeaderReplication.MemberConnection.State.CONNECTED).isPresent();
     }
 
     private boolean hasUsableSessionOtherThan(Computer computer, List<PeerSession> earlier) {
@@ -293,16 +325,16 @@ final class ControlPlaneReplicationTest {
         Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
         Map<String, Object> invitation = member.post("invite", Map.of("expectedPeer", leaderNode.nodeId()));
         leader.post("join", Map.of("inviteUri", invitation.get("inviteUri")));
-        await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
+        await(() -> connectedOn(member, leaderNode));
         assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-b", "src/b.py")).acquired());
         List<PeerSession> before = List.copyOf(member.owner.get().sessions());
 
         leader.stop();
-        Computer restarted = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
+        Computer restarted = new Computer("leader", leaderNode, null);
 
         await(() -> hasUsableSessionOtherThan(member, before) && restarted.hasPeer());
         assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-c", "src/c.py")).acquired());
-        await(() -> restarted.applied() == 4);
+        await(() -> entriesOf(restarted, memberNode) == 4);
         assertTrue(journaled(restarted, "DIAL_RESUMED"));
     }
 
@@ -315,16 +347,16 @@ final class ControlPlaneReplicationTest {
         Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
         Map<String, Object> invitation = member.post("invite", Map.of("expectedPeer", leaderNode.nodeId()));
         leader.post("join", Map.of("inviteUri", invitation.get("inviteUri")));
-        await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
+        await(() -> connectedOn(member, leaderNode));
         assertEquals(Set.of(leaderNode.nodeId()), ReplicationPeers.read(member.coordination).hosted().values().iterator().next());
         List<PeerSession> before = List.copyOf(leader.owner.get().sessions());
 
         member.stop();
-        Computer restarted = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        Computer restarted = new Computer("member", memberNode, null);
 
         await(() -> hasUsableSessionOtherThan(leader, before) && restarted.hasPeer());
         assertTrue(new WorkIntentService(restarted.store(), memberNode).announce(lane("agt-c", "src/c.py")).acquired());
-        await(() -> leader.applied() == 2);
+        await(() -> entriesOf(leader, memberNode) == 2);
         assertTrue(journaled(restarted, "HOST_RESUMED"));
     }
 
@@ -339,13 +371,13 @@ final class ControlPlaneReplicationTest {
         Computer a = new Computer("a", aNode, ReplicationSettings.member(leaderNode.nodeId()));
         Map<String, Object> invitation = leader.post("invite", Map.of());
         a.post("join", Map.of("inviteUri", invitation.get("inviteUri")));
-        await(() -> MemberReplication.recordedState(a.coordination).filter("CONNECTED"::equals).isPresent());
+        await(() -> connectedOn(a, leaderNode));
         List<String> bJournal = new CopyOnWriteArrayList<>();
         LinkRuntimeOwner b = strangerOwner("b", bNode, node -> true, bJournal);
         List<PeerSession> before = List.copyOf(a.owner.get().sessions());
 
         leader.stop();
-        Computer restarted = new Computer("leader", leaderNode, ReplicationSettings.leader(both));
+        Computer restarted = new Computer("leader", leaderNode, null);
         await(() -> hasUsableSessionOtherThan(a, before) && restarted.hasPeer());
         b.resumeDialing((String) invitation.get("inviteUri"));
         // A refused attempt takes longer to give up on Windows than on Linux; wait for it rather than for a fixed time.
@@ -367,10 +399,12 @@ final class ControlPlaneReplicationTest {
         leader.post("join", Map.of("inviteUri", member.post("invite", Map.of()).get("inviteUri")));
         await(() -> a.hasPeer() && member.hasPeer() && leader.peers().size() == 2);
         leader.stop();
-        // The leader's list loses both while it is down; neither record is used.
-        ReplicationSettings.leader(Set.of()).write(leader.coordination);
+        // Both are removed while it is down, by entries of its log (ADR-0098 step 6); neither record is used.
+        MembershipService owner = new MembershipService(new PredictionEventStore(leader.coordination, projectId), leaderNode);
+        owner.remove(aNode.nodeId());
+        owner.remove(memberNode.nodeId());
 
-        Computer restarted = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of()));
+        Computer restarted = new Computer("leader", leaderNode, null);
         // The stopped leader's sessions take longer to end on Windows than on Linux; wait for that, not a fixed time.
         await(() -> a.owner.get().sessions().stream().noneMatch(PeerSession::isUsable) && member.owner.get().sessions().stream().noneMatch(PeerSession::isUsable)
                 && journaled(restarted, "HOST_RESUME_SKIPPED") && journaled(restarted, "DIAL_RESUME_SKIPPED"));
@@ -390,11 +424,11 @@ final class ControlPlaneReplicationTest {
         Computer leader = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
         Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
         leader.post("join", Map.of("inviteUri", member.post("invite", Map.of("expectedPeer", leaderNode.nodeId())).get("inviteUri")));
-        await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
+        await(() -> connectedOn(member, leaderNode));
         leader.stop();
         Files.writeString(leader.coordination.resolve(ReplicationPeers.FILE), "dial=not a record\n");
 
-        Computer restarted = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
+        Computer restarted = new Computer("leader", leaderNode, null);
         settle();
 
         assertTrue(restarted.owner.get().sessions().isEmpty());
@@ -406,7 +440,7 @@ final class ControlPlaneReplicationTest {
         Computer leader = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
         Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
         leader.post("join", Map.of("inviteUri", member.post("invite", Map.of("expectedPeer", leaderNode.nodeId())).get("inviteUri")));
-        await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
+        await(() -> connectedOn(member, leaderNode));
         return member;
     }
 
@@ -420,7 +454,7 @@ final class ControlPlaneReplicationTest {
         assertEquals(1, before.size());
 
         member.stop();
-        Computer restarted = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        Computer restarted = new Computer("member", memberNode, null);
 
         await(() -> journaled(restarted, "HOST_RESUMED") && restarted.hasPeer());
         Set<String> after = ReplicationReplay.read(restarted.coordination, 8_192).orElseThrow();
@@ -436,7 +470,7 @@ final class ControlPlaneReplicationTest {
         member.stop();
         Files.writeString(member.coordination.resolve(ReplicationReplay.FILE), "not a fingerprint\n");
 
-        Computer restarted = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        Computer restarted = new Computer("member", memberNode, null);
         settle();
 
         assertTrue(journaled(restarted, "REPLAY_GUARD_UNREADABLE"), ReplicationJournal.read(restarted.coordination).toString());
@@ -453,7 +487,7 @@ final class ControlPlaneReplicationTest {
         member.stop();
         Files.delete(member.coordination.resolve(ReplicationReplay.FILE));
 
-        Computer restarted = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        Computer restarted = new Computer("member", memberNode, null);
         settle();
 
         assertTrue(journaled(restarted, "REPLAY_GUARD_UNREADABLE"));
@@ -468,12 +502,12 @@ final class ControlPlaneReplicationTest {
         Computer leader = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
         Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
         leader.post("join", Map.of("inviteUri", member.post("invite", Map.of("expectedPeer", leaderNode.nodeId())).get("inviteUri")));
-        await(() -> MemberReplication.recordedState(member.coordination).filter("CONNECTED"::equals).isPresent());
+        await(() -> connectedOn(member, leaderNode));
         int port = ReplicationPeers.read(member.coordination).hosted().keySet().iterator().next();
         member.stop();
 
         try (DatagramSocket taken = new DatagramSocket(port)) {
-            Computer restarted = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+            Computer restarted = new Computer("member", memberNode, null);
             assertTrue(taken.isBound());
             assertTrue(journaled(restarted, "HOST_RESUME_FAILED"), ReplicationJournal.read(restarted.coordination).toString());
             assertTrue(restarted.owner.get().sessions().isEmpty());
@@ -508,7 +542,7 @@ final class ControlPlaneReplicationTest {
         // An agent's process is not the server's: it has no code side of its own and asks over loopback HTTP.
         CodeExchange.register(member.coordination, null);
 
-        assertTrue(CodeExchange.followLeaderIfMember(member.coordination, projectId, memberRoot));
+        assertTrue(CodeExchange.followLeaderIfMember(member.coordination, projectId, memberRoot, memberNode.nodeId()));
 
         assertEquals(leaderHead, GitProcessRunner.run(memberRoot, "rev-parse", "HEAD"), "the member's branch followed the leader's");
         assertEquals("second", Files.readString(memberRoot.resolve("board.txt")).strip());
@@ -529,7 +563,7 @@ final class ControlPlaneReplicationTest {
     }
 
     @Test
-    void aMemberAddedOrRemovedInTheSettingsIsServedOrRefusedWithoutRestartingTheLeader() throws Exception {
+    void aMemberAddedOrRemovedByEntriesOfTheOwnersLogIsServedOrRefusedWithoutRestartingTheOwner() throws Exception {
         NodeIdentity leaderNode = identity("leader");
         NodeIdentity memberNode = identity("member");
         Computer leader = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of()));
@@ -538,18 +572,18 @@ final class ControlPlaneReplicationTest {
         member.post("join", Map.of("inviteUri", invitation.get("inviteUri")));
         await(() -> member.hasPeer() && leader.hasPeer());
 
-        // The member always writes its own log; the leader takes copies only from a node its settings name.
+        // The member always writes its own log; the owner takes copies only from a node its log names a member.
         assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-b", "src/b.py")).acquired());
         settle();
-        assertEquals(0, PredictionEventStore.recordedEvents(leader.coordination), "a node the settings do not name gets nothing from the leader");
+        assertEquals(0, entriesOf(leader, memberNode), "a node the log does not name gets nothing from the owner");
 
-        ReplicationSettings.leader(Set.of(memberNode.nodeId())).write(leader.coordination);
+        add(leader, memberNode);
         assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-c", "src/c.py")).acquired());
-        await(() -> leader.applied() == 4);
+        await(() -> entriesOf(leader, memberNode) == 4);
 
-        ReplicationSettings.leader(Set.of()).write(leader.coordination);
+        remove(leader, memberNode);
         assertTrue(new WorkIntentService(member.store(), memberNode).announce(lane("agt-d", "src/d.py")).acquired());
         settle();
-        assertEquals(4, leader.store().events().size(), "a removed node's later entries do not reach the leader");
+        assertEquals(4, entriesOf(leader, memberNode), "a removed node's later entries do not reach the owner");
     }
 }

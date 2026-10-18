@@ -98,6 +98,25 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
          * @throws java.io.IOException when the list cannot be saved; the request then stays pending
          */
         void admit(String nodeId, String codeRemoteUrl) throws java.io.IOException;
+
+        /**
+         * Records that this computer holds a joiner's session and asks for it to be let in, so the request outlives
+         * this process and every member sees it (ADR-0098 step 6).
+         *
+         * @param nodeId the joining node
+         * @throws java.io.IOException when the request cannot be recorded; the session is still held
+         */
+        default void requested(String nodeId) throws java.io.IOException {
+        }
+
+        /**
+         * Records that the request of a joiner is declined.
+         *
+         * @param nodeId the joining node
+         * @throws java.io.IOException when the answer cannot be recorded, for example because only the owner declines
+         */
+        default void declined(String nodeId) throws java.io.IOException {
+        }
     }
 
     private record Held(String nodeId, Instant requestedAt, Instant expiresAt, int port, String codeRemoteUrl) {
@@ -497,6 +516,11 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
         requests.put(session.remoteNodeId(), new Held(session.remoteNodeId(), now,
                 expiresAt == null ? now.plus(org.synesis.link.protocol.CompactBootstrapInvitation.MAX_LIFETIME) : expiresAt, port, projectUrls.get(connectionLink)));
         record("JOIN_REQUESTED peer=" + session.remoteNodeId());
+        try {
+            admission.requested(session.remoteNodeId());
+        } catch (java.io.IOException | RuntimeException unrecorded) {
+            record("JOIN_REQUEST_NOT_RECORDED peer=" + session.remoteNodeId() + " cause=" + unrecorded.getMessage());
+        }
         publish(OnboardingEventType.SESSION_CREATED, "JOIN_REQUESTED");
     }
 
@@ -563,6 +587,11 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     @Override
     public void declineJoin(String nodeId) throws JoinRequestException {
         Held held = pendingRequest(nodeId);
+        try {
+            admission.declined(nodeId);
+        } catch (java.io.IOException | RuntimeException unrecorded) {
+            throw new JoinRequestException("DECLINE_NOT_SAVED");
+        }
         requests.remove(nodeId, held);
         closeHeld(nodeId);
         record("JOIN_DECLINED peer=" + nodeId);

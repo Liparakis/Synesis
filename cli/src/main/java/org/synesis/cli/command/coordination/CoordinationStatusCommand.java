@@ -9,7 +9,6 @@ import org.synesis.cli.exit.ExitCodes;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.replication.LeaderReplication;
-import org.synesis.coordination.replication.MemberReplication;
 import org.synesis.coordination.replication.ReplicationJournal;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -63,11 +62,25 @@ public final class CoordinationStatusCommand implements Callable<Integer> {
                 runtime.terminal().stdout("LOG_PROBLEM=" + problem);
             }
             replication.ifPresent(settings -> {
-                runtime.terminal().stdout("REPLICATION_ROLE=" + (settings.isMember() ? "member" : "leader"));
-                if (settings.isMember()) {
+                runtime.terminal().stdout("REPLICATION_ROLE=" + (settings.shared() ? "shared" : settings.isMember() ? "member" : "leader"));
+                if (settings.shared()) {
+                    // Who belongs is in the logs (ADR-0098 step 6); the running server only says how each is connected.
+                    var membership = store.membershipProjection();
+                    membership.owner().ifPresent(owner -> runtime.terminal().stdout("REPLICATION_OWNER=" + owner));
+                    runtime.terminal().stdout("REPLICATION_RECOVERY_KEY=" + (membership.recoveryPublicKey().length > 0 ? "SET" : "NONE"));
+                    var recorded = LeaderReplication.recordedMembers(projectData);
+                    String self = selfNode(location);
+                    membership.members().stream().sorted().forEach(node -> runtime.terminal().stdout("REPLICATION_MEMBER=" + node + " "
+                            + (node.equals(self) ? "STATE=THIS_COMPUTER" : recorded.map(members -> connection(members.get(node)))
+                                    .orElse("STATE=NO_COORDINATION_SERVER"))));
+                    membership.openRequests().forEach(request -> runtime.terminal().stdout("JOIN_REQUEST=" + request.joinerNodeId()
+                            + " inviter=" + request.inviterNodeId()));
+                } else if (settings.isMember()) {
                     runtime.terminal().stdout("REPLICATION_LEADER=" + settings.leaderNodeId());
-                    runtime.terminal().stdout("REPLICATION_STATE="
-                            + MemberReplication.recordedState(projectData).orElse("NO_COORDINATION_SERVER"));
+                    // The shared side records its connection to the leader a step-5 member file still names (ADR-0098 step 6).
+                    runtime.terminal().stdout("REPLICATION_STATE=" + LeaderReplication.recordedMembers(projectData)
+                            .map(members -> members.containsKey(settings.leaderNodeId()) ? members.get(settings.leaderNodeId()).state().name() : "DISCONNECTED")
+                            .orElse("NO_COORDINATION_SERVER"));
                 } else {
                     // The role file names the members; the running leader server only says how each is connected.
                     var recorded = LeaderReplication.recordedMembers(projectData);
@@ -82,6 +95,14 @@ public final class CoordinationStatusCommand implements Callable<Integer> {
         } catch (Exception failure) {
             runtime.terminal().stderr("COORDINATION_ERROR=" + failure.getMessage());
             return ExitCodes.LOCAL_CONFIGURATION;
+        }
+    }
+
+    private static String selfNode(org.synesis.workspace.application.project.ProjectLocation location) {
+        try {
+            return location.loadOrCreateIdentity().nodeId();
+        } catch (Exception unreadable) {
+            return "";
         }
     }
 

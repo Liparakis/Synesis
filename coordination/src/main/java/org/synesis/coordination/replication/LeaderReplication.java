@@ -84,6 +84,8 @@ public final class LeaderReplication implements AutoCloseable {
     private final LogExchange exchange;
     private volatile CoordinationHttpServer served;
     private final Supplier<Set<String>> members;
+    private final java.util.function.Predicate<String> admitted;
+    private final MembershipView membership;
     private final Runnable afterMemberEntry;
     private volatile Runnable pulled = () -> {
     };
@@ -128,12 +130,31 @@ public final class LeaderReplication implements AutoCloseable {
      * @param afterMemberEntry called after entries of a member arrived; it must not block
      */
     public LeaderReplication(Path root, UUID projectId, Supplier<Set<String>> members, Runnable afterMemberEntry) {
+        this(root, projectId, members, node -> members.get().contains(node), node -> members.get().contains(node), null, afterMemberEntry);
+    }
+
+    /**
+     * Exchanges one project's logs with the members the membership entries name (ADR-0098 step 6): the side every
+     * computer of a shared project runs, the owner's and every member's alike (designer item 13).
+     *
+     * @param root             this computer's coordination folder
+     * @param projectId        the project
+     * @param membership       which computers are admitted and whose logs are copied, read afresh
+     * @param afterMemberEntry called after entries of another computer arrived; it must not block
+     */
+    public LeaderReplication(Path root, UUID projectId, MembershipView membership, Runnable afterMemberEntry) {
+        this(root, projectId, membership::others, membership::admitted, membership::copied, membership, afterMemberEntry);
+    }
+
+    private LeaderReplication(Path root, UUID projectId, Supplier<Set<String>> members, java.util.function.Predicate<String> admitted,
+            java.util.function.Predicate<String> copied, MembershipView membership, Runnable afterMemberEntry) {
+        this.membership = membership;
         this.afterMemberEntry = CoordinationNullException.requireNonNull(afterMemberEntry, "afterMemberEntry");
         this.root = CoordinationNullException.requireNonNull(root, "root");
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.members = CoordinationNullException.requireNonNull(members, "members");
-        this.exchange = new LogExchange(root, projectId, node -> members.get().contains(node),
-                node -> members.get().contains(node), this::afterArrivals);
+        this.admitted = CoordinationNullException.requireNonNull(admitted, "admitted");
+        this.exchange = new LogExchange(root, projectId, admitted, copied, this::afterArrivals);
         notices.execute(this::writeConnections);
     }
 
@@ -178,6 +199,20 @@ public final class LeaderReplication implements AutoCloseable {
      */
     public static LeaderReplication serving(Path root, UUID projectId, Runnable afterMemberEntry) {
         return new LeaderReplication(root, projectId, () -> currentMembers(root), afterMemberEntry);
+    }
+
+    /**
+     * Serves the project of a coordination folder as the membership entries say, or before sharing as the computers
+     * it trusts say (ADR-0098 step 6, designer items 13 and 15): every computer's side.
+     *
+     * @param root             this computer's coordination folder
+     * @param projectId        the project
+     * @param self             this computer's node
+     * @param afterMemberEntry called after entries of another computer arrived; it must not block
+     * @return the side
+     */
+    public static LeaderReplication shared(Path root, UUID projectId, String self, Runnable afterMemberEntry) {
+        return new LeaderReplication(root, projectId, new MembershipView(root, projectId, self), afterMemberEntry);
     }
 
     /**
@@ -234,7 +269,16 @@ public final class LeaderReplication implements AutoCloseable {
      * @return true when the leader's settings name it as a member
      */
     public boolean isMember(String nodeId) {
-        return members.get().contains(nodeId);
+        return admitted.test(nodeId);
+    }
+
+    /**
+     * The membership this side goes by, when it goes by the membership entries (ADR-0098 step 6).
+     *
+     * @return the view, or empty for a side built on a fixed or settings-file member list
+     */
+    public Optional<MembershipView> membership() {
+        return Optional.ofNullable(membership);
     }
 
     /**

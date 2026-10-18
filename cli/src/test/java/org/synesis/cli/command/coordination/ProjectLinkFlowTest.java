@@ -14,11 +14,15 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -31,14 +35,19 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
 import org.synesis.coordination.application.CoordinationService;
+import org.synesis.coordination.application.MembershipService;
+import org.synesis.coordination.application.SharedSettingsMigration;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.membership.MembershipProjection;
+import org.synesis.coordination.domain.prediction.PredictionEvent;
+import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.LoopbackExchange;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationPeers;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.replication.LeaderReplication;
-import org.synesis.coordination.replication.MemberReplication;
 import org.synesis.coordination.replication.ReplicationJournal;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
 
@@ -68,6 +77,9 @@ import org.synesis.workspace.transport.control.network.LinkNetworkProjection;
 @Timeout(180)
 final class ProjectLinkFlowTest {
 
+    private static final Set<PredictionEventType> MEMBERSHIP_ENTRIES = EnumSet.of(PredictionEventType.PROJECT_SHARED, PredictionEventType.JOIN_REQUESTED,
+            PredictionEventType.JOIN_ANSWERED, PredictionEventType.JOIN_POLICY_SET, PredictionEventType.MEMBER_REMOVED, PredictionEventType.MEMBER_CARD,
+            PredictionEventType.OWNER_CHANGED);
     private static final String REMOTE_URL = "https://example.test/org/project.git";
 
     @TempDir
@@ -123,21 +135,45 @@ final class ProjectLinkFlowTest {
             this.node = location.loadOrCreateIdentity();
             Path coordination = location.coordinationDirectory();
             UUID projectId = location.projectId();
-            var settings = ReplicationSettings.read(coordination);
-            MemberReplication member = settings.filter(ReplicationSettings::isMember).isPresent() ? MemberReplication.open(coordination, projectId) : null;
-            MergeDriver merge = member == null ? MergeDriver.forProject(location.root(), coordination, projectId, node, 3_000L) : null;
-            LeaderReplication leader = merge != null ? LeaderReplication.serving(coordination, projectId, merge::onMemberEntry) : null;
-            ReplicationSide side = new ReplicationSide(coordination, projectId, location.root(), member, settings.map(ReplicationSettings::leaderNodeId).orElse(null), leader, merge);
+            PredictionEventStore store = new PredictionEventStore(coordination, projectId);
+            // As the launcher starts: a step-5 settings file moves into the log, and every computer plays the same side.
+            SharedSettingsMigration.migrate(coordination, store, node);
+            MembershipService membership = new MembershipService(store, node);
+            MergeDriver merge = MergeDriver.forProject(location.root(), coordination, projectId, node, 3_000L);
+            LeaderReplication leader = LeaderReplication.shared(coordination, projectId, node.nodeId(), merge::onMemberEntry);
+            ReplicationSide side = new ReplicationSide(coordination, projectId, location.root(), node.nodeId(), leader, merge);
             ControlPlaneEventHub hub = new ControlPlaneEventHub();
             this.owner = CoordinationServerLauncher.linkOwner(new Onboarding(location.linkDirectory(), hub::publish), node, hub, location.identity(), side,
-                    new ReplicationJournal(coordination), coordination, (nodeId, codeRemoteUrl) -> {
-                        try {
-                            ProjectSharing.admit(location.root(), coordination, nodeId, codeRemoteUrl);
-                        } catch (ProjectSharing.Refusal refused) {
-                            throw new IOException(refused.code());
+                    new ReplicationJournal(coordination), coordination, new LinkRuntimeOwner.MemberAdmission() {
+                        @Override
+                        public void admit(String nodeId, String codeRemoteUrl) throws IOException {
+                            try {
+                                ProjectSharing.admit(location.root(), coordination, membership, nodeId, codeRemoteUrl);
+                            } catch (ProjectSharing.Refusal refused) {
+                                throw new IOException(refused.code());
+                            }
+                        }
+
+                        @Override
+                        public void requested(String nodeId) throws IOException {
+                            try {
+                                membership.share(Optional.empty());
+                                membership.requestJoin(nodeId);
+                            } catch (GeneralSecurityException unsigned) {
+                                throw new IOException(unsigned);
+                            }
+                        }
+
+                        @Override
+                        public void declined(String nodeId) throws IOException {
+                            try {
+                                membership.answer(nodeId, false);
+                            } catch (GeneralSecurityException unsigned) {
+                                throw new IOException(unsigned);
+                            }
                         }
                     });
-            CoordinationService coordinationService = new CoordinationService(new PredictionEventStore(coordination, projectId), node);
+            CoordinationService coordinationService = new CoordinationService(store, node);
             ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, coordinationService, new ProviderApplicationService(), new DoctorService(), new LinkNetworkProjection(owner), registry);
             AtomicReference<CoordinationHttpServer> serverRef = new AtomicReference<>();
             ControlPlaneHttpHandler control = new ControlPlaneHttpHandler(readModel, coordinationService, owner, hub, ControlPlaneHttpHandler.SelectionGateway.UNAVAILABLE, registry,
@@ -164,11 +200,7 @@ final class ProjectLinkFlowTest {
             CoordinationHttpServer server = new CoordinationHttpServer(coordinationService, new InetSocketAddress("127.0.0.1", 0), null, control);
             server.start();
             serverRef.set(server);
-            if (member != null) {
-                member.serve(server);
-            } else if (leader != null) {
-                leader.serve(server);
-            }
+            leader.serve(server);
             side.serveCode(server);
             this.endpoint = URI.create("http://127.0.0.1:" + server.address().getPort());
             this.commandToken = control.runtimeCommandToken();
@@ -211,6 +243,24 @@ final class ProjectLinkFlowTest {
         ReplicationSettings role() throws Exception {
             return ReplicationSettings.read(location.coordinationDirectory()).orElseThrow();
         }
+
+        /** The membership entries this computer's log holds, own and copied, in local order. */
+        List<PredictionEventType> membershipEntries() throws Exception {
+            return store().events().stream().map(PredictionEvent::type).filter(MEMBERSHIP_ENTRIES::contains).toList();
+        }
+
+        MembershipProjection membership() throws Exception {
+            return store().membershipProjection();
+        }
+
+        /** Whether this computer's log, with the copies it holds, names the node a member. */
+        boolean namesMember(String nodeId) {
+            try {
+                return membership().members().contains(nodeId);
+            } catch (Exception unreadable) {
+                return false;
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -251,6 +301,15 @@ final class ProjectLinkFlowTest {
         assertTrue(condition.getAsBoolean(), "condition not reached");
     }
 
+    /** How many entries of {@code author} took effect in {@code holder}'s log, its own or copied; -1 while it cannot be read. */
+    private static long entriesOf(Computer holder, Computer author) {
+        try {
+            return holder.store().events().stream().filter(event -> event.actorNodeId().equals(author.node.nodeId())).count();
+        } catch (Exception unreadable) {
+            return -1;
+        }
+    }
+
     private static boolean announces(Computer computer, WorkIntent intent) {
         try {
             return new WorkIntentService(computer.store(), computer.node).announce(intent).acquired();
@@ -266,7 +325,7 @@ final class ProjectLinkFlowTest {
     }
 
     @Test
-    void theOwnerInvitesTheFriendOpensTheLinkTheOwnerAcceptsAndAMembersEntryLandsOnTheLeader() throws Exception {
+    void theOwnerInvitesTheFriendOpensTheLinkTheOwnerAcceptsAndTheEntriesOfBothLandOnTheOther() throws Exception {
         Computer owner = start(ownerProject, null);
         ProjectLocation friendProject = friendClone("friend");
         friendRegistry.register(friendProject.root());
@@ -281,7 +340,8 @@ final class ProjectLinkFlowTest {
         assertEquals(REMOTE_URL, invited.body().get("codeRemoteUrl"), "the credentials in the remote never reach the link");
         assertFalse(link.contains("secret"));
         assertEquals("origin", invited.body().get("codeRemoteName"));
-        assertTrue(ReplicationSettings.read(ownerProject.coordinationDirectory()).isEmpty(), "inviting writes nothing: only the first accept makes this computer the leader");
+        assertTrue(ReplicationSettings.read(ownerProject.coordinationDirectory()).isEmpty(), "inviting writes nothing: the project is shared when a joiner is held");
+        assertEquals(List.of(), owner.membershipEntries());
 
         // The friend pastes it into a UI served by another project's runtime; the folder is found by identity.
         Response opened = friendHome.post("open-project-link", Map.of("link", link));
@@ -290,12 +350,14 @@ final class ProjectLinkFlowTest {
         assertEquals(friendProject.root().toString(), opened.body().get("folder"));
         assertEquals("member", opened.body().get("role"));
         assertNotNull(opened.body().get("answerUri"), "the answer link for a friend on another network");
-        assertEquals(ReplicationSettings.member(owner.node.nodeId()).withCodeRemote("synesis"), friend.role());
+        assertEquals(ReplicationSettings.sharedProject("synesis"), friend.role(), "the joiner is role=shared at once; who belongs is the owner's log");
+        assertEquals(Set.of(owner.node.nodeId()), ReplicationPeers.read(friendProject.coordinationDirectory()).dialed().keySet(),
+                "the inviter is a computer it dialed, which it trusts until the owner's entries arrive");
         assertEquals(REMOTE_URL, GitProcessRunner.run(friendProject.root(), "remote", "get-url", "synesis").strip());
         assertEquals("CODE_REMOTE_UNAVAILABLE", opened.body().get("codeRemoteCheck"), "the join goes on and says this computer cannot fetch without a prompt");
         assertTrue(String.valueOf(opened.body().get("codeRemoteDetail")).contains("git fetch synesis"), opened.toString());
 
-        // Authenticated and identity-checked, but not served until the owner accepts.
+        // Authenticated and identity-checked, held, and on the owner's log as a request; not served until the owner accepts.
         await(() -> {
             try {
                 return owner.joinRequests().size() == 1;
@@ -304,22 +366,35 @@ final class ProjectLinkFlowTest {
             }
         });
         assertEquals(friend.node.nodeId(), owner.joinRequests().getFirst().get("nodeId"));
-        assertTrue(announces(friend, lane("agt-f", "src/before.py")), "a member appends to its own log whether or not the owner accepted it");
-        assertEquals(0, PredictionEventStore.recordedEvents(ownerProject.coordinationDirectory()), "nothing of the friend's reached the owner, which does not serve a node it has not accepted");
-        assertTrue(ReplicationSettings.read(ownerProject.coordinationDirectory()).isEmpty());
+        assertEquals(List.of(PredictionEventType.PROJECT_SHARED, PredictionEventType.JOIN_REQUESTED), owner.membershipEntries(), "holding the joiner shared the project and asked");
+        assertEquals(owner.node.nodeId(), owner.membership().owner().orElseThrow());
+        assertEquals(Set.of(owner.node.nodeId()), owner.membership().members());
+        assertEquals(friend.node.nodeId(), owner.membership().openRequests().getFirst().joinerNodeId());
+        assertTrue(announces(friend, lane("agt-f", "src/before.py")), "a joiner appends to its own log whether or not the owner accepted it");
+        Thread.sleep(2_000);
+        assertTrue(owner.store().events().stream().allMatch(event -> event.actorNodeId().equals(owner.node.nodeId())),
+                "nothing of the friend's reached the owner, which does not serve or copy a node it has not accepted");
+        assertEquals(Set.of(owner.node.nodeId()), owner.membership().members());
 
         Response accepted = owner.post("accept-join", Map.of("nodeId", friend.node.nodeId()));
         assertEquals(200, accepted.status(), accepted.toString());
         assertEquals("ACCEPTED", accepted.body().get("state"));
-        assertEquals(ReplicationSettings.leader(java.util.Set.of(friend.node.nodeId())).withCodeRemote("origin"), owner.role(), "accepting wrote the leader role, the member and the remote the link carried");
+        assertEquals(ReplicationSettings.sharedProject("origin"), owner.role(), "accepting wrote role=shared and the remote the link carried");
+        assertEquals(List.of(PredictionEventType.PROJECT_SHARED, PredictionEventType.JOIN_REQUESTED, PredictionEventType.JOIN_ANSWERED), owner.membershipEntries());
+        assertEquals(Set.of(owner.node.nodeId(), friend.node.nodeId()), owner.membership().members());
         assertEquals(List.of(), owner.joinRequests());
-        await(() -> MemberReplication.recordedState(friendProject.coordinationDirectory()).filter("CONNECTED"::equals).isPresent());
+
+        // After acceptance both pull each other: the owner's entries reach the friend, which then sees itself a member.
+        await(() -> friend.namesMember(friend.node.nodeId()));
+        assertEquals(owner.node.nodeId(), friend.membership().owner().orElseThrow(), "the friend learned who owns the project from the owner's log");
+        assertEquals(List.of(PredictionEventType.PROJECT_SHARED, PredictionEventType.JOIN_REQUESTED, PredictionEventType.JOIN_ANSWERED), friend.membershipEntries());
 
         assertTrue(announces(friend, lane("agt-f", "src/after.py")));
-        int friendEntries = friend.store().events().size();
-        await(() -> PredictionEventStore.recordedEvents(ownerProject.coordinationDirectory()) == friendEntries);
-        assertEquals(friendEntries, owner.store().events().size(), "the owner holds byte-identical copies of everything the friend appended, before and after it accepted");
-        assertTrue(owner.store().events().stream().allMatch(event -> event.actorNodeId().equals(friend.node.nodeId())));
+        await(() -> entriesOf(owner, friend) > 0);
+        await(() -> entriesOf(owner, friend) == entriesOf(friend, friend));
+        assertTrue(announces(owner, lane("agt-o", "src/owner.py")));
+        await(() -> entriesOf(friend, owner) == entriesOf(owner, owner));
+        assertEquals(owner.store().events().size(), friend.store().events().size(), "each holds the same entries, its own and the other's");
         assertTrue(Files.readString(ownerProject.coordinationDirectory().resolve("replication.peers")).contains(friend.node.nodeId()), "recorded for a restart");
     }
 
@@ -350,7 +425,11 @@ final class ProjectLinkFlowTest {
         Thread.sleep(3_500);
         assertTrue(owner.owner.get().sessions().isEmpty(), "the friend's redial is not admitted: its invitation is used up and it is no member");
         assertTrue(announces(friend, lane("agt-f", "src/declined.py")), "the friend still writes its own log");
-        assertEquals(0, PredictionEventStore.recordedEvents(ownerProject.coordinationDirectory()), "none of it reached the owner");
+        assertTrue(owner.store().events().stream().allMatch(event -> event.actorNodeId().equals(owner.node.nodeId())), "none of it reached the owner");
+        assertEquals(List.of(PredictionEventType.PROJECT_SHARED, PredictionEventType.JOIN_REQUESTED, PredictionEventType.JOIN_ANSWERED), owner.membershipEntries());
+        assertEquals(Optional.of(false), owner.membership().requests().getFirst().accepted(), "the decline is an entry of the owner's log: JOIN_ANSWERED(false)");
+        assertEquals(friend.node.nodeId(), owner.membership().requests().getFirst().joinerNodeId());
+        assertEquals(Set.of(owner.node.nodeId()), owner.membership().members());
         assertEquals(404, owner.post("accept-join", Map.of("nodeId", friend.node.nodeId())).status());
     }
 
@@ -386,7 +465,7 @@ final class ProjectLinkFlowTest {
         assertEquals(clone.toString(), chosen.body().get("folder"));
         assertTrue(Files.isDirectory(clone.resolve(".synesis/local")), "registered as a copy of the project (initReplica)");
         assertTrue(friendRegistry.projects().stream().anyMatch(view -> view.projectId().equals(ownerProject.projectId()) && view.path().equals(clone)));
-        assertEquals(ReplicationSettings.member(owner.node.nodeId()).withCodeRemote("synesis"), ReplicationSettings.read(clone.resolve(".synesis/coordination")).orElseThrow());
+        assertEquals(ReplicationSettings.sharedProject("synesis"), ReplicationSettings.read(clone.resolve(".synesis/coordination")).orElseThrow());
     }
 
     @Test
@@ -409,7 +488,7 @@ final class ProjectLinkFlowTest {
     }
 
     @Test
-    void aFriendWithItsOwnLogCannotFollowAndOneThatFollowsCannotInvite() throws Exception {
+    void aFriendWithItsOwnLogCannotFollowAndOneThatFollowsInvitesWithAProjectLinkToo() throws Exception {
         Computer owner = start(ownerProject, null);
         ProjectLocation friendProject = friendClone("friend");
         friendRegistry.register(friendProject.root());
@@ -430,9 +509,9 @@ final class ProjectLinkFlowTest {
         assertEquals(200, joined.status(), joined.toString());
         Response invite = follower.post("invite", Map.of("project", true));
         assertEquals(201, invite.status(), invite.toString());
-        assertNull(invite.body().get("kind"), "a member hosts the plain connection invitation, as the two-computer topology documents");
-        assertTrue(((String) invite.body().get("inviteUri")).startsWith("synesis://join/SLB3-"), invite.toString());
-        assertEquals(ReplicationSettings.member(owner.node.nodeId()).withCodeRemote("synesis"), follower.role(), "and it changed nothing");
+        assertEquals("PROJECT", invite.body().get("kind"), "any member invites to the project: it holds the joiner's session and records the request (ADR-0098 step 6)");
+        assertTrue(((String) invite.body().get("inviteUri")).startsWith("synesis://project/SLP1-"), invite.toString());
+        assertEquals(ReplicationSettings.sharedProject("synesis"), follower.role(), "and it changed nothing");
     }
 
     @Test
@@ -453,7 +532,7 @@ final class ProjectLinkFlowTest {
         assertEquals("CONNECTING", opened.body().get("state"));
         assertEquals(joined.toString(), opened.body().get("folder"));
         assertFalse(Files.exists(joined.resolve(".git")), "no code before the owner accepts");
-        assertEquals(ReplicationSettings.member(owner.node.nodeId()), ReplicationSettings.read(joined.resolve(".synesis/coordination")).orElseThrow(),
+        assertEquals(ReplicationSettings.sharedProject(null), ReplicationSettings.read(joined.resolve(".synesis/coordination")).orElseThrow(),
                 "a folder with no repository yet names no mirror");
         await(() -> {
             try {
@@ -502,7 +581,7 @@ final class ProjectLinkFlowTest {
         Response accepted = owner.post("accept-join", Map.of("nodeId", friend.node.nodeId()));
 
         assertEquals(200, accepted.status(), accepted.toString());
-        assertEquals(ReplicationSettings.leader(java.util.Set.of(friend.node.nodeId())), owner.role(), "code moves over Link, so no remote is needed");
+        assertEquals(ReplicationSettings.sharedProject(null), owner.role(), "code moves over Link, so no remote is needed");
         assertEquals(List.of(), owner.joinRequests());
     }
 
@@ -529,7 +608,7 @@ final class ProjectLinkFlowTest {
         assertEquals(200, friend.post("cancel", Map.of("operationId", plain.getFirst())).status());
         Response again = friend.post("open-project-link", Map.of("link", link));
         assertEquals(200, again.status(), again.toString());
-        assertEquals(ReplicationSettings.member(owner.node.nodeId()).withCodeRemote("synesis"), friend.role());
+        assertEquals(ReplicationSettings.sharedProject("synesis"), friend.role());
     }
 
     @Test

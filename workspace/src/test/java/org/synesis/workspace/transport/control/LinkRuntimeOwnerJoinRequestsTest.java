@@ -212,4 +212,120 @@ class LinkRuntimeOwnerJoinRequestsTest {
             assertEquals(List.of("null"), urls);
         }
     }
+
+    /** An admission that records which of the three calls it received, and can be made to fail on one. */
+    private static final class RecordingAdmission implements LinkRuntimeOwner.MemberAdmission {
+
+        final List<String> calls = new CopyOnWriteArrayList<>();
+        volatile boolean failRequested;
+        volatile boolean failDeclined;
+
+        @Override
+        public void admit(String nodeId, String codeRemoteUrl) {
+            calls.add("admit:" + nodeId);
+        }
+
+        @Override
+        public void requested(String nodeId) throws IOException {
+            calls.add("requested:" + nodeId);
+            if (failRequested) {
+                throw new IOException("log unavailable");
+            }
+        }
+
+        @Override
+        public void declined(String nodeId) throws IOException {
+            calls.add("declined:" + nodeId);
+            if (failDeclined) {
+                throw new IOException("only the owner declines");
+            }
+        }
+    }
+
+    @Test
+    void holdingAJoinerAsksTheAdmissionToRecordTheRequestOnceAndAcceptingAsksNothingMore() throws Exception {
+        NodeIdentity hostNode = identity(temp.resolve("host"));
+        NodeIdentity joinerNode = identity(temp.resolve("joiner"));
+        RecordingAdmission admission = new RecordingAdmission();
+        try (LinkRuntimeOwner host = host(hostNode, admission);
+                LinkRuntimeOwner joiner = joiner(joinerNode)) {
+            connect(host, joiner, hostNode);
+            await(() -> host.joinRequests().size() == 1);
+
+            assertEquals(List.of("requested:" + joinerNode.nodeId()), admission.calls);
+
+            host.acceptJoin(joinerNode.nodeId());
+
+            assertEquals(List.of("requested:" + joinerNode.nodeId(), "admit:" + joinerNode.nodeId()), admission.calls);
+        }
+    }
+
+    @Test
+    void aRequestThatCannotBeRecordedStillHoldsTheJoinerForTheDecision() throws Exception {
+        NodeIdentity hostNode = identity(temp.resolve("host"));
+        NodeIdentity joinerNode = identity(temp.resolve("joiner"));
+        RecordingAdmission admission = new RecordingAdmission();
+        admission.failRequested = true;
+        try (LinkRuntimeOwner host = host(hostNode, admission);
+                LinkRuntimeOwner joiner = joiner(joinerNode)) {
+            connect(host, joiner, hostNode);
+            await(() -> host.joinRequests().size() == 1);
+
+            assertEquals(joinerNode.nodeId(), host.joinRequests().getFirst().nodeId());
+            assertEquals(List.of(), served);
+        }
+    }
+
+    @Test
+    void decliningAsksTheAdmissionToRecordTheAnswerBeforeTheSessionIsClosed() throws Exception {
+        NodeIdentity hostNode = identity(temp.resolve("host"));
+        NodeIdentity joinerNode = identity(temp.resolve("joiner"));
+        RecordingAdmission admission = new RecordingAdmission();
+        try (LinkRuntimeOwner host = host(hostNode, admission);
+                LinkRuntimeOwner joiner = joiner(joinerNode)) {
+            connect(host, joiner, hostNode);
+            await(() -> host.joinRequests().size() == 1);
+
+            host.declineJoin(joinerNode.nodeId());
+
+            assertEquals(List.of("requested:" + joinerNode.nodeId(), "declined:" + joinerNode.nodeId()), admission.calls);
+            assertEquals(List.of(), host.joinRequests());
+            await(() -> host.get().sessions().stream().noneMatch(session -> session.remoteNodeId().equals(joinerNode.nodeId())));
+        }
+    }
+
+    @Test
+    void aDeclineThatCannotBeRecordedLeavesTheRequestPendingAndTheSessionOpen() throws Exception {
+        NodeIdentity hostNode = identity(temp.resolve("host"));
+        NodeIdentity joinerNode = identity(temp.resolve("joiner"));
+        RecordingAdmission admission = new RecordingAdmission();
+        admission.failDeclined = true;
+        try (LinkRuntimeOwner host = host(hostNode, admission);
+                LinkRuntimeOwner joiner = joiner(joinerNode)) {
+            connect(host, joiner, hostNode);
+            await(() -> host.joinRequests().size() == 1);
+
+            assertEquals("DECLINE_NOT_SAVED", assertThrows(ControlPlaneLinkOperations.JoinRequestException.class, () -> host.declineJoin(joinerNode.nodeId())).code());
+
+            assertEquals(1, host.joinRequests().size());
+            assertTrue(host.get().sessions().stream().anyMatch(session -> session.remoteNodeId().equals(joinerNode.nodeId())), "the session is not closed on a decline that was not saved");
+            host.acceptJoin(joinerNode.nodeId());
+            assertEquals(List.of(), host.joinRequests());
+        }
+    }
+
+    @Test
+    void anAdmissionThatImplementsOnlyAdmitIsNotAskedToRecordAnythingElse() throws Exception {
+        NodeIdentity hostNode = identity(temp.resolve("host"));
+        NodeIdentity joinerNode = identity(temp.resolve("joiner"));
+        try (LinkRuntimeOwner host = host(hostNode, (node, url) -> members.add(node));
+                LinkRuntimeOwner joiner = joiner(joinerNode)) {
+            connect(host, joiner, hostNode);
+            await(() -> host.joinRequests().size() == 1);
+
+            host.declineJoin(joinerNode.nodeId());
+
+            assertEquals(List.of(), host.joinRequests());
+        }
+    }
 }

@@ -53,7 +53,8 @@ final class ProviderWorktreeAllocation {
             if (!Files.exists(path)) {
                 // A member bases a new lane on the head the leader integrated (ADR-0098). The base
                 // recorded in the binding, and so in the intent, is then a commit the leader has.
-                if (CodeExchange.followLeaderIfMember(location.coordinationDirectory(), location.projectId(), location.root())) {
+                if (CodeExchange.followLeaderIfMember(location.coordinationDirectory(), location.projectId(), location.root(),
+                        location.loadOrCreateIdentity().nodeId())) {
                     String followed = currentCommit(location.root());
                     baseCommit = validCommit(followed) ? followed : baseCommit;
                 }
