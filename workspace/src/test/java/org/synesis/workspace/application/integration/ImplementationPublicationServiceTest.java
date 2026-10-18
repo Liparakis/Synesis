@@ -328,6 +328,35 @@ class ImplementationPublicationServiceTest {
         assertEquals(revision.commitSha(), gitOutput(ownerWorktree, "rev-parse", completionSnapshot.provenance().snapshotRef()));
     }
 
+    @Test
+    void aRequesterWhoseComputerDoesNotHoldTheImplementationIsToldToRetryWhileNoComputerThatHasItAnswers() throws Exception {
+        Files.writeString(ownerWorktree.resolve("src/Product.java"), "public class Product { int count() { return 5; } }\n");
+        AgentResponse published = new ImplementationPublicationService().publishImplementation(request(publicationArguments(completionReadiness()), contractRevision, ownerConnection));
+        assertEquals(AgentStatus.WAITING, published.status(), published.toJson());
+        Path coordination = location.root().resolve(".synesis/coordination");
+        var revision = new PredictionEventStore(coordination, location.projectId()).capabilityRequestProjection().findLatestImplementation(handle).orElseThrow();
+        String commit = revision.commitSha();
+        // The log names a commit that was made on another computer: this computer's repository does not hold it.
+        for (String ref : gitOutput(projectRoot, "for-each-ref", "--format=%(refname) %(objectname)", "refs/synesis").lines().toList()) {
+            if (ref.endsWith(" " + commit)) {
+                git(projectRoot, "update-ref", "-d", ref.substring(0, ref.indexOf(' ')));
+            }
+        }
+        Path object = projectRoot.resolve(".git/objects").resolve(commit.substring(0, 2)).resolve(commit.substring(2));
+        assertTrue(object.toFile().setWritable(true), "git writes objects read-only");
+        Files.delete(object);
+        // This computer is a member whose leader and mirror are out of reach: no code server, no coordination server.
+        org.synesis.coordination.persistence.ReplicationSettings.member("leader-node").write(coordination);
+
+        AgentResponse inspected = new ImplementationValidationService().validateImplementation(new ImplementationValidationService.ValidateRequest(projectRoot,
+                "codex", requesterConnection, handle, "inspect", null, revision.revisionNumber(), List.of()));
+
+        assertEquals(AgentStatus.BLOCKED, inspected.status(), inspected.toJson());
+        assertEquals("task_not_ready", inspected.toMap().get("reason"), inspected.toJson());
+        assertEquals("retry", inspected.toMap().get("nextAction"), inspected.toJson());
+        assertEquals("CODE_REMOTE_UNAVAILABLE", responseReason(inspected), inspected.toJson());
+    }
+
     private AgentResponse completionReadiness() {
         return new AgentNextActionService().getNextAction(new NextActionRequest(projectRoot, "codex", ownerConnection, true));
     }

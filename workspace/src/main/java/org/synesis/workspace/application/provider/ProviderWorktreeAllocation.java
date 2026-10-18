@@ -29,6 +29,8 @@ import static org.synesis.workspace.application.provider.ProviderWorktreeGitFact
  */
 final class ProviderWorktreeAllocation {
 
+    private static final System.Logger LOG = System.getLogger(ProviderWorktreeAllocation.class.getName());
+
     private ProviderWorktreeAllocation() {
     }
 
@@ -50,13 +52,23 @@ final class ProviderWorktreeAllocation {
         }
         try {
             Files.createDirectories(path.getParent());
+            String localMainBecause = null;
             if (!Files.exists(path)) {
-                // A member bases a new lane on the head the leader integrated (ADR-0098). The base
-                // recorded in the binding, and so in the intent, is then a commit the leader has.
-                if (CodeExchange.followLeaderIfMember(location.coordinationDirectory(), location.projectId(), location.root(),
-                        location.loadOrCreateIdentity().nodeId())) {
-                    String followed = currentCommit(location.root());
-                    baseCommit = validCommit(followed) ? followed : baseCommit;
+                // A member bases a new lane on the newest main it can reach (ADR-0098, step 3 item 12).
+                // Its own copy is always reachable: with no computer that holds a newer one answering,
+                // the lane starts from it, and the merge of the two copies later settles the difference.
+                try {
+                    if (CodeExchange.followLeaderIfMember(location.coordinationDirectory(), location.projectId(), location.root(),
+                            location.loadOrCreateIdentity().nodeId())) {
+                        String followed = currentCommit(location.root());
+                        baseCommit = validCommit(followed) ? followed : baseCommit;
+                    }
+                } catch (CodeRemote.Refused unreachable) {
+                    if (!unreachable.retryable()) {
+                        throw unreachable;
+                    }
+                    localMainBecause = unreachable.detail();
+                    LOG.log(System.Logger.Level.INFO, "A lane starts from this computer''s own main; no computer holding a newer one answered: {0}", localMainBecause);
                 }
                 try {
                     runGit(location.root(), "worktree", "add", "-b", branch, path.toString(), baseCommit);
@@ -64,7 +76,7 @@ final class ProviderWorktreeAllocation {
                     runGit(location.root(), "worktree", "add", path.toString(), branch);
                 }
             }
-            writeWorkspaceMarker(path, location, binding, branch);
+            writeWorkspaceMarker(path, location, binding, branch, localMainBecause);
             RepositoryPrivateStateService.ensure(location.root());
             ProviderIntegration provider = ProviderRegistry.find(binding.provider());
             if (provider != null) {
@@ -88,7 +100,12 @@ final class ProviderWorktreeAllocation {
         return Path.of(base, "Synesis", "workspaces").toAbsolutePath().normalize();
     }
 
-    private static void writeWorkspaceMarker(Path worktree, ProjectLocation location, Binding binding, String branch) throws IOException {
+    /**
+     * Writes the marker that names the worktree's project and session. When the lane started from this computer's own
+     * main because no computer holding a newer one answered, the marker says so and why, so that a later re-merge of
+     * the lane is expected.
+     */
+    private static void writeWorkspaceMarker(Path worktree, ProjectLocation location, Binding binding, String branch, String localMainBecause) throws IOException {
         Map<String, Object> marker = new LinkedHashMap<>();
         marker.put("schemaVersion", 1);
         marker.put("projectId", binding.projectId());
@@ -96,6 +113,10 @@ final class ProviderWorktreeAllocation {
         marker.put("provider", binding.provider());
         marker.put("controlCheckoutPath", location.root().toString());
         marker.put("branch", branch);
+        if (localMainBecause != null) {
+            marker.put("baseFrom", "LOCAL_MAIN");
+            marker.put("baseFromReason", localMainBecause);
+        }
         writeText(worktree.resolve(".synesis/local/workspace-binding.json"), ProviderJson.write(marker) + System.lineSeparator());
     }
 }

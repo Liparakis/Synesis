@@ -80,9 +80,10 @@ public final class WorkspaceReadinessService {
     }
 
     /**
-     * A worktree that could not be allocated for a reason a person must fix, such as a code remote this computer cannot
-     * fetch from without a sign-in (ADR-0098). The next ensure retries the allocation, but retrying alone cannot
-     * succeed, so the agent is told to stop and pass the detail on.
+     * A worktree that could not be allocated for a reason a person must fix, such as replication settings this computer
+     * cannot read (ADR-0098). The next ensure retries the allocation, but retrying alone cannot succeed, so the agent is
+     * told to stop and pass the detail on. No computer or mirror answering is not such a reason: the lane then starts
+     * from this computer's own main.
      */
     private static ReadinessResult allocationNeedsPerson(ProviderSessionBindingService.Binding binding) {
         String code = Objects.requireNonNullElse(binding.lastSeenState(), "WORKSPACE_ALLOCATION_FAILED");

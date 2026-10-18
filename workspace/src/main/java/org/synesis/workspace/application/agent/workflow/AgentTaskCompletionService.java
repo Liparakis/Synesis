@@ -679,7 +679,7 @@ public final class AgentTaskCompletionService {
 
     /** Nothing was proposed; an unreachable mirror is tried again, unreadable settings need the operator. */
     private static AgentResponse codeRemoteRefusal(CodeRemote.Refused refused) {
-        AgentNextAction next = CodeRemote.UNAVAILABLE.equals(refused.code()) ? AgentNextAction.RETRY : AgentNextAction.REQUEST_HUMAN_HELP;
+        AgentNextAction next = refused.retryable() ? AgentNextAction.RETRY : AgentNextAction.REQUEST_HUMAN_HELP;
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, next, Map.of(NextActionKeys.REASON, refused.code(), "message", refused.getMessage()));
     }
 
