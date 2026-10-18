@@ -55,7 +55,7 @@ final class HolePunchTest {
           CompactBootstrapInvitation.fromShareLink(second.invitationLink()),
           List.of(new Candidate(CandidateType.LAN, InetAddress.getLoopbackAddress(), 4000, 0)))
           .shareLink();
-      for (String answer : List.of(answerToSecond, "synesis://answer/SLA3-AAo", "not a link")) {
+      for (String answer : List.of(answerToSecond, "synesis://answer/SLA3-AAs", "not a link")) {
         OnboardingFailure failure = assertThrows(OnboardingFailure.class,
             () -> first.importAnswer(answer));
         assertEquals(OnboardingFailureCode.ANSWER_INVALID, failure.code());
