@@ -80,6 +80,17 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
     to add. The rule that a reviewer lane ends by publishing its notes stays; agents had refused to invent a file nobody
     asked for, which left work groups open (s1-run5, s5-run3, s5-run5). (USER-STATED, 2026-10-19: "we can still write a
     review saying that nothing existed for the agent to review and it's okay".)
+    - *Built (2026-10-19, uncommitted):* an offered review's `ensure_session` arguments already claim
+      `reviews/<snapshot>.md`; once the verdict is recorded and no other review is owed, `get_next_action` names that
+      path (`reviewNotesPath`, or the lane's own claimed report path when it claimed another) with the instruction to
+      write the notes and finish, replacing the nothing-to-publish advice to cancel; a refused `no_change` finish of a
+      reviewer lane carries the same guidance with `finish_lane` (`ReviewNotes`). Two s5-run8 refusals no longer send an
+      agent to a person: `WORKSPACE_STALE_DIRTY` from `ensure_session` is `workspace_stale` with `retry` and an
+      instruction to call `get_next_action`, and the loser of a race for a combine gets `COMBINE_TAKEN_OR_CLOSED` with
+      `retry` and the same instruction. Tests: `McpSyn039SliceTest`, `AgentNextActionServiceTest`,
+      `AgentSessionServiceTest`, `McpCombineTakenTest`. *Not covered:* two sessions that both pass the combine's
+      waiting check before either announces; the second has its worktree moved before its announcement overlaps the
+      first's claims (`OVERLAPPING_CLAIM`, still `request_human_help`; read from the source, untested).
 
 ## Expected result (DERIVED)
 

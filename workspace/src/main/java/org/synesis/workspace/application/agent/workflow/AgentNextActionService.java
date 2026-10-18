@@ -276,7 +276,22 @@ public final class AgentNextActionService {
         AgentResponse durable = resolveDurableCoordination(request, root, inspection.location(), readiness.binding(), readiness.worktree());
         AgentResponse resolved = durable != null ? durable : LocalCoordinationFallback.resolveLocalCoordination(bindingService, request, inspection.location(), readiness.worktree());
         AgentResponse answered = notingDisputesAndTrash(notingRejection(resolved, inspection.location(), readiness.binding()), inspection.location(), readiness.binding());
-        return request.completionRequested() ? notingNothingToPublish(answered, inspection.location(), readiness.binding(), readiness.worktree()) : answered;
+        AgentResponse noted = request.completionRequested() ? notingNothingToPublish(answered, inspection.location(), readiness.binding(), readiness.worktree()) : answered;
+        return notingReviewNotes(noted, inspection.location(), readiness.binding());
+    }
+
+    /**
+     * Tells a reviewer that has recorded its verdict to write its review notes and finish (ADR-0102 item 10). It
+     * replaces the nothing-to-publish advice, which offered a reviewer the cancellation of the lane it must finish.
+     */
+    private static AgentResponse notingReviewNotes(AgentResponse response, ProjectLocation location, ProviderSessionBindingService.Binding binding) {
+        try {
+            Optional<PredictionEventStore> store = openEventStore(location);
+            return store.isEmpty() ? response : ReviewNotes.onceDecided(response, store.get(), WorkspaceCollaborationService.participantHandle(binding.sessionId()));
+        } catch (Exception failure) {
+            logSuppressed("review notes projection", failure);
+            return response;
+        }
     }
 
     /**
@@ -885,7 +900,7 @@ public final class AgentNextActionService {
         // unclaimed part, a fresh agent left a snapshot awaiting review unreviewed.
         String choice = AgentReviewActionProjection.reviewCandidatesFor(store, participantId).isEmpty() ? "choose a part that no listed participant claims, and announce it by calling "
                 : "either choose a part that no listed participant claims, or review a snapshot awaiting review: reviewCandidates[i].reviewerIntent holds its ensure_session arguments, "
-                        + "to which you add claims for your report or test path. Announce your choice by calling ";
+                        + "which already claim the file you write your review notes to. Announce your choice by calling ";
         // Run 6: a fresh agent read the README's "python -m unittest passes" as a part nobody
         // claimed and announced a lane for it, though every integration already runs that command.
         String validation = location.validation() == null ? "" : " Synesis runs this project's validation command (`" + String.join(" ", location.validation().argv())

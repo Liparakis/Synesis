@@ -339,6 +339,8 @@ class AgentNextActionServiceTest {
             assertEquals("reviewer", reviewerTask.get("role"));
             assertEquals(groupId.toString(), reviewerTask.get("workGroupId"));
             assertFalse(((List<?>) reviewerTask.get("reviewTargets")).isEmpty());
+            assertEquals(List.of(Map.of("kind", "path_exact", "path", "reviews/" + candidate.get("snapshotId") + ".md")), reviewerTask.get("claims"),
+                    "the notes a reviewer ends its lane by publishing are claimed with no step of its own (ADR-0102 item 10)");
             Map<String, Object> claimRequirement = (Map<String, Object>) reviewerIntent.get("claimRequirement");
             assertEquals("task.claims", claimRequirement.get("field"));
             assertEquals(Boolean.TRUE, claimRequirement.get("required"));

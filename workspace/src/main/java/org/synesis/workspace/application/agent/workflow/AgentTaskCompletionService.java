@@ -427,7 +427,7 @@ public final class AgentTaskCompletionService {
             }
 
             if (request.outcome() == CompletionOutcome.NO_CHANGE) {
-                return completeNoChangeTask(request, location, identity, participantHandle, laneIntent);
+                return ReviewNotes.onNoChangeRefused(completeNoChangeTask(request, location, identity, participantHandle, laneIntent), store, participantHandle);
             }
 
             if (laneIntent.isPresent()) {

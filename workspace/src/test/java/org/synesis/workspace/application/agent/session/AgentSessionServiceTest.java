@@ -247,6 +247,34 @@ class AgentSessionServiceTest {
     }
 
     @Test
+    void aWorktreeThatCannotBeRefreshedWithoutRiskingItsWorkSendsTheAgentToItsLaneNotToAPerson() throws Exception {
+        String connection = "stale-dirty";
+        var location = new ProjectApplicationService().locate(tempRoot);
+        var original = new ProviderSessionBindingService().ensure(location, "codex", connection).binding();
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        assertTrue(new WorkIntentService(store, identity).announce(new WorkIntent(UUID.randomUUID(), location.projectId(), WorkspaceCollaborationService.participantHandle(original.sessionId()),
+                "codex", UUID.randomUUID(), "Change the readme", "Readme changed", original.baseCommit(), List.of(ResourceSelector.pathExact("README.md")), 1,
+                WorkIntent.Status.ANNOUNCED)).acquired());
+        Path worktree = Path.of(original.worktreePath());
+        Files.writeString(worktree.resolve("README.md"), "unpublished work\n");
+        // main moves under the claimed file, so carrying the work across could lose it.
+        Files.writeString(tempRoot.resolve("README.md"), "integrated elsewhere\n");
+        git(tempRoot, "commit", "-am", "integrated elsewhere");
+
+        AgentResponse answer = sessionService.ensureSession(new SessionResolutionRequest(tempRoot, "codex", connection, null, false));
+
+        assertEquals(AgentStatus.BLOCKED, answer.status(), "s5-run8 answered internal_failure with request_human_help: " + answer.toJson());
+        assertEquals(AgentReason.WORKSPACE_STALE, answer.reason(), answer.toJson());
+        assertEquals(AgentNextAction.RETRY, answer.nextAction(), answer.toJson());
+        java.util.Map<?, ?> result = (java.util.Map<?, ?>) answer.result();
+        assertEquals("WORKSPACE_STALE_DIRTY", result.get("reason"));
+        assertTrue(String.valueOf(result.get("instruction")).contains("Call get_next_action"), answer.toJson());
+        assertEquals("unpublished work\n", Files.readString(worktree.resolve("README.md")), "the work is kept");
+        assertEquals(original.worktreePath(), new ProviderSessionBindingService().find(location, "codex", connection).orElseThrow().worktreePath());
+    }
+
+    @Test
     void testTaskIntentValidation() {
         assertThrows(IllegalArgumentException.class, () -> new AgentTaskIntent("a".repeat(4097), "ok", List.of(), List.of()));
     }

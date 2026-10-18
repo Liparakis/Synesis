@@ -747,6 +747,9 @@ static Map<String, Object> reviewerIntentGuidance(WorkGroup group, TaskSnapshotR
         task.put(NextActionKeys.WORK_GROUP_ID, group.workGroupId().toString());
         task.put("role", WorkIntent.Role.REVIEWER.wireValue());
         task.put(NextActionKeys.REVIEW_TARGETS, snapshotReviewTargets(snapshot));
+        // The notes this reviewer ends its lane by publishing (ADR-0102 item 10). Left to name a path of its own, a
+        // reviewer had nothing it was asked to write once its verdict was recorded.
+        task.put("claims", List.of(Map.of(NextActionKeys.KIND, "path_exact", "path", ReviewNotes.offeredPath(snapshot.snapshotId()))));
 
         Map<String, Object> claimRequirement = new LinkedHashMap<>();
         claimRequirement.put("field", "task.claims");
@@ -754,7 +757,8 @@ static Map<String, Object> reviewerIntentGuidance(WorkGroup group, TaskSnapshotR
         claimRequirement.put("purpose", "review report or test evidence");
         claimRequirement.put("selectorKinds", List.of("path_exact", "path_subtree"));
         claimRequirement.put("mustBeDisjointFrom", List.of("producer snapshot paths", "all active claims"));
-        claimRequirement.put("guidance", "Choose a report or test path to claim; Synesis will validate that the claim is disjoint.");
+        claimRequirement.put("guidance", "The arguments claim " + ReviewNotes.offeredPath(snapshot.snapshotId())
+                + " for your review notes; you may name another report or test path instead. Synesis validates that the claim is disjoint.");
 
         return Map.of(NextActionKeys.SNAPSHOT_ID, snapshot.snapshotId(), NextActionKeys.TOOL, NextActionProtocol.TOOL_ENSURE_SESSION, NextActionKeys.ARGUMENTS, Map.of("task", task), "claimRequirement", claimRequirement);
     }
