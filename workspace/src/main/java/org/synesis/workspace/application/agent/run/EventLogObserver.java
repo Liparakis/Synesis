@@ -141,6 +141,7 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         java.util.Set<String> laneRequests = store.operatorRequestProjection().all().stream().filter(request -> !request.raisedBySynesis())
                 .map(org.synesis.coordination.domain.operator.OperatorRequest::id).collect(java.util.stream.Collectors.toUnmodifiableSet());
         OptionalLong otherComputerConnectedSince = otherComputerConnectedSince(coordination);
+        boolean otherComputerKnown = !peersOfProject(coordination).isEmpty();
         // Where the operator closed each request, and where each coordination request was answered,
         // read once for every agent's question.
         Map<String, Long> operatorClosings = new HashMap<>();
@@ -160,6 +161,11 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             @Override
             public boolean otherComputerConnected() {
                 return otherComputerConnectedSince.isPresent();
+            }
+
+            @Override
+            public boolean otherComputerKnown() {
+                return otherComputerKnown;
             }
 
             @Override
@@ -318,15 +324,23 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
      * end the run.
      */
     private static OptionalLong otherComputerConnectedSince(java.nio.file.Path coordination) {
+        java.util.Set<String> peers = peersOfProject(coordination);
+        return ReplicationJournal.connectedSince(coordination).entrySet().stream().filter(session -> peers.contains(session.getKey()))
+                .mapToLong(session -> session.getValue().toEpochMilli()).max();
+    }
+
+    /**
+     * The computers the replication side records connections for: the other members since ADR-0098 step 6, or the
+     * leader. Empty for an unshared project and when the settings cannot be read, which fails closed to a run that does
+     * not wait for another computer.
+     */
+    private static java.util.Set<String> peersOfProject(java.nio.file.Path coordination) {
         try {
-            // The computers the replication side records connections for: the other members since ADR-0098 step 6.
-            java.util.Set<String> peers = ReplicationSettings.read(coordination).map(settings -> settings.isMember() ? java.util.Set.of(settings.leaderNodeId())
+            return ReplicationSettings.read(coordination).map(settings -> settings.isMember() ? java.util.Set.of(settings.leaderNodeId())
                     : settings.shared() ? org.synesis.coordination.replication.LeaderReplication.recordedMembers(coordination).map(java.util.Map::keySet)
                             .orElse(java.util.Set.of()) : settings.members()).orElse(java.util.Set.of());
-            return ReplicationJournal.connectedSince(coordination).entrySet().stream().filter(session -> peers.contains(session.getKey()))
-                    .mapToLong(session -> session.getValue().toEpochMilli()).max();
         } catch (IOException unreadable) {
-            return OptionalLong.empty();
+            return java.util.Set.of();
         }
     }
 

@@ -486,6 +486,23 @@ class ConversationServiceTest {
     }
 
     @Test
+    void theRunObserverKnowsAnotherComputerFromTheProjectSettingsWhetherItIsConnectedOrAway() throws Exception {
+        ProjectLocation location = projectService.locate(projectRoot);
+        EventLogObserver observer = new EventLogObserver(location);
+        assertFalse(observer.observe().otherComputerKnown(), "an unshared project has no other computer");
+
+        ReplicationSettings.leader(java.util.Set.of("sl1-member")).write(location.coordinationDirectory());
+        assertTrue(observer.observe().otherComputerKnown(), "a member that never connected is still known");
+        assertFalse(observer.observe().otherComputerConnected());
+
+        ReplicationSettings.member("sl1-leader").write(location.coordinationDirectory());
+        assertTrue(observer.observe().otherComputerKnown(), "a member knows its leader");
+
+        java.nio.file.Files.writeString(location.coordinationDirectory().resolve("replication.properties"), "role=neither\n");
+        assertFalse(observer.observe().otherComputerKnown(), "unreadable settings fail closed to a run that does not wait");
+    }
+
+    @Test
     void aSuspendedHolderStillHoldsItsOpenLaneAndALaneContinuedByAnotherSessionIsNoLongerItsOwn() throws Exception {
         EventLogObserver observer = new EventLogObserver(projectService.locate(projectRoot));
         ProjectLocation location = projectService.locate(projectRoot);

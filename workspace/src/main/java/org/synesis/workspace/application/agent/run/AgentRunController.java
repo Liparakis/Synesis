@@ -365,6 +365,11 @@ public final class AgentRunController {
         if (observation.otherComputerConnected() && agents.stream().anyMatch(agent -> agent.mayComeBack(observation, maxResumes))) {
             return Wait.OTHER_COMPUTER_CONNECTED;
         }
+        // Known but away: the wake of ADR-0099 fix 11 continues the run when it comes back, and the run's own
+        // deadline bounds the wait (ADR-0102 item 6).
+        if (observation.otherComputerKnown() && agents.stream().anyMatch(agent -> agent.mayComeBack(observation, maxResumes))) {
+            return Wait.OTHER_COMPUTER_AWAY;
+        }
         return null;
     }
 
@@ -375,7 +380,9 @@ public final class AgentRunController {
         /** A participant this controller did not start holds an open lane. */
         FOREIGN_LANE_OPEN,
         /** Another computer of the project is connected and an agent here can come back to its lane or its request. */
-        OTHER_COMPUTER_CONNECTED
+        OTHER_COMPUTER_CONNECTED,
+        /** Another computer of the project is known but has no open session with this one, and an agent here can come back to its lane or its request. */
+        OTHER_COMPUTER_AWAY
     }
 
     /** The log head the controller observed at one moment. */
@@ -721,6 +728,17 @@ public final class AgentRunController {
          * @return {@code true} while another computer of the project is connected
          */
         default boolean otherComputerConnected() {
+            return false;
+        }
+
+        /**
+         * Reports whether the project has another computer at all, connected or away: for the leader its members,
+         * for a member its leader, as the project's replication settings name them. Empty or unreadable settings
+         * report {@code false}, so a single-computer project ends as it always did.
+         *
+         * @return {@code true} while another computer is a peer of the project
+         */
+        default boolean otherComputerKnown() {
             return false;
         }
 

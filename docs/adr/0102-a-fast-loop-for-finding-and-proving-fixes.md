@@ -63,6 +63,11 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
 6. **The run controller keeps waiting while another computer of the project is known but away**, bounded by the run's
    own timeout, instead of ending `STALLED`; the same run continues after the heal, with no agents restarted by hand. This
    is a product rule as well as a lab saving: under ADR-0098's premise the other computer comes back.
+   Built 2026-10-19: `AgentRunController.Observation.otherComputerKnown()` (read by `EventLogObserver` from the project's
+   replication settings; empty or unreadable means not known, so a single-computer project is unchanged) and
+   `AgentRunController.Wait.OTHER_COMPUTER_AWAY`, printed as `AGENT_RUN_WAITING=OTHER_COMPUTER_AWAY` (an additive value).
+   The wait ends at `--timeout-minutes` as `TIMED_OUT`; a reconnect resumes the agents through ADR-0099 fix 11. Source-level
+   evidence only.
 7. **A fast test rule for fixers.** While fixing, a fixer runs only the affected test classes, on Linux in Podman (about
    15 to 30 seconds), and never a whole module suite in the loop. The Windows run is the touched classes plus one final
    Windows gate before a push.

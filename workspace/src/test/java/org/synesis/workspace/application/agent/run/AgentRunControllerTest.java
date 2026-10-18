@@ -336,6 +336,47 @@ final class AgentRunControllerTest {
         assertTrue(script.events.contains("AGENT_RUN_WAITING=OTHER_COMPUTER_CONNECTED"), script.events.toString());
     }
 
+    /** ADR-0102 item 6: a peer that is known but away no longer ends the run STALLED; the run's own timeout bounds the wait. */
+    @Test
+    void aRunWaitsForAKnownComputerThatIsAwayUntilItsTimeout() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3);
+        script.at(0).head(7).announced().otherComputerAway();
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(30));
+
+        assertEquals(AgentRunController.Outcome.TIMED_OUT, result.outcome());
+        assertEquals(0, result.resumes());
+        assertEquals(30, script.tick, "it waited for the deadline instead of stalling");
+        assertEquals(List.of("AGENT_RUN_WAITING=OTHER_COMPUTER_AWAY"), script.events.stream().filter(event -> event.startsWith("AGENT_RUN_WAITING=")).toList());
+    }
+
+    @Test
+    void theSameRunContinuesWhenTheAwayComputerComesBackWithNothingNewToSend() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude");
+        script.lifetimes(3, 2, 2);
+        script.at(0).head(41).announced().otherComputerAway();
+        script.at(40).head(41).cameBackAt(40);
+
+        script.run(8, Duration.ofSeconds(60));
+
+        assertEquals(List.of(40), script.resumedAtTicks, "resumed by the reconnect, with nobody restarted by hand");
+        assertTrue(script.events.indexOf("AGENT_RUN_WAITING=OTHER_COMPUTER_AWAY") < script.events.indexOf("AGENT_RESUMED=claude#1 resume=1"), script.events.toString());
+    }
+
+    @Test
+    void aKnownComputerThatIsAwayKeepsNoRunGoingWhenNoAgentHereHasAnythingToComeBackTo() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3);
+        script.closedLaneProviders.addAll(List.of("claude", "codex"));
+        script.at(0).head(7).announced().otherComputerAway();
+
+        assertEquals(AgentRunController.Outcome.STALLED, script.run(8, Duration.ofSeconds(30)).outcome());
+        assertTrue(script.tick < 30);
+        assertTrue(script.events.stream().noneMatch(event -> event.startsWith("AGENT_RUN_WAITING=")), script.events.toString());
+    }
+
     @Test
     void aConnectedComputerKeepsNoRunGoingWhenNoAgentHereHasALaneToComeBackTo() throws Exception {
         Script script = new Script();
@@ -1297,6 +1338,11 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public boolean otherComputerKnown() {
+                    return state.otherComputer || state.otherComputerAway;
+                }
+
+                @Override
                 public OptionalLong otherComputerConnectedSince() {
                     return state.otherComputer && state.cameBackAtTick >= 0 ? OptionalLong.of(state.cameBackAtTick * 1_000L) : OptionalLong.empty();
                 }
@@ -1345,6 +1391,7 @@ final class AgentRunControllerTest {
         private boolean allCancelled;
         private boolean foreignLane;
         private boolean otherComputer;
+        private boolean otherComputerAway;
         private long cameBackAtTick = -1;
         private final List<String> operatorRequests = new ArrayList<>();
         private final Map<String, Long> messages = new java.util.HashMap<>();
@@ -1436,6 +1483,12 @@ final class AgentRunControllerTest {
         /** Another computer sharing the project's log is connected to this one. */
         private State otherComputer() {
             otherComputer = true;
+            return this;
+        }
+
+        /** Another computer is a peer of the project but has no open session with this one. */
+        private State otherComputerAway() {
+            otherComputerAway = true;
             return this;
         }
 
