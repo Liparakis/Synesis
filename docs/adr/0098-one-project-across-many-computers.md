@@ -1387,7 +1387,16 @@ The two-homes run with the friend's PC is repeated after step 5 as a check, not 
   it is checked, so a check that comes second finds it (`judgeClaim` reads the log) and exactly one stands, which
   `ofTwoAgentsClaimingAtTheSameMomentThroughTheServicesOnlyOneClaimStandsAndTheOtherIsReleased` covers through the
   services. Left as it is: the test could count a race in which both stood as one where the two checks did not
-  overlap, and require enough overlapping ones. (FLAKY, test only, step 4.)
+  overlap, and require enough overlapping ones. (FLAKY, test only, step 4.) Fixed on 2026-10-19 (293947ad): each
+  side registers its claim before the race, as `LaneClaimService` does through `ClaimLock.announce`; 200 races under
+  load passed.
+- **Both claims giving way, once, under load.** In one 200-race run on 2026-10-19 (several gate containers at once),
+  `ofTwoAgentsClaimingAtTheSameMomentThroughTheServicesOnlyOneClaimStandsAndTheOtherIsReleased` failed at race 140 with
+  neither claim standing, both refused `OVERLAPPING_CLAIM` by the lock. Safe (no overlap stands) but not live (both
+  agents are refused). Hypothesis, not proven: `ClaimLock.announce` swallows an `IOException` (2 s connect, 12 s request
+  on loopback), so a claim sits in the log unregistered until its check starts, and `judgeClaim` answers a question
+  arriving in that gap `OVERLAPPING_CLAIM` even on the higher node. Pinning it needs the order of register, append and
+  check per side logged, or a failing `announce` injected. (OPEN, step 4.)
 - **A third computer for step 6:** whether QUIC from the VM reaches a Podman container on this PC.
   (REQUIRES-MEASUREMENT.)
 - **Home routers:** the UDP mapping lifetime, against the 15 s pull. (REQUIRES-MEASUREMENT.)
