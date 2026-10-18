@@ -110,6 +110,7 @@ public final class CodeTransferServer {
         if (target == null) {
             return new CodeTransferMessage.Unavailable(CodeTransferMessage.NOT_HELD);
         }
+        String branch = "HEAD".equals(wanted) ? branchName() : "";
         List<String> exclusions = new ArrayList<>();
         for (String have : want.have().stream().distinct().sorted().toList()) {
             if (commit(have) != null) {
@@ -122,14 +123,14 @@ public final class CodeTransferServer {
             long commits = Long.parseLong(GitProcessRunner.runBundle(repository,
                     withExclusions(exclusions, "rev-list", "--first-parent", "--count", target)));
             if (commits == 0) {
-                return new CodeTransferMessage.Piece(pieceId, 0, 0, target, target);
+                return new CodeTransferMessage.Piece(pieceId, 0, 0, target, target, branch);
             }
             prepare(bundle, pieceId, cut(target, exclusions, commits), exclusions);
         }
         String head = GitProcessRunner.run(repository, "bundle", "list-heads", bundle.toString()).split("\\s+")[0];
         long size = Files.size(bundle);
         return new CodeTransferMessage.Piece(pieceId, size,
-                (int) ((size + CodeTransferMessage.CHUNK_BYTES - 1) / CodeTransferMessage.CHUNK_BYTES), head, target);
+                (int) ((size + CodeTransferMessage.CHUNK_BYTES - 1) / CodeTransferMessage.CHUNK_BYTES), head, target, branch);
     }
 
     private CodeTransferMessage chunk(CodeTransferMessage.Chunk chunk) throws IOException {
@@ -151,7 +152,7 @@ public final class CodeTransferServer {
     }
 
     /** Whether a name is exactly a snapshot or prepared ref, with an ID Git can take only as a ref name. */
-    private static boolean isServedRef(String name) {
+    static boolean isServedRef(String name) {
         String id = name.substring(name.lastIndexOf('/') + 1);
         return REF_ID.matcher(id).matches()
                 && (name.equals(SnapshotRefs.snapshotRef(id)) || name.equals(SnapshotRefs.preparedRef(id)));
@@ -161,6 +162,12 @@ public final class CodeTransferServer {
     private String branchHead() throws IOException {
         return GitProcessRunner.runOptional(repository, "symbolic-ref", "-q", "HEAD").startsWith("refs/heads/")
                 ? commit("HEAD") : null;
+    }
+
+    /** The checked-out branch's short name, or empty when a peer could not be given it as a branch name. */
+    private String branchName() throws IOException {
+        String name = GitProcessRunner.runOptional(repository, "symbolic-ref", "-q", "--short", "HEAD");
+        return CodeTransferCodec.isBranchName(name) ? name : "";
     }
 
     /** The commit a served name or a well-formed commit ID resolves to here, or null when it is not held. */

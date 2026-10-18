@@ -67,26 +67,30 @@ A bare repository on a shared folder or a host works.
    - **Not known, but B has it:** the UI asks for the folder (type it, or **Choose folder**); on the command line pass
      `--project <folder>`. The folder is accepted only if its `.synesis/project.json` has the same project identity; a
      clone that holds only that file is made a replica (`initReplica`) and registered.
-   - **Not on this computer:** B is told so with the URL to clone from (`CODE_REMOTE_URL`). Synesis does not clone. B
-     clones it, then chooses the folder as above.
+   - **Not on this computer:** B chooses an empty folder, or types a new one (`synesis link join <link> --into
+     <folder>`). It becomes a copy of the project with no code yet; once A accepts, B's coordination server fetches A's
+     branch over Link, in pieces, and checks it out under A's branch name (ADR-0098 step 3). The URL the link carries
+     (`CODE_REMOTE_URL`), if any, is only a faster start: B may clone it and choose the clone instead.
 
-   Then, with no node ID typed, B's computer becomes a member of A, sets its code remote (the remote of the clone
-   whose URL matches A's; if none matches, a remote named `synesis` is added), and connects. It refuses, and writes
+   Then, with no node ID typed, B's computer becomes a member of A, sets its code mirror when the link names a URL and the
+   folder already holds a clone (the remote of the clone whose URL matches A's; if none matches, a remote named
+   `synesis` is added), and connects. Code moves over Link either way. It refuses, and writes
    nothing, when B's copy already has log entries (`LOG_NOT_EMPTY`), follows another leader, or leads members of its
    own. B should not start agents before this.
 
-   B's computer then asks the code remote for its head the way agents will, with no prompt (`git ls-remote`). If that
-   fails, the join still goes on, and the UI (or `CODE_REMOTE_CHECK=CODE_REMOTE_UNAVAILABLE` and `CODE_REMOTE_DETAIL`)
-   says what Git said and what to run: `git fetch <remote>` once in a terminal in the project folder, signing in if Git
-   asks, so the sign-in is stored. Until then every agent on B stops with `workspace_not_ready` and the same detail, and
-   `synesis provider status` shows `WORKTREE_BINDING_DIAGNOSTIC=CODE_REMOTE_UNAVAILABLE`. Synesis reads Git's system
+   With a mirror, B's computer then asks it for its head, with no prompt (`git ls-remote`). If that fails, the join still
+   goes on, and the UI (or `CODE_REMOTE_CHECK=CODE_REMOTE_UNAVAILABLE` and `CODE_REMOTE_DETAIL`) says what Git said and
+   what to run: `git fetch <remote>` once in a terminal in the project folder, signing in if Git asks, so the sign-in is
+   stored. Code still comes over Link while A is connected; the mirror is asked only when it is not, and then an agent on
+   B that cannot get the code stops with `workspace_not_ready` and the same detail, and `synesis provider status` shows
+   `WORKTREE_BINDING_DIAGNOSTIC=CODE_REMOTE_UNAVAILABLE`. Synesis reads Git's system
    configuration (where Git for Windows registers its credential manager) but not `~/.gitconfig`, so a credential
    helper set only there, for example by `gh auth setup-git`, is not used.
 3. **A (the owner) accepts.** B's connection is authenticated and the project identity is checked, but nothing is served
    on it until A's person accepts it. The Network view lists `<node> wants to join <project>` with **Accept** and
    **Decline**; or run `synesis link requests`, then `synesis link accept <node ID>` or `synesis link decline <node ID>`.
-   Accepting makes A the leader, adds B as a member, sets `code.remote` to the remote the link named and starts serving B at
-   once; if the link named no URL it is refused with `CODE_REMOTE_NOT_CONFIGURED` and the request stays. Declining closes B's session. A request ends when the
+   Accepting makes A the leader, adds B as a member, sets `code.remote` to the remote the link named, if any, as a mirror,
+   and starts serving B at once; a link with no URL is accepted the same way, and code moves over Link. Declining closes B's session. A request ends when the
    invitation it used expires (ten minutes), and requests are not kept across a restart of A's runtime: B asks again
    with a new invitation.
 4. **Two networks.** If B does not connect within a few seconds, B's UI (and `synesis link join`) shows an answer link

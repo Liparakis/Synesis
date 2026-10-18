@@ -531,7 +531,8 @@ describe("shared project invitations", () => {
 
     expect(await screen.findByText("synesis://answer/SLA3-xyz")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("They have to accept this computer");
-    expect(screen.getByRole("alert")).toHaveTextContent("agents here cannot start yet");
+    expect(screen.getByRole("alert")).toHaveTextContent("cannot fetch from the project's Git mirror without a sign-in");
+    expect(screen.getByRole("alert")).toHaveTextContent("Code still comes over Link");
     expect(screen.getByRole("alert")).toHaveTextContent("git fetch synesis");
   });
 
@@ -549,6 +550,7 @@ describe("shared project invitations", () => {
 
     const group = await screen.findByRole("group", {name: "Where is the project?"});
     expect(group).toHaveTextContent("This project is not on this computer yet");
+    expect(group).toHaveTextContent("Synesis fetches the project into it from the owner's computer");
     expect(within(group).getByText("https://example.test/org/project.git")).toBeInTheDocument();
     expect(within(group).getByRole("button", {name: "Use this folder"})).toBeDisabled();
 
@@ -559,6 +561,29 @@ describe("shared project invitations", () => {
 
     expect(openProjectLink).toHaveBeenLastCalledWith(link, "C:\\work\\clone");
     expect(await screen.findByText("synesis://answer/SLA3-xyz")).toBeInTheDocument();
+    expect(screen.queryByRole("group", {name: "Where is the project?"})).not.toBeInTheDocument();
+  });
+
+  it("fetches the project into a new folder over Link and shows no clone hint when the invitation names no remote", async () => {
+    const user = userEvent.setup();
+    const openProjectLink = vi.fn()
+      .mockResolvedValueOnce({apiVersion: "v1", state: "PROJECT_NOT_FOUND", codeRemoteUrl: null})
+      .mockResolvedValueOnce({apiVersion: "v1", state: "CONNECTING", operationId: "op", answerUri: "synesis://answer/SLA3-xyz", folder: "C:\\work\\new-project"});
+    const client = {openProjectLink, chooseProject: vi.fn(), join: vi.fn()} as unknown as ControlPlaneClient;
+
+    render(<NetworkView network={network} client={client}/>);
+    await user.type(screen.getByLabelText("Join from an invitation"), link);
+    await user.click(screen.getByRole("button", {name: "Join"}));
+
+    const group = await screen.findByRole("group", {name: "Where is the project?"});
+    expect(group).toHaveTextContent("Choose an empty folder, or type a new one");
+    expect(group).not.toHaveTextContent("clone it yourself");
+    await user.type(within(group).getByLabelText("Project folder"), "C:\\work\\new-project");
+    await user.click(within(group).getByRole("button", {name: "Use this folder"}));
+
+    expect(openProjectLink).toHaveBeenLastCalledWith(link, "C:\\work\\new-project");
+    expect(await screen.findByText("synesis://answer/SLA3-xyz")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Connecting to the owner of the project");
     expect(screen.queryByRole("group", {name: "Where is the project?"})).not.toBeInTheDocument();
   });
 
@@ -602,9 +627,10 @@ describe("shared project invitations", () => {
 
     await user.click(screen.getByRole("button", {name: "Create Invitation"}));
 
-    expect(screen.getByRole("status")).toHaveTextContent("names no code remote");
+    expect(screen.getByRole("status")).toHaveTextContent("names no Git remote");
     expect(screen.getByRole("status")).toHaveTextContent("several Git remotes");
-    expect(screen.getByRole("status")).toHaveTextContent("create a new invitation");
+    expect(screen.getByRole("status")).toHaveTextContent("the code moves over Link");
+    expect(screen.getByRole("status")).not.toHaveTextContent("create a new invitation");
   });
 
   it("shows who invited, which project, where code comes from and when it expires before the person joins", async () => {

@@ -24,12 +24,13 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
  * What a person's computer does to take part in a shared project when it makes or opens a project link (ADR-0098,
- * "Joining, revised"): say where code is fetched from, find or register the folder that holds
+ * "Joining, revised"): say which Git remote mirrors the code, if any, find or prepare the folder that holds
  * the project, follow the inviter, and add an accepted joiner. It is the same work as {@code project share},
  * {@code project follow} and {@code project add-member}, which stay for scripts, decided once and in the same way.
  *
- * <p>Every refusal is a {@link Refusal} with a stable code and writes nothing. Nothing here clones: a folder that
- * does not hold the project is reported, not created.
+ * <p>Every refusal is a {@link Refusal} with a stable code and writes nothing. Nothing here clones: an empty folder is
+ * made a copy of the project that holds no code yet, and the coordination server checks the leader's branch out in it
+ * over Link once the owner has accepted this computer (ADR-0098 step 3, "Joining clones over Link").
  */
 public final class ProjectSharing {
 
@@ -126,7 +127,8 @@ public final class ProjectSharing {
 
     /**
      * Makes this computer the leader of the project, keeping its members, and adds a node to the member list. Only an
-     * accepted join writes the role file, and the code remote is the remote whose URL the invitation carried.
+     * accepted join writes the role file. Code moves over Link; the mirror is the remote whose URL the invitation
+     * carried, else the one the role file named, else none.
      *
      * <p>The read, check and write run under the project append lock, so two accepts, an accept and a follow, or an
      * accept and an agent's append never lose each other's change.
@@ -135,8 +137,7 @@ public final class ProjectSharing {
      * @param coordination  the project's coordination folder
      * @param nodeId        the node an accepted request came from
      * @param codeRemoteUrl the URL the invitation carried, or {@code null} when it carried none
-     * @throws Refusal {@code NOT_A_LEADER} on a member, {@code CODE_REMOTE_NOT_CONFIGURED} when the invitation carried
-     *                 no URL or no remote of this project has it
+     * @throws Refusal {@code NOT_A_LEADER} on a member
      * @throws IOException when the lock cannot be taken or the role file cannot be written
      */
     @SuppressWarnings("try") // the lock is held for its scope only
@@ -148,7 +149,7 @@ public final class ProjectSharing {
             }
             String remote = codeRemoteUrl == null ? null : remoteWithUrl(root, codeRemoteUrl);
             if (remote == null) {
-                throw new Refusal("CODE_REMOTE_NOT_CONFIGURED");
+                remote = found.map(ReplicationSettings::codeRemote).orElse(null);
             }
             Set<String> members = new LinkedHashSet<>(found.map(ReplicationSettings::members).orElse(Set.of()));
             members.add(nodeId);
@@ -211,8 +212,11 @@ public final class ProjectSharing {
             } else if (PredictionEventStore.recordedEvents(coordination) > 0) {
                 throw new Refusal("LOG_NOT_EMPTY");
             }
-            boolean hadAddedRemote = remotes(root).contains(ADDED_REMOTE);
-            String remote = invitation.codeRemoteUrl().isPresent()
+            // A folder that gets its repository over Link has none to add a remote to yet, and Git run there would find
+            // the repository of an enclosing folder; it follows with no mirror.
+            boolean repository = Files.exists(root.resolve(".git"));
+            boolean hadAddedRemote = repository && remotes(root).contains(ADDED_REMOTE);
+            String remote = repository && invitation.codeRemoteUrl().isPresent()
                     ? remoteFor(root, invitation.codeRemoteUrl().get())
                     : found.map(ReplicationSettings::codeRemote).orElse(null);
             boolean addedRemote = ADDED_REMOTE.equals(remote) && !hadAddedRemote;
@@ -243,7 +247,9 @@ public final class ProjectSharing {
      * <p>With no folder given, the registry decides: a folder registered for the project is used. With a folder
      * given, it is accepted only if it is the project: its {@code .synesis/project.json} carries the link's identity,
      * or, for a clone Synesis never saw, a Git remote has the link's code remote URL. A clone that holds only the
-     * project file is made a replica ({@code initReplica}, ADR-0080) and the folder is registered.
+     * project file is made a replica ({@code initReplica}, ADR-0080) and the folder is registered. An empty folder, or
+     * a new one in a folder that exists, is made a replica with no repository yet, which the leader's branch is checked
+     * out into over Link after the owner accepts this computer.
      *
      * @param registry   this installation's known projects
      * @param service    project initialization
@@ -262,8 +268,16 @@ public final class ProjectSharing {
                 return known(registry, identity, preferred);
             }
             Path root = chosen.toAbsolutePath().normalize();
+            if (!Files.exists(root) && root.getParent() != null && Files.isDirectory(root.getParent())) {
+                Files.createDirectory(root);
+            }
             if (!Files.isDirectory(root)) {
                 throw new Refusal("PROJECT_FOLDER_INVALID");
+            }
+            if (isEmpty(root)) {
+                // No .git: the first checkout over Link makes the repository (CodeOverLink.followMain).
+                service.initReplica(root, identity, false);
+                return Optional.of(registry.register(root).path());
             }
             Path synesis = root.resolve(".synesis");
             if (Files.exists(synesis.resolve("project.json"))) {
@@ -306,6 +320,12 @@ public final class ProjectSharing {
             return Optional.of(preferred.toAbsolutePath().normalize());
         }
         return copies.stream().findFirst();
+    }
+
+    private static boolean isEmpty(Path folder) throws IOException {
+        try (var children = Files.list(folder)) {
+            return children.findAny().isEmpty();
+        }
     }
 
     private static boolean onlyProjectFile(Path synesis) throws IOException {

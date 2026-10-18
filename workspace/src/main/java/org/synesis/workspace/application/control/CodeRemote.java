@@ -12,15 +12,13 @@ import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
- * How code moves between the computers of one project (ADR-0098): through a Git remote of each computer's own
- * clone, named by {@code code.remote} in {@code replication.properties}. The coordination log names commits
- * (lane snapshots under {@code refs/synesis/snapshots/}, prepared completions under
- * {@code refs/synesis/prepared/}); the objects travel here, never in the log.
+ * The Git remote a shared project may keep as a mirror of its code (ADR-0098 step 3), named by {@code code.remote}
+ * in {@code replication.properties}; {@link CodeExchange} moves code over Link first and uses this after it. The
+ * coordination log names commits (lane snapshots under {@code refs/synesis/snapshots/}, prepared completions under
+ * {@code refs/synesis/prepared/}); the objects travel here or over Link, never in the log.
  *
- * <p>{@link #of} is the gate. A coordination folder with no replication settings is a single computer: it
- * answers empty and callers run no push and no fetch, exactly as before. Settings without a {@code code.remote}
- * refuse with {@link #NOT_CONFIGURED}; the remote is never guessed, because pushing a project's work to a remote
- * nobody chose is not recoverable.</p>
+ * <p>{@link #of} answers empty with settings that name no remote. The remote is never guessed, because pushing a
+ * project's work to a remote nobody chose is not recoverable.</p>
  *
  * <p>Only {@code refs/synesis/*} and the control branch are ever pushed. Every command runs through
  * {@link GitProcessRunner} (no global configuration, hooks off, no signing) with its remote timeout. A remote
@@ -29,10 +27,7 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
  */
 public final class CodeRemote {
 
-    /** Settings exist but name no remote to move code through. */
-    public static final String NOT_CONFIGURED = "CODE_REMOTE_NOT_CONFIGURED";
-
-    /** The remote could not be pushed to or fetched from. */
+    /** The remote could not be pushed to or fetched from, or the code could not be had over Link: try again later. */
     public static final String UNAVAILABLE = "CODE_REMOTE_UNAVAILABLE";
 
     private static final String SYNESIS_NAMESPACE = "refs/synesis/";
@@ -40,68 +35,19 @@ public final class CodeRemote {
     private static final Pattern URL_CREDENTIALS = Pattern.compile("([A-Za-z][A-Za-z0-9+.-]*://)[^/@\\s]+@");
 
     private final String name;
-    private final boolean member;
 
-    private CodeRemote(String name, boolean member) {
+    private CodeRemote(String name) {
         this.name = name;
-        this.member = member;
     }
 
     /**
-     * Reads whether, and through which remote, this computer exchanges code.
+     * The mirror the settings name.
      *
-     * @param coordinationDirectory the folder holding {@code replication.properties}
-     * @return empty for a single computer (no settings file); otherwise the remote
-     * @throws Refused {@link #NOT_CONFIGURED}, or the role file's own code when it cannot be read
+     * @param settings this computer's replication settings
+     * @return the remote, or empty when the settings name none
      */
-    public static Optional<CodeRemote> of(Path coordinationDirectory) throws Refused {
-        Optional<ReplicationSettings> settings;
-        try {
-            settings = ReplicationSettings.read(Objects.requireNonNull(coordinationDirectory, "coordinationDirectory"));
-        } catch (CoordinationException invalid) {
-            throw new Refused(invalid.code(), "replication settings cannot be read");
-        }
-        if (settings.isEmpty()) {
-            return Optional.empty();
-        }
-        if (settings.get().codeRemote() == null) {
-            throw new Refused(NOT_CONFIGURED, "replication.properties names no code.remote");
-        }
-        return Optional.of(new CodeRemote(settings.get().codeRemote(), settings.get().isMember()));
-    }
-
-    /**
-     * What a member does before it gives out a new lane: follows the leader's integrated head ({@link #followLeader}).
-     * Nothing happens on a single computer or on the leader, whose checkout the integration pass advances.
-     *
-     * @param coordinationDirectory the folder holding {@code replication.properties}
-     * @param controlRoot           the control checkout
-     * @return true when this is a member and its checkout was brought up to date
-     * @throws Refused {@link #NOT_CONFIGURED} or {@link #UNAVAILABLE} on a member that cannot fetch the branch
-     */
-    public static boolean followLeaderIfMember(Path coordinationDirectory, Path controlRoot) throws Refused {
-        Optional<CodeRemote> remote;
-        try {
-            remote = of(coordinationDirectory);
-        } catch (Refused refused) {
-            if (NOT_CONFIGURED.equals(refused.code()) && !isMemberCopy(coordinationDirectory)) {
-                return false;
-            }
-            throw refused;
-        }
-        if (remote.isPresent() && remote.get().member) {
-            remote.get().followLeader(controlRoot);
-            return true;
-        }
-        return false;
-    }
-
-    private static boolean isMemberCopy(Path coordinationDirectory) {
-        try {
-            return ReplicationSettings.read(coordinationDirectory).map(ReplicationSettings::isMember).orElse(false);
-        } catch (CoordinationException unreadable) {
-            return true;
-        }
+    static Optional<CodeRemote> of(ReplicationSettings settings) {
+        return Optional.ofNullable(settings.codeRemote()).map(CodeRemote::new);
     }
 
     /**
@@ -117,7 +63,7 @@ public final class CodeRemote {
             // The name can come from another runtime's answer; Git must never read it as an option.
             throw new Refused(UNAVAILABLE, "the code remote name is not usable: " + remoteName.strip());
         }
-        new CodeRemote(remoteName, true).remote(repository, List.of("ls-remote", remoteName, "HEAD"));
+        new CodeRemote(remoteName).remote(repository, List.of("ls-remote", remoteName, "HEAD"));
     }
 
     /**
@@ -128,7 +74,7 @@ public final class CodeRemote {
      * @param refs       full ref names, each under {@code refs/synesis/}
      * @throws Refused {@link #UNAVAILABLE} when the push fails
      */
-    public void pushRefs(Path repository, String... refs) throws Refused {
+    void pushRefs(Path repository, String... refs) throws Refused {
         List<String> command = new ArrayList<>(List.of("push", "--no-verify", name));
         for (String ref : refs) {
             if (!ref.startsWith(SYNESIS_NAMESPACE)) {
@@ -146,49 +92,11 @@ public final class CodeRemote {
      * @param repository a worktree of the project's clone
      * @throws Refused {@link #UNAVAILABLE} when the fetch fails
      */
-    public void fetchSynesisRefs(Path repository) throws Refused {
+    void fetchSynesisRefs(Path repository) throws Refused {
         remote(repository, List.of("fetch", "--no-tags", "--no-write-fetch-head", name, "refs/synesis/*:refs/synesis/*"));
     }
 
-    /**
-     * Fetches the Synesis refs only when the commit a caller is about to read is not in the clone yet.
-     *
-     * @param repository a worktree of the project's clone
-     * @param commit     the commit the log names
-     * @throws Refused {@link #UNAVAILABLE} when the fetch fails
-     */
-    public void fetchIfMissing(Path repository, String commit) throws Refused {
-        if (!hasCommit(repository, commit)) {
-            fetchSynesisRefs(repository);
-        }
-    }
-
-    /**
-     * Makes sure a commit the log names is in a clone before a caller reads it: nothing on a single computer, and
-     * nothing when the clone already holds the commit. A missing or mismatched commit after the fetch is left for
-     * the caller's own checks to refuse.
-     *
-     * @param coordinationDirectory the folder holding {@code replication.properties}
-     * @param repository            a worktree of the project's clone
-     * @param commit                the commit the log names
-     * @throws Refused {@link #NOT_CONFIGURED} or {@link #UNAVAILABLE} when the commit is absent and cannot be fetched
-     */
-    public static void ensureCommit(Path coordinationDirectory, Path repository, String commit) throws Refused {
-        Optional<CodeRemote> remote;
-        try {
-            remote = of(coordinationDirectory);
-        } catch (Refused refused) {
-            if (NOT_CONFIGURED.equals(refused.code()) && hasCommit(repository, commit)) {
-                return;
-            }
-            throw refused;
-        }
-        if (remote.isPresent()) {
-            remote.get().fetchIfMissing(repository, commit);
-        }
-    }
-
-    private static boolean hasCommit(Path repository, String commit) {
+    static boolean hasCommit(Path repository, String commit) {
         try {
             return GitProcessRunner.runResult(repository, "cat-file", "-e", commit + "^{commit}").exitCode() == 0;
         } catch (IOException unreadable) {
@@ -206,7 +114,7 @@ public final class CodeRemote {
      * @param controlRoot the control checkout
      * @throws Refused {@link #UNAVAILABLE} when the branch cannot be fetched
      */
-    public void followLeader(Path controlRoot) throws Refused {
+    void followLeader(Path controlRoot) throws Refused {
         try {
             String branch = GitProcessRunner.runOptional(controlRoot, "symbolic-ref", "--short", "-q", "HEAD");
             if (branch.isEmpty()) {
@@ -214,16 +122,28 @@ public final class CodeRemote {
             }
             String tracking = trackingRef(branch);
             remote(controlRoot, List.of("fetch", "--no-tags", "--no-write-fetch-head", name, "+refs/heads/" + branch + ":" + tracking));
-            String head = GitProcessRunner.run(controlRoot, "rev-parse", "HEAD");
-            String leaderHead = GitProcessRunner.run(controlRoot, "rev-parse", tracking);
-            if (!head.equals(leaderHead) && GitProcessRunner.isAncestor(controlRoot, head, leaderHead)
-                    && ControlBranchAdvancementService.foreignChanges(controlRoot).isEmpty()) {
-                GitProcessRunner.run(controlRoot, "merge", "--ff-only", leaderHead);
-            }
+            followTo(controlRoot, GitProcessRunner.run(controlRoot, "rev-parse", tracking));
         } catch (Refused refused) {
             throw refused;
         } catch (Exception failure) {
             throw new Refused(UNAVAILABLE, reason(failure));
+        }
+    }
+
+    /**
+     * Fast-forwards a member's control checkout to a leader's head it now holds, only when that head is ahead of the
+     * checkout's and the checkout holds nothing Synesis did not put there. Over a remote and over Link alike, this is
+     * the one way a member's checkout follows.
+     *
+     * @param controlRoot the control checkout
+     * @param leaderHead  the leader's head, present here
+     * @throws Exception when Git cannot read or move the checkout
+     */
+    static void followTo(Path controlRoot, String leaderHead) throws Exception {
+        String head = GitProcessRunner.run(controlRoot, "rev-parse", "HEAD");
+        if (!head.equals(leaderHead) && GitProcessRunner.isAncestor(controlRoot, head, leaderHead)
+                && ControlBranchAdvancementService.foreignChanges(controlRoot).isEmpty()) {
+            GitProcessRunner.run(controlRoot, "merge", "--ff-only", leaderHead);
         }
     }
 
@@ -235,7 +155,7 @@ public final class CodeRemote {
      * @param controlRoot the control checkout
      * @throws Refused {@link #UNAVAILABLE} when the push fails
      */
-    public void publishControlBranch(Path controlRoot) throws Refused {
+    void publishControlBranch(Path controlRoot) throws Refused {
         try {
             String branch = GitProcessRunner.runOptional(controlRoot, "symbolic-ref", "--short", "-q", "HEAD");
             if (branch.isEmpty()) {
@@ -326,7 +246,7 @@ public final class CodeRemote {
         /**
          * Returns the refusal code.
          *
-         * @return {@link CodeRemote#NOT_CONFIGURED}, {@link CodeRemote#UNAVAILABLE}, a role-file code, or a
+         * @return {@link CodeRemote#UNAVAILABLE}, a role-file code, or a
          *         {@link org.synesis.coordination.persistence.CodeTransferMessage} code from a Link transfer
          */
         public String code() {

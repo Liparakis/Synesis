@@ -28,6 +28,8 @@ import org.synesis.coordination.persistence.ReplicationMessage;
  */
 public final class CoordinationHttpServer implements AutoCloseable {
 
+    private static final int MAX_CODE_REQUEST_BYTES = 1024;
+
     private final CoordinationService service;
     private final HttpServer server;
     private final ExecutorService executor;
@@ -35,6 +37,10 @@ public final class CoordinationHttpServer implements AutoCloseable {
      * Where this computer's processes send proposals and pulls for a leader, or null when this computer has none.
      */
     private volatile ReplicationExchange relay;
+    /**
+     * Where this computer's processes ask for code of a shared project, or null when this computer has no peers.
+     */
+    private volatile ReplicationExchange code;
 
     /**
      * Creates a loopback-only server.
@@ -110,7 +116,8 @@ public final class CoordinationHttpServer implements AutoCloseable {
         server.setExecutor(executor);
         server.createContext("/command", this::command);
         server.createContext("/events", this::events);
-        server.createContext("/replication", this::replicate);
+        server.createContext("/replication", exchange -> forward(exchange, relay, ReplicationMessage.MAX_BYTES));
+        server.createContext("/code", exchange -> forward(exchange, code, MAX_CODE_REQUEST_BYTES));
         if (codexLifecycleHandler != null) {
             server.createContext("/codex-lifecycle/v1", codexLifecycleHandler);
         }
@@ -239,6 +246,16 @@ public final class CoordinationHttpServer implements AutoCloseable {
     }
 
     /**
+     * Sets, or with null removes, what answers this computer's processes when they ask for code of a shared project
+     * (ADR-0098 step 3): the coordination server moves it over Link and answers once it is here.
+     *
+     * @param exchange the answerer, or null
+     */
+    public void code(ReplicationExchange exchange) {
+        this.code = exchange;
+    }
+
+    /**
      * Starts listening for commands and event streams.
      */
     public void start() {
@@ -321,13 +338,13 @@ public final class CoordinationHttpServer implements AutoCloseable {
     }
 
     /**
-     * Relays one replication request of a local process to the leader and returns the encoded answer. Answers 503
-     * when this computer has no relay, which tells the caller that nothing was sent.
+     * Hands one request of a local process to {@code current} and returns its answer: a replication request relayed
+     * to the leader, or a code request. Answers 503 when there is no {@code current}, which tells the caller that
+     * nothing was sent.
      *
      * @throws IOException when the request body cannot be read or the answer cannot be written
      */
-    private void replicate(HttpExchange exchange) throws IOException {
-        ReplicationExchange current = relay;
+    private static void forward(HttpExchange exchange, ReplicationExchange current, int maxBytes) throws IOException {
         if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
             send(exchange, 405, new byte[0]);
         } else if (current == null) {
@@ -335,7 +352,7 @@ public final class CoordinationHttpServer implements AutoCloseable {
         } else {
             byte[] body;
             try {
-                body = readBounded(exchange, ReplicationMessage.MAX_BYTES);
+                body = readBounded(exchange, maxBytes);
             } catch (CoordinationException tooLarge) {
                 send(exchange, 413, new byte[0]);
                 return;

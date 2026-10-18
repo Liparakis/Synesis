@@ -23,13 +23,16 @@ public final class CodeTransferCodec {
 
     private static final int WANT = 1;
     private static final int CHUNK = 2;
+    private static final int FETCH = 3;
     private static final int PIECE = 16;
     private static final int CHUNK_DATA = 17;
     private static final int UNAVAILABLE = 18;
+    private static final int FETCHED = 19;
 
     private static final int SHA256_BYTES = 32;
     private static final Pattern COMMIT_ID = Pattern.compile("[0-9a-f]{40}|[0-9a-f]{64}");
     private static final Pattern PIECE_ID = Pattern.compile("[0-9a-f]{64}");
+    private static final Pattern BRANCH = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._/-]{0,254}");
 
     private CodeTransferCodec() {
     }
@@ -81,6 +84,15 @@ public final class CodeTransferCodec {
                     writeText(out, chunk.pieceId());
                     out.writeInt(chunk.index());
                 }
+                case CodeTransferMessage.Fetch fetch -> {
+                    out.writeByte(FETCH);
+                    WireFormat.writeUuid(out, fetch.project());
+                    writeText(out, fetch.wanted());
+                }
+                case CodeTransferMessage.Fetched fetched -> {
+                    out.writeByte(FETCHED);
+                    writeText(out, fetched.commit());
+                }
                 case CodeTransferMessage.Piece piece -> {
                     out.writeByte(PIECE);
                     writeText(out, piece.pieceId());
@@ -88,6 +100,7 @@ public final class CodeTransferCodec {
                     out.writeInt(piece.chunkCount());
                     writeText(out, piece.tip());
                     writeText(out, piece.target());
+                    writeText(out, piece.branch());
                 }
                 case CodeTransferMessage.ChunkData data -> {
                     out.writeByte(CHUNK_DATA);
@@ -124,10 +137,12 @@ public final class CodeTransferCodec {
                 case WANT -> new CodeTransferMessage.Want(WireFormat.readUuid(in), readText(in), readHaves(in));
                 case CHUNK -> new CodeTransferMessage.Chunk(WireFormat.readUuid(in), readText(in), in.readInt());
                 case PIECE -> new CodeTransferMessage.Piece(readText(in), in.readLong(), in.readInt(), readText(in),
-                        readText(in));
+                        readText(in), readText(in));
                 case CHUNK_DATA -> new CodeTransferMessage.ChunkData(in.readInt(), readChunk(in),
                         exactly(in, SHA256_BYTES));
                 case UNAVAILABLE -> new CodeTransferMessage.Unavailable(readText(in));
+                case FETCH -> new CodeTransferMessage.Fetch(WireFormat.readUuid(in), readText(in));
+                case FETCHED -> new CodeTransferMessage.Fetched(readText(in));
                 default -> throw invalid(null);
             };
             if (in.available() != 0) {
@@ -146,6 +161,19 @@ public final class CodeTransferCodec {
         if (!withinBounds) {
             throw new IllegalArgumentException("code transfer message field out of bounds");
         }
+    }
+
+    /**
+     * Tells whether text can be the short name of a branch a peer reports: none (empty), or a name of letters,
+     * digits, {@code . _ / -} that starts with a letter or digit and that Git's ref-name rules admit as far as a
+     * pattern can tell. A receiver still asks Git ({@code check-ref-format}) before it creates the branch.
+     *
+     * @param value candidate text
+     * @return true when it is empty or such a name
+     */
+    public static boolean isBranchName(String value) {
+        return value != null && (value.isEmpty() || BRANCH.matcher(value).matches() && !value.contains("..")
+                && !value.contains("//") && !value.endsWith("/") && !value.endsWith(".") && !value.endsWith(".lock"));
     }
 
     static boolean isPieceId(String value) {

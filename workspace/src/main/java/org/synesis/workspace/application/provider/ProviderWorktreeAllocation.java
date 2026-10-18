@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.synesis.workspace.application.control.CodeExchange;
 import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService.Binding;
@@ -52,7 +53,7 @@ final class ProviderWorktreeAllocation {
             if (!Files.exists(path)) {
                 // A member bases a new lane on the head the leader integrated (ADR-0098). The base
                 // recorded in the binding, and so in the intent, is then a commit the leader has.
-                if (CodeRemote.followLeaderIfMember(location.coordinationDirectory(), location.root())) {
+                if (CodeExchange.followLeaderIfMember(location.coordinationDirectory(), location.projectId(), location.root())) {
                     String followed = currentCommit(location.root());
                     baseCommit = validCommit(followed) ? followed : baseCommit;
                 }

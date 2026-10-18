@@ -6,7 +6,7 @@ order, and structured rejection. Java object serialization is prohibited.
 ## Compatibility number
 
 Two builds connect only if they carry the same **compatibility number**
-(`LinkCompatibility.CURRENT`, currently `6`). It is raised whenever any format
+(`LinkCompatibility.CURRENT`, currently `7`). It is raised whenever any format
 sent between computers changes, and for nothing else; it is not the build
 string. It is an unsigned 16-bit big-endian value in a position no later
 layout may move, so a build with another number can still read it and refuse
@@ -131,7 +131,7 @@ order:
 
 | Width | Field                                                                                        |
 |------:|----------------------------------------------------------------------------------------------|
-|     2 | compatibility number (`6`)                                                                   |
+|     2 | compatibility number (`7`)                                                                   |
 |    16 | project UUID, most significant long first                                                    |
 |     8 | project creation time, epoch seconds as a signed `long`                                      |
 |     4 | project creation time, nanosecond of the second                                              |
@@ -262,8 +262,7 @@ beside `events/`:
 
 ## Code over Link protocol `SCX1`
 
-Compatibility `7` (ADR-0098 step 3; `LinkCompatibility.CURRENT` is raised when
-it is routed on Link). Carried as the opaque payload of one Link application
+Compatibility `7` (ADR-0098 step 3). Carried as the opaque payload of one Link application
 stream between two computers of a project, beside `SRL1` and told apart by its
 magic. One request, one answer per stream. Big-endian, strict: every length is
 checked before allocation, every field against its bound, nothing may follow
@@ -277,9 +276,11 @@ ASCII digits; a *piece ID* is a length u8 `64` and 64 such digits.
 |-----:|------|-----------|-------------------------|
 |  `1` | WANT | requester to holder | project UUID (16), wanted length u8 `1..255` and wanted (UTF-8), have count u16 `0..256`, that many commit IDs |
 |  `2` | CHUNK | requester to holder | project UUID (16), piece ID, index u32 `0..2^31-1` |
-| `16` | PIECE | answer to WANT | piece ID, total bytes u64, chunk count u32 (total bytes / 262,144 rounded up), tip commit ID, target commit ID |
+| `16` | PIECE | answer to WANT | piece ID, total bytes u64, chunk count u32 (total bytes / 262,144 rounded up), tip commit ID, target commit ID, branch length u8 `0..255` and branch (UTF-8) |
 | `17` | CHUNK_DATA | answer to CHUNK | index u32 `0..2^31-1`, length u32 `1..262144`, bytes, SHA-256 of the bytes (32) |
-| `18` | UNAVAILABLE | answer to WANT, CHUNK | code length u8 `1..64`, code (UTF-8) |
+| `18` | UNAVAILABLE | answer to WANT, CHUNK, FETCH | code length u8 `1..64`, code (UTF-8) |
+|  `3` | FETCH | process to its own coordination server, loopback only | project UUID (16), wanted length u8 and wanted: a commit ID or `HEAD` |
+| `19` | FETCHED | answer to FETCH, loopback only | commit ID |
 
 - **The holder names what it serves.** `wanted` is `refs/synesis/snapshots/<id>`
   or `refs/synesis/prepared/<id>` (`<id>` is `[A-Za-z0-9_-]{1,128}`), `HEAD`
@@ -296,7 +297,10 @@ ASCII digits; a *piece ID* is a length u8 `64` and 64 such digits.
   `refs/synesis/outgoing/<piece ID>`. `target` is the commit `wanted` resolved
   to; the requester asks again, naming `tip` as a have, until `tip` equals
   `target`. Total bytes `0` and chunk count `0` mean the haves already
-  contain `target`.
+  contain `target`. `branch` is the short name of the holder's checked-out
+  branch when `wanted` is `HEAD` (letters, digits and `._/-`, starting with a
+  letter or digit), so a computer that fetches the whole project names its
+  branch alike; it is empty for any other `wanted`.
 - **Chunks** are 262,144 bytes but the last. The requester checks each one's
   size and SHA-256, keeps it under `code-incoming/<piece ID>/` in its
   coordination folder, and after a lost exchange resumes from the first
@@ -310,3 +314,14 @@ ASCII digits; a *piece ID* is a length u8 `64` and 64 such digits.
   holds of it and asks again. A piece the holder cannot prepare is
   `CODE_PIECE_FAILED`.
 - **Bundle commands** run for at most 10 minutes each, never under a lock.
+- **FETCH and FETCHED never travel on Link.** A process of a shared project
+  posts FETCH to `/code` on its coordination server (the address in
+  `replication.endpoint`) and waits up to 11 minutes. The server moves the
+  commit over Link, from the leader on a member, and on the leader from the
+  member whose entry names it, else from each connected member; it refuses a
+  commit no entry of its log names. A fetched commit that a snapshot entry
+  names gets that entry's snapshot ref when the ref is absent. `HEAD` brings
+  a member's checked-out branch up to the leader's by fast-forward only, and
+  only when the checkout holds no change Synesis did not make; a computer
+  with no repository yet gets the leader's branch checked out under its name.
+  A Link peer that sends FETCH is answered `CODE_NOT_SERVED`.

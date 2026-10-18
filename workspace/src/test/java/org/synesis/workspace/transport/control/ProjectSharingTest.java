@@ -208,14 +208,24 @@ final class ProjectSharingTest {
   }
 
   @Test
-  void acceptingIsRefusedAndWritesNothingWhenTheLinkCarriedNoUrlOrNoRemoteHasIt() throws Exception {
+  void acceptingWithoutAUrlOrWithOneNoRemoteHasNamesNoMirrorBecauseCodeMovesOverLink() throws Exception {
     GitProcessRunner.run(owner.root(), "remote", "add", "origin", URL);
 
-    assertEquals("CODE_REMOTE_NOT_CONFIGURED", assertThrows(ProjectSharing.Refusal.class,
-        () -> ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-friend", null)).code());
-    assertEquals("CODE_REMOTE_NOT_CONFIGURED", assertThrows(ProjectSharing.Refusal.class,
-        () -> ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-friend", "https://example.test/other.git")).code());
-    assertTrue(ReplicationSettings.read(owner.coordinationDirectory()).isEmpty());
+    ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-friend", null);
+    assertEquals(ReplicationSettings.leader(Set.of("sl1-friend")), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow());
+
+    ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-second", "https://example.test/other.git");
+    assertEquals(ReplicationSettings.leader(Set.of("sl1-friend", "sl1-second")), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow());
+  }
+
+  @Test
+  void aMirrorAlreadyNamedStaysWhenALaterInvitationCarriedNoUrl() throws Exception {
+    GitProcessRunner.run(owner.root(), "remote", "add", "origin", URL);
+    ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-friend", URL);
+
+    ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-second", null);
+
+    assertEquals(ReplicationSettings.leader(Set.of("sl1-friend", "sl1-second")).withCodeRemote("origin"), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow());
   }
 
   @Test
@@ -357,7 +367,23 @@ final class ProjectSharingTest {
 
     assertEquals("PROJECT_FOLDER_NOT_THE_PROJECT", assertThrows(ProjectSharing.Refusal.class, () -> ProjectSharing.locate(registry, service, invitation(URL), plain, null)).code());
     assertEquals("PROJECT_FOLDER_NOT_THE_PROJECT", assertThrows(ProjectSharing.Refusal.class, () -> ProjectSharing.locate(registry, service, invitation(null), plain, null)).code());
-    assertEquals("PROJECT_FOLDER_INVALID", assertThrows(ProjectSharing.Refusal.class, () -> ProjectSharing.locate(registry, service, invitation(URL), temp.resolve("missing"), null)).code());
+    assertEquals("PROJECT_FOLDER_INVALID", assertThrows(ProjectSharing.Refusal.class, () -> ProjectSharing.locate(registry, service, invitation(URL), temp.resolve("missing/deeper"), null)).code());
+    assertFalse(Files.exists(temp.resolve("missing")), "only a new folder in a folder that exists is made");
     assertFalse(Files.exists(plain.resolve(".synesis")), "a refusal initializes nothing");
+  }
+
+  @Test
+  void anEmptyOrNewFolderBecomesACopyOfTheProjectThatHoldsNoCodeYet() throws Exception {
+    Path empty = Files.createDirectories(temp.resolve("empty"));
+    Path fresh = temp.resolve("fresh");
+
+    for (Path folder : List.of(empty, fresh)) {
+      Optional<Path> found = ProjectSharing.locate(registry, service, invitation(null), folder, null);
+
+      assertEquals(Optional.of(folder.toAbsolutePath().normalize()), found);
+      assertTrue(service.require(folder).identity().matches(owner.identity()), "the copy carries the invitation's project");
+      assertFalse(Files.exists(folder.resolve(".git")), "the repository comes over Link once the owner accepts");
+      assertTrue(registry.projects().stream().anyMatch(view -> view.path().equals(found.orElseThrow())));
+    }
   }
 }

@@ -30,6 +30,7 @@ import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.control.CodeExchange;
 import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderManualService;
@@ -66,7 +67,7 @@ public final class ImplementationPublicationService {
         return new AgentResponse(AgentStatus.BLOCKED, agentReason, nextAction, Map.of("reason", reason));
     }
 
-    /** Nothing was published; an unreachable remote is tried again, a missing setting needs the operator. */
+    /** Nothing was published; an unreachable mirror is tried again, unreadable settings need the operator. */
     private static AgentResponse codeRemoteRefusal(CodeRemote.Refused refused) {
         return blocked(refused.code(), AgentReason.POLICY_DENIED,
                 CodeRemote.UNAVAILABLE.equals(refused.code()) ? AgentNextAction.RETRY : AgentNextAction.REQUEST_HUMAN_HELP);
@@ -181,9 +182,9 @@ public final class ImplementationPublicationService {
                 return blocked("CAPABILITY_PUBLISHER_WORKSPACE_STALE", AgentReason.WORKSPACE_STALE, AgentNextAction.ENSURE_SESSION);
             }
 
-            Optional<CodeRemote> codeRemote;
+            Optional<CodeExchange> codeExchange;
             try {
-                codeRemote = CodeRemote.of(coordination);
+                codeExchange = CodeExchange.of(coordination, location.projectId());
             } catch (CodeRemote.Refused refused) {
                 return codeRemoteRefusal(refused);
             }
@@ -224,10 +225,10 @@ public final class ImplementationPublicationService {
             if (snapshot.changedPaths().size() > ImplementationRevisionRecord.MAX_CHANGED_PATHS) {
                 return blocked("CAPABILITY_PUBLICATION_PATH_LIMIT_EXCEEDED", AgentReason.POLICY_DENIED, AgentNextAction.REQUEST_HUMAN_HELP);
             }
-            if (codeRemote.isPresent()) {
-                // The entries below name this commit; the computers that read them fetch it from the remote.
+            if (codeExchange.isPresent()) {
+                // The entries below name this commit; the computers that read them fetch it from this one, or the mirror.
                 try {
-                    codeRemote.get().pushRefs(ownerWorktree, snapshot.provenance().snapshotRef());
+                    codeExchange.get().handIn(ownerWorktree, snapshot.provenance().snapshotRef());
                 } catch (CodeRemote.Refused refused) {
                     return codeRemoteRefusal(refused);
                 }

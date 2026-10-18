@@ -166,8 +166,8 @@ project's explicit `code.remote`, or its only Git remote; never a guess among se
 `kind: "PROJECT"`, `projectId`, `role: "leader"`, `codeRemoteName` and `codeRemoteUrl` (the URL without credentials; the
 owner is shown both), and `codeRemoteReason` when `codeRemoteUrl` is `null`: `NO_GIT_REMOTE`, `SEVERAL_GIT_REMOTES`,
 `CODE_REMOTE_MISSING` (`code.remote` names a remote the project does not have) or `URL_NOT_SHAREABLE` (not `https://`,
-`ssh://` or `user@host:path`). A link without a URL can be opened, but its joiner cannot be accepted
-(`accept-join` answers `409 CODE_REMOTE_NOT_CONFIGURED`); add a Git remote and create a new invitation. On a computer
+`ssh://` or `user@host:path`). A link without a URL is complete: code moves over Link (ADR-0098 step 3), and a remote
+the link names is only a mirror and a faster start for a joiner that clones it. On a computer
 that follows another leader the same command (with or without `project`) creates the plain connection invitation of the
 section above, with no `kind`: a member can host a connection for its leader.
 
@@ -233,8 +233,8 @@ used; a request ends there and its session is closed. `accept-join` adds the nod
 session at once (it also stays served after a restart, because it is recorded in `replication.peers`) and returns
 `state: "ACCEPTED"`. Accepting is what writes the leader role (keeping the members), adds the node and sets `code.remote`
 to the remote whose URL the link that brought the node carried, under the project lock so two accepts never lose a
-member; if that link carried no URL, or no remote has it any more, it answers `409 CODE_REMOTE_NOT_CONFIGURED` and the
-request stays. `decline-join` closes its session and returns `DECLINED`; its invitation was used up by its first
+member; if that link carried no URL, or no remote has it any more, the mirror the role named stays, and with none the
+role names no mirror: code moves over Link. `decline-join` closes its session and returns `DECLINED`; its invitation was used up by its first
 connection, so it cannot come back with it. `404 JOIN_REQUEST_UNKNOWN` when no such request waits (decided, expired, or
 the runtime restarted: requests are kept in memory and a restart drops them), `503 MEMBER_NOT_SAVED` when the member
 list could not be written, in which case the request stays.

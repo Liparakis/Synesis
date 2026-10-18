@@ -49,11 +49,13 @@ import org.synesis.link.onboarding.Onboarding;
 import org.synesis.link.session.PeerSession;
 import org.synesis.link.session.SessionCloseReason;
 
+import org.synesis.workspace.application.control.CodeExchange;
 import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.doctor.DoctorService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 import org.synesis.workspace.transport.control.ControlPlaneEventHub;
 import org.synesis.workspace.transport.control.ControlPlaneHttpHandler;
 import org.synesis.workspace.transport.control.ControlPlaneReadModel;
@@ -111,11 +113,13 @@ final class ControlPlaneReplicationTest {
             this.node = node;
             this.coordination = synesis.resolve("coordination");
             settings.write(coordination);
-            MemberReplication member = settings.isMember() ? own(MemberReplication.open(coordination, projectId)) : null;
-            LeaderReplication leader = settings.isMember() ? null : own(LeaderReplication.open(coordination, projectId));
+            MemberReplication member = settings.isMember() ? MemberReplication.open(coordination, projectId) : null;
+            LeaderReplication leader = settings.isMember() ? null : LeaderReplication.open(coordination, projectId);
+            // The side closes the member or leader side it holds.
+            ReplicationSide side = own(new ReplicationSide(coordination, projectId, root, member, settings.leaderNodeId(), leader, null));
             ControlPlaneEventHub eventHub = new ControlPlaneEventHub();
             this.owner = own(CoordinationServerLauncher.linkOwner(new Onboarding(profile.resolve("link"), eventHub::publish), node, eventHub,
-                    new ProjectIdentity(projectId, createdAt), settings, member, leader, new ReplicationJournal(coordination), coordination));
+                    new ProjectIdentity(projectId, createdAt), side, new ReplicationJournal(coordination), coordination, null));
             CoordinationService service = new CoordinationService(new PredictionEventStore(coordination, projectId), node);
             ProjectLocation location = new ProjectLocation(root, synesis, synesis.resolve("project.json"), profile, projectId, createdAt);
             ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, service, new ProviderApplicationService(), new DoctorService(), new LinkNetworkProjection(owner), null);
@@ -125,6 +129,7 @@ final class ControlPlaneReplicationTest {
             if (member != null) {
                 member.serve(server);
             }
+            side.serveCode(server);
             this.endpoint = URI.create("http://127.0.0.1:" + server.address().getPort());
             this.commandToken = control.runtimeCommandToken();
         }
@@ -465,6 +470,40 @@ final class ControlPlaneReplicationTest {
             assertTrue(journaled(restarted, "HOST_RESUME_FAILED"), ReplicationJournal.read(restarted.coordination).toString());
             assertTrue(restarted.owner.get().sessions().isEmpty());
         }
+    }
+
+    /**
+     * Code over Link end to end (ADR-0098 step 3): a process of the member asks its own server on the loopback
+     * {@code /code} route, and the server brings the leader's branch over the Link session the control plane made,
+     * with no Git remote anywhere.
+     */
+    @Test
+    void aMembersProcessBringsTheLeadersBranchOverTheSessionWithNoRemote() throws Exception {
+        NodeIdentity leaderNode = identity("leader");
+        NodeIdentity memberNode = identity("member");
+        Path leaderRoot = temp.resolve("leader");
+        Path memberRoot = temp.resolve("member");
+        GitProcessRunner.run(leaderRoot, "init", "-q");
+        Files.writeString(leaderRoot.resolve("board.txt"), "first\n");
+        GitProcessRunner.run(leaderRoot, "add", "board.txt");
+        GitProcessRunner.run(leaderRoot, "commit", "-q", "-m", "first");
+        String branch = GitProcessRunner.run(leaderRoot, "symbolic-ref", "--short", "HEAD");
+        GitProcessRunner.run(memberRoot, "init", "-q");
+        GitProcessRunner.run(memberRoot, "fetch", "-q", leaderRoot.toString(), branch);
+        GitProcessRunner.run(memberRoot, "checkout", "-q", "-B", branch, "FETCH_HEAD");
+        Files.writeString(leaderRoot.resolve("board.txt"), "second\n");
+        GitProcessRunner.run(leaderRoot, "commit", "-q", "-am", "second");
+        String leaderHead = GitProcessRunner.run(leaderRoot, "rev-parse", "HEAD");
+        Computer leader = new Computer("leader", leaderNode, ReplicationSettings.leader(Set.of(memberNode.nodeId())));
+        Computer member = new Computer("member", memberNode, ReplicationSettings.member(leaderNode.nodeId()));
+        connect(leader, member);
+        // An agent's process is not the server's: it has no code side of its own and asks over loopback HTTP.
+        CodeExchange.register(member.coordination, null);
+
+        assertTrue(CodeExchange.followLeaderIfMember(member.coordination, projectId, memberRoot));
+
+        assertEquals(leaderHead, GitProcessRunner.run(memberRoot, "rev-parse", "HEAD"), "the member's branch followed the leader's");
+        assertEquals("second", Files.readString(memberRoot.resolve("board.txt")).strip());
     }
 
     @Test

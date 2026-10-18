@@ -216,9 +216,6 @@ final class ProjectLinkEndpoints {
         } catch (ControlPlaneLinkOperations.JoinRequestException undecided) {
             throw switch (undecided.code()) {
                 case "MEMBER_NOT_SAVED" -> failure(503, undecided.code(), "the member list could not be saved");
-                case LinkRuntimeOwner.MemberAdmission.CODE_REMOTE_NOT_CONFIGURED -> failure(409, undecided.code(),
-                        "the invitation named no code remote, so code cannot move to that computer: add a Git remote to the project, "
-                                + "create a new invitation and decline this request");
                 default -> failure(404, undecided.code(), "no such join request is waiting");
             };
         }

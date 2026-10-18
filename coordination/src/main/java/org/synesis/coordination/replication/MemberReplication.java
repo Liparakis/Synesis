@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -84,6 +85,10 @@ public final class MemberReplication implements AutoCloseable {
         return thread;
     });
     private final AtomicBoolean pullQueued = new AtomicBoolean();
+    private volatile Runnable pulled = () -> {
+    };
+    // Set by attach: the next good pull tells the listener even when it brought nothing new.
+    private final AtomicBoolean attachedSincePull = new AtomicBoolean();
     private volatile PeerSession session;
     private volatile State state = State.DISCONNECTED;
     // The last request over a session that looked live got no answer; proposals answer "unreachable" until a pull does.
@@ -117,6 +122,17 @@ public final class MemberReplication implements AutoCloseable {
                 .filter(ReplicationSettings::isMember)
                 .orElseThrow(() -> new CoordinationException("NOT_A_MEMBER"));
         return new MemberReplication(root, projectId, settings.leaderNodeId());
+    }
+
+    /**
+     * Tells {@code listener} after each pull that applied entries and after the first good pull of each session, so
+     * this computer's code can follow what the log now names (ADR-0098 step 3, "Members follow {@code main}"). It
+     * runs on the pulling thread and must return at once.
+     *
+     * @param listener told after such a pull
+     */
+    public void whenPulled(Runnable listener) {
+        pulled = CoordinationNullException.requireNonNull(listener, "listener");
     }
 
     /**
@@ -168,6 +184,7 @@ public final class MemberReplication implements AutoCloseable {
         }
         session = leader;
         silent = false;
+        attachedSincePull.set(true);
         requestPull();
     }
 
@@ -181,10 +198,7 @@ public final class MemberReplication implements AutoCloseable {
     public void serve(CoordinationHttpServer server) throws IOException {
         served = server;
         server.relay(this::relay);
-        String host = server.address().getAddress().getHostAddress();
-        Files.writeString(root.resolve(LoopbackExchange.ENDPOINT_FILE),
-                (host.contains(":") ? "[" + host + "]" : host) + ":" + server.address().getPort() + "\n",
-                StandardCharsets.UTF_8);
+        LoopbackExchange.recordEndpoint(root, server.address());
         setState(state);
     }
 
@@ -240,6 +254,16 @@ public final class MemberReplication implements AutoCloseable {
     }
 
     /**
+     * The session to the leader while it is live, for other protocols that ride on it (Code over Link).
+     *
+     * @return the leader's node and its session, or nothing
+     */
+    public Map<String, PeerSession> liveSessions() {
+        PeerSession leader = session;
+        return Sessions.live(leader) ? Map.of(leaderNodeId, leader) : Map.of();
+    }
+
+    /**
      * The state as of the last pull.
      *
      * @return the state
@@ -265,9 +289,12 @@ public final class MemberReplication implements AutoCloseable {
             return;
         }
         try {
-            new PredictionEventStore(root, projectId).pullFrom(new ExchangeLeaderChannel(projectId, request -> relay(request)));
+            int applied = new PredictionEventStore(root, projectId).pullFrom(new ExchangeLeaderChannel(projectId, request -> relay(request)));
             silent = false;
             setState(State.CONNECTED);
+            if (attachedSincePull.getAndSet(false) | applied > 0) {
+                tellPulled();
+            }
         } catch (CoordinationException failure) {
             if (failure.code().equals("LEADER_LOG_DIVERGED")) {
                 LOGGER.log(System.Logger.Level.ERROR,
@@ -280,6 +307,15 @@ public final class MemberReplication implements AutoCloseable {
         } catch (IOException | GeneralSecurityException failure) {
             LOGGER.log(System.Logger.Level.WARNING, "Pulling the leader's log failed; it will be tried again.", failure);
             setState(State.DISCONNECTED);
+        }
+    }
+
+    /** A listener that throws must not end the pulling, which a scheduled task that throws would. */
+    private void tellPulled() {
+        try {
+            pulled.run();
+        } catch (RuntimeException failed) {
+            LOGGER.log(System.Logger.Level.WARNING, "Following the pulled log failed; the next pull tries again.", failed);
         }
     }
 

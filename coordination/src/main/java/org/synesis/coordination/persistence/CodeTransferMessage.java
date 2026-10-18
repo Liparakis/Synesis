@@ -119,6 +119,44 @@ public sealed interface CodeTransferMessage {
     }
 
     /**
+     * What a process asks its own computer's coordination server on the loopback {@code /code} route, never sent
+     * on Link: make a commit present in this computer's repository, fetching it over Link from a computer of the
+     * project, or, with {@code HEAD}, bring this computer's checked-out branch up to the leader's. The server answers
+     * {@link Fetched} or {@link Unavailable}.
+     *
+     * @param project the project
+     * @param wanted  a commit ID an entry of the log names, or {@code HEAD}
+     */
+    record Fetch(UUID project, String wanted) implements CodeTransferMessage {
+
+        /**
+         * Checks the bounds.
+         *
+         * @throws IllegalArgumentException when a field is out of its bound
+         */
+        public Fetch {
+            CodeTransferCodec.require(project != null && ("HEAD".equals(wanted) || CodeTransferCodec.isCommitId(wanted)));
+        }
+    }
+
+    /**
+     * The answer to a {@link Fetch}: the commit is now present.
+     *
+     * @param commit the fetched commit, or for {@code HEAD} the head of the checked-out branch afterwards
+     */
+    record Fetched(String commit) implements CodeTransferMessage {
+
+        /**
+         * Checks the bounds.
+         *
+         * @throws IllegalArgumentException when the commit is not a commit ID
+         */
+        public Fetched {
+            CodeTransferCodec.require(CodeTransferCodec.isCommitId(commit));
+        }
+    }
+
+    /**
      * The next piece: a Git bundle holding the history from the requester's haves to {@code tip}.
      *
      * @param pieceId    64 lowercase hexadecimal digits naming the piece
@@ -126,8 +164,11 @@ public sealed interface CodeTransferMessage {
      * @param chunkCount the number of chunks, {@code totalBytes} divided by {@link #CHUNK_BYTES} rounded up
      * @param tip        the commit the bundle brings
      * @param target     the commit the wanted name resolved to; the transfer is done when {@code tip} equals it
+     * @param branch     the short name of the holder's checked-out branch when the wanted name is {@code HEAD}, so a
+     *                   computer that fetches a whole project names its branch alike; empty otherwise
      */
-    record Piece(String pieceId, long totalBytes, int chunkCount, String tip, String target) implements CodeTransferMessage {
+    record Piece(String pieceId, long totalBytes, int chunkCount, String tip, String target, String branch)
+            implements CodeTransferMessage {
 
         /**
          * Checks the bounds.
@@ -137,7 +178,8 @@ public sealed interface CodeTransferMessage {
         public Piece {
             CodeTransferCodec.require(CodeTransferCodec.isPieceId(pieceId) && totalBytes >= 0
                     && chunkCount == (totalBytes + CHUNK_BYTES - 1) / CHUNK_BYTES
-                    && CodeTransferCodec.isCommitId(tip) && CodeTransferCodec.isCommitId(target));
+                    && CodeTransferCodec.isCommitId(tip) && CodeTransferCodec.isCommitId(target)
+                    && CodeTransferCodec.isBranchName(branch));
         }
     }
 

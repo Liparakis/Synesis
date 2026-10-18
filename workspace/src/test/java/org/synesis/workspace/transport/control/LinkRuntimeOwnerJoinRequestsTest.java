@@ -212,22 +212,4 @@ class LinkRuntimeOwnerJoinRequestsTest {
             assertEquals(List.of("null"), urls);
         }
     }
-
-    @Test
-    void anAdmissionThatRefusesForWantOfACodeRemoteSaysSoAndLeavesTheRequestPending() throws Exception {
-        NodeIdentity hostNode = identity(temp.resolve("host"));
-        NodeIdentity joinerNode = identity(temp.resolve("joiner"));
-        try (LinkRuntimeOwner host = host(hostNode, (node, url) -> {
-            throw new IOException(LinkRuntimeOwner.MemberAdmission.CODE_REMOTE_NOT_CONFIGURED);
-        });
-                LinkRuntimeOwner joiner = joiner(joinerNode)) {
-            connect(host, joiner, hostNode);
-            await(() -> host.joinRequests().size() == 1);
-
-            assertEquals("CODE_REMOTE_NOT_CONFIGURED", assertThrows(ControlPlaneLinkOperations.JoinRequestException.class, () -> host.acceptJoin(joinerNode.nodeId())).code());
-
-            assertEquals(1, host.joinRequests().size());
-            assertEquals(List.of(), served);
-        }
-    }
 }

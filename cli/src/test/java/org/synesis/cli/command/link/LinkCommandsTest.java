@@ -1,6 +1,7 @@
 package org.synesis.cli.command.link;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
@@ -271,7 +272,41 @@ class LinkCommandsTest {
         assertEquals(ExitCodes.LOCAL_CONFIGURATION, joined.exit(), joined.toString());
         assertEquals(List.of("ERROR=PROJECT_NOT_ON_THIS_COMPUTER"), joined.stderr());
         assertTrue(joined.stdout().contains("CODE_REMOTE_URL=https://example.test/p.git"), joined.toString());
+        assertTrue(joined.stdout().stream().anyMatch(line -> line.startsWith("NEXT=") && line.contains("--into")), joined.toString());
         assertEquals(List.of(), runtime.commands);
+    }
+
+    @Test
+    void joiningAProjectLinkIntoANewFolderMakesItACopyThatGetsTheCodeOverLinkAndAsksItsRuntimeToFollow() throws Exception {
+        KnownProjectRegistry registry = new KnownProjectRegistry(tmp.resolve("registry.json"));
+        Path into = tmp.resolve("joined");
+        String link = projectLink("https://example.test/p.git");
+        runtime.connectsAfterReads = 2;
+        runtime.peerNode = "sl1-host";
+
+        Run joined = runIn(null, cli -> new LinkJoinCommand(cli, project -> runtime, 5, registry), link, "--into", into.toString());
+
+        assertEquals(ExitCodes.OK, joined.exit(), joined.toString());
+        assertEquals(List.of("join-project-link " + Map.of("link", link)), runtime.commands);
+        assertTrue(joined.stdout().contains("PROJECT_FOLDER=" + into), joined.toString());
+        assertTrue(joined.stdout().stream().anyMatch(line -> line.startsWith("NEXT=") && line.contains("over Link")), joined.toString());
+        assertTrue(Files.exists(into.resolve(".synesis/project.json")), "the folder is a copy of the project");
+        assertFalse(Files.exists(into.resolve(".git")), "its code comes over Link once the owner accepts");
+        assertEquals(List.of(into), registry.projects().stream().map(KnownProjectRegistry.ProjectView::path).toList());
+    }
+
+    @Test
+    void joiningIntoAFolderThatHoldsAnythingIsRefusedBeforeTheRuntimeIsAsked() throws Exception {
+        KnownProjectRegistry registry = new KnownProjectRegistry(tmp.resolve("registry.json"));
+        Path into = Files.createDirectories(tmp.resolve("busy"));
+        Files.writeString(into.resolve("notes.txt"), "mine\n");
+
+        Run joined = runIn(null, cli -> new LinkJoinCommand(cli, project -> runtime, 5, registry), projectLink(null), "--into", into.toString());
+
+        assertEquals(ExitCodes.LOCAL_CONFIGURATION, joined.exit(), joined.toString());
+        assertEquals(List.of("ERROR=PROJECT_FOLDER_NOT_EMPTY"), joined.stderr());
+        assertEquals(List.of(), runtime.commands);
+        assertFalse(Files.exists(into.resolve(".synesis")), "nothing was written into it");
     }
 
     @Test

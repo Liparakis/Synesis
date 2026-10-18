@@ -39,14 +39,20 @@ final class CodeTransferProtocolTest {
                 HEADER + "01" + PROJECT_HEX + "1d" + ascii("refs/synesis/snapshots/snap_1") + "0000");
         vectors.put(new CodeTransferMessage.Chunk(PROJECT, PIECE, 3),
                 HEADER + "02" + PROJECT_HEX + "40" + ascii(PIECE) + "00000003");
-        vectors.put(new CodeTransferMessage.Piece(PIECE, 262_145, 2, COMMIT, COMMIT_256),
-                HEADER + "10" + "40" + ascii(PIECE) + "0000000000040001" + "00000002" + "28" + ascii(COMMIT) + "40" + ascii(COMMIT_256));
-        vectors.put(new CodeTransferMessage.Piece(PIECE, 0, 0, COMMIT, COMMIT),
-                HEADER + "10" + "40" + ascii(PIECE) + "0000000000000000" + "00000000" + "28" + ascii(COMMIT) + "28" + ascii(COMMIT));
+        vectors.put(new CodeTransferMessage.Fetch(PROJECT, COMMIT),
+                HEADER + "03" + PROJECT_HEX + "28" + ascii(COMMIT));
+        vectors.put(new CodeTransferMessage.Fetch(PROJECT, "HEAD"),
+                HEADER + "03" + PROJECT_HEX + "04" + ascii("HEAD"));
+        vectors.put(new CodeTransferMessage.Piece(PIECE, 262_145, 2, COMMIT, COMMIT_256, ""),
+                HEADER + "10" + "40" + ascii(PIECE) + "0000000000040001" + "00000002" + "28" + ascii(COMMIT) + "40" + ascii(COMMIT_256) + "00");
+        vectors.put(new CodeTransferMessage.Piece(PIECE, 0, 0, COMMIT, COMMIT, "main"),
+                HEADER + "10" + "40" + ascii(PIECE) + "0000000000000000" + "00000000" + "28" + ascii(COMMIT) + "28" + ascii(COMMIT) + "04" + ascii("main"));
         vectors.put(CodeTransferMessage.ChunkData.of(1, new byte[]{1, 2, 3}),
                 HEADER + "11" + "00000001" + "00000003" + "010203" + HexFormat.of().formatHex(SHA256_OF_010203));
         vectors.put(new CodeTransferMessage.Unavailable(CodeTransferMessage.NOT_SERVED),
                 HEADER + "12" + "0f" + ascii("CODE_NOT_SERVED"));
+        vectors.put(new CodeTransferMessage.Fetched(COMMIT_256),
+                HEADER + "13" + "40" + ascii(COMMIT_256));
         return vectors;
     }
 
@@ -100,8 +106,8 @@ final class CodeTransferProtocolTest {
         rejects(hex("53435832" + "01" + "12" + "01" + "41"));
         rejects(hex("53435831" + "02" + "12" + "01" + "41"));
         rejects(hex(HEADER + "00"));
-        rejects(hex(HEADER + "03" + PROJECT_HEX));
-        rejects(hex(HEADER + "13" + "01" + "41"));
+        rejects(hex(HEADER + "04" + PROJECT_HEX));
+        rejects(hex(HEADER + "14" + "01" + "41"));
         rejects(hex(HEADER + "ff"));
     }
 
@@ -122,6 +128,10 @@ final class CodeTransferProtocolTest {
         rejects(hex(piece + "0000000000040000" + "00000002" + tips));
         rejects(hex(piece + "ffffffffffffffff" + "00000000" + tips));
         rejects(hex(piece + "0000000000000001" + "00000001" + "28" + ascii(COMMIT) + "04" + ascii("HEAD")));
+        rejects(hex(piece + "0000000000000000" + "00000000" + tips + "04" + ascii("../x")));
+        rejects(hex(piece + "0000000000000000" + "00000000" + tips + "05" + ascii("-main")));
+        rejects(hex(HEADER + "03" + PROJECT_HEX + "1d" + ascii("refs/synesis/snapshots/snap_1")));
+        rejects(hex(HEADER + "13" + "04" + ascii("HEAD")));
         String data = HEADER + "11" + "00000000";
         rejects(hex(data + "00000000" + "00".repeat(32)));
         rejects(hex(data + String.format("%08x", CodeTransferMessage.CHUNK_BYTES + 1) + "01"));
@@ -146,7 +156,11 @@ final class CodeTransferProtocolTest {
         assertThrows(IllegalArgumentException.class,
                 () -> CodeTransferCodec.encode(new CodeTransferMessage.Chunk(PROJECT, "../x", 0)));
         assertThrows(IllegalArgumentException.class,
-                () -> CodeTransferCodec.encode(new CodeTransferMessage.Piece(PIECE, 10, 2, COMMIT, COMMIT)));
+                () -> CodeTransferCodec.encode(new CodeTransferMessage.Piece(PIECE, 10, 2, COMMIT, COMMIT, "")));
+        assertThrows(IllegalArgumentException.class,
+                () -> CodeTransferCodec.encode(new CodeTransferMessage.Piece(PIECE, 0, 0, COMMIT, COMMIT, "main.lock")));
+        assertThrows(IllegalArgumentException.class,
+                () -> CodeTransferCodec.encode(new CodeTransferMessage.Fetch(PROJECT, "main")));
         assertThrows(IllegalArgumentException.class, () -> CodeTransferCodec.encode(
                 CodeTransferMessage.ChunkData.of(0, new byte[CodeTransferMessage.CHUNK_BYTES + 1])));
         assertThrows(IllegalArgumentException.class,

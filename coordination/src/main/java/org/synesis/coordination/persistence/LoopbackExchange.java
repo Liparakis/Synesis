@@ -3,6 +3,7 @@ package org.synesis.coordination.persistence;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpConnectTimeoutException;
@@ -32,26 +33,62 @@ public final class LoopbackExchange implements ReplicationExchange {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
     // A relayed request waits for one Link exchange, which gives up after five seconds.
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(12);
+    // A code request is answered within the server's ten-minute bound for moving code; the margin covers the answer.
+    private static final Duration CODE_REQUEST_TIMEOUT = Duration.ofMinutes(11);
 
     private static final class Client {
         private static final HttpClient INSTANCE = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
     }
 
     private final Path root;
+    private final String route;
+    private final Duration timeout;
 
     /**
-     * Binds the exchange to one coordination folder.
+     * Binds the exchange to one coordination folder, for replication requests.
      *
      * @param root the folder holding {@code events}
      */
     public LoopbackExchange(Path root) {
+        this(root, "/replication", REQUEST_TIMEOUT);
+    }
+
+    private LoopbackExchange(Path root, String route, Duration timeout) {
         this.root = CoordinationNullException.requireNonNull(root, "root");
+        this.route = route;
+        this.timeout = timeout;
+    }
+
+    /**
+     * Binds an exchange to one coordination folder, for code requests: the {@code /code} route, waiting up to
+     * eleven minutes for the answer.
+     *
+     * @param root the folder holding {@code events}
+     * @return the exchange
+     */
+    public static LoopbackExchange forCode(Path root) {
+        return new LoopbackExchange(root, "/code", CODE_REQUEST_TIMEOUT);
+    }
+
+    /**
+     * Records where this computer's coordination server listens, so that processes opening the project's log can
+     * reach it.
+     *
+     * @param root    the folder holding {@code events}
+     * @param address the server's loopback address
+     * @throws IOException when the file cannot be written
+     */
+    public static void recordEndpoint(Path root, InetSocketAddress address) throws IOException {
+        String host = address.getAddress().getHostAddress();
+        Files.writeString(root.resolve(ENDPOINT_FILE),
+                (host.contains(":") ? "[" + host + "]" : host) + ":" + address.getPort() + "\n",
+                StandardCharsets.UTF_8);
     }
 
     @Override
     public byte[] exchange(byte[] request) throws IOException {
         URI endpoint = endpoint();
-        HttpRequest post = HttpRequest.newBuilder(endpoint.resolve("/replication")).timeout(REQUEST_TIMEOUT)
+        HttpRequest post = HttpRequest.newBuilder(endpoint.resolve(route)).timeout(timeout)
                 .header("Content-Type", "application/octet-stream")
                 .POST(HttpRequest.BodyPublishers.ofByteArray(request)).build();
         HttpResponse<byte[]> response;
@@ -65,7 +102,7 @@ public final class LoopbackExchange implements ReplicationExchange {
         }
         if (response.statusCode() == 503) {
             // The server has no relay attached: nothing was forwarded.
-            throw new ConnectException("coordination server has no leader link");
+            throw new ConnectException("coordination server has no " + ("/code".equals(route) ? "code exchange" : "leader link"));
         }
         if (response.statusCode() != 200) {
             throw new IOException("coordination server answered " + response.statusCode());

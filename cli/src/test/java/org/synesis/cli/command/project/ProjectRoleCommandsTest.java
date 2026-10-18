@@ -184,6 +184,21 @@ class ProjectRoleCommandsTest {
     }
 
     @Test
+    void shareAndFollowNeedNoRemoteBecauseCodeMovesOverLink() throws Exception {
+        Run shared = share();
+
+        assertEquals(ExitCodes.OK, shared.exit(), shared.toString());
+        assertTrue(shared.stdout().contains("CODE_REMOTE="), shared.toString());
+        assertEquals(ReplicationSettings.leader(Set.of()), settings());
+
+        Files.delete(coordination().resolve(ReplicationSettings.FILE));
+        Run followed = follow("--leader", peer);
+
+        assertEquals(ExitCodes.OK, followed.exit(), followed.toString());
+        assertEquals(ReplicationSettings.member(peer), settings());
+    }
+
+    @Test
     void followMakesThisComputerAMemberOfTheLeaderWithTheRemoteAndStopsTheRuntime() throws Exception {
         String other = NodeIdentity.generate().nodeId();
         ReplicationPeers.rememberHosted(coordination(), 40000, other);

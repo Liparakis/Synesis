@@ -25,7 +25,7 @@ public final class ProjectFollowCommand extends ProjectRoleCommand {
 
     @Option(names = "--leader", required = true, description = "Node ID of the leader (printed by 'synesis project share' on its computer).")
     private String leader;
-    @Option(names = "--code-remote", required = true, description = "Name of the Git remote of this clone that code moves through. Every computer must reach it.")
+    @Option(names = "--code-remote", description = "Name of a Git remote of this clone to keep as a mirror of the code. Code moves over Link without one.")
     private String codeRemote;
 
     /**
@@ -60,14 +60,18 @@ public final class ProjectFollowCommand extends ProjectRoleCommand {
         } else if (PredictionEventStore.recordedEvents(role.coordination()) > 0) {
             throw new Refusal("LOG_NOT_EMPTY");
         }
-        requireRemote(role, codeRemote);
-        role.write(ReplicationSettings.member(leader).withCodeRemote(codeRemote));
+        ReplicationSettings member = ReplicationSettings.member(leader);
+        if (codeRemote != null) {
+            requireRemote(role, codeRemote);
+            member = member.withCodeRemote(codeRemote);
+        }
+        role.write(member);
         // A member reconnects to its leader only; records of any other node (from an earlier role) must not be resumed.
         ReplicationPeers.retainOnly(role.coordination(), Set.of(leader));
         runtime.terminal().stdout("ROLE=member");
         runtime.terminal().stdout("NODE_ID=" + own);
         runtime.terminal().stdout("LEADER_NODE_ID=" + leader);
-        runtime.terminal().stdout("CODE_REMOTE=" + codeRemote);
+        runtime.terminal().stdout("CODE_REMOTE=" + (codeRemote == null ? "" : codeRemote));
     }
 
     @Override

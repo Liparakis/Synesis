@@ -15,7 +15,7 @@ import picocli.CommandLine.Option;
 @Command(name = "share", description = "Make this computer the leader of the project, so members can follow it.", mixinStandardHelpOptions = true)
 public final class ProjectShareCommand extends ProjectRoleCommand {
 
-    @Option(names = "--code-remote", required = true, description = "Name of the Git remote of this clone that code moves through. Every computer must reach it.")
+    @Option(names = "--code-remote", description = "Name of a Git remote of this clone to keep as a mirror of the code. Code moves over Link without one.")
     private String codeRemote;
 
     /**
@@ -35,11 +35,13 @@ public final class ProjectShareCommand extends ProjectRoleCommand {
     void apply(Role role) throws Exception {
         // A leader sharing again keeps its members; a computer that follows another one is refused.
         Set<String> members = role.settings().isPresent() ? role.leader().members() : Set.of();
-        requireRemote(role, codeRemote);
+        if (codeRemote != null) {
+            requireRemote(role, codeRemote);
+        }
         role.write(new ReplicationSettings(null, members, codeRemote));
         runtime.terminal().stdout("ROLE=leader");
         runtime.terminal().stdout("NODE_ID=" + role.location().loadOrCreateIdentity().nodeId());
-        runtime.terminal().stdout("CODE_REMOTE=" + codeRemote);
+        runtime.terminal().stdout("CODE_REMOTE=" + (codeRemote == null ? "" : codeRemote));
         runtime.terminal().stdout("MEMBERS=" + members.size());
     }
 
