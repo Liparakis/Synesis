@@ -135,6 +135,15 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         java.util.Set<String> laneRequests = store.operatorRequestProjection().all().stream().filter(request -> !request.raisedBySynesis())
                 .map(org.synesis.coordination.domain.operator.OperatorRequest::id).collect(java.util.stream.Collectors.toUnmodifiableSet());
         boolean otherComputerConnected = otherComputerConnected(coordination);
+        // Where the operator closed each request, read once for every agent's question.
+        Map<String, Long> operatorClosings = new HashMap<>();
+        for (int index = 0; index < events.size(); index++) {
+            java.util.Optional<String> closed = events.get(index).type() == org.synesis.coordination.domain.prediction.PredictionEventType.OPERATOR_REQUEST_CLOSED
+                    ? closedRequest(events.get(index)) : java.util.Optional.empty();
+            if (closed.isPresent()) {
+                operatorClosings.put(closed.get(), index + 1L);
+            }
+        }
         return new AgentRunController.Observation() {
 
             @Override
@@ -159,6 +168,14 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             }
 
             @Override
+            public boolean sessionFenced(String provider, String connectionInstanceId) {
+                // The rule the MCP server's recovery fence applies to the same binding.
+                String participant = participantOf(provider, connectionInstanceId);
+                return participant != null && store.collaborationProjection().participantState(participant)
+                        .filter(state -> state == Participant.State.SUSPENDED || state == Participant.State.RECOVERY_HELD).isPresent();
+            }
+
+            @Override
             public boolean foreignActiveLaneOpen(List<AgentRunController.Observation.Connection> managed) {
                 java.util.Set<String> own = managed.stream().map(connection -> participantOf(connection.provider(), connection.connectionInstanceId()))
                         .filter(Objects::nonNull).collect(java.util.stream.Collectors.toUnmodifiableSet());
@@ -174,6 +191,18 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                 // message that would not be shown to it.
                 return participant == null ? OptionalLong.empty() : WorkspaceCollaborationService.laneOf(store, participant)
                         .map(lane -> store.conversationProjection().unread(lane.authorityLineageId()).stream().mapToLong(message -> message.sequence()).max())
+                        .orElse(OptionalLong.empty());
+            }
+
+            @Override
+            public OptionalLong newestOperatorAnswerFor(String provider, String connectionInstanceId) {
+                String participant = participantOf(provider, connectionInstanceId);
+                if (participant == null) {
+                    return OptionalLong.empty();
+                }
+                return WorkspaceCollaborationService.laneOf(store, participant)
+                        .map(lane -> store.operatorRequestProjection().all().stream().filter(request -> request.raisedBy().equals(lane.authorityLineageId().toString()))
+                                .map(request -> operatorClosings.get(request.id())).filter(Objects::nonNull).mapToLong(Long::longValue).max())
                         .orElse(OptionalLong.empty());
             }
 
@@ -265,6 +294,15 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             };
         } catch (IOException malformed) {
             return false;
+        }
+    }
+
+    /** The request an operator closing names, or empty when the payload cannot be read. */
+    private static java.util.Optional<String> closedRequest(PredictionEvent event) {
+        try {
+            return java.util.Optional.of(org.synesis.coordination.domain.operator.OperatorRequest.closedRequestId(event.payload()));
+        } catch (IOException malformed) {
+            return java.util.Optional.empty();
         }
     }
 

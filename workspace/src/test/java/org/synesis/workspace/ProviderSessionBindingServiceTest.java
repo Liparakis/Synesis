@@ -256,6 +256,42 @@ final class ProviderSessionBindingServiceTest {
         assertEquals(ended.sessionId(), service.find(location, "codex", "ended-lane").orElseThrow().sessionId());
     }
 
+    /**
+     * A clean worker holding private commits behind a moved control head was given a fresh binding,
+     * which stranded the open lane of the session the run controller keeps on that connection
+     * (ADR-0099, amendment). A session with an open lane keeps its binding and its worktree.
+     */
+    @Test
+    void aStaleCleanWorkerWithPrivateCommitsKeepsTheSessionOfItsOpenLane() throws Exception {
+        Path root = Files.createTempDirectory("synesis-session-stale-open-lane-");
+        git(root, "init");
+        var location = new ProjectApplicationService().init(root).location();
+        Files.writeString(root.resolve("README.md"), "baseline\n");
+        git(root, "add", "README.md");
+        git(root, "config", "user.email", "stale@example.invalid");
+        git(root, "config", "user.name", "Stale Lane Test");
+        git(root, "commit", "-m", "baseline");
+        var service = new ProviderSessionBindingService();
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var intents = new WorkIntentService(new PredictionEventStore(root.resolve(".synesis/coordination"), location.projectId()), identity);
+
+        var kept = service.ensure(location, "codex", "kept-lane").binding();
+        announce(intents, location, kept, "lane.py");
+        Path worker = Path.of(kept.worktreePath());
+        Files.writeString(worker.resolve("lane.py"), "print('lane')\n");
+        git(worker, "add", "lane.py");
+        git(worker, "commit", "-m", "private lane work");
+        Files.writeString(root.resolve("README.md"), "peer integrated\n");
+        git(root, "add", "README.md");
+        git(root, "commit", "-m", "peer integrated");
+
+        var resumed = service.ensure(location, "codex", "kept-lane").binding();
+
+        assertEquals(kept.sessionId(), resumed.sessionId());
+        assertEquals(kept.worktreePath(), resumed.worktreePath());
+        assertTrue(Files.exists(worker.resolve("lane.py")), "the lane's private work stays where it was");
+    }
+
     private static UUID announce(WorkIntentService intents, ProjectLocation location, ProviderSessionBindingService.Binding binding, String path) throws Exception {
         UUID id = UUID.randomUUID();
         assertTrue(intents.announce(new WorkIntent(id,

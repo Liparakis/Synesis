@@ -122,6 +122,13 @@ public final class CodexProviderIntegration implements ProviderIntegration {
                 }
                 return java.util.Optional.empty();
             }
+
+            @Override
+            public Map<String, String> environment(HeadlessOptions options) {
+                // Codex's MCP servers get the identity through the configuration above; its hooks get
+                // Codex's own environment, and the Stop hook finds the agent's wait by this identity.
+                return options.connectionInstanceId() == null ? Map.of() : Map.of(CONNECTION_INSTANCE_VARIABLE, options.connectionInstanceId());
+            }
         });
     }
 
@@ -139,6 +146,11 @@ public final class CodexProviderIntegration implements ProviderIntegration {
             // identity is added to the Synesis server's entry for this one process. The value is
             // a plain token, which Codex takes literally.
             arguments.addAll(List.of("--config", "mcp_servers.synesis.env." + CONNECTION_INSTANCE_VARIABLE + "=" + options.connectionInstanceId()));
+            if (options.hookLauncher() != null) {
+                // Its Stop hook holds the agent told WAIT until something arrives for its lane, as
+                // Claude Code's does (ADR-0099); trusted for this run only, and only this hook.
+                arguments.addAll(CodexStopHook.arguments(options.hookLauncher(), System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")));
+            }
         }
         return arguments;
     }
@@ -151,11 +163,6 @@ public final class CodexProviderIntegration implements ProviderIntegration {
     @Override
     public String matcher() {
         return "^apply_patch$";
-    }
-
-    @Override
-    public boolean requiresRealValidation() {
-        return true;
     }
 
     @Override
@@ -173,9 +180,21 @@ public final class CodexProviderIntegration implements ProviderIntegration {
         return true;
     }
 
+    /**
+     * Codex runs this project's hooks in a session the person starts only after they trust the project and review the
+     * hooks in Codex, and Synesis never does that for them. That is a step of theirs, not a fault of the installation:
+     * an agent Synesis starts needs neither (its writes go through Synesis in Codex's read-only sandbox, and it is given
+     * Synesis's own Stop hook for its run, {@link CodexStopHook}), so the state is reported beside a healthy install
+     * rather than as a degraded one (ADR-0099, 2026-10-18).
+     */
     @Override
     public String trustStatus() {
         return "REVIEW_REQUIRED";
+    }
+
+    @Override
+    public String trustNote() {
+        return "Codex runs this project's hooks in a session you start only after you trust the project and review its hooks with /hooks in Codex; agents that synesis agents run starts do not need that.";
     }
 
     @Override

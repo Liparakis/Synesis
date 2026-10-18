@@ -130,6 +130,8 @@ public final class AgentRunController {
         OptionalLong seenBeforeExit = OptionalLong.empty();
         // Why the run last said it waits with every agent stopped, so each wait is reported once.
         Wait reportedWait = null;
+        // Ended connections the project could not record yet, offered again at every observation.
+        List<String> unrecordedEnds = new ArrayList<>();
         try {
             int index = 0;
             long headAtStart = observer.observe().headSequence();
@@ -150,13 +152,14 @@ public final class AgentRunController {
                     seenBeforeExit = OptionalLong.of(heads.removeFirst().sequence());
                 }
                 heads.addLast(new HeadAt(now, observation.headSequence()));
+                unrecordedEnds.removeIf(connections::end);
                 for (Agent agent : agents) {
                     if (agent.process != null && !agent.process.isAlive()) {
                         agent.exited(observation.lastActivitySequence(agent.spec.provider(), agent.connectionId), seenBeforeExit, observation.progressedSince(agent.startedAtSequence),
                                 agent.holdsOpenLane(observation));
                         listener.accept("AGENT_EXITED=" + agent.label() + " exitCode=" + agent.exitCode);
                     }
-                    keepOrEnd(agent, observation, request.maxResumesPerAgent(), listener);
+                    keepOrEnd(agent, observation, request.maxResumesPerAgent(), listener, unrecordedEnds);
                 }
                 boolean awaitingDeadline = false;
                 if (!observation.complete()) {
@@ -173,6 +176,8 @@ public final class AgentRunController {
                         // session, to take the next piece of work, as a Claude agent woken by its Stop
                         // hook for its lane ending does in the same process.
                         boolean laneEnded = agent.heldLaneAtStop && !agent.holdsOpenLane(observation);
+                        // Only once its end is recorded: the close is what lets its lane be held for continuation.
+                        boolean fencedLaneWaits = agent.fencedLaneToContinue && agent.holdsOpenLane(observation) && !unrecordedEnds.contains(agent.connectionId);
                         if (!agent.resumable(request.maxResumesPerAgent()) || !(laneEnded || agent.holdsOpenLane(observation))) {
                             continue;
                         }
@@ -186,10 +191,11 @@ public final class AgentRunController {
                         boolean deadlinePassed = answerDeadline.isPresent() && now >= answerDeadline.getAsLong() && answerDeadline.getAsLong() != agent.resumedForDeadline;
                         OptionalLong message = agent.newestUnreadMessage(observation);
                         boolean messageWaiting = agent.unreadMessageWaiting(observation);
-                        if (laneEnded || observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || messageWaiting) {
+                        if (laneEnded || fencedLaneWaits || observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || messageWaiting) {
                             if (deadlinePassed) {
                                 agent.resumedForDeadline = answerDeadline.getAsLong();
                             }
+                            agent.fencedLaneToContinue = false;
                             // Whatever it is resumed for, it reads its messages then. A message
                             // it stops without acting on does not resume it again.
                             agent.resumedForMessage = Math.max(agent.resumedForMessage, message.orElse(0L));
@@ -239,9 +245,11 @@ public final class AgentRunController {
                     agent.process.stop();
                 }
                 if (!agent.connectionEnded) {
-                    agent.endConnection(connections);
+                    agent.endConnection(connections, unrecordedEnds);
                 }
             }
+            // Nothing offers them again once the run is over, so these wait for the project.
+            unrecordedEnds.forEach(connections::ended);
         }
     }
 
@@ -251,11 +259,15 @@ public final class AgentRunController {
      * that its end of input no longer closes it. A session that could not be kept was closed by its
      * own MCP server, so it is ended and the agent's next process gets a new identity.
      */
-    private void keepOrEnd(Agent agent, Observation observation, int maxResumes, Consumer<String> listener) {
+    private void keepOrEnd(Agent agent, Observation observation, int maxResumes, Consumer<String> listener, List<String> unrecordedEnds) {
         if (agent.connectionEnded) {
             return;
         }
-        boolean mayComeBack = agent.process != null || agent.resumable(maxResumes) && agent.holdsOpenLane(observation);
+        // A fenced session refuses every call of its agent, so an agent resumed on it idled until the run
+        // ended. Its lane can be continued only by a new session, through the ordinary continuation: the
+        // connection is ended, and the agent is resumed once on a new one, where that is offered to it.
+        boolean fenced = agent.process == null && observation.sessionFenced(agent.spec.provider(), agent.connectionId);
+        boolean mayComeBack = !fenced && (agent.process != null || agent.resumable(maxResumes) && agent.holdsOpenLane(observation));
         if (mayComeBack && connections.keep(agent.connectionId)) {
             if (!agent.sessionKept) {
                 agent.sessionKept = true;
@@ -264,7 +276,8 @@ public final class AgentRunController {
             return;
         }
         if (agent.process == null) {
-            agent.endConnection(connections);
+            agent.fencedLaneToContinue = fenced && agent.holdsOpenLane(observation);
+            agent.endConnection(connections, unrecordedEnds);
         }
     }
 
@@ -421,11 +434,28 @@ public final class AgentRunController {
         String open();
 
         /**
-         * Records that a connection has ended: no process of this controller will use it again.
+         * Records that a connection has ended: no process of this controller will use it again. Waits
+         * a bounded time for the project when it is busy.
          *
          * @param connectionInstanceId identity returned by {@link #open()}
          */
         void ended(String connectionInstanceId);
+
+        /**
+         * Records that a connection has ended, as {@link #ended} does, but makes one attempt (which may
+         * wait the project lock's two seconds) instead of many. The controller offers an end that could
+         * not be recorded again at each observation,
+         * and waits for it when the run ends, so a busy project never leaves the lease of an agent that
+         * has ended naming the controller.
+         *
+         * @param connectionInstanceId identity returned by {@link #open()}
+         * @return {@code true} when the end is recorded or there was nothing to record; {@code false}
+         *         when the project could not record it now
+         */
+        default boolean end(String connectionInstanceId) {
+            ended(connectionInstanceId);
+            return true;
+        }
 
         /**
          * Keeps the session of a connection alive while the controller can still start a process on
@@ -601,6 +631,20 @@ public final class AgentRunController {
         boolean holdsOpenLane(String provider, String connectionInstanceId);
 
         /**
+         * Reports whether the session behind one connection is fenced for recovery: its participant is
+         * suspended or held for recovery, so the MCP server refuses its calls with
+         * {@code SESSION_EPOCH_FENCED} and its lane can only be continued by a new session. A kept
+         * session gets there only when its keeper stopped renewing for longer than the grace period.
+         *
+         * @param provider             provider identifier
+         * @param connectionInstanceId connection of one of the agent's processes
+         * @return {@code true} while that session is fenced
+         */
+        default boolean sessionFenced(String provider, String connectionInstanceId) {
+            return false;
+        }
+
+        /**
          * One connection the controller gave a process of its own.
          *
          * @param provider             provider identifier
@@ -647,6 +691,20 @@ public final class AgentRunController {
          * @return that position, or empty when the connection holds no lane or its lane has nothing unread
          */
         default OptionalLong newestUnreadMessageFor(String provider, String connectionInstanceId) {
+            return OptionalLong.empty();
+        }
+
+        /**
+         * Returns the log position at which the operator last closed a request that the lane held by the
+         * session behind one connection put to it (ADR-0093). The closing is not work and resumes nobody
+         * else, but the lane that asked may be waiting for that answer, so it resumes that lane's stopped
+         * agent once, as a message addressed to it does.
+         *
+         * @param provider             provider identifier
+         * @param connectionInstanceId connection of the agent's last process
+         * @return that position, or empty when the connection holds no lane or the operator closed nothing it asked
+         */
+        default OptionalLong newestOperatorAnswerFor(String provider, String connectionInstanceId) {
             return OptionalLong.empty();
         }
     }
@@ -750,6 +808,8 @@ public final class AgentRunController {
         private boolean connectionEnded;
         /** Whether the session of its current connection has been kept at least once. */
         private boolean sessionKept;
+        /** Whether its last session was ended because it was fenced for recovery, its lane still to continue. */
+        private boolean fencedLaneToContinue;
 
         private Agent(int index, AgentSpec spec) {
             this.index = index;
@@ -769,8 +829,11 @@ public final class AgentRunController {
             return spec.options().withConnection(identity);
         }
 
-        private void endConnection(Connections connections) {
-            connections.ended(connectionId);
+        /** Reports its current connection ended; an end the project could not record yet is kept to be offered again. */
+        private void endConnection(Connections connections, List<String> unrecordedEnds) {
+            if (!connections.end(connectionId)) {
+                unrecordedEnds.add(connectionId);
+            }
             connectionEnded = true;
         }
 
@@ -812,10 +875,10 @@ public final class AgentRunController {
             return connectionIds.stream().anyMatch(identity -> observation.holdsOpenLane(spec.provider(), identity));
         }
 
-        /** The newest unread message addressed to a lane any of this agent's connections holds. */
+        /** The newest unread message, or operator answer, addressed to a lane any of this agent's connections holds. */
         private OptionalLong newestUnreadMessage(Observation observation) {
-            return connectionIds.stream().map(identity -> observation.newestUnreadMessageFor(spec.provider(), identity)).filter(OptionalLong::isPresent)
-                    .mapToLong(OptionalLong::getAsLong).max();
+            return connectionIds.stream().flatMap(identity -> java.util.stream.Stream.of(observation.newestUnreadMessageFor(spec.provider(), identity),
+                    observation.newestOperatorAnswerFor(spec.provider(), identity))).filter(OptionalLong::isPresent).mapToLong(OptionalLong::getAsLong).max();
         }
 
         /** Whether a message for its lane arrived that it has not been resumed for. */

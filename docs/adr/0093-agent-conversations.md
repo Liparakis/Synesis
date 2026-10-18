@@ -191,7 +191,8 @@ The decision above is built as written, with these choices where it left room.
   `synesis operator close`. A request Synesis raised cannot be closed that way.
 - A lane putting something to the operator resumes nobody, like any other
   message, and neither does the operator closing it. A request Synesis raises
-  still does.
+  still does. (Narrowed by ADR-0099, fixes of 2026-10-18: the closing now wakes
+  the lane that asked, and nobody else.)
 - A message resumes the stopped agent whose lane it is addressed to when the
   lane's mark does not cover it, it is newer than what that agent had seen, and
   it is newer than the last message the agent was resumed for. An agent resumed

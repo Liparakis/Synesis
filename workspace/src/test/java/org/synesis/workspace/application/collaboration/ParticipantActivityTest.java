@@ -125,6 +125,51 @@ class ParticipantActivityTest {
         assertTrue(observer.observe().holdsOpenLane("codex", "chat-a"), "the same connection holds its next lane");
     }
 
+    /** The controller reads a suspended session as its MCP server's recovery fence does (ADR-0099, amendment). */
+    @Test
+    void theRunControllerSeesASuspendedSessionAsFenced(@TempDir Path temp) throws Exception {
+        ProjectLocation location = project(temp.resolve("fenced"));
+        EventLogObserver observer = new EventLogObserver(location);
+        lane(location, "chat-a", "src/a.txt");
+        lane(location, "chat-b", "src/b.txt");
+        assertFalse(observer.observe().sessionFenced("codex", "chat-a"));
+
+        String participant = WorkspaceCollaborationService.participantHandle(new ProviderSessionBindingService().find(location, "codex", "chat-a").orElseThrow().sessionId());
+        new org.synesis.coordination.application.WorkIntentService(location.openCoordinationStore(), location.loadOrCreateIdentity()).suspend(participant);
+
+        AgentRunController.Observation fenced = observer.observe();
+        assertTrue(fenced.sessionFenced("codex", "chat-a"));
+        assertTrue(service.recoveryFenced(location.root(), "codex", "chat-a"), "the same rule as the MCP server's fence");
+        assertTrue(fenced.holdsOpenLane("codex", "chat-a"), "its lane waits to be continued");
+        assertFalse(fenced.sessionFenced("codex", "chat-b"));
+        assertFalse(fenced.sessionFenced("codex", "chat-never"));
+    }
+
+    /** The operator closing a lane's own request is addressed to that lane alone, and is not progress (ADR-0093). */
+    @Test
+    void theRunControllerSeesTheOperatorAnswerToALanesOwnRequestOnly(@TempDir Path temp) throws Exception {
+        ProjectLocation location = project(temp.resolve("answered"));
+        EventLogObserver observer = new EventLogObserver(location);
+        lane(location, "chat-a", "src/a.txt");
+        lane(location, "chat-b", "src/b.txt");
+        PredictionEventStore store = location.openCoordinationStore();
+        var identity = location.loadOrCreateIdentity();
+        String participantA = WorkspaceCollaborationService.participantHandle(new ProviderSessionBindingService().find(location, "codex", "chat-a").orElseThrow().sessionId());
+        String lineageA = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participantA))
+                .findFirst().orElseThrow().authorityLineageId().toString();
+        store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, identity.nodeId(),
+                org.synesis.coordination.domain.operator.OperatorRequest.askedByLane("opr_a", lineageA, "Install the runner", "").encodeRaised(), identity);
+        assertTrue(observer.observe().newestOperatorAnswerFor("codex", "chat-a").isEmpty(), "asked, not answered");
+        long beforeAnswer = location.openCoordinationStore().headSequence();
+
+        store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_CLOSED, identity.nodeId(), org.synesis.coordination.domain.operator.OperatorRequest.encodeClosed("opr_a", "Installed."), identity);
+
+        AgentRunController.Observation answered = observer.observe();
+        assertEquals(answered.headSequence(), answered.newestOperatorAnswerFor("codex", "chat-a").orElseThrow());
+        assertTrue(answered.newestOperatorAnswerFor("codex", "chat-b").isEmpty());
+        assertFalse(answered.progressedSince(beforeAnswer), "still not work");
+    }
+
     @Test
     void aVerifiedCallAppendsNothingToTheLog(@TempDir Path temp) throws Exception {
         ProjectLocation location = project(temp.resolve("quiet"));

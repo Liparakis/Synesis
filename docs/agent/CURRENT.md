@@ -1,3 +1,76 @@
+# 2026-10-18 — ADR-0099's known limits fixed, and Codex agents get a Stop hook
+
+The owner asked on 2026-10-18 to fix every limit ADR-0099's amendment listed and to re-test Codex's hooks (USER-STATED);
+the CLOSE answer for a lane its agent cancelled stays, by the owner's choice. Branch `claude/adr-0099-limits-3ceb11`,
+eight commits (the last fixes the review's findings) and this docs commit; not pushed, not merged. Source-level
+evidence only: no real run on this code yet (the main session re-checks it in its next PC + VM run after merging). The ADR stays Proposed. Design notes for each fix are in ADR-0099,
+"Fixes of 2026-10-18".
+
+**Root causes and changes.**
+1. `keep` read only the lease, so a kept participant the log had suspended was resumed on the same connection and
+   refused `SESSION_EPOCH_FENCED` until the run ended. The controller now sees the fence (`Observation.sessionFenced`),
+   ends that connection and resumes the agent once on a new one, where its held lane is offered for continuation.
+2. ADR-0093 made the operator closing a lane's request resume nobody, so a lane that asked and waited was never woken.
+   The closing now wakes that lane alone: an `operator` entry in the Stop hook's lane view, and a once-only controller
+   resume (`Observation.newestOperatorAnswerFor`). Still not progress.
+3. `ControllerConnections.ended` gave up after 30 s on a busy lock, leaving the lease naming the controller. An end is
+   now tried once per observation (`Connections.end`) until recorded; the run's end waits for the rest.
+4. `resumeStale` reallocated a clean worker with private commits even when its session held an open lane. Such a
+   session now keeps its binding and worktree.
+5. A first process that opened and closed its lease within 2 s beat the controller's first `keep`. The controller now
+   reserves itself as keeper before starting the process (`<connection>.keeper` note); the MCP server names the
+   reserved keeper when it is alive and the server descends from it (the `keep` fence), so its own close is a no-op.
+7. Codex 0.163.0 re-test (below). Agents the controller starts on Codex get Synesis's own Stop hook on the command line
+   with its trust pinned to its hash, for that run only; `synesis hook codex` answers Stop as Claude's hook does.
+   `provider install/status codex` report hook review as `TRUST_NOTE` beside a healthy install, not `DEGRADED`.
+8. `LeaseKeeperTest` used `ProcessHandle.current().parent()`, empty on this fresh Windows 11 install; it now launches a
+   foreign process.
+
+**Codex verdict (VERIFIED on Windows and the Linux VM, 14 model runs, codex-rs source at `rust-v0.163.0`).** Hooks run
+in `codex exec`, `exec resume` and `app-server`, but only trusted ones. The 0.162 tests saw nothing because an
+untrusted project's hooks are never loaded (the bypass flag does not change that), `node` is not on this PC's `PATH`,
+and pwsh breaks inner double quotes. A hook given with `-c hooks.Stop=[...]` plus `-c hooks.state={'<key>'={trusted_hash=...}}`
+runs with no project trust, no bypass and nothing written to `~/.codex`. A blocking Stop continues the same turn with
+the reason, `stop_hook_active` is set, the environment is inherited. Unlike Claude Code: no continuation cap (Synesis
+caps at three), a timed-out hook is not killed on Windows (Synesis ends its own hold first), exit 2 does not work on
+Windows (Synesis uses the JSON form). The trust key and hash recipe are internal to Codex; a Codex that changes them
+skips the hook silently and the controller wakes the agent as before.
+
+**Tests.** Each fix has a test that fails on the code before it (run on Windows with the old code
+put back, unless marked compile-time): `ControllerConnectionsTest.aProcessThatOpensAndClosesItsLeaseBeforeTheControllerLooksLeavesTheSessionKept`
+(5; a real child JVM opens and closes its lease), `AgentRunControllerTest.anAgentWhoseKeptSessionWasFencedIsResumedOnceInANewSessionToContinueItsLane`
+(1), `LaneWakeTest.theOperatorClosingARequestTheLaneAskedWakesIt` (2), `ProviderSessionBindingServiceTest.aStaleCleanWorkerWithPrivateCommitsKeepsTheSessionOfItsOpenLane`
+(4), `LeaseKeeperTest.aProcessCannotKeepTheSessionOfAProcessItDidNotStart` (8, failed every run before);
+compile-time before: `AgentRunControllerTest.anEndTheProjectCouldNotRecordIsOfferedAgainUntilItIsRecorded` and
+`ControllerConnectionsTest.anEndTriedWhileTheLockIsBusy...` (3), `...theOperatorClosingALanesRequestResumesThatLanesAgentOnceAndNoOther`
+and `ParticipantActivityTest` 2 (1, 2), `HookCodexStopTest` 2, `CodexStopHookTest` 2 (hash pinned to the one Codex 0.163.0
+reported), `HeadlessSessionContractTest` 2 (hook arguments; a real `.cmd` shim in a folder with a space receives them
+intact), `LeaseKeeperTest.aReservationNamingAProcessTheOpenerDoesNotDescendFromOrADeadOneNamesNobody` (7, 5).
+Full gate on the final code: **Linux** (Podman, `check`): BUILD SUCCESSFUL, link 199, coordination 324,
+project-record 60, relay 12, mcp-contract 20, workspace 856 (3 skipped), mcp 201, cli 200, no failure. **Windows**
+(`check --max-workers=4`, single-use daemon): BUILD SUCCESSFUL, the same counts with workspace 856 (1 skipped), no
+failure. A first Windows attempt was stopped by another session's `gradlew --stop` (not a test result). Outside the
+gate, `ControllerConnectionsTest`'s lock tests failed about one run in four on Windows, old tests included (Open).
+Real check without a model call: Codex 0.163.0 `hooks/list` reports the hook Synesis builds for this PC's install path
+`trusted`.
+
+**Review.** Independent review (Sonnet 5.5, requested effort medium; effort metadata unavailable). Acted on:
+a `.cmd` shim in a folder with a space would have lost its path (now `cmd /d /s /c` with one quoted line, real test);
+a keeper reservation with an unknown start time failed open (now names nobody), with negative tests; a fenced lane's
+resume before its end is recorded; the operator closings scanned per call; a backslash allowed in a Linux hook path.
+Not changed, with reasons in ADR-0099: the fence rule is restated once (the coordination module keeps it private); the
+660 s timeout is not derived from `LaneWake.HOLD` (the provider package does not depend on the run package); keeper
+notes left by a killed controller are not swept; `AgentRunController` is near 900 lines.
+
+**Open.** Real-run evidence is NOT REACHED for every fix: the main session re-checks them in its next PC +
+VM run after merging, and should see Codex agents held by their Stop hook (`synesis hook codex` Stop entries in local
+diagnostics, `WOKEN`) instead of exiting at every WAIT. The Codex hook rests on Codex internals (trust key, hash
+recipe); a release that changes them skips it silently. Changed meanings that need the owner's approval with the ADR:
+`provider install/status codex` no longer `DEGRADED` for hook review alone, and an operator closing a lane's request
+now wakes that lane (ADR-0093 narrowed). A transient failure to read `.synesis/project.json` sends lease reads to a
+`default-project` folder (`ProjectAdministrativeLayout.resolveProjectId`), the cause of the Windows lock-test flake;
+recorded, not fixed. `link join` answering too early is the main session's (step 3).
+
 # 2026-10-17 — A waiting agent keeps its session (ADR-0099 amendment) and the PC + VM rerun (COMPLETED)
 
 Fixes for the five defects of the overnight entry below, with the owner's approval of the three rule changes

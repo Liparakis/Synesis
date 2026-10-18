@@ -62,7 +62,7 @@ final class AgentRunControllerTest {
         assertEquals(List.of("open conn-1", "open conn-2", "ended conn-1", "open conn-3", "ended conn-2", "ended conn-3"), script.connections,
                 "a resumed process is a new connection, opened only after the previous one was reported ended");
         assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-1"), script.environments.get(0), "Claude Code passes its environment to the MCP server");
-        assertEquals(Map.of(), script.environments.get(1), "Codex is given the identity through its configuration arguments");
+        assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-2"), script.environments.get(1), "Codex's hooks read it from its environment");
         assertTrue(script.commands.get(1).contains("mcp_servers.synesis.env.SYNESIS_MCP_CONNECTION_INSTANCE_ID=conn-2"), script.commands.get(1).toString());
         assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-3"), script.environments.get(2));
     }
@@ -108,6 +108,51 @@ final class AgentRunControllerTest {
         assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches,
                 "resumed once to take the next work, then not again: it holds no lane");
         assertEquals(List.of(3), script.resumedAtTicks);
+    }
+
+    /**
+     * A kept session whose participant was suspended (its keeper stopped renewing past the grace period)
+     * was resumed on the same connection, refused SESSION_EPOCH_FENCED at every call, and idled until
+     * the run ended. It is ended, and its agent is resumed once on a new connection, where continuing
+     * its held lane is offered to it, without waiting for progress.
+     */
+    @Test
+    void anAgentWhoseKeptSessionWasFencedIsResumedOnceInANewSessionToContinueItsLane() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.lifetimes(1, 20, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(5).announced();
+        script.at(3).head(7).fenced("claude#1");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches, "resumed once, though nothing progressed");
+        assertEquals(List.of(3), script.resumedAtTicks);
+        assertEquals(List.of("open conn-1", "open conn-2", "ended conn-1", "open conn-3"), script.connections.subList(0, 4), "the fenced session is ended, the resume is a new one");
+        assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-3"), script.environments.get(2));
+    }
+
+    /**
+     * An end the project lock refused was given up, and the lease went on naming the controller for
+     * an agent that had ended, its lane looking held by a live session until the run ended. It is
+     * offered again at each observation until it is recorded.
+     */
+    @Test
+    void anEndTheProjectCouldNotRecordIsOfferedAgainUntilItIsRecorded() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.busyEnds = 2;
+        script.lifetimes(1, 20, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(5).announced();
+        script.at(3).head(9).progressAfter(5).laneEnded("claude#1");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        List<String> conn1 = script.connections.stream().filter(line -> line.endsWith(" conn-1")).toList();
+        assertEquals(List.of("open conn-1", "busy conn-1", "busy conn-1", "ended conn-1"), conn1, "the end is offered at each look until the project records it");
+        assertTrue(script.connections.indexOf("ended conn-1") < script.connections.indexOf("ended conn-2"), "while the run goes on: " + script.connections);
     }
 
     @Test
@@ -631,6 +676,26 @@ final class AgentRunControllerTest {
         assertFalse(AgentRunController.isProgress(PredictionEventType.CONVERSATION_MESSAGES_DELIVERED));
     }
 
+    /**
+     * A lane that asked the operator and stopped to wait for the answer was resumed by nothing when the
+     * operator closed its request, and kept its lane until the run ended. The closing resumes that
+     * lane's agent once, and no other.
+     */
+    @Test
+    void theOperatorClosingALanesRequestResumesThatLanesAgentOnceAndNoOther() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "codex", "claude");
+        script.lifetimes(1, 20, 1, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(5).announced();
+        script.at(3).head(6).operatorAnswer("claude#1", 6);
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("start claude#1", "start codex#2", "start claude#3", "resume claude#1 session-1"), script.launches);
+        assertEquals(List.of(3), script.resumedAtTicks, "once, at the answer");
+    }
+
     @Test
     void runLeftWithAnOpenRequestARaisedByALaneSaysItNeedsAnOperator() throws Exception {
         Script script = new Script();
@@ -705,6 +770,8 @@ final class AgentRunControllerTest {
         private boolean endlessProgress;
         /** Whether the controller's sessions can be kept, as real leases opened by its own children can. */
         private boolean keepSessions;
+        /** How many attempts to record an end the project refuses first, as a busy project lock does. */
+        private int busyEnds;
         private int tick;
         private int launched;
 
@@ -735,6 +802,17 @@ final class AgentRunControllerTest {
                 @Override
                 public void ended(String connectionInstanceId) {
                     connections.add("ended " + connectionInstanceId);
+                }
+
+                @Override
+                public boolean end(String connectionInstanceId) {
+                    if (busyEnds > 0) {
+                        busyEnds--;
+                        connections.add("busy " + connectionInstanceId);
+                        return false;
+                    }
+                    ended(connectionInstanceId);
+                    return true;
                 }
 
                 @Override
@@ -871,6 +949,17 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public OptionalLong newestOperatorAnswerFor(String provider, String connectionInstanceId) {
+                    Long sequence = laneHeldUnder(connectionInstanceId) ? state.operatorAnswers.get(agentOf.get(connectionInstanceId)) : null;
+                    return sequence == null ? OptionalLong.empty() : OptionalLong.of(sequence);
+                }
+
+                @Override
+                public boolean sessionFenced(String provider, String connectionInstanceId) {
+                    return state.fenced.contains(agentOf.get(connectionInstanceId)) && Integer.valueOf(1).equals(ordinalOf.get(connectionInstanceId));
+                }
+
+                @Override
                 public boolean foreignActiveLaneOpen(List<Connection> managed) {
                     return state.foreignLane;
                 }
@@ -902,6 +991,20 @@ final class AgentRunControllerTest {
         private final List<String> operatorRequests = new ArrayList<>();
         private final Map<String, Long> messages = new java.util.HashMap<>();
         private final List<String> endedLanes = new ArrayList<>();
+        private final List<String> fenced = new ArrayList<>();
+        private final Map<String, Long> operatorAnswers = new java.util.HashMap<>();
+
+        /** The operator closed, at this log position, a request the lane of this agent, by its label, put to it. */
+        private State operatorAnswer(String agent, long sequence) {
+            operatorAnswers.put(agent, sequence);
+            return this;
+        }
+
+        /** The session of this agent's first connection, by its label, is suspended or held for recovery. */
+        private State fenced(String agent) {
+            fenced.add(agent);
+            return this;
+        }
 
         /** The lane of this agent, by its label, has ended: integrated, cancelled or continued by another. */
         private State laneEnded(String agent) {

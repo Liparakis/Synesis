@@ -118,7 +118,7 @@ final class ProviderResults {
     }
 
     static ProviderResult result(ProviderIntegration provider, String state, ProviderIntegration.SyntheticCheck synthetic, Path config, Path profile, String mcpStatus) {
-        return simple("PROVIDER_INSTALL_RESULT",
+        return withTrustNote(provider, simple("PROVIDER_INSTALL_RESULT",
                 state,
                 0,
                 "PROVIDER",
@@ -140,11 +140,11 @@ final class ProviderResults {
                 "TRUST_STATUS",
                 provider.trustStatus(),
                 "REAL_AGENT_VALIDATION",
-                "NOT_COMPLETED");
+                "NOT_COMPLETED"));
     }
 
     static ProviderResult status(ProviderIntegration provider, String state, Path config, boolean metadata, int count, boolean launcher, boolean profile, boolean synthetic, int exit) {
-        return simple("PROVIDER_STATUS",
+        return withTrustNote(provider, simple("PROVIDER_STATUS",
                 state,
                 exit,
                 "PROVIDER",
@@ -168,7 +168,12 @@ final class ProviderResults {
                 "TRUST_STATUS",
                 provider.trustStatus(),
                 "REAL_AGENT_VALIDATION",
-                "NOT_COMPLETED");
+                "NOT_COMPLETED"));
+    }
+
+    /** Adds what the trust state asks of the person, when the provider says so. */
+    private static ProviderResult withTrustNote(ProviderIntegration provider, ProviderResult result) {
+        return provider.trustNote().isEmpty() ? result : withValue(result, "TRUST_NOTE", provider.trustNote());
     }
 
     static ProviderResult simple(String key, String state, int exit, String... fields) {
