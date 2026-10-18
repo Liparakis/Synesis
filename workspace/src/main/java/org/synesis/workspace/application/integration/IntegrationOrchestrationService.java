@@ -439,6 +439,15 @@ public final class IntegrationOrchestrationService {
         return undeclared;
     }
 
+    /**
+     * Whether a snapshot belongs to a lane this computer introduced: the lanes this computer's pass merges (ADR-0098
+     * step 5). The integration entries it writes then act for its own participants only, as attribution requires.
+     */
+    static boolean ownLane(PredictionEventStore store, NodeIdentity identity, TaskSnapshotRecord snapshot) {
+        return store.collaborationProjection().introducingNode(snapshot.provenance().participantIdentity())
+                .map(identity.nodeId()::equals).orElse(true);
+    }
+
     private static boolean isAncestor(Path workdir, String base, String head) {
         try {
             return GitProcessRunner.isAncestor(workdir, base, head);
@@ -478,11 +487,8 @@ public final class IntegrationOrchestrationService {
         Objects.requireNonNull(store, "store");
         Objects.requireNonNull(identity, "identity");
 
-        if (store.isReplicationMember()) {
-            // The checkout, the test gate and the branch are the leader's (ADR-0098): a member's
-            // snapshots reach the leader's log as proposals and the leader's pass integrates them.
-            return NOTHING_TO_INTEGRATE;
-        }
+        // Every computer merges its own lanes onto its own copy of main (ADR-0098 step 5); another computer's lanes are
+        // that computer's to merge.
         AgentResponse response = integrate(controlRoot, store, identity, operatorAsked);
         publishControlBranch(controlRoot, store);
         return response;
@@ -514,7 +520,7 @@ public final class IntegrationOrchestrationService {
      *
      * @return the pass's response when it must not run, {@code null} when it may
      */
-    private static AgentResponse fetchCommitsNamedByLog(Path controlRoot, PredictionEventStore store) {
+    private static AgentResponse fetchCommitsNamedByLog(Path controlRoot, PredictionEventStore store, NodeIdentity identity) {
         Optional<CodeExchange> exchange;
         try {
             exchange = CodeExchange.of(store.rootDirectory(), store.projectId());
@@ -528,7 +534,8 @@ public final class IntegrationOrchestrationService {
         try {
             // Only what the pass may integrate: work still waiting for its review fetches nothing, so a computer that is
             // away holds up only its own reviewed work.
-            IntegrationCandidatePolicy.reviewAcceptedInOrder(new PredictionEventStore(store.rootDirectory(), store.projectId()))
+            PredictionEventStore current = new PredictionEventStore(store.rootDirectory(), store.projectId());
+            IntegrationCandidatePolicy.reviewAcceptedInOrder(current).stream().filter(snapshot -> ownLane(current, identity, snapshot))
                     .forEach(snapshot -> snapshots.put(snapshot.provenance().snapshotRef(), snapshot.commitSha()));
         } catch (IOException | java.security.GeneralSecurityException unreadable) {
             return null;
@@ -544,7 +551,7 @@ public final class IntegrationOrchestrationService {
     private AgentResponse integrate(Path controlRoot, PredictionEventStore store, NodeIdentity identity, boolean operatorAsked) {
         // Before the lock: moving code can take minutes (ADR-0098 step 3), and bringing a commit that is here already
         // changes nothing, so two passes may both ask.
-        AgentResponse fetchFailed = fetchCommitsNamedByLog(controlRoot, store);
+        AgentResponse fetchFailed = fetchCommitsNamedByLog(controlRoot, store, identity);
         if (fetchFailed != null) {
             return fetchFailed;
         }
@@ -616,7 +623,7 @@ public final class IntegrationOrchestrationService {
         // is looked at before the eligible snapshots are: the snapshots of
         // a started attempt are not eligible, so a project whose whole work
         // was in the attempt would otherwise never reach it.
-        var activeAttempt = store.taskCompletionProjection().activeIntegrationAttempt();
+        var activeAttempt = store.taskCompletionProjection().activeIntegrationAttempt(identity.nodeId());
         if (activeAttempt.isPresent() && "started".equals(activeAttempt.get().status())) {
             var attempt = activeAttempt.get();
             try {
@@ -664,10 +671,10 @@ public final class IntegrationOrchestrationService {
             }
         }
 
-        List<TaskSnapshotRecord> snapshots = IntegrationCandidatePolicy.currentRevisions(store);
+        List<TaskSnapshotRecord> snapshots = IntegrationCandidatePolicy.currentRevisions(store).stream().filter(snapshot -> ownLane(store, identity, snapshot)).toList();
         Optional<OperatorRequest> validationFailing = ValidationFailureGuard.reconcile(controlRoot, store, identity, !snapshots.isEmpty());
         if (snapshots.isEmpty()) {
-            List<TaskSnapshotRecord> pendingReviews = store.taskCompletionProjection().pendingReviewSnapshots();
+            List<TaskSnapshotRecord> pendingReviews = store.taskCompletionProjection().pendingReviewSnapshots().stream().filter(snapshot -> ownLane(store, identity, snapshot)).toList();
             if (!pendingReviews.isEmpty()) {
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("state", TaskCompletionState.REVIEW_PENDING.value());
@@ -716,7 +723,7 @@ public final class IntegrationOrchestrationService {
         // work group travel through one guarded integration attempt so a
         // project gate can validate their complete change set together.
         List<TaskSnapshotRecord> allSnapshots = store.taskCompletionProjection().allSnapshots();
-        List<TaskSnapshotRecord> eligible = IntegrationCandidatePolicy.reviewAcceptedInOrder(store);
+        List<TaskSnapshotRecord> eligible = IntegrationCandidatePolicy.reviewAcceptedInOrder(store).stream().filter(snapshot -> ownLane(store, identity, snapshot)).toList();
         if (eligible.isEmpty()) {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("state", "review_acceptance_required");
@@ -853,9 +860,9 @@ public final class IntegrationOrchestrationService {
      *
      * @return the reasons, empty when the attempt may be recorded
      */
-    private static List<String> staleBasis(Path controlRoot, PredictionEventStore store, Attempt attempt) {
+    private static List<String> staleBasis(Path controlRoot, PredictionEventStore store, NodeIdentity identity, Attempt attempt) {
         List<String> reasons = new ArrayList<>();
-        Optional<IntegrationAttemptRecord> active = store.taskCompletionProjection().activeIntegrationAttempt();
+        Optional<IntegrationAttemptRecord> active = store.taskCompletionProjection().activeIntegrationAttempt(identity.nodeId());
         if (active.isEmpty() || !active.get().attemptId().equals(attempt.id()) || !"started".equals(active.get().status())) {
             reasons.add("ATTEMPT_NOT_ACTIVE");
         }
@@ -896,7 +903,7 @@ public final class IntegrationOrchestrationService {
         String expectedControlHead = attempt.expectedControlHead();
         List<TaskSnapshotRecord> ordered = attempt.ordered();
 
-        List<String> stale = staleBasis(controlRoot, store, attempt);
+        List<String> stale = staleBasis(controlRoot, store, identity, attempt);
         if (!stale.isEmpty()) {
             // The work was never wrong, only decided on a basis that has moved: the snapshots go
             // back to the state they had and a later pass chooses again.

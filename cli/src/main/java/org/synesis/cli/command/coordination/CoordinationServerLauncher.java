@@ -122,9 +122,9 @@ final class CoordinationServerLauncher {
                     ? MemberReplication.open(projectData, location.projectId()) : null;
             // A project with no role file is an unshared leader: it serves nobody until its person accepts a joiner.
             // The leader's merge pass follows a member's entry without an agent of the leader's calling in.
-            var mergeDriver = memberReplication == null
-                    ? MergeDriver.forProject(location.root(), projectData, location.projectId(), node, MERGE_DELAY_MILLIS).repeatEvery(MERGE_INTERVAL_MILLIS) : null;
-            var leaderReplication = mergeDriver != null
+            // Every computer merges its own lanes (ADR-0098 step 5), a member as well as the owner's computer.
+            var mergeDriver = MergeDriver.forProject(location.root(), projectData, location.projectId(), node, MERGE_DELAY_MILLIS).repeatEvery(MERGE_INTERVAL_MILLIS);
+            var leaderReplication = memberReplication == null
                     ? LeaderReplication.serving(projectData, location.projectId(), mergeDriver::onMemberEntry) : null;
             var side = new ReplicationSide(projectData, location.projectId(), location.root(), memberReplication,
                     replicationSettings.map(ReplicationSettings::leaderNodeId).orElse(null), leaderReplication, mergeDriver);

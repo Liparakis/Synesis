@@ -120,7 +120,7 @@ final class ArrivalOrderPropertyTest {
                 pending.put(log, logs.get(log).subList(taken.get(log), delivered.get(log)));
             }
         }
-        ArrivalOrder.Round round = ArrivalOrder.take(projections, pending, null, revision);
+        ArrivalOrder.Round round = ArrivalOrder.take(projections, pending, revision);
         long next = revision;
         for (ArrivalOrder.Taken entry : round.taken()) {
             taken.merge(entry.log(), 1, Integer::sum);
@@ -225,7 +225,7 @@ final class ArrivalOrderPropertyTest {
             PredictionEvent event = PredictionEvent.create(PROJECT, prediction, log.size() + 1L, type, node(), payload,
                     previous, identity, log.size() + 1L);
             try {
-                view.check(event, false, revision + 1);
+                view.check(event, revision + 1);
             } catch (java.io.IOException refused) {
                 return false;
             }

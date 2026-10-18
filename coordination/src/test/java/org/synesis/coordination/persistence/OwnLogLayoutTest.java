@@ -303,22 +303,24 @@ final class OwnLogLayoutTest {
     }
 
     @Test
-    void aLeaderOnlyEntryOfAnotherComputersCopyCountsForNothingAndTakesNoRevision() throws Exception {
-        PredictionEventStore b = open(rootB);
-        announce(b, nodeB, UUID.randomUUID(), "agt-b", "src/b.py");
-        List<byte[]> entries = new ArrayList<>(b.entriesAfter(0, 100, Integer.MAX_VALUE));
-        PredictionEvent last = PredictionEvent.decode(entries.getLast());
-        entries.add(handmade(nodeB, last.sequence() + 1, last, PredictionEventType.TASK_INTEGRATED, new byte[] {1}));
+    void anIntegrationEntryOfAnotherComputersCopyNamingALaneItDidNotIntroduceCountsForNothingAndTakesNoRevision()
+            throws Exception {
         PredictionEventStore a = open(rootA);
+        WorkIntent lane = announce(a, nodeA, UUID.randomUUID(), "agt-a", "src/a.py");
+        byte[] snapshot = MemberReplicationTest.snapshotOf(lane, "snap_a");
+        a.append(lane.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, nodeA.nodeId(), snapshot, nodeA);
+        long held = a.headSequence();
+        // B did not introduce agt-a, so B's integration entry for its snapshot acts for a participant it does not own.
+        List<byte[]> entries = List.of(handmade(nodeB, 1, null, PredictionEventType.TASK_INTEGRATED, snapshot));
 
         assertEquals(entries.size(), a.placeCopies(nodeB.nodeId(), entries));
 
-        long voidedSequence = entries.size();
-        assertEquals(List.of(nodeB.nodeId() + " " + voidedSequence + " EVENT_TYPE_LEADER_ONLY"), a.problems());
-        assertEquals(entries.size() - 1L, a.headSequence());
+        String verdict = nodeB.nodeId() + " 1 PARTICIPANT_NOT_OWNED_BY_SIGNER";
+        assertEquals(List.of(verdict), a.problems());
+        assertEquals(held, a.headSequence());
         assertTrue(a.events().stream().noneMatch(event -> event.type() == PredictionEventType.TASK_INTEGRATED));
-        assertTrue(lines(rootA).contains(nodeB.nodeId() + " " + voidedSequence + " EVENT_TYPE_LEADER_ONLY"));
-        assertEquals(entries.size(), PredictionEventStore.recordedEvents(rootA), "the entry stays in the copy");
+        assertTrue(lines(rootA).contains(verdict));
+        assertEquals(held + 1, PredictionEventStore.recordedEvents(rootA), "the entry stays in the copy");
 
         // A restart reads the same verdict from the applied order; it is not judged again.
         PredictionEventStore reopened = open(rootA);

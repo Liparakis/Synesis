@@ -869,7 +869,8 @@ public final class AgentNextActionService {
     private static AgentResponse integrationStateAction(PredictionEventStore store, CapabilityActor actor) {
         var taskCompletion = store.taskCompletionProjection();
 
-        boolean conflict = taskCompletion.activeIntegrationAttempt().map(attempt -> INTEGRATION_CONFLICT_STATUS.equals(attempt.status())).orElse(false);
+        // The caller's own computer merges its lanes (ADR-0098 step 5); another computer's conflict is not its block.
+        boolean conflict = taskCompletion.activeIntegrationAttempt(actor.nodeId()).map(attempt -> INTEGRATION_CONFLICT_STATUS.equals(attempt.status())).orElse(false);
         if (conflict) {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.REQUEST_HUMAN_HELP, pendingOnly(1));
         }

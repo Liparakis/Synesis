@@ -77,10 +77,6 @@ final class Projections implements ProjectionView {
                     (event, revision) -> operatorRequests.apply(event)),
             new Stage(conversations::validate, conversations::apply));
 
-    /**
-     * Whether the entry being judged was written by the owner's computer; read by the admission rules.
-     */
-    private boolean leaderEntry;
 
     Projections(ProjectId project) {
         this.project = CoordinationNullException.requireNonNull(project, "project");
@@ -90,40 +86,27 @@ final class Projections implements ProjectionView {
      * Refuses this computer's own new entry when any rule refuses it. Nothing is changed.
      *
      * @param event    the signed entry about to be written
-     * @param leader   whether this computer is the owner's, which may act for any participant until ADR-0098 step 5
      * @param revision the local revision the entry would take
      * @throws IOException with the refusal code
      */
-    void check(PredictionEvent event, boolean leader, long revision) throws IOException {
-        if (!leader && event.type().leaderOnly()) {
-            // Only the owner's computer merges until ADR-0098 step 5; a member's entry of this type would count for
-            // nothing everywhere else.
-            throw new CoordinationException("EVENT_TYPE_LEADER_ONLY");
-        }
+    void check(PredictionEvent event, long revision) throws IOException {
         for (Stage stage : stages) {
             stage.validate().accept(event, ApplyMode.CHECK, revision);
         }
         // Last, so a rule of one projection answers first. It reads every projection and applies nothing.
-        leaderEntry = leader;
-        try {
-            AppendAdmission.check(event, this);
-        } finally {
-            leaderEntry = false;
-        }
+        AppendAdmission.check(event, this);
     }
 
     /**
      * Takes an entry of another computer's log: applies it, holds it back, or counts it for nothing. It never
      * throws for what the entry says, so one entry cannot stop a copy of a log.
      *
-     * @param event          a verified entry of another computer's log
-     * @param signedByLeader whether the owner's computer signed it
-     * @param revision       the local revision the entry takes if it applies
+     * @param event    a verified entry of another computer's log
+     * @param revision the local revision the entry takes if it applies
      * @return how it was taken
      * @throws IOException when the entry passed its trial and still failed to apply, which is a defect here
      */
-    Arrival arrive(PredictionEvent event, boolean signedByLeader, long revision) throws IOException {
-        leaderEntry = signedByLeader;
+    Arrival arrive(PredictionEvent event, long revision) throws IOException {
         try {
             AppendAdmission.checkArrival(event, this);
             for (Stage stage : stages) {
@@ -142,8 +125,6 @@ final class Projections implements ProjectionView {
             LOGGER.log(System.Logger.Level.WARNING, "An arriving entry could not be applied and counts for nothing.",
                     unreadable);
             return new Arrival("ENTRY_UNREADABLE", false);
-        } finally {
-            leaderEntry = false;
         }
         apply(event, revision);
         return Arrival.APPLIED;
@@ -165,11 +146,6 @@ final class Projections implements ProjectionView {
     @Override
     public ProjectId projectIdentity() {
         return project;
-    }
-
-    @Override
-    public boolean leaderEntry() {
-        return leaderEntry;
     }
 
     PredictionProjection prediction() {

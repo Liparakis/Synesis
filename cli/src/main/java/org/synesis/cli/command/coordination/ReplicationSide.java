@@ -58,7 +58,7 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
      * @param member       the member side, or {@code null}
      * @param leaderNodeId the leader of that member side
      * @param leader       the leader side, or {@code null} when this is a member
-     * @param mergeDriver  the leader's merge pass, or {@code null}
+     * @param mergeDriver  this computer's merge pass, or {@code null}
      */
     ReplicationSide(Path coordination, UUID projectId, Path repository, MemberReplication member, String leaderNodeId, LeaderReplication leader,
             MergeDriver mergeDriver) {
@@ -69,8 +69,12 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
         this.leaderNodeId = leaderNodeId;
         this.leader = leader;
         this.mergeDriver = mergeDriver;
-        if (member != null && code != null) {
-            member.whenPulled(code::mainMayHaveMoved);
+        if (member != null) {
+            member.whenPulled(this::afterMemberPull);
+        }
+        if (leader != null && code != null) {
+            // Every computer takes another's newer main, the owner's computer too (ADR-0098 step 5).
+            leader.whenPulled(code::mainMayHaveMoved);
         }
     }
 
@@ -192,9 +196,7 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
             return;
         }
         MemberReplication created = new MemberReplication(coordination, projectId, leaderNode);
-        if (code != null) {
-            created.whenPulled(code::mainMayHaveMoved);
-        }
+        created.whenPulled(this::afterMemberPull);
         try {
             created.serve(server);
         } catch (IOException | RuntimeException failed) {
@@ -202,16 +204,26 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
             throw failed;
         }
         LeaderReplication retiredLeader = leader;
-        MergeDriver retiredMerge = mergeDriver;
         leaderNodeId = leaderNode;
         member = created;
         leader = null;
-        mergeDriver = null;
-        if (retiredMerge != null) {
-            retiredMerge.close();
-        }
+        // The merge driver stays: a member merges its own lanes too (ADR-0098 step 5).
         if (retiredLeader != null) {
             retiredLeader.close();
+        }
+    }
+
+    /**
+     * After a member's pull that brought entries: its code may follow another computer's main, and its own merge pass
+     * may have work (a review accepted on another computer, a copy of main to re-merge onto).
+     */
+    private void afterMemberPull() {
+        if (code != null) {
+            code.mainMayHaveMoved();
+        }
+        MergeDriver asMerge = mergeDriver;
+        if (asMerge != null) {
+            asMerge.onMemberEntry();
         }
     }
 

@@ -17,7 +17,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
-import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.link.identity.NodeIdentity;
 
@@ -75,18 +74,6 @@ final class ReplicationRoleFileTest {
         assertEquals(2, PredictionEventStore.recordedEvents(root));
         assertTrue(new PredictionEventStore(root, project).isReplicationMember());
         assertEquals(2, new PredictionEventStore(root, project).events().size());
-    }
-
-    @Test
-    void aMemberFileKeepsLeaderOnlyTypesOutOfTheMembersOwnLog(@TempDir Path root) throws Exception {
-        ReplicationSettings.member("sl1-leader").write(root);
-        PredictionEventStore store = new PredictionEventStore(root, project);
-
-        IOException refusal = assertThrows(IOException.class, () -> store.append(UUID.randomUUID(),
-                PredictionEventType.TASK_INTEGRATED, self.nodeId(), new byte[] {1}, self));
-
-        assertEquals("EVENT_TYPE_LEADER_ONLY", refusal.getMessage());
-        assertEquals(0, PredictionEventStore.recordedEvents(root));
     }
 
     @Test
