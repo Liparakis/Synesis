@@ -130,6 +130,28 @@ export interface TaskSnapshot {
   owner: string;
 }
 
+/** A snapshot whose reviewers disagreed: open while its state is review_disputed, otherwise the state says how it ended. */
+export interface DisputeSnapshot {
+  snapshotId: string;
+  taskId?: string;
+  author?: string;
+  verdicts: Record<string, string>;
+  state: string;
+}
+
+/** Work kept in the trash: taken over, finished after its goal was met, or given up in a dispute (ADR-0098 step 7). */
+export interface TrashSnapshot {
+  laneId: string;
+  epoch: number;
+  taskId: string;
+  workGroupId: string;
+  commit: string;
+  reason: string;
+  trashedBy: string;
+  restoredInto: string[];
+  emptied: boolean;
+}
+
 export interface OwnershipSnapshot {
   capability: string;
   taskId: string;
@@ -237,6 +259,8 @@ export interface Snapshot {
   conversations: ConversationSnapshot[];
   operatorRequests: OperatorRequestSnapshot[];
   tasks: TaskSnapshot[];
+  disputes: DisputeSnapshot[];
+  trash: TrashSnapshot[];
   ownerships: OwnershipSnapshot[];
   network: NetworkSnapshot;
   onboarding?: OnboardingSnapshot;
@@ -409,6 +433,8 @@ export function normalizeSnapshot(input: Snapshot): Snapshot {
     conversations: input.conversations ?? [],
     operatorRequests: input.operatorRequests ?? [],
     tasks: input.tasks ?? [],
+    disputes: input.disputes ?? [],
+    trash: input.trash ?? [],
     ownerships: input.ownerships ?? [],
     onboarding: {
       pendingJoins: input.onboarding?.pendingJoins ?? [],
@@ -589,6 +615,16 @@ export class ControlPlaneClient {
     return this.command<Record<string, unknown>>("remove-project", {projectIds});
   }
 
+  /** Brings trashed work back in a work group of its own. */
+  async restoreTrash(laneId: string, epoch: number): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("restore-trash", {laneId, epoch});
+  }
+
+  /** Deletes trashed work for good, on every computer; the person has confirmed it. */
+  async emptyTrash(laneId: string, epoch: number): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("empty-trash", {laneId, epoch, confirmed: true});
+  }
+
   startEvents(handlers: {
     onSnapshot(snapshot: Snapshot): void;
     onEvent(event: ServerEvent): void;
@@ -633,7 +669,7 @@ export class ControlPlaneClient {
     };
   }
 
-  private async command<T>(name: string, body: Record<string, string | string[] | boolean>): Promise<T> {
+  private async command<T>(name: string, body: Record<string, string | string[] | boolean | number>): Promise<T> {
     const response = await this.request(`${API_PREFIX}/commands/${name}`, {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-Synesis-Control-CSRF": this.csrfToken},

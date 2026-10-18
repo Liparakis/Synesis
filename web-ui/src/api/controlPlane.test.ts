@@ -1,5 +1,5 @@
 import {afterEach, vi} from "vitest";
-import {ControlPlaneClient, normalizeSnapshot, parseSseBlock} from "./controlPlane";
+import {ControlPlaneClient, normalizeSnapshot, parseSseBlock, type Snapshot} from "./controlPlane";
 
 function respond(status: number, body: unknown): Response {
   return {ok: status >= 200 && status < 300, status, json: async () => body} as Response;
@@ -57,6 +57,8 @@ describe("control-plane client helpers", () => {
       conversations: [],
       operatorRequests: [],
       tasks: [],
+      disputes: [],
+      trash: [],
       ownerships: [],
       network: {status: "UNCONFIGURED"} as never,
       diagnostics: {} as never,
@@ -65,5 +67,51 @@ describe("control-plane client helpers", () => {
     expect(snapshot.network.overlay.status).toBe("UNCONFIGURED");
     expect(snapshot.network.relay.status).toBe("DISABLED");
     expect(snapshot.network.peers).toEqual([]);
+  });
+
+  it("reads a snapshot from an older control plane that sends no disputes as having none", () => {
+    const snapshot = normalizeSnapshot({
+      apiVersion: "v1",
+      runtime: {} as never,
+      project: null,
+      knownProjects: [],
+      providers: [],
+      agents: [],
+      workgroups: [],
+      claims: [],
+      capabilities: [],
+      conversations: [],
+      operatorRequests: [],
+      tasks: [],
+      ownerships: [],
+      network: {status: "UNCONFIGURED"} as never,
+      diagnostics: {} as never,
+    } as unknown as Snapshot);
+    expect(snapshot.disputes).toEqual([]);
+    expect(snapshot.trash).toEqual([]);
+  });
+
+  it("keeps the disputes a control plane sends", () => {
+    const disputes = [{snapshotId: "snap-1", taskId: "task-1", author: "agt-a", verdicts: {"agt-b": "ACCEPTED", "agt-c": "REJECTED"}, state: "review_disputed"}];
+    const snapshot = normalizeSnapshot({
+      apiVersion: "v1",
+      runtime: {} as never,
+      project: null,
+      knownProjects: [],
+      providers: [],
+      agents: [],
+      workgroups: [],
+      claims: [],
+      capabilities: [],
+      conversations: [],
+      operatorRequests: [],
+      tasks: [],
+      disputes,
+      trash: [],
+      ownerships: [],
+      network: {status: "UNCONFIGURED"} as never,
+      diagnostics: {} as never,
+    });
+    expect(snapshot.disputes).toEqual(disputes);
   });
 });

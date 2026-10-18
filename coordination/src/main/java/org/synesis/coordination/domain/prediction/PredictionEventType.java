@@ -384,7 +384,20 @@ public enum PredictionEventType {
      * Moves ownership to another member's node key or replaces the recovery key; signed by the owner, or carrying the
      * recovery key's signature.
      */
-    OWNER_CHANGED(89);
+    OWNER_CHANGED(89),
+    /**
+     * Keeps one lane's work at one epoch in the trash, as a commit named by the entry: its lane was taken over, it was
+     * finished after its goal was met, or its author gave up a disputed snapshot (ADR-0098 step 7).
+     */
+    WORK_TRASHED(90),
+    /**
+     * A person brings trashed work back, in a work group of its own whose lanes start with it.
+     */
+    TRASH_RESTORED(91),
+    /**
+     * A person deletes trashed work for good: the one deletion of work there is; every computer deletes its ref.
+     */
+    TRASH_EMPTIED(92);
 
 
     private static final Map<Integer, PredictionEventType> BY_WIRE_CODE = Arrays.stream(values())

@@ -218,6 +218,23 @@ nothing, and makes a run that stalls end `NEEDS_OPERATOR`. Synesis cannot observ
 that it was dealt with, so `synesis operator close <id> [--because <text>]`
 closes it.
 
+## Trash
+
+Work that leaves an agent's hands is kept, never deleted on its own (ADR-0098
+step 7): the worktree of a lane another computer took over while this one was
+away (`TAKEN_OVER`), a snapshot finished after its work group's goal was met
+(`LATE_FOR_MET_GOAL`), and a snapshot still disputed or rejected when its work
+group completed (`DISPUTE_GIVEN_UP`). Each is a commit under
+`refs/synesis/trash/<lane>/<epoch>` on the computer that trashed it, which any
+computer of the project can fetch.
+
+`synesis trash list` prints one `TRASH=<lane> EPOCH=<epoch> REASON=...` line per
+piece of work. `synesis trash restore <lane> <epoch>` brings it back in a work
+group of its own, with the original's review policy; a lane announced in that
+group starts with the work in its worktree. `synesis trash empty <lane> <epoch>
+--yes` deletes it for good, on every computer: the one deletion of work Synesis
+makes, and it cannot be undone.
+
 ## Conversations
 
 `synesis conversations` lists what agents said to each other, one line per

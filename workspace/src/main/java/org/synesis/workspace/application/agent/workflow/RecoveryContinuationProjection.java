@@ -20,6 +20,7 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.collaboration.AwayLanes;
 
 /**
  * Projects recovery-held lanes that a different participant may explicitly continue, and the
@@ -29,6 +30,9 @@ import org.synesis.workspace.agent.AgentStatus;
  * both the collaboration view and the durable stage order consume it independently.</p>
  */
 final class RecoveryContinuationProjection {
+
+    /** How a candidate names the owner of another computer's lane when that computer is away (ADR-0098 step 7). */
+    static final String AWAY = "AWAY";
 
     private RecoveryContinuationProjection() {
     }
@@ -45,6 +49,22 @@ final class RecoveryContinuationProjection {
      * @return deterministic, public-safe continuation candidates ordered by source intent id
      */
     static List<Map<String, Object>> continuationCandidates(PredictionEventStore store, String participantId, String callerProvider) {
+        return continuationCandidates(store, participantId, callerProvider, null);
+    }
+
+    /**
+     * Projects the lanes a caller may continue, with the lanes of computers that are away when this computer is
+     * stalled (ADR-0098 step 7, designer item 10): those are offered as {@code AWAY}, with the same request, and taken
+     * over from what of them reached this computer. Another computer's lane held for recovery is that computer's to
+     * continue, and is not offered here: its recovery snapshot is in that computer's folders.
+     *
+     * @param store         current project projection
+     * @param participantId exact current caller participant
+     * @param thisNode      this computer's node ID, or {@code null} when unknown, which offers no away lane and
+     *                      every recovery-held one, as before step 7
+     * @return deterministic, public-safe continuation candidates ordered by source intent id
+     */
+    static List<Map<String, Object>> continuationCandidates(PredictionEventStore store, String participantId, String callerProvider, String thisNode) {
         var collaboration = store.collaborationProjection();
         var workGroups = store.workGroupProjection();
         List<WorkIntent> callerIntents = collaboration.activeIntents().stream().filter(existing -> existing.participant().equals(participantId)).toList();
@@ -53,7 +73,7 @@ final class RecoveryContinuationProjection {
         List<Map<String, Object>> candidates = new ArrayList<>();
         for (WorkIntent intent : collaboration.activeIntents()) {
             boolean recoveryHeld = collaboration.participantState(intent.participant()).orElse(null) == Participant.State.RECOVERY_HELD && collaboration.recoverySnapshotReference(intent.participant()).isPresent();
-            if (!recoveryHeld) {
+            if (!recoveryHeld || (thisNode != null && AwayLanes.anotherComputers(store, intent, thisNode))) {
                 continue;
             }
             WorkGroup group = workGroups.group(intent.workGroupId()).orElse(null);
@@ -61,7 +81,14 @@ final class RecoveryContinuationProjection {
                 continue;
             }
             boolean sameParticipant = intent.participant().equals(participantId);
-            candidates.add(continuationCandidate(intent, group, continuationBlock(intent, sameParticipant, callerIntents, callerSelectors, callerProvider)));
+            candidates.add(continuationCandidate(intent, group, continuationBlock(intent, sameParticipant, callerIntents, callerSelectors, callerProvider), Participant.State.RECOVERY_HELD.name()));
+        }
+        if (thisNode != null) {
+            for (WorkIntent intent : AwayLanes.offered(store, store.rootDirectory(), thisNode)) {
+                WorkGroup group = workGroups.group(intent.workGroupId()).orElseThrow();
+                // Any provider may take it over: no session of the away computer is continued.
+                candidates.add(continuationCandidate(intent, group, continuationBlock(intent, false, callerIntents, callerSelectors, null), AWAY));
+            }
         }
         candidates.sort(Comparator.comparing(candidate -> String.valueOf(candidate.get(NextActionKeys.SOURCE_INTENT_ID))));
         return List.copyOf(candidates);
@@ -73,9 +100,10 @@ final class RecoveryContinuationProjection {
      * @param intent        the recovery-held intent
      * @param group         the active work group of the intent
      * @param blockedReason why the caller may not continue it, or {@code null} when it may
+     * @param ownerState    {@code RECOVERY_HELD}, or {@code AWAY} for another computer's lane taken over
      * @return the candidate map; {@code available} is {@code false} when blocked
      */
-    private static Map<String, Object> continuationCandidate(WorkIntent intent, WorkGroup group, String blockedReason) {
+    private static Map<String, Object> continuationCandidate(WorkIntent intent, WorkGroup group, String blockedReason, String ownerState) {
         Map<String, Object> candidate = new LinkedHashMap<>();
         candidate.put(NextActionKeys.SOURCE_INTENT_ID, intent.intentId().toString());
         candidate.put(NextActionKeys.INTENT_ID, intent.intentId().toString());
@@ -88,7 +116,7 @@ final class RecoveryContinuationProjection {
         candidate.put("role", intent.role().wireValue());
         candidate.put(NextActionKeys.KNOWN_DEPENDENCIES, intent.knownDependencies());
         candidate.put("formerOwner", intent.participant());
-        candidate.put("formerOwnerState", Participant.State.RECOVERY_HELD.name());
+        candidate.put("formerOwnerState", ownerState);
         candidate.put(NextActionKeys.WORK_GROUP, CollaborationResponseMapper.workGroupMap(group));
         candidate.put("unfinished", true);
         candidate.put("blocksWorkGroupCompletion", true);

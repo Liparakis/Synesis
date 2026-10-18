@@ -318,6 +318,7 @@ public final class ReviewAdmissionRules {
     public static boolean holdsReview(ProjectionView current, LaneGrant grant) {
         WorkGroupProjection workGroups = current.workGroupProjection();
         return !workGroups.continuationGrant(grant.identity()) && !workGroups.grantSuperseded(grant.identity())
+                && !workGroups.grantRevoked(grant.identity())
                 && (workGroups.grantAvailable(grant.identity()) || workGroups.grantConsumed(grant.identity()));
     }
 

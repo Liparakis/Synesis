@@ -36,6 +36,10 @@ public final class CollaborationProjection {
      * designer item 11).
      */
     private final Set<WorkIntentId> endedIntents = new LinkedHashSet<>();
+    /** Every lane that ended, as it stood when it ended: what the trash names (ADR-0098 step 7). */
+    private final Map<WorkIntentId, WorkIntent> pastIntents = new LinkedHashMap<>();
+    /** The review grants a verdict was recorded on, so a second verdict on one is known as a replacement. */
+    private final Set<UUID> reviewedGrants = new LinkedHashSet<>();
     /** Each lane that has ended, by lineage, as it was then. Kept only to say who a past lane was. */
     private final Map<UUID, WorkIntent> endedLanes = new LinkedHashMap<>();
     private final CoordinationRequests requests;
@@ -67,6 +71,7 @@ public final class CollaborationProjection {
         this.mode = mode;
         intents.putAll(source.intents);
         endedIntents.addAll(source.endedIntents);
+        pastIntents.putAll(source.pastIntents);
         endedLanes.putAll(source.endedLanes);
         requests = new CoordinationRequests(source.requests);
         noChangeCompletions.putAll(source.noChangeCompletions);
@@ -74,6 +79,7 @@ public final class CollaborationProjection {
         participantHistory.putAll(source.participantHistory);
         introducedBy.putAll(source.introducedBy);
         successorIntents.putAll(source.successorIntents);
+        reviewedGrants.addAll(source.reviewedGrants);
         groupsWithLanes.addAll(source.groupsWithLanes);
         activated = source.activated;
         lastStateChangeSequence = source.lastStateChangeSequence;
@@ -150,6 +156,9 @@ public final class CollaborationProjection {
     private WorkIntent endLane(WorkIntentId id) {
         WorkIntent ended = intents.remove(id);
         endedIntents.add(id);
+        if (ended != null) {
+            pastIntents.put(id, ended);
+        }
         return ended;
     }
 
@@ -332,6 +341,40 @@ public final class CollaborationProjection {
      */
     public synchronized Optional<WorkIntent> intent(WorkIntentId identity) {
         return Optional.ofNullable(intents.get(CoordinationNullException.requireNonNull(identity, "intent ID")));
+    }
+
+    /**
+     * Returns a lane whether it is open or ended, as it stood when it ended: the lane a trash entry names, which a
+     * takeover or a release has ended (ADR-0098 step 7).
+     *
+     * @param id intent ID
+     * @return the lane, or empty when no such lane was ever on the log
+     */
+    public synchronized Optional<WorkIntent> lane(UUID id) {
+        WorkIntentId identity = new WorkIntentId(CoordinationNullException.requireNonNull(id, "intent ID"));
+        return Optional.ofNullable(intents.getOrDefault(identity, pastIntents.get(identity)));
+    }
+
+    /**
+     * Returns the lanes another computer's agent took over (ADR-0098 step 7): each lane whose successor's owner a
+     * different node put on the log than the lane's own, paired with that successor, whether either is open or ended.
+     *
+     * @return the lane and its successor, in the order the lanes ended
+     */
+    public synchronized List<Map.Entry<WorkIntent, WorkIntent>> takenOver() {
+        List<Map.Entry<WorkIntent, WorkIntent>> taken = new java.util.ArrayList<>();
+        successorIntents.forEach((sourceId, successorId) -> {
+            WorkIntent source = intents.getOrDefault(sourceId, pastIntents.get(sourceId));
+            WorkIntent successor = intents.getOrDefault(successorId, pastIntents.get(successorId));
+            if (source != null && successor != null) {
+                String own = introducedBy.get(source.participantIdentity());
+                String taker = introducedBy.get(successor.participantIdentity());
+                if (own != null && taker != null && !own.equals(taker)) {
+                    taken.add(Map.entry(source, successor));
+                }
+            }
+        });
+        return List.copyOf(taken);
     }
 
     /**
@@ -842,6 +885,7 @@ public final class CollaborationProjection {
      * @throws IOException when payload validation or durable I/O fails
      */
     private void review(ReviewValidationPayload validation) throws IOException {
+        boolean replacement = !reviewedGrants.add(validation.grantId());
         if (!"REJECTED".equals(validation.result())) {
             return;
         }
@@ -855,6 +899,12 @@ public final class CollaborationProjection {
             if (mode == ApplyMode.ARRIVAL && !endedIntents.contains(target)) {
                 throw new MissingReferenceException("REVIEW_TARGET_STALE");
             }
+            return;
+        }
+        if (replacement && current.version() > validation.claimEpoch()) {
+            // A reviewer replacing its verdict with a rejection, after a rejection reopened the lane (ADR-0098 step 7):
+            // the correction is under way. Only a replacement: two reviewers' rejections reopen it twice, as logs
+            // written before replacements existed replay.
             return;
         }
         if (mode.checking()) {
@@ -1036,7 +1086,10 @@ public final class CollaborationProjection {
         WorkIntent target = continuation.targetIntent();
         WorkIntent source = laneNamed(continuation.sourceIntent(), "CONTINUATION_SOURCE_NOT_FOUND");
         if (source != null && mode.checking()) {
-            requireRecoverySource(continuation, source);
+            // A takeover's source is another computer's lane, held by nobody here; AppendAdmission judged it.
+            if (!continuation.takeover()) {
+                requireRecoverySource(continuation, source);
+            }
             validateContinuationTarget(source, target, continuation);
             validateContinuationClaimOverlap(source, target);
         }
@@ -1114,6 +1167,7 @@ public final class CollaborationProjection {
         intents.values().stream().filter(intent -> intent.participantIdentity().equals(participant)).forEach(intent -> {
             endedLanes.put(intent.authorityLineageId(), intent);
             endedIntents.add(intent.identity());
+            pastIntents.put(intent.identity(), intent);
         });
         intents.entrySet().removeIf(entry -> entry.getValue().participantIdentity().equals(participant));
     }

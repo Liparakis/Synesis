@@ -1070,6 +1070,90 @@ Decided while building step 6 (designer, 2026-10-18; each open to the owner):
    it; "Restore" opens a new lane from it (`TRASH_RESTORED`); "Empty" is a person's action, confirmed in the UI or with
    `synesis trash empty`, and is the only place a ref is deleted (`TRASH_EMPTIED`).
 
+Decided while building step 7 (designer, 2026-10-18; each open to the owner):
+
+6. **Telling the parties of a dispute.** Each reviewer with a verdict on a disputed snapshot, and its author, finds a
+   `reviewDispute` in its next answer: the snapshot, each reviewer's verdict, and what to do: message the others
+   (`send_message`, ADR-0093) and, on changing one's mind, record a new verdict on the same grant. A stopped reviewer
+   or author is resumed once for each new state of the dispute (ADR-0099). Messages need the sender to hold a lane;
+   a reviewer without one is told so, and its verdict still counts (NOT BUILT: messages from a computer's agent with no
+   lane).
+7. **A new verdict replaces the reviewer's own.** While a snapshot is disputed, the reviewer of a grant may record
+   another verdict on that grant; it replaces its own, and the projection judges the snapshot again (agreed accepted,
+   agreed rejected, or still disputed). Once the verdicts agree, or the snapshot is integrated, a verdict is final as
+   before. The replacement is bound to the grant and snapshot it was given for, not to the author lane's current
+   epoch, which a rejection had moved on. The review workspace is not opened again for it.
+8. **The record of a dispute.** The projection remembers every snapshot that was ever disputed. The Coordination view
+   gets a Reviews tab listing them: the snapshot, its author, each reviewer's latest verdict, how it stands (disputed,
+   agreed accepted, agreed rejected). The messages between the reviewers and the author stay in the Conversations
+   tab, under the author's lane.
+9. **"Stalled", for this computer.** None of this computer's agents holds an open lane in an active work group,
+   while such a group still has an open lane whose computer is not connected to this one now. "Connected" is this
+   computer's record of its member sessions (`replication.members`, written whole by its replication side; not the
+   rotating journal, which keeps 100 lines and can lose one): another computer is away when that record says its
+   session ended or names no session of it. With no readable record nobody is away, so a takeover of a computer that
+   is in fact connected cannot follow from a missing file. A redial within Link's retained time changes nothing. No
+   timer. The offer, the takeover and the release of reviews use the one test (`AwayLanes.stalled`). The taker's
+   computer judges it again when the takeover is asked for, outside the append lock; a computer that connects in that
+   moment meets the takeover as two takers of one lane meet (ADR-0100 row 8). A review the caller may take still comes before any continuation, as for recovery
+   candidates (`continuationsFirst`); a re-review or a combine is a lane or grant of this computer, which keeps it
+   from being stalled only once taken.
+10. **The offer.** When this computer is stalled, the lanes of computers that are not connected are offered to its
+    lane-less agents as continuation candidates, beside the recovery candidates (`formerOwnerState` `AWAY`), with the
+    same request. No agent is assigned.
+11. **The takeover.** Taking one writes the taker's own `LANE_CONTINUATION_ACCEPTED`. Its recovery reference names
+    the lane's last snapshot that reached this computer (`snapshot:<id>`), or the lane's base (`base:<commit>`); the
+    actor scopes are empty, since no session of the away computer is here. The new lane keeps the task, claims,
+    group and lineage at the next epoch; its worktree, made from this computer's `main` as every lane's is, gets
+    everything the snapshot changed against the lane's base, uncommitted, with Git's markers where it conflicts (as
+    a combine lane's does). Any provider may take a lane over: no session is continued. Another computer's lane held
+    for recovery is not offered here; its recovery snapshot is in that computer's folders. A
+    source owner that is not held for recovery is lawful for such a continuation when another computer introduced it
+    and the reference names that lane's snapshot or base; whether that computer was away and stalled is judged by the
+    taker's computer when it writes the entry, and is not judged again where the entry arrives.
+12. **The returning agent.** An agent whose lane another computer took over finds `laneTakenOver` in every answer
+    (the successor and its owner): stop; its claims ended with the lane; close the session. Its own computer, seeing
+    the takeover, commits everything in the lane's worktree, committed or not, to
+    `refs/synesis/trash/<lane>/<epoch>` and writes `WORK_TRASHED` (reason `TAKEN_OVER`), once, whether or not the agent
+    calls in: the sweep runs in every integration pass (the merge driver runs one at an interval on every computer),
+    the ref first and then the entry, so a crash between them leaves a ref the next pass names. With no worktree left,
+    the lane's newest snapshot is kept. A lane it had already integrated on its own `main` meets the taker's at the
+    re-merge, as the ADR says. The takeover is found whether or not the taker's lane is still open: a taker that
+    finished before this computer came back still leaves the lane taken over.
+13. **The trash entries** (codes 90 to 92): `WORK_TRASHED` {lane, epoch, task, group, commit, reason},
+    `TRASH_RESTORED` {lane, epoch, the new work group}, `TRASH_EMPTIED` {lane, epoch}. Each is written by the computer
+    whose person or agent acted; `WORK_TRASHED` only by the computer that put the lane's owner on the log. Work is
+    trashed once per lane and epoch; restoring or emptying names work in the trash, and an arriving entry that names
+    work not arrived yet waits. A trashed commit is named by its entry and served under its trash ref, so every
+    computer can fetch it over Link; an emptied one is no longer served. An agent finds its own trashed work in
+    `trashedWork` in every answer.
+14. **What else goes to the trash.** The same sweep takes, for each lane of this computer whose work group is no
+    longer active, its newest snapshot when it was not integrated: one still disputed or rejected was given up
+    (`DISPUTE_GIVEN_UP`); any other came after the goal was met (`LATE_FOR_MET_GOAL`). The snapshot's commit is kept
+    under the trash ref, and its agent is told.
+15. **Restore** is a person's action (the Trash tab, or `synesis trash restore`): it writes a work group of its own,
+    with the original's review policy and goal, and `TRASH_RESTORED` naming it. The group's ID follows from the work
+    and how often it was restored, so a repeat after a crash finds it. A producer lane announced in it starts with
+    everything the trashed commit holds against the trashed lane's base applied, uncommitted, to its worktree, as a
+    takeover's does; a commit trashed on another computer is fetched over Link first.
+16. **Empty** is a person's action, confirmed in the UI (and by the endpoint, which needs `confirmed`) or with
+    `synesis trash empty --yes`: it writes `TRASH_EMPTIED`, then deletes the trash ref on this computer; every
+    computer's sweep deletes its own copy of an emptied ref, this one's too after a crash between the two. It is the
+    one deletion of work the "nothing taken back" fitness function allows (`NothingTakenBackArchitectureTest`: only
+    `WorkTrash` deletes a trash ref).
+17. **Stalled reviews.** Taking a lane over carries its owner's review grants to the taker, as every continuation
+    does. A review held by a reviewer of an away computer that holds no lane (since ADR-0089 a producer reviews
+    without one) is released instead: while this computer is stalled, its integration pass revokes that grant
+    (`LANE_REVOKED`, judged again under the append lock) when no verdict is recorded and the snapshot is still under
+    review, and a reviewer here may then be admitted. A revoked grant holds no review. A verdict the away reviewer writes before the release reaches it
+    stands beside the new reviewer's, and the two may meet as a dispute; one written after is refused
+    (`REVIEW_GRANT_REVOKED`). NOT BUILT: a re-review offered to an away original reviewer alone, and a review request
+    accepted on the away computer whose grant never reached this one.
+18. **Reviewer lanes and the report rule.** A reviewer lane that cannot close without publishing a report (no-change
+    is refused) keeps its work group open; step 7 does not change that rule (the owner decides). It touches it twice:
+    such a lane is an open lane for the stall test of the computers that are not its own, and a report published after
+    the group completed goes to the trash.
+
 ## Build order
 
 Each step is small, works on its own, and ends with a real run on this PC and `synesis-peer-vm` (scripts in
@@ -1170,6 +1254,17 @@ The two-homes run with the friend's PC is repeated after step 5 as a check, not 
   production; `LinkRuntimeOwner` has grown past 1,200 lines and its card code could be a class of its own; the
   `MemberAdmission` callbacks other than `admit` are defaults, so another implementation could skip the durable
   request. For the simplification after step 7 (ADR-0101).
+
+- **Left by the code review of step 7** (2026-10-18). For the owner: what the main audit (step 5) does with a
+  verdict that arrives after its snapshot was integrated on another computer. It can happen when an away reviewer's
+  verdict, written before its review was released (designer item 17), arrives after the new reviewer's acceptance
+  was integrated; the audit then finds a verdict that is not an acceptance and refuses that copy of `main`. One rule
+  that does not depend on order: each reviewer on a grant not revoked has accepted. Not changed here, since it changes
+  the audit. Also recorded rather than built: the takeover's reference is told apart by its `snapshot:` / `base:`
+  prefix rather than a typed source; three read paths still build the collaboration view without this computer's
+  node ID (so they list another computer's recovery-held lanes, which only that computer can continue); the Trash view
+  lives in `App.tsx`, which was past 1,000 lines already; `NothingTakenBackArchitectureTest` covers the trash refs,
+  not yet the logs and the other `refs/synesis/` refs. For the simplification after step 7 (ADR-0101).
 
 - **Every throw an arriving entry can reach.** Classified on 2026-10-18 in ADR-0100, "Every rule an arriving entry
   can reach", and built in step 4; what still depends on order is designer item 18.

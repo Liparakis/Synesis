@@ -139,6 +139,13 @@ export const mockSnapshot: Snapshot = {
     {id: "task-002", title: "Type Generation", capability: "code.refactor", owner: "agent-planner-01"},
     {id: "task-003", title: "Error Map", capability: "code.executor", owner: "code-executor-02"},
   ],
+  disputes: [
+    {snapshotId: "snapshot-007", taskId: "task-002", author: "agent-planner-01", verdicts: {"code-executor-02": "ACCEPTED", "agent-reviewer-03": "REJECTED"}, state: "review_disputed"},
+  ],
+  trash: [
+    {laneId: "6f1c2a8e-0000-4000-8000-000000000001", epoch: 2, taskId: "task-003", workGroupId: "wg-001", commit: "3f2a9c1d7e8b4a6f0c1d2e3f4a5b6c7d8e9f0a1b",
+      reason: "TAKEN_OVER", trashedBy: "peer_9x23a", restoredInto: [], emptied: false},
+  ],
   ownerships: [
     {capability: "code.refactor", taskId: "task-001", owner: "agent-planner-01", protectedScopes: ["src/parser"], intentVersion: 2},
   ],

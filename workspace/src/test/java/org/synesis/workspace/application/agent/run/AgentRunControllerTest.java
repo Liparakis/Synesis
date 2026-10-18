@@ -815,6 +815,51 @@ final class AgentRunControllerTest {
         assertEquals(List.of(3, 7), script.resumedAtTicks);
     }
 
+    /** ADR-0098 step 7: a review dispute resumes a stopped agent without a lane once for each state of the dispute. */
+    @Test
+    void aStoppedAgentWithNoLaneIsResumedOnceForAReviewDisputeAndAgainOnlyWhenItsVerdictsChange() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "codex");
+        script.lifetimes(1, 40, 1, 1, 1);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(5).announced();
+        script.at(3).head(9).progressAfter(5).dispute("claude#1", "snap-1 {a=ACCEPTED, b=REJECTED}");
+        script.at(6).head(12).progressAfter(9).dispute("claude#1", "snap-1 {a=ACCEPTED, b=REJECTED}");
+        script.at(9).head(15).progressAfter(12).dispute("claude#1", "snap-1 {a=REJECTED, b=REJECTED}");
+
+        script.run(8, Duration.ofSeconds(14));
+
+        assertEquals(List.of(3, 9), script.resumedAtTicks, "the same state is not shown twice; a changed one is new");
+    }
+
+    @Test
+    void aReviewDisputeNobodyHereIsPartyToResumesNobody() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "codex");
+        script.lifetimes(1, 40);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(5).announced();
+        script.at(3).head(9).progressAfter(5).dispute("someone-else", "snap-1 {a=ACCEPTED, b=REJECTED}");
+
+        assertEquals(0, script.run(8, Duration.ofSeconds(10)).resumes());
+    }
+
+    @Test
+    void aReviewDisputeThatEndedAndReturnsInTheSameStateIsSeenAgain() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "codex");
+        script.lifetimes(1, 40, 1, 1);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(5).announced();
+        script.at(3).head(9).progressAfter(5).dispute("claude#1", "snap-1 {a=ACCEPTED, b=REJECTED}");
+        script.at(5).head(12).progressAfter(9);
+        script.at(7).head(15).progressAfter(12).dispute("claude#1", "snap-1 {a=ACCEPTED, b=REJECTED}");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of(3, 7), script.resumedAtTicks);
+    }
+
     @Test
     void aReviewResumesAnAgentWithNoLaneBesideASiblingWhoseLaneWaitsForAnOperator() throws Exception {
         Script script = new Script();
@@ -1266,6 +1311,11 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public List<String> disputesFor(String provider, List<String> connectionInstanceIds) {
+                    return state.disputes.getOrDefault(agentOf.get(connectionInstanceIds.getFirst()), List.of());
+                }
+
+                @Override
                 public OptionalLong newestAnswerFor(String provider, String connectionInstanceId) {
                     Long sequence = state.answers.get(agentOf.get(connectionInstanceId));
                     return sequence == null ? OptionalLong.empty() : OptionalLong.of(sequence);
@@ -1304,10 +1354,17 @@ final class AgentRunControllerTest {
         private final Map<String, List<String>> reviews = new java.util.LinkedHashMap<>();
         private final Map<String, Long> answers = new java.util.HashMap<>();
         private final List<String> requestsHeld = new ArrayList<>();
+        private final Map<String, List<String>> disputes = new java.util.HashMap<>();
 
         /** A request a session of this agent, by its label, made was answered at this log position. */
         private State answer(String agent, long sequence) {
             answers.put(agent, sequence);
+            return this;
+        }
+
+        /** This agent, by its label, is a party to review disputes, each in the state these keys name. */
+        private State dispute(String agent, String... keys) {
+            disputes.put(agent, List.of(keys));
             return this;
         }
 

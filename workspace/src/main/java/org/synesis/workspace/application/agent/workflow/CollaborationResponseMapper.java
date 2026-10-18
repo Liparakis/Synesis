@@ -122,7 +122,14 @@ public final class CollaborationResponseMapper {
         if (store == null || NextActionSupport.activeIntentOf(store, participant).isPresent()) {
             return Map.of();
         }
-        List<Map<String, Object>> continuations = RecoveryContinuationProjection.continuationsFirst(store, participant, RecoveryContinuationProjection.continuationCandidates(store, participant, provider));
+        String thisNode;
+        try {
+            thisNode = location.loadOrCreateIdentity().nodeId();
+        } catch (Exception unreadable) {
+            thisNode = null;
+        }
+        List<Map<String, Object>> continuations = RecoveryContinuationProjection.continuationsFirst(store, participant,
+                RecoveryContinuationProjection.continuationCandidates(store, participant, provider, thisNode));
         if (!continuations.isEmpty()) {
             return Map.of("continuationCandidates", continuations, "continuationInstruction", "A lane whose agent has left must be continued before its work can be reviewed or finished. "
                     + "Continue one by calling request_coordination with continuationCandidates[i].continuationRequest, or call get_next_action.");

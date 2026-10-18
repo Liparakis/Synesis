@@ -338,6 +338,24 @@ public final class CoordinationService {
     }
 
     /**
+     * Returns the trash as the log says (ADR-0098 step 7).
+     *
+     * @return trash projection
+     */
+    public org.synesis.coordination.domain.trash.TrashProjection trashProjection() {
+        return fresh().trashProjection();
+    }
+
+    /**
+     * Returns the current durable projection of task snapshots and their reviews.
+     *
+     * @return task completion projection
+     */
+    public org.synesis.coordination.domain.task.TaskCompletionProjection taskCompletionProjection() {
+        return fresh().taskCompletionProjection();
+    }
+
+    /**
      * Returns the current durable capability request projection.
      *
      * @return capability request projection

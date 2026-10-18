@@ -101,8 +101,13 @@ public final class ReviewValidationService {
                 if (!snapshot.provenance().workGroupId().equals(grant.workGroupId()) || !snapshot.provenance().laneId().equals(grant.targetIntentId()) || snapshot.provenance().claimEpoch() != grant.claimEpoch()) {
                     return blocked("REVIEW_SNAPSHOT_MISMATCH", AgentNextAction.RETRY);
                 }
+                // While the reviewers disagree, a reviewer may replace its own verdict on its grant; that speaks of the
+                // snapshot it was granted, whatever a rejection did to the author's lane since (ADR-0098 step 7).
+                boolean replacing = store.workGroupProjection().reviewValidationForGrant(grant.grantId()).isPresent()
+                        && store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(null)
+                        == org.synesis.coordination.domain.task.TaskCompletionState.REVIEW_DISPUTED;
                 var targetIntent = store.collaborationProjection().intent(grant.targetIntentId());
-                if (targetIntent.isPresent() && (targetIntent.get().status() != org.synesis.coordination.domain.collaboration.WorkIntent.Status.ANNOUNCED || targetIntent.get().version() != grant.claimEpoch()
+                if (!replacing && targetIntent.isPresent() && (targetIntent.get().status() != org.synesis.coordination.domain.collaboration.WorkIntent.Status.ANNOUNCED || targetIntent.get().version() != grant.claimEpoch()
                         || !targetIntent.get().taskId().equals(snapshot.taskId()) || !targetIntent.get().participant().equals(snapshot.provenance().participant()) || !targetIntent.get().authorityLineageId()
                         .equals(snapshot.provenance().authorityLineageId()))) {
                     return blocked("REVIEW_GRANT_STALE", AgentNextAction.RETRY);
@@ -131,7 +136,7 @@ public final class ReviewValidationService {
                         request.reason(),
                         snapshot.provenance().participant());
                 var existing = store.workGroupProjection().reviewValidationForGrant(grant.grantId());
-                if (existing.isPresent() && !existing.get().equals(decision)) {
+                if (existing.isPresent() && !existing.get().equals(decision) && !replacing) {
                     return blocked("REVIEW_DECISION_CONFLICT", AgentNextAction.RETRY);
                 }
                 var snapshotState = store.taskCompletionProjection().snapshotState(snapshot.snapshotId());
@@ -143,6 +148,9 @@ public final class ReviewValidationService {
                 if (existing.isEmpty()) {
                     UUID eventId = validationEventId(grant.grantId(), snapshot.snapshotId());
                     store.append(eventId, PredictionEventType.REVIEW_VALIDATION_RECORDED, identity.nodeId(), decision.encode(), identity);
+                } else if (replacing && !existing.get().result().equals(decision.result())) {
+                    // A replacement is a new entry of its own: the first verdict stays on record.
+                    store.append(UUID.randomUUID(), PredictionEventType.REVIEW_VALIDATION_RECORDED, identity.nodeId(), decision.encode(), identity);
                 }
                 WorkGroup group = store.workGroupProjection().group(grant.workGroupId()).orElseThrow(() -> new IOException("WORK_GROUP_NOT_FOUND"));
                 reviewSnapshotAccessService.remove(root, grant.grantId());

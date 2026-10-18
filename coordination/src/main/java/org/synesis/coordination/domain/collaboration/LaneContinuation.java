@@ -154,4 +154,21 @@ public record LaneContinuation(LaneGrantId grant, WorkIntentId sourceIntent, Wor
     public String snapshotReference() {
         return recoverySnapshot.value();
     }
+
+    /** Prefix of a takeover's reference to the lane's last snapshot that reached the taker's computer. */
+    public static final String TAKEOVER_FROM_SNAPSHOT = "snapshot:";
+    /** Prefix of a takeover's reference to the lane's base, when none of its snapshots reached the taker's computer. */
+    public static final String TAKEOVER_FROM_BASE = "base:";
+
+    /**
+     * Whether this continues the lane of a computer that is away rather than a lane held for recovery here (ADR-0098
+     * step 7, designer item 11): its reference names the lane's snapshot or base instead of a recovery snapshot, and no
+     * session of the source's computer is here to give an actor scope.
+     *
+     * @return whether it is a takeover
+     */
+    public boolean takeover() {
+        String reference = recoverySnapshot.value();
+        return reference.startsWith(TAKEOVER_FROM_SNAPSHOT) || reference.startsWith(TAKEOVER_FROM_BASE);
+    }
 }

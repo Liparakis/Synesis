@@ -293,6 +293,107 @@ public final class IntegrationWorkspaceService {
     }
 
     /**
+     * Gives a takeover's worktree the work of the lane it takes over (ADR-0098 step 7, designer item 11): everything
+     * the snapshot changed against its lane's base, applied without committing onto the worktree as it was made. A
+     * snapshot's commit sits on whatever its lane had committed, so it is first restated as one commit on the base.
+     * Conflicts stay in the files as Git's markers, for the taker to resolve.
+     *
+     * @param worktree the taker's worktree, clean apart from Synesis's own files
+     * @param snapshot the lane's last snapshot that reached this computer
+     * @throws IOException when the worktree is not clean, belongs to another takeover, or Git fails
+     */
+    public void materializeTakeover(Path worktree, TaskSnapshotRecord snapshot) throws IOException {
+        Objects.requireNonNull(snapshot, "snapshot");
+        applyUncommitted(worktree, "TAKEOVER", snapshot.snapshotId(), snapshot.baseCommit(), snapshot.commitSha());
+    }
+
+    /**
+     * Gives a lane of a restore's work group the trashed work it brings back (ADR-0098 step 7, designer item 15):
+     * everything the trashed commit holds against the trashed lane's base, applied without committing, as a
+     * takeover's worktree gets its snapshot.
+     *
+     * @param worktree the new lane's worktree, clean apart from Synesis's own files
+     * @param item     what names the trashed work, for the marker
+     * @param base     the trashed lane's base
+     * @param commit   the trashed commit, present in the repository
+     * @throws IOException when the worktree is not clean, belongs to another restore, or Git fails
+     */
+    public void materializeRestore(Path worktree, String item, String base, String commit) throws IOException {
+        applyUncommitted(worktree, "RESTORE", item, base, commit);
+    }
+
+    /**
+     * Takes back what {@link #materializeTakeover} applied, when the takeover's entry was refused: every path the
+     * snapshot changed is put back as the worktree's commit has it, and the marker is removed, so the worktree is as
+     * it was made and may take over another lane.
+     *
+     * @param worktree the taker's worktree
+     * @param snapshot the snapshot that was applied
+     * @throws IOException when Git fails
+     */
+    public void undoTakeover(Path worktree, TaskSnapshotRecord snapshot) throws IOException {
+        undoUncommitted(worktree, "TAKEOVER", snapshot.baseCommit(), snapshot.commitSha());
+    }
+
+    /**
+     * Takes back what {@link #materializeRestore} applied, when the lane's announcement was refused.
+     *
+     * @param worktree the lane's worktree
+     * @param base     the trashed lane's base
+     * @param commit   the trashed commit
+     * @throws IOException when Git fails
+     */
+    public void undoRestore(Path worktree, String base, String commit) throws IOException {
+        undoUncommitted(worktree, "RESTORE", base, commit);
+    }
+
+    private void undoUncommitted(Path worktree, String kind, String base, String commit) throws IOException {
+        Path target = worktree.toAbsolutePath().normalize();
+        for (String path : GitProcessRunner.run(target, "diff", "--name-only", "--no-renames", base, commit).lines().filter(line -> !line.isBlank()).toList()) {
+            if (GitProcessRunner.runResult(target, "cat-file", "-e", "HEAD:" + path).exitCode() == 0) {
+                GitProcessRunner.run(target, "checkout", "-q", "HEAD", "--", path);
+            } else {
+                Files.deleteIfExists(target.resolve(path));
+            }
+        }
+        Files.deleteIfExists(target.resolve(".synesis/local/" + kind.toLowerCase(java.util.Locale.ROOT) + "-materialization.txt"));
+    }
+
+    /**
+     * Applies everything {@code commit} holds against {@code base} to a worktree, without committing; conflicts stay
+     * as Git's markers, and a marker file makes a repeated call after a crash leave the worktree as it is.
+     */
+    private void applyUncommitted(Path worktree, String kind, String item, String base, String commit) throws IOException {
+        Objects.requireNonNull(worktree, "worktree");
+        Path target = worktree.toAbsolutePath().normalize();
+        if (!Files.isDirectory(target) || !Files.exists(target.resolve(".git"))) {
+            throw new IOException(kind + "_WORKTREE_INVALID");
+        }
+        Path marker = target.resolve(".synesis/local/" + kind.toLowerCase(java.util.Locale.ROOT) + "-materialization.txt");
+        String expectedMarker = item + "\n" + base + "\n" + commit + "\n";
+        if (Files.exists(marker)) {
+            if (!expectedMarker.equals(Files.readString(marker))) {
+                throw new IOException(kind + "_MATERIALIZATION_MARKER_MISMATCH");
+            }
+            return;
+        }
+        String status = GitProcessRunner.run(target, "status", "--porcelain", "--untracked-files=all");
+        List<String> unmanagedChanges = status.lines().filter(line -> !line.isBlank()).filter(line -> !managedWorkspaceMetadata(line)).toList();
+        if (!unmanagedChanges.isEmpty()) {
+            throw new IOException(kind + "_TARGET_DIRTY:" + unmanagedChanges.getFirst());
+        }
+        String onBase = GitProcessRunner.run(target, "commit-tree", commit + "^{tree}", "-p", base, "-m", "Synesis " + kind.toLowerCase(java.util.Locale.ROOT) + " of " + item);
+        writeRepairMarker(marker, expectedMarker);
+        try {
+            GitProcessRunner.run(target, "cherry-pick", "--no-commit", onBase);
+        } catch (IOException conflict) {
+            // The markers in the files are the taker's to resolve.
+        }
+        GitProcessRunner.runOptional(target, "cherry-pick", "--quit");
+        GitProcessRunner.run(target, "reset", "-q");
+    }
+
+    /**
      * Result of an integration attempt inside the dedicated integration worktree.
      *
      * @param worktreePath         absolute path to integration worktree

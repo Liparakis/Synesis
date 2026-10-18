@@ -824,6 +824,15 @@ public final class PredictionEventStore implements ProjectionView {
     }
 
     /**
+     * Returns the trash as the log says (ADR-0098 step 7).
+     *
+     * @return trash projection
+     */
+    public org.synesis.coordination.domain.trash.TrashProjection trashProjection() {
+        return projections.trash();
+    }
+
+    /**
      * Counts the entries recorded under a coordination directory without replaying them: this computer's own and
      * every copy it holds. It grows whenever an entry is written or arrives, which is what its readers watch for.
      *

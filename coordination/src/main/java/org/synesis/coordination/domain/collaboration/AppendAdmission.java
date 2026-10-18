@@ -62,12 +62,13 @@ public final class AppendAdmission {
             case COORDINATION_RESPONDED -> responded(CollaborationCodec.decodeResponse(payload), view);
             case LANE_GRANT_ISSUED -> issued(CollaborationCodec.decodeLaneGrant(payload), view);
             case LANE_GRANT_CONSUMED -> consumed(CollaborationCodec.decodeLaneGrant(payload), view);
-            case LANE_CONTINUATION_ACCEPTED -> continued(CollaborationCodec.decodeContinuation(payload), view);
+            case LANE_CONTINUATION_ACCEPTED -> continued(CollaborationCodec.decodeContinuation(payload), view, event.actorNodeId());
             case WORK_GROUP_STATUS_CHANGED -> groupStatusChanged(CollaborationCodec.decodeWorkGroup(payload));
             case REVIEW_VALIDATION_RECORDED -> reviewed(ReviewValidationPayload.decode(payload), view);
             case COMPLETION_PREPARED -> prepared(CompletionPreparedPayload.decode(payload), view);
             case TASK_SNAPSHOT_CREATED -> snapshotted(TaskSnapshotPayload.decode(payload), view);
             case TASK_CANCELLATION_REQUESTED, TASK_CANCELLED -> cancelled(event, view);
+            case WORK_TRASHED -> trashed(org.synesis.coordination.domain.trash.TrashEntries.WorkTrashed.decode(payload), view, event.actorNodeId());
             case CAPABILITY_IMPLEMENTATION_PUBLISHED ->
                     published(ImplementationEventPayload.decode(payload), view);
             default -> {
@@ -109,13 +110,19 @@ public final class AppendAdmission {
      * Revalidates a continuation against its source lane: owner, claim epoch, recovery hold and snapshot, work
      * group, grant, and that the successor is not the other side of a review.
      *
+     * <p>A takeover (ADR-0098 step 7, designer item 11) needs no recovery hold: its source is another computer's
+     * lane, which no session here can fence. It is lawful when another computer introduced the source's owner and its
+     * reference names a snapshot of that lane or the lane's base. Whether that computer was away and this one stalled
+     * is judged by the taker's computer before it asks; nothing in the log can show it.</p>
+     *
      * @param view         projections
      * @param continuation the proposed continuation
      * @param requireGrant whether the grant must already be on the log
+     * @param writer       the node that writes the continuation
      * @throws IOException with the refusal code
      */
     public static void requireLawfulContinuation(ProjectionView view, LaneContinuation continuation,
-            boolean requireGrant) throws IOException {
+            boolean requireGrant, String writer) throws IOException {
         CollaborationProjection collaboration = view.collaborationProjection();
         WorkIntent source = collaboration.intent(continuation.sourceIntent())
                 .orElseThrow(() -> new CoordinationException("CONTINUATION_SOURCE_NOT_FOUND"));
@@ -125,14 +132,18 @@ public final class AppendAdmission {
         if (!source.claimEpoch().equals(continuation.claimEpoch())) {
             throw new CoordinationException("CLAIM_EPOCH_STALE");
         }
-        boolean recoveryHeld = collaboration.participantState(continuation.sourceOwner())
-                .filter(state -> state == Participant.State.RECOVERY_HELD).isPresent();
-        if (!recoveryHeld) {
-            throw new CoordinationException("RECOVERY_NOT_HELD");
-        }
-        if (collaboration.recoverySnapshotReference(continuation.sourceOwner())
-                .filter(continuation.recoverySnapshot()::equals).isEmpty()) {
-            throw new CoordinationException("RECOVERY_SNAPSHOT_MISMATCH");
+        if (continuation.takeover()) {
+            requireTakeoverSource(view, continuation, source, writer);
+        } else {
+            boolean recoveryHeld = collaboration.participantState(continuation.sourceOwner())
+                    .filter(state -> state == Participant.State.RECOVERY_HELD).isPresent();
+            if (!recoveryHeld) {
+                throw new CoordinationException("RECOVERY_NOT_HELD");
+            }
+            if (collaboration.recoverySnapshotReference(continuation.sourceOwner())
+                    .filter(continuation.recoverySnapshot()::equals).isEmpty()) {
+                throw new CoordinationException("RECOVERY_SNAPSHOT_MISMATCH");
+            }
         }
         WorkGroup group = view.workGroupProjection().group(source.group())
                 .orElseThrow(() -> new CoordinationException("WORK_GROUP_NOT_FOUND"));
@@ -151,6 +162,29 @@ public final class AppendAdmission {
         }
         requireRoleIsolation(collaboration, source, continuation);
         requireNoOpenReviewOf(view.workGroupProjection(), source, continuation);
+    }
+
+    /**
+     * Refuses a takeover whose source is this computer's own lane, or whose reference names neither a snapshot of
+     * that lane nor its base, or that carries actor scopes no session here could have given.
+     */
+    private static void requireTakeoverSource(ProjectionView view, LaneContinuation continuation, WorkIntent source,
+            String writer) throws IOException {
+        String introducer = view.collaborationProjection().introducingNode(continuation.sourceOwner()).orElse(null);
+        if (introducer == null || introducer.equals(writer)) {
+            throw new CoordinationException("TAKEOVER_SOURCE_NOT_ANOTHER_COMPUTERS");
+        }
+        if (continuation.sourceActorScope() != null || continuation.targetActorScope() != null) {
+            throw new CoordinationException("TAKEOVER_ACTOR_SCOPE_INVALID");
+        }
+        String reference = continuation.recoverySnapshot().value();
+        boolean namesLane = reference.startsWith(LaneContinuation.TAKEOVER_FROM_BASE)
+                ? reference.substring(LaneContinuation.TAKEOVER_FROM_BASE.length()).equals(source.baseCommit())
+                : view.taskCompletionProjection().findSnapshotById(reference.substring(LaneContinuation.TAKEOVER_FROM_SNAPSHOT.length()))
+                        .filter(snapshot -> snapshot.provenance().authorityLineageId().equals(source.authorityLineageId())).isPresent();
+        if (!namesLane) {
+            throw new CoordinationException("TAKEOVER_REFERENCE_INVALID");
+        }
     }
 
     /**
@@ -255,13 +289,26 @@ public final class AppendAdmission {
         requireGrantTargetCurrent(view, grant);
     }
 
-    private static void continued(LaneContinuation continuation, ProjectionView view) throws IOException {
-        requireLawfulContinuation(view, continuation, false);
+    private static void continued(LaneContinuation continuation, ProjectionView view, String writer) throws IOException {
+        requireLawfulContinuation(view, continuation, false, writer);
         WorkIntent target = continuation.targetIntent();
         WorkIntent source = view.collaborationProjection().intent(continuation.sourceIntent()).orElseThrow();
         if (target.status() != WorkIntent.Status.ANNOUNCED
                 || target.participantIdentity().equals(source.participantIdentity())) {
             throw new CoordinationException("CONTINUATION_TARGET_INVALID");
+        }
+    }
+
+    /**
+     * Work is trashed by the computer whose agent's lane it was (ADR-0098 step 7, designer item 13), which holds its
+     * worktree: another computer has only what reached it.
+     */
+    private static void trashed(org.synesis.coordination.domain.trash.TrashEntries.WorkTrashed trashed, ProjectionView view, String writer)
+            throws IOException {
+        WorkIntent lane = view.collaborationProjection().lane(trashed.laneId())
+                .orElseThrow(() -> new CoordinationException("TRASH_LANE_NOT_FOUND"));
+        if (!view.collaborationProjection().introducingNode(lane.participantIdentity()).map(writer::equals).orElse(false)) {
+            throw new CoordinationException("TRASH_LANE_NOT_THIS_COMPUTERS");
         }
     }
 
@@ -275,7 +322,8 @@ public final class AppendAdmission {
      * Judges an entry that arrived from another computer's log (ADR-0098 step 4). Its writer judged every rule
      * above against its own view, so only the rules an honest build never breaks are judged again, the ones that
      * make an entry count for nothing (ADR-0100 rows 3 and 5): an entry acting for another node's participant, an
-     * integration entry included (ADR-0098 step 5), and a self-review.
+     * integration entry included (ADR-0098 step 5), a self-review, and work trashed by a computer whose lane it was not
+     * (ADR-0098 step 7).
      *
      * @param event signed entry of another computer's log
      * @param view  projections as they stand before the entry
@@ -294,6 +342,15 @@ public final class AppendAdmission {
                 throw new CoordinationException("REVIEW_SELF_APPROVAL_FORBIDDEN");
             }
         }
+        if (event.type() == PredictionEventType.WORK_TRASHED) {
+            // Only the lane's own computer holds its worktree: an entry from another counts for nothing, the first
+            // one to arrive would otherwise stand (ADR-0098 step 7). One naming a lane not arrived yet waits.
+            var trashed = org.synesis.coordination.domain.trash.TrashEntries.WorkTrashed.decode(event.payload());
+            if (view.collaborationProjection().lane(trashed.laneId()).isEmpty()) {
+                throw new MissingReferenceException("TRASH_LANE_NOT_FOUND");
+            }
+            trashed(trashed, view, event.actorNodeId());
+        }
     }
 
     private static void reviewed(ReviewValidationPayload review, ProjectionView view) throws IOException {
@@ -307,9 +364,17 @@ public final class AppendAdmission {
         if (!producer.equals(review.sourceParticipant())) {
             throw new CoordinationException("REVIEW_SNAPSHOT_MISMATCH");
         }
-        // A lane that has moved on is not the one the review was granted for.
+        // Another computer released the review while this reviewer's computer was away (ADR-0098 step 7). A verdict
+        // written before the release arrived stands beside the new reviewer's; one written after is refused.
+        if (view.workGroupProjection().grantRevoked(new LaneGrantId(review.grantId()))) {
+            throw new CoordinationException("REVIEW_GRANT_REVOKED");
+        }
+        // A lane that has moved on is not the one the review was granted for; a reviewer replacing its own verdict
+        // speaks of the snapshot it was granted, whatever a rejection did to the lane since (ADR-0098 step 7).
+        boolean replacing = view.workGroupProjection().reviewValidationForGrant(review.grantId()).isPresent()
+                && view.taskCompletionProjection().snapshotState(review.snapshotIdentity()).orElse(null) == TaskCompletionState.REVIEW_DISPUTED;
         WorkIntent lane = view.collaborationProjection().intent(review.targetIntentId()).orElse(null);
-        if (lane != null && (lane.status() != WorkIntent.Status.ANNOUNCED || lane.version() != review.claimEpoch()
+        if (!replacing && lane != null && (lane.status() != WorkIntent.Status.ANNOUNCED || lane.version() != review.claimEpoch()
                 || !lane.taskId().equals(snapshot.taskId()) || !lane.participant().equals(producer)
                 || !lane.authorityLineageId().equals(snapshot.provenance().authorityLineageId()))) {
             throw new CoordinationException("REVIEW_GRANT_STALE");

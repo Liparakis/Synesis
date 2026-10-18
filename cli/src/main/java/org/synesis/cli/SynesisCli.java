@@ -125,7 +125,7 @@ public final class SynesisCli {
         groups.put("Set up", List.of("init", "provider", "doctor", "ui", "version", "help"));
         groups.put("Work with another person", List.of("host", "join", "sync", "identity"));
         groups.put("Coordinate work", List.of("agents", "collaboration", "task", "ownership", "constraint", "events", "coordination"));
-        groups.put("Maintain a project", List.of("operator", "cleanup", "reconcile", "repair", "migrate", "project"));
+        groups.put("Maintain a project", List.of("operator", "trash", "cleanup", "reconcile", "repair", "migrate", "project"));
         return groups;
     }
 
@@ -228,6 +228,10 @@ public final class SynesisCli {
         command.getSubcommands().get("operator").addSubcommand("list", new org.synesis.cli.command.operator.OperatorListCommand(runtime));
         command.getSubcommands().get("operator").addSubcommand("recheck", new org.synesis.cli.command.operator.OperatorRecheckCommand(runtime));
         command.getSubcommands().get("operator").addSubcommand("close", new org.synesis.cli.command.operator.OperatorCloseCommand(runtime));
+        command.addSubcommand("trash", new org.synesis.cli.command.trash.TrashCommand());
+        command.getSubcommands().get("trash").addSubcommand("list", new org.synesis.cli.command.trash.TrashCommand.List(runtime));
+        command.getSubcommands().get("trash").addSubcommand("restore", new org.synesis.cli.command.trash.TrashCommand.Restore(runtime));
+        command.getSubcommands().get("trash").addSubcommand("empty", new org.synesis.cli.command.trash.TrashCommand.Empty(runtime));
         command.addSubcommand("conversations", new org.synesis.cli.command.conversation.ConversationsCommand(runtime));
         command.addSubcommand("hook", new HookCommand());
         command.getSubcommands().get("hook").addSubcommand("claude", new HookClaudeCodeCommand(runtime));

@@ -275,7 +275,7 @@ public final class AgentNextActionService {
 
         AgentResponse durable = resolveDurableCoordination(request, root, inspection.location(), readiness.binding(), readiness.worktree());
         AgentResponse resolved = durable != null ? durable : LocalCoordinationFallback.resolveLocalCoordination(bindingService, request, inspection.location(), readiness.worktree());
-        AgentResponse answered = notingRejection(resolved, inspection.location(), readiness.binding());
+        AgentResponse answered = notingDisputesAndTrash(notingRejection(resolved, inspection.location(), readiness.binding()), inspection.location(), readiness.binding());
         return request.completionRequested() ? notingNothingToPublish(answered, inspection.location(), readiness.binding(), readiness.worktree()) : answered;
     }
 
@@ -328,6 +328,36 @@ public final class AgentNextActionService {
             return new AgentResponse(response.status(), response.reason(), response.nextAction(), result);
         } catch (Exception failure) {
             logSuppressed("rejection projection", failure);
+            return response;
+        }
+    }
+
+    /**
+     * Adds what every answer carries while it applies ({@link AnswerNotices}): a review dispute the caller is a party
+     * to, its lane taken over by another computer, its work in the trash (ADR-0098 step 7).
+     *
+     * @param response the resolved answer
+     * @param location project location
+     * @param binding  the verified binding of the calling session
+     * @return the answer with those notices, or as it was when none applies
+     */
+    private AgentResponse notingDisputesAndTrash(AgentResponse response, ProjectLocation location, ProviderSessionBindingService.Binding binding) {
+        if (response.result() != null && !(response.result() instanceof Map<?, ?>)) {
+            return response;
+        }
+        try {
+            Optional<PredictionEventStore> store = openEventStore(location);
+            Map<String, Object> notices = store.isEmpty() ? Map.of()
+                    : AnswerNotices.forParticipant(store.get(), WorkspaceCollaborationService.participantHandle(binding.sessionId()));
+            if (notices.isEmpty()) {
+                return response;
+            }
+            Map<String, Object> result = new LinkedHashMap<>();
+            putResult(result, response.result(), null);
+            notices.forEach(result::putIfAbsent);
+            return new AgentResponse(response.status(), response.reason(), response.nextAction(), result);
+        } catch (Exception failure) {
+            logSuppressed("dispute and trash projection", failure);
             return response;
         }
     }
@@ -676,7 +706,7 @@ public final class AgentNextActionService {
     /** Evaluates the stages after the integration pump, in the order {@link #durableCoordinationAction} documents. */
     private AgentResponse stagedAction(NextActionRequest request, ProjectLocation location, ProviderSessionBindingService.Binding binding, Path worktree, PredictionEventStore store, NodeIdentity callerIdentity,
             AgentResponse integrationPump) throws Exception {
-        Map<String, Object> collaboration = CollaborationView.collaborationDetails(store, binding.sessionId(), null, binding.provider());
+        Map<String, Object> collaboration = CollaborationView.collaborationDetails(store, binding.sessionId(), null, binding.provider(), callerIdentity.nodeId());
         LaneScope lane = new LaneScope(WorkspaceCollaborationService.participantHandle(binding.sessionId()), worktree, binding.baseCommit());
         CapabilityActor actor = new CapabilityActor(callerIdentity.nodeId(), binding.supervisorId(), binding.workerId(), binding.sessionId());
 

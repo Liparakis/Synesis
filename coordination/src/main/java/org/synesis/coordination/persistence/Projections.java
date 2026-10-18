@@ -17,6 +17,7 @@ import org.synesis.coordination.domain.prediction.PredictionProjection;
 import org.synesis.coordination.domain.task.CoordinationProjection;
 import org.synesis.coordination.domain.task.TaskCompletionProjection;
 import org.synesis.coordination.domain.membership.MembershipProjection;
+import org.synesis.coordination.domain.trash.TrashProjection;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
@@ -59,6 +60,7 @@ final class Projections implements ProjectionView {
     private final OperatorRequestProjection operatorRequests = new OperatorRequestProjection();
     private final ConversationProjection conversations = new ConversationProjection();
     private final MembershipProjection membership;
+    private final TrashProjection trash = new TrashProjection();
 
     /**
      * Every projection above, in validation and application order; the one place a new projection is registered.
@@ -80,7 +82,9 @@ final class Projections implements ProjectionView {
                     (event, revision) -> operatorRequests.apply(event)),
             new Stage(conversations::validate, conversations::apply),
             new Stage((event, mode, revision) -> membership().validate(event, mode),
-                    (event, revision) -> membership().apply(event)));
+                    (event, revision) -> membership().apply(event)),
+            new Stage((event, mode, revision) -> trash.validate(event, mode),
+                    (event, revision) -> trash.apply(event)));
 
 
     Projections(ProjectId project) {
@@ -200,6 +204,10 @@ final class Projections implements ProjectionView {
 
     ConversationProjection conversations() {
         return conversations;
+    }
+
+    TrashProjection trash() {
+        return trash;
     }
 
     @FunctionalInterface

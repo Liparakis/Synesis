@@ -109,7 +109,10 @@ class PredictionWireFormatTest {
             entry(PredictionEventType.JOIN_POLICY_SET, 86),
             entry(PredictionEventType.MEMBER_REMOVED, 87),
             entry(PredictionEventType.MEMBER_CARD, 88),
-            entry(PredictionEventType.OWNER_CHANGED, 89)
+            entry(PredictionEventType.OWNER_CHANGED, 89),
+            entry(PredictionEventType.WORK_TRASHED, 90),
+            entry(PredictionEventType.TRASH_RESTORED, 91),
+            entry(PredictionEventType.TRASH_EMPTIED, 92)
     );
 
     @Test

@@ -50,12 +50,13 @@ final class ParticipantRecoveryService {
      *
      * @param current      fresh authoritative project projection
      * @param continuation proposed successor continuation
+     * @param writer       this computer, which writes it
      * @throws IOException when payload validation or durable I/O fails
      */
     private static void validateContinuation(PredictionEventStore current,
             LaneContinuation continuation,
-            boolean requireGrant) throws IOException {
-        AppendAdmission.requireLawfulContinuation(current, continuation, requireGrant);
+            boolean requireGrant, String writer) throws IOException {
+        AppendAdmission.requireLawfulContinuation(current, continuation, requireGrant, writer);
         WorkIntent source = current.collaborationProjection().intent(continuation.sourceIntent())
                 .orElseThrow(() -> new CoordinationException("CONTINUATION_SOURCE_NOT_FOUND"));
         validateContinuationTarget(current, source, continuation);
@@ -249,7 +250,7 @@ final class ParticipantRecoveryService {
             if (requireGrant && !current.workGroupProjection().grantAvailable(continuation.grant())) {
                 throw new CoordinationException("LANE_GRANT_REPLAYED");
             }
-            validateContinuation(current, continuation, requireGrant);
+            validateContinuation(current, continuation, requireGrant, signer.nodeId());
             current.append(continuation.targetIntent().intentId(),
                     PredictionEventType.LANE_CONTINUATION_ACCEPTED,
                     signer.nodeId(),

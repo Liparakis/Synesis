@@ -189,6 +189,41 @@ class ControlPlaneHttpHandlerTest {
         }
     }
 
+    private HttpResponse<String> trashCommand(Fixture fixture, Map<String, Object> credentials, String command, Map<String, Object> body) throws Exception {
+        return fixture.client.send(jsonRequest(fixture, "/api/v1/commands/" + command).header(ControlPlaneHttpHandler.SESSION_HEADER, (String) credentials.get("sessionToken"))
+                .header(ControlPlaneHttpHandler.CSRF_HEADER, (String) credentials.get("csrfToken")).POST(HttpRequest.BodyPublishers.ofString(ProviderJson.write(body))).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** ADR-0098 step 7: the Trash tab confirms an empty, and this endpoint refuses one that was not confirmed. */
+    @Test
+    void emptyingTheTrashNeedsConfirmationAndRestoringAnUnknownItemIsRefused() throws Exception {
+        try (Fixture fixture = new Fixture("trash-commands", true)) {
+            Map<String, Object> credentials = login(fixture);
+            String lane = UUID.randomUUID().toString();
+
+            HttpResponse<String> unconfirmed = trashCommand(fixture, credentials, "empty-trash", Map.of("laneId", lane, "epoch", 1));
+            assertEquals(400, unconfirmed.statusCode());
+            assertTrue(unconfirmed.body().contains("CONFIRMATION_REQUIRED"), unconfirmed.body());
+
+            HttpResponse<String> notConfirmedTrue = trashCommand(fixture, credentials, "empty-trash", Map.of("laneId", lane, "epoch", 1, "confirmed", "yes"));
+            assertEquals(400, notConfirmedTrue.statusCode());
+
+            HttpResponse<String> badEpoch = trashCommand(fixture, credentials, "restore-trash", Map.of("laneId", lane, "epoch", -1));
+            assertEquals(400, badEpoch.statusCode());
+
+            HttpResponse<String> badLane = trashCommand(fixture, credentials, "restore-trash", Map.of("laneId", "not-a-uuid", "epoch", 1));
+            assertEquals(400, badLane.statusCode());
+
+            HttpResponse<String> unknown = trashCommand(fixture, credentials, "restore-trash", Map.of("laneId", lane, "epoch", 1));
+            assertEquals(409, unknown.statusCode(), unknown.body());
+            assertTrue(unknown.body().contains("TRASH_REFUSED"), unknown.body());
+
+            HttpResponse<String> confirmedUnknown = trashCommand(fixture, credentials, "empty-trash", Map.of("laneId", lane, "epoch", 1, "confirmed", true));
+            assertEquals(409, confirmedUnknown.statusCode(), confirmedUnknown.body());
+        }
+    }
+
     @Test
     void networkEndpointProjectsRealLinkMembership() throws Exception {
         AtomicReference<LinkState> state = new AtomicReference<>();

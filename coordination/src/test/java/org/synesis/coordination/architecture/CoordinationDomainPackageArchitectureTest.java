@@ -21,6 +21,7 @@ final class CoordinationDomainPackageArchitectureTest {
             "command",
             "contract",
             "membership",
+            "trash",
             "conversation",
             "integration",
             "operator",

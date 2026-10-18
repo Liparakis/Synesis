@@ -16,6 +16,7 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.replication.ReplicationJournal;
 import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
+import org.synesis.workspace.application.agent.workflow.DisputeNotice;
 import org.synesis.workspace.application.collaboration.ParticipantActivity;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.ConsumerAbsenceGuard;
@@ -239,9 +240,16 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             }
 
             @Override
+            public List<String> disputesFor(String provider, List<String> connectionInstanceIds) {
+                return connectionInstanceIds.stream().map(connection -> participantOf(provider, connection)).filter(Objects::nonNull).distinct()
+                        .flatMap(participant -> DisputeNotice.stateKeys(store, participant).stream()).distinct().toList();
+            }
+
+            @Override
             public boolean holdsRequestOrGrant(String provider, String connectionInstanceId) {
                 String participant = participantOf(provider, connectionInstanceId);
-                return participant != null && ProviderSessionTerminalizationService.holdsRequestOrGrant(store, participant);
+                return participant != null && (ProviderSessionTerminalizationService.holdsRequestOrGrant(store, participant)
+                        || DisputeNotice.verdictUnsettled(store, participant));
             }
 
             @Override

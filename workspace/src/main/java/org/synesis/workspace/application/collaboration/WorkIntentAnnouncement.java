@@ -156,7 +156,17 @@ final class WorkIntentAnnouncement {
                 role == null ? WorkIntent.Role.PRODUCER : role,
                 reviewTargetSelectors == null ? List.of() : reviewTargetSelectors,
                 knownDependencies == null ? List.of() : knownDependencies);
-        return service.announce(intent, location.review());
+        boolean restoring = intent.role() == WorkIntent.Role.PRODUCER && binding.worktreePath() != null
+                && WorkTrash.applyRestored(location, store, group, Path.of(binding.worktreePath()));
+        try {
+            return service.announce(intent, location.review());
+        } catch (Exception refused) {
+            // The restored work goes with the refused lane, not into whatever this worktree announces next.
+            if (restoring) {
+                WorkTrash.undoRestored(store, group, Path.of(binding.worktreePath()));
+            }
+            throw refused;
+        }
     }
 
     static UUID defaultWorkGroupId(UUID projectId) {

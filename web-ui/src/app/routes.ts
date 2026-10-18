@@ -1,9 +1,10 @@
-export type ProjectView = "overview" | "agents" | "coordination" | "network" | "diagnostics";
+export type ProjectView = "overview" | "agents" | "coordination" | "trash" | "network" | "diagnostics";
 
 export const projectTabs: Array<{id: ProjectView; label: string}> = [
   {id: "overview", label: "Overview"},
   {id: "agents", label: "Agents"},
   {id: "coordination", label: "Coordination"},
+  {id: "trash", label: "Trash"},
   {id: "network", label: "Network"},
   {id: "diagnostics", label: "Diagnostics"},
 ];

@@ -23,6 +23,7 @@ import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.domain.task.CoordinationTask;
+import org.synesis.coordination.domain.task.TaskCompletionState;
 
 import org.synesis.workspace.application.conversation.ConversationService;
 import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
@@ -132,6 +133,8 @@ public final class ControlPlaneReadModel {
         result.put("conversations", conversations());
         result.put("operatorRequests", operatorRequests());
         result.put("tasks", tasks());
+        result.put("disputes", disputes());
+        result.put("trash", trash());
         result.put("ownerships", ownerships());
         result.put("network", networkSnapshot.toMap());
         result.put("diagnostics", diagnostics());
@@ -477,6 +480,39 @@ public final class ControlPlaneReadModel {
             result.put("owner", view.ownerNodeId());
             return result;
         }).toList();
+    }
+
+    /**
+     * Builds the record of review disputes, oldest first: each snapshot whose reviewers disagreed, their verdicts now,
+     * and the snapshot's state, which says whether the dispute is open ({@code review_disputed}) or how it ended
+     * (ADR-0098 step 7).
+     *
+     * @return disputes
+     */
+    private List<Map<String, Object>> disputes() {
+        var completion = coordination.taskCompletionProjection();
+        return completion.disputedSnapshots().stream().limit(MAX_COLLECTION_ITEMS).map(id -> {
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("snapshotId", id.value());
+            completion.findSnapshotById(id).ifPresent(snapshot -> {
+                result.put("taskId", snapshot.taskId().toString());
+                result.put("author", snapshot.provenance().participant());
+            });
+            result.put("verdicts", new java.util.TreeMap<>(completion.verdicts(id)));
+            result.put("state", completion.snapshotState(id).map(TaskCompletionState::value).orElse("unknown"));
+            return result;
+        }).toList();
+    }
+
+    /**
+     * Builds the trash, oldest first: work taken over, finished after its goal was met, or given up in a dispute, and
+     * whether a person restored or emptied it (ADR-0098 step 7).
+     *
+     * @return trashed work
+     */
+    private List<Map<String, Object>> trash() {
+        return org.synesis.workspace.application.collaboration.WorkTrash.describe(coordination.trashProjection()).stream()
+                .limit(MAX_COLLECTION_ITEMS).toList();
     }
 
     /**
