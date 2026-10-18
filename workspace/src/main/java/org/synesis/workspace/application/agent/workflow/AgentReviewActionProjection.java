@@ -186,6 +186,11 @@ static AgentResponse reviewActionResponse(Map<String, Object> collaboration, boo
                 // session holds one lane, so the reviewer cannot take the implementation over itself.
                 result.put("instruction", "No open producer lane claims what this lane reviews: its producer left, or its work was integrated after another review. "
                         + "Nothing will be submitted for this lane to review until a participant announces it again. Keep waiting, or call cancel_lane with the reason if no producer is coming.");
+            } else if (admittedAnotherReviewer(store, reviewer)) {
+                // In a real run a second reviewer lane waited here for ever: the author had accepted
+                // the other reviewer's request for the only snapshot this lane could review.
+                result.put("instruction", "What this lane reviews was published, and its author admitted another reviewer to that review. "
+                        + "Nothing will be submitted for this lane to review unless that review is given up. Keep waiting, or call cancel_lane with the reason if that review is not coming back.");
             }
             result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(reviewer));
             result.put(NextActionKeys.WORK_GROUP_ID, reviewer.workGroupId().toString());
@@ -197,6 +202,23 @@ static AgentResponse reviewActionResponse(Map<String, Object> collaboration, boo
             return new AgentResponse(AgentStatus.WAITING, AgentReason.VALIDATION_REQUIRED, AgentNextAction.WAIT, result);
         }
         return null;
+    }
+
+/**
+     * Returns whether everything waiting for review that a reviewer lane targets was admitted to
+     * another participant: its author accepted that participant's review request, or that
+     * participant holds the review grant. A request still pending admits nobody yet, and the author
+     * may still refuse it, so it does not count here, although it keeps the snapshot from being
+     * offered.
+     */
+    private static boolean admittedAnotherReviewer(PredictionEventStore store, WorkIntent reviewer) {
+        List<TaskSnapshotRecord> pending = store.taskCompletionProjection().pendingReviewSnapshots().stream().filter(snapshot -> snapshot.provenance().workGroupId().equals(reviewer.workGroupId()))
+                .filter(snapshot -> reviewTargetsMatch(reviewer, snapshot)).toList();
+        return !pending.isEmpty() && pending.stream().allMatch(snapshot -> store.collaborationProjection().requests().stream()
+                .anyMatch(request -> request.kind() == CoordinationRequest.Kind.REVIEW && request.status() == CoordinationRequest.Status.ACCEPTED && snapshot.snapshotId().equals(request.snapshotId())
+                        && !request.requester().equals(reviewer.participant()))
+                || store.workGroupProjection().grants().stream().anyMatch(grant -> snapshot.snapshotId().equals(grant.snapshotId()) && !grant.targetParticipant().equals(reviewer.participant())
+                        && ReviewAdmissionRules.holdsReview(store, grant)));
     }
 
 static boolean hasMandatoryReviewCandidate(PredictionEventStore store, WorkIntent reviewer) {

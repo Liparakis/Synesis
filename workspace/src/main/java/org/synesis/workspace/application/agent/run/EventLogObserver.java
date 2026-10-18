@@ -21,6 +21,7 @@ import org.synesis.workspace.application.collaboration.WorkspaceCollaborationSer
 import org.synesis.workspace.application.integration.ConsumerAbsenceGuard;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.provider.session.ProviderSessionTerminalizationService;
 
 /**
  * Observes a project by replaying its durable coordination log. It only reads.
@@ -136,14 +137,19 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         java.util.Set<String> laneRequests = store.operatorRequestProjection().all().stream().filter(request -> !request.raisedBySynesis())
                 .map(org.synesis.coordination.domain.operator.OperatorRequest::id).collect(java.util.stream.Collectors.toUnmodifiableSet());
         boolean otherComputerConnected = otherComputerConnected(coordination);
-        // Where the operator closed each request, read once for every agent's question.
+        // Where the operator closed each request, and where each coordination request was answered,
+        // read once for every agent's question.
         Map<String, Long> operatorClosings = new HashMap<>();
+        Map<java.util.UUID, Long> responses = new HashMap<>();
         for (int index = 0; index < events.size(); index++) {
-            java.util.Optional<String> closed = events.get(index).type() == org.synesis.coordination.domain.prediction.PredictionEventType.OPERATOR_REQUEST_CLOSED
-                    ? closedRequest(events.get(index)) : java.util.Optional.empty();
+            PredictionEvent event = events.get(index);
+            java.util.Optional<String> closed = event.type() == org.synesis.coordination.domain.prediction.PredictionEventType.OPERATOR_REQUEST_CLOSED
+                    ? closedRequest(event) : java.util.Optional.empty();
             if (closed.isPresent()) {
                 operatorClosings.put(closed.get(), index + 1L);
             }
+            long position = index + 1L;
+            answeredRequest(event).ifPresent(request -> responses.put(request, position));
         }
         return new AgentRunController.Observation() {
 
@@ -211,6 +217,19 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             public List<String> reviewsOffered(String provider, List<String> connectionInstanceIds) {
                 return CollaborationResponseMapper.openReviewSnapshots(store,
                         connectionInstanceIds.stream().map(connection -> participantOf(provider, connection)).filter(Objects::nonNull).distinct().toList());
+            }
+
+            @Override
+            public OptionalLong newestAnswerFor(String provider, String connectionInstanceId) {
+                String participant = participantOf(provider, connectionInstanceId);
+                return participant == null ? OptionalLong.empty() : store.collaborationProjection().requests().stream().filter(request -> request.requester().equals(participant))
+                        .map(request -> responses.get(request.requestId())).filter(Objects::nonNull).mapToLong(Long::longValue).max();
+            }
+
+            @Override
+            public boolean holdsRequestOrGrant(String provider, String connectionInstanceId) {
+                String participant = participantOf(provider, connectionInstanceId);
+                return participant != null && ProviderSessionTerminalizationService.holdsRequestOrGrant(store, participant);
             }
 
             @Override
@@ -302,6 +321,16 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         } catch (IOException malformed) {
             return false;
         }
+    }
+
+    /**
+     * The coordination request a response answers, or empty for any other event. A response is
+     * appended under the identity of the request it answers, as {@code CoordinationRequestService}
+     * writes it.
+     */
+    private static java.util.Optional<java.util.UUID> answeredRequest(PredictionEvent event) {
+        return event.type() == org.synesis.coordination.domain.prediction.PredictionEventType.COORDINATION_RESPONDED ? java.util.Optional.of(event.predictionId())
+                : java.util.Optional.empty();
     }
 
     /** The request an operator closing names, or empty when the payload cannot be read. */

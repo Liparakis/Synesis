@@ -421,7 +421,9 @@ project runtime lives (`MergeDriver.repeatEvery`); a pass with nothing to merge 
   method `keep` on `AgentRunController.Connections` (an implementation without it keeps the old behaviour).
 - Changed by the fixes of 2026-10-18. Additive unless said otherwise: `Connections.end`, `Observation.sessionFenced` and
   `Observation.newestOperatorAnswerFor` (default methods), and `Observation.reviewsOffered` (default) with
-  `CollaborationResponseMapper.openReviewSnapshots` (fix 9); `SessionLeaseService.reserveKeeper` and `releaseKeeper`;
+  `CollaborationResponseMapper.openReviewSnapshots` (fix 9), and `Observation.newestAnswerFor` and
+  `Observation.holdsRequestOrGrant` (defaults) with `ProviderSessionTerminalizationService.holdsRequestOrGrant`
+  (fix 10); `SessionLeaseService.reserveKeeper` and `releaseKeeper`;
   `HeadlessOptions.hookLauncher` with `withHookLauncher` (a fourth record component: the two- and three-argument
   constructors stay, so callers compile unchanged; a record pattern over three components would not);
   `ProviderIntegration.trustNote` (default); `ProviderApplicationService.launcherPath` made public. Local file
@@ -508,14 +510,49 @@ before it. The ADR stays Proposed. Source-level evidence only: none of these has
    at most one per agent per offer. A Claude agent's Stop hook has no
    matching gap to close: it holds only an agent that was told WAIT with a lane, and one without a lane stops and is
    resumed by the controller. Source-level evidence only. No real run has shown it yet.
+10. **An answer to a request of an agent here without a lane (the failure VERIFIED in a real PC and VM run, mp18-link, 2026-10-18).**
+    A Claude agent on the PC whose lane for `case.py` had been integrated asked to review `count.py`, which a producer
+    lane of the same group that has published may do (ADR-0089, amendment). It was told to wait for the author's
+    answer and stopped (08:04). The author, a Codex agent on the VM, accepted at about 08:14. Nothing resumed the PC
+    agent: it held no lane, and fix 9 does not offer a review the agent itself holds. Both computers printed
+    `AGENT_RUN_WAITING=FOREIGN_LANE_OPEN`; `count.py` waited for ever for the reviewer it had admitted, and `cli.py` for
+    `count.py`. Resuming alone would not have been enough: the controller had ended that agent's connection when it
+    stopped with no lane, a closed session is never reopened, and the grant belongs to the session that asked
+    (Decision 4), so a new session could not have used it. Two rules now, with or without a lane:
+    - The controller keeps the session of a stopped agent it may resume while that session holds a coordination
+      request that is pending or a review grant it has not finished (`Observation.holdsRequestOrGrant`, the
+      `PENDING_DEPENDENCY` and `PENDING_REVIEW` checks of `ProviderSessionTerminalizationService`, read as
+      `holdsRequestOrGrant`). The same rule closes the gap Decision 4 described for a stopped agent: one holding a
+      review grant when its own lane was integrated had its session ended, and was resumed in a new one that could
+      not finish the review; it is now resumed in its own. A run whose agents have all stopped also keeps waiting
+      while another computer is connected and such a session is kept (`OTHER_COMPUTER_CONNECTED`), by the same rule
+      that keeps the session, since that computer may answer.
+    - A stopped agent is resumed once when a request one of its current sessions made is answered after it stopped
+      (accepted, rejected or otherwise resolved: a `COORDINATION_RESPONDED` event for it, read through
+      `Observation.newestAnswerFor`). The grant an accepted review request issues is part of that answer and is not
+      counted again, and a response given again appends nothing. An answer it saw before it stopped resumes nothing,
+      a later answer resumes it once more, and this applies too when its own published work waits for an operator.
+    The controller's wake decision now lives in one method, `wakeFor`. Contract line visible to agents: an agent that
+    asked something through Synesis is resumed, on the session that asked, when the request is answered. The Stop
+    hook needs no change: it holds only an agent told WAIT with a lane, and one without a lane stops and is resumed
+    by the controller as above. Also from this run: a second reviewer lane for `count.py`, whose author had accepted
+    the first reviewer's request for its only snapshot, waited (`WAIT_FOR_ELIGIBLE_PRODUCER`) for an admission that
+    would not come. When every snapshot it could review was admitted to another participant (an accepted review
+    request, or a review grant that participant holds; a request still pending admits nobody yet), its
+    `get_next_action` wait now says that the author admitted another reviewer and that it may call `cancel_lane`, as
+    a reviewer whose module was integrated elsewhere is told. Source-level evidence only. No real run has shown it
+    yet.
 
 ### Not done
 
 - Fix 9 counts only agents resumed for a review as looking at it. A running agent here with no lane may see the same
   review and a stopped one be resumed for it at the same moment; the claim settles it, at the cost of one resume. An
-  agent none of whose connections has a known session is never resumed for a review. `AgentRunController`'s resume
-  loop now weighs five reasons and three exceptions inline in a file of about 930 lines; the next wake reason should
-  move that decision into its own method first.
+  agent none of whose connections has a known session is never resumed for a review.
+- Fix 10 resumes an agent for an answer only to a request one of its current sessions made. A request whose session
+  was ended by an older build, or because the agent ran out of `--max-resumes`, has no session left to use the answer.
+  As for a message, an answer recorded in the 30 seconds before the agent's process ended is taken as unseen, so an
+  answer it read just before stopping can cost one resume. `AgentRunController` is now about 1,020 lines; its
+  `Agent` bookkeeping class (about 200 lines) is the piece to move into its own package-private file next.
 - A lane its agent cancelled does not start a fresh session on `ensure_session`: the session is told its lane is
   closed (`CLOSE`), as an existing test requires so that cancelled work is not announced again, and a task in the same
   process is refused. The controller starts such an agent again on a new connection once its lane has ended. The owner

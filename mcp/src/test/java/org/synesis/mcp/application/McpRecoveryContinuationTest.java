@@ -701,6 +701,44 @@ final class McpRecoveryContinuationTest {
 
     }
 
+    /**
+     * Real run across a PC and a VM (2026-10-18, mp18-link): the author of count.py accepted one
+     * reviewer's request for its only snapshot, and a second reviewer lane for count.py waited for
+     * ever to be admitted. It is told the review went to another reviewer and that it may cancel.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aReviewerWhoseOnlyCandidateWentToAnotherReviewerIsToldItMayCancel(@TempDir Path temp) throws Exception {
+        Path project = initializedProject(temp.resolve("losing-reviewer-project"));
+        ProjectLocation location = new ProjectApplicationService().locate(project);
+        McpProviderTestSupport.install(location, "codex");
+        new ProviderManualService().install("codex");
+        AgentSessionService sessions = new AgentSessionService();
+        for (String connection : List.of("author-count", "reviewer-admitted", "reviewer-late")) {
+            ensureAndTrust(sessions, location, project, connection);
+        }
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        UUID groupId = UUID.randomUUID();
+        collaboration.createWorkGroup(project, groupId, "Build count", "Review each exact candidate before integration", ReviewPolicy.mandatoryIndependent());
+        var author = collaboration.announce(project, "codex", "author-count", "Implement count", "Publish count", List.of(ResourceSelector.pathExact("count.py")), groupId);
+        for (String reviewer : List.of("reviewer-admitted", "reviewer-late")) {
+            collaboration.announce(project, "codex", reviewer, "Review count", "Independently review count", List.of(ResourceSelector.pathExact(reviewer + ".md")), groupId, WorkIntent.Role.REVIEWER,
+                    List.of(ResourceSelector.pathExact("count.py")));
+        }
+        publishForReview(project, location, "author-count", author.intent(), "snap_count", "count.py");
+        McpProtocolHandler late = new McpProtocolHandler(sessions, project, "codex", "reviewer-late");
+        Map<String, Object> before = innerResult(late.handleMessage(toolCall("get_next_action", "{}")));
+        assertFalse(String.valueOf(before).contains("admitted another reviewer"), before.toString());
+
+        CoordinationRequest request = collaboration.request(project, "codex", "reviewer-admitted", author.intent().intentId(), CoordinationRequest.Kind.REVIEW, "Review this exact immutable snapshot", "snap_count");
+        collaboration.respond(project, "codex", "author-count", request.requestId(), CoordinationRequest.Status.ACCEPTED, "admitted");
+
+        Map<String, Object> next = innerResult(late.handleMessage(toolCall("get_next_action", "{}")));
+        assertEquals("wait", next.get("nextAction"), next.toString());
+        String instruction = String.valueOf(((Map<String, Object>) next.get("result")).get("instruction"));
+        assertTrue(instruction.contains("admitted another reviewer") && instruction.contains("cancel_lane"), next.toString());
+    }
+
     private static void publishForReview(Path project, ProjectLocation location, String connection, WorkIntent intent, String snapshotId, String path) throws Exception {
         String session = new ProviderSessionBindingService().find(location, "codex", connection).orElseThrow().sessionId();
         SnapshotProvenance provenance = new SnapshotProvenance(intent.workGroupId(), intent.intentId(), intent.authorityLineageId(), intent.participant(), session, intent.version(), List.of(), List.of(),
