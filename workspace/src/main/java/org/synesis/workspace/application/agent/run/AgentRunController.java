@@ -176,6 +176,7 @@ public final class AgentRunController {
                         // session, to take the next piece of work, as a Claude agent woken by its Stop
                         // hook for its lane ending does in the same process.
                         boolean laneEnded = agent.heldLaneAtStop && !agent.holdsOpenLane(observation);
+                        boolean fencedLaneWaits = agent.fencedLaneToContinue && agent.holdsOpenLane(observation);
                         if (!agent.resumable(request.maxResumesPerAgent()) || !(laneEnded || agent.holdsOpenLane(observation))) {
                             continue;
                         }
@@ -189,10 +190,11 @@ public final class AgentRunController {
                         boolean deadlinePassed = answerDeadline.isPresent() && now >= answerDeadline.getAsLong() && answerDeadline.getAsLong() != agent.resumedForDeadline;
                         OptionalLong message = agent.newestUnreadMessage(observation);
                         boolean messageWaiting = agent.unreadMessageWaiting(observation);
-                        if (laneEnded || observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || messageWaiting) {
+                        if (laneEnded || fencedLaneWaits || observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || messageWaiting) {
                             if (deadlinePassed) {
                                 agent.resumedForDeadline = answerDeadline.getAsLong();
                             }
+                            agent.fencedLaneToContinue = false;
                             // Whatever it is resumed for, it reads its messages then. A message
                             // it stops without acting on does not resume it again.
                             agent.resumedForMessage = Math.max(agent.resumedForMessage, message.orElse(0L));
@@ -260,7 +262,11 @@ public final class AgentRunController {
         if (agent.connectionEnded) {
             return;
         }
-        boolean mayComeBack = agent.process != null || agent.resumable(maxResumes) && agent.holdsOpenLane(observation);
+        // A fenced session refuses every call of its agent, so an agent resumed on it idled until the run
+        // ended. Its lane can be continued only by a new session, through the ordinary continuation: the
+        // connection is ended, and the agent is resumed once on a new one, where that is offered to it.
+        boolean fenced = agent.process == null && observation.sessionFenced(agent.spec.provider(), agent.connectionId);
+        boolean mayComeBack = !fenced && (agent.process != null || agent.resumable(maxResumes) && agent.holdsOpenLane(observation));
         if (mayComeBack && connections.keep(agent.connectionId)) {
             if (!agent.sessionKept) {
                 agent.sessionKept = true;
@@ -269,6 +275,7 @@ public final class AgentRunController {
             return;
         }
         if (agent.process == null) {
+            agent.fencedLaneToContinue = fenced && agent.holdsOpenLane(observation);
             agent.endConnection(connections, unrecordedEnds);
         }
     }
@@ -622,6 +629,20 @@ public final class AgentRunController {
         boolean holdsOpenLane(String provider, String connectionInstanceId);
 
         /**
+         * Reports whether the session behind one connection is fenced for recovery: its participant is
+         * suspended or held for recovery, so the MCP server refuses its calls with
+         * {@code SESSION_EPOCH_FENCED} and its lane can only be continued by a new session. A kept
+         * session gets there only when its keeper stopped renewing for longer than the grace period.
+         *
+         * @param provider             provider identifier
+         * @param connectionInstanceId connection of one of the agent's processes
+         * @return {@code true} while that session is fenced
+         */
+        default boolean sessionFenced(String provider, String connectionInstanceId) {
+            return false;
+        }
+
+        /**
          * One connection the controller gave a process of its own.
          *
          * @param provider             provider identifier
@@ -771,6 +792,8 @@ public final class AgentRunController {
         private boolean connectionEnded;
         /** Whether the session of its current connection has been kept at least once. */
         private boolean sessionKept;
+        /** Whether its last session was ended because it was fenced for recovery, its lane still to continue. */
+        private boolean fencedLaneToContinue;
 
         private Agent(int index, AgentSpec spec) {
             this.index = index;

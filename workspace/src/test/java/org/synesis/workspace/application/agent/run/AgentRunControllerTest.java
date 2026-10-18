@@ -111,6 +111,29 @@ final class AgentRunControllerTest {
     }
 
     /**
+     * A kept session whose participant was suspended (its keeper stopped renewing past the grace period)
+     * was resumed on the same connection, refused SESSION_EPOCH_FENCED at every call, and idled until
+     * the run ended. It is ended, and its agent is resumed once on a new connection, where continuing
+     * its held lane is offered to it, without waiting for progress.
+     */
+    @Test
+    void anAgentWhoseKeptSessionWasFencedIsResumedOnceInANewSessionToContinueItsLane() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.lifetimes(1, 20, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(5).announced();
+        script.at(3).head(7).fenced("claude#1");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches, "resumed once, though nothing progressed");
+        assertEquals(List.of(3), script.resumedAtTicks);
+        assertEquals(List.of("open conn-1", "open conn-2", "ended conn-1", "open conn-3"), script.connections.subList(0, 4), "the fenced session is ended, the resume is a new one");
+        assertEquals(Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-3"), script.environments.get(2));
+    }
+
+    /**
      * An end the project lock refused was given up, and the lease went on naming the controller for
      * an agent that had ended, its lane looking held by a live session until the run ended. It is
      * offered again at each observation until it is recorded.
@@ -906,6 +929,11 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public boolean sessionFenced(String provider, String connectionInstanceId) {
+                    return state.fenced.contains(agentOf.get(connectionInstanceId)) && Integer.valueOf(1).equals(ordinalOf.get(connectionInstanceId));
+                }
+
+                @Override
                 public boolean foreignActiveLaneOpen(List<Connection> managed) {
                     return state.foreignLane;
                 }
@@ -937,6 +965,13 @@ final class AgentRunControllerTest {
         private final List<String> operatorRequests = new ArrayList<>();
         private final Map<String, Long> messages = new java.util.HashMap<>();
         private final List<String> endedLanes = new ArrayList<>();
+        private final List<String> fenced = new ArrayList<>();
+
+        /** The session of this agent's first connection, by its label, is suspended or held for recovery. */
+        private State fenced(String agent) {
+            fenced.add(agent);
+            return this;
+        }
 
         /** The lane of this agent, by its label, has ended: integrated, cancelled or continued by another. */
         private State laneEnded(String agent) {

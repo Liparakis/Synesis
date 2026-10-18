@@ -159,6 +159,14 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             }
 
             @Override
+            public boolean sessionFenced(String provider, String connectionInstanceId) {
+                // The rule the MCP server's recovery fence applies to the same binding.
+                String participant = participantOf(provider, connectionInstanceId);
+                return participant != null && store.collaborationProjection().participantState(participant)
+                        .filter(state -> state == Participant.State.SUSPENDED || state == Participant.State.RECOVERY_HELD).isPresent();
+            }
+
+            @Override
             public boolean foreignActiveLaneOpen(List<AgentRunController.Observation.Connection> managed) {
                 java.util.Set<String> own = managed.stream().map(connection -> participantOf(connection.provider(), connection.connectionInstanceId()))
                         .filter(Objects::nonNull).collect(java.util.stream.Collectors.toUnmodifiableSet());

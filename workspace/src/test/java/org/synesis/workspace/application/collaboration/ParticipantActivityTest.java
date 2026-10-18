@@ -125,6 +125,26 @@ class ParticipantActivityTest {
         assertTrue(observer.observe().holdsOpenLane("codex", "chat-a"), "the same connection holds its next lane");
     }
 
+    /** The controller reads a suspended session as its MCP server's recovery fence does (ADR-0099, amendment). */
+    @Test
+    void theRunControllerSeesASuspendedSessionAsFenced(@TempDir Path temp) throws Exception {
+        ProjectLocation location = project(temp.resolve("fenced"));
+        EventLogObserver observer = new EventLogObserver(location);
+        lane(location, "chat-a", "src/a.txt");
+        lane(location, "chat-b", "src/b.txt");
+        assertFalse(observer.observe().sessionFenced("codex", "chat-a"));
+
+        String participant = WorkspaceCollaborationService.participantHandle(new ProviderSessionBindingService().find(location, "codex", "chat-a").orElseThrow().sessionId());
+        new org.synesis.coordination.application.WorkIntentService(location.openCoordinationStore(), location.loadOrCreateIdentity()).suspend(participant);
+
+        AgentRunController.Observation fenced = observer.observe();
+        assertTrue(fenced.sessionFenced("codex", "chat-a"));
+        assertTrue(service.recoveryFenced(location.root(), "codex", "chat-a"), "the same rule as the MCP server's fence");
+        assertTrue(fenced.holdsOpenLane("codex", "chat-a"), "its lane waits to be continued");
+        assertFalse(fenced.sessionFenced("codex", "chat-b"));
+        assertFalse(fenced.sessionFenced("codex", "chat-never"));
+    }
+
     @Test
     void aVerifiedCallAppendsNothingToTheLog(@TempDir Path temp) throws Exception {
         ProjectLocation location = project(temp.resolve("quiet"));
