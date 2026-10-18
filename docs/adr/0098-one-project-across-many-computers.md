@@ -964,8 +964,12 @@ Decided while building step 6 (designer, 2026-10-18; each open to the owner):
 7. **Membership is a projection like the others.** A new stage, `MembershipProjection`, applies the membership
    entries in each computer's applied order. Whether an entry counts is judged by the same rules on the writer's own
    append and on arrival (`AppendAdmission`), and one that fails counts for nothing, as in step 4. A project with no
-   `PROJECT_SHARED` is not shared: membership checks nothing there. The owner's statements come from one log, so they
-   meet nothing; the only two lines that can cross are the old owner's and a recovery change (item 12).
+   `PROJECT_SHARED` is not shared: membership checks nothing there. The owner's statements come from one log, but
+   they refer to entries of other logs (a request in the inviting member's log, a member's acceptance), so an arriving
+   entry that refers to what this computer has not applied yet waits for it, as a missing reference does in step 4:
+   an answer before its request, an entry of a computer whose acceptance has not arrived, an owner statement of a
+   later revision. Every computer then ends with the same membership whatever the order. Only the old owner's line and
+   a recovery change can still cross (item 12). (Corrected after the code review of step 6.)
 8. **The entries** (wire codes 83 to 89): `PROJECT_SHARED` {owner public key, recovery public key or none}, written
    once by the owner's computer, whose node key it names; `JOIN_REQUESTED` {request, joiner node}, written by
    the member that holds the joiner's session (the session was authenticated with the joiner's key, and nothing needs
@@ -976,9 +980,12 @@ Decided while building step 6 (designer, 2026-10-18; each open to the owner):
    statements applied before it; a statement is written at the revision its writer holds, so an old one cannot be
    replayed later.
 9. **Who may write what.** `JOIN_REQUESTED` and `MEMBER_CARD`: any member. `JOIN_ANSWERED`: the owner; under
-   `ANY_MEMBER` also any member, accepting only (a decline is the owner's). `JOIN_POLICY_SET` and `MEMBER_REMOVED`:
-   the owner. `OWNER_CHANGED`: the owner, or any member carrying a valid recovery signature over the project, the
-   action, the new keys and the revision. A request is answered once; the first valid answer applied stands.
+   `ANY_MEMBER` also any member, accepting only (a decline is the owner's), judged by the policy in force at the
+   revision the answer carries. `JOIN_POLICY_SET` and `MEMBER_REMOVED`: the owner. `OWNER_CHANGED`: the owner, or any
+   member carrying a valid recovery signature over the project, the action, the new keys and the revision. The owner's
+   answer decides and always takes its revision, even over a member's acceptance applied before it (a decline then
+   removes the joiner again); a member's acceptance counts only while no answer is applied. A computer that joined
+   another's project (it dialed an inviter, or holds another computer's log) never shares one itself.
 10. **Members and logs.** The members are the owner and every accepted joiner not removed. A computer serves and pulls
     only members; it copies every log of anyone who was ever a member, so a removed computer's log stays complete. An
     entry of a removed computer's log after the head its removal names counts for nothing. One the computer had
@@ -1135,6 +1142,16 @@ The two-homes run with the friend's PC is repeated after step 5 as a check, not 
 - **Nothing pushed into a computer:** the Link code mover runs no `git push` toward a peer and no command a peer chose.
 
 ## Unresolved
+
+- **Left by the code review of step 6** (2026-10-18), each recorded rather than built: before `PROJECT_SHARED`
+  arrives a joiner trusts its inviter about who the owner is (the project link does not name the owner); a
+  re-admitted computer's removal head is forgotten; an old recovery statement stays usable until the recovery key is
+  rotated; a member that runs `link accept` before the owner answers gets `MEMBER_NOT_SAVED` rather than "waiting for
+  the owner"; `MembershipView` replays the log in a store of its own and serves a removed member for up to half a
+  second; `MemberReplication`, the settings-based `LeaderReplication` constructors and `becomeMember` are dead in
+  production; `LinkRuntimeOwner` has grown past 1,200 lines and its card code could be a class of its own; the
+  `MemberAdmission` callbacks other than `admit` are defaults, so another implementation could skip the durable
+  request. For the simplification after step 7 (ADR-0101).
 
 - **Every throw an arriving entry can reach.** Classified on 2026-10-18 in ADR-0100, "Every rule an arriving entry
   can reach", and built in step 4; what still depends on order is designer item 18.

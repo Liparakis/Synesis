@@ -21,6 +21,7 @@ import org.synesis.coordination.domain.membership.MembershipEntries.ProjectShare
 import org.synesis.coordination.domain.prediction.ApplyMode;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.exception.CoordinationException;
+import org.synesis.coordination.exception.MissingReferenceException;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
@@ -30,13 +31,24 @@ import org.synesis.link.identity.NodeIdentity;
  * {@code PROJECT_SHARED} is not shared, and nothing here refuses anything there.
  *
  * <p>Every rule is checked in {@link #validate}, on this computer's own append and on arrival alike; an arriving entry
- * that breaks one counts for nothing, as in step 4. One rule reaches every entry, not only membership ones: an entry of
- * a removed computer's log after the head its removal names counts for nothing.</p>
+ * that breaks one counts for nothing, as in step 4. An arriving entry that refers to what this computer has not
+ * applied yet (a request in another member's log, an acceptance not arrived, an owner statement of a later revision)
+ * waits for it, so every computer ends with the same membership whatever the order. One rule reaches every entry, not
+ * only membership ones: an entry of a removed computer's log after the head its removal names counts for nothing.</p>
  */
 public final class MembershipProjection {
 
-    /** One join request and its answer. */
-    public record JoinRequest(UUID requestId, String joinerNodeId, String inviterNodeId, Optional<Boolean> accepted) {
+    /**
+     * One join request and its answer.
+     *
+     * @param requestId       the request
+     * @param joinerNodeId    the joining computer
+     * @param inviterNodeId   the member that holds its session and wrote the request
+     * @param accepted        the answer applied, or empty while none is
+     * @param answeredByOwner whether the owner gave that answer
+     */
+    public record JoinRequest(UUID requestId, String joinerNodeId, String inviterNodeId, Optional<Boolean> accepted,
+                              boolean answeredByOwner) {
     }
 
     private boolean shared;
@@ -44,6 +56,8 @@ public final class MembershipProjection {
     private byte[] recoveryPublicKey = new byte[0];
     private long revision;
     private JoinPolicy policy = JoinPolicy.OWNER_ONLY;
+    /** Each policy by the revision it took effect at, so a member's answer is judged by the policy it was written under. */
+    private final java.util.TreeMap<Long, JoinPolicy> policies = new java.util.TreeMap<>();
     private final Set<String> members = new LinkedHashSet<>();
     private final Set<String> everMembers = new LinkedHashSet<>();
     private final Map<String, Long> removedHeads = new LinkedHashMap<>();
@@ -91,7 +105,7 @@ public final class MembershipProjection {
             }
             case JOIN_REQUESTED -> {
                 JoinRequested payload = JoinRequested.decode(event.payload());
-                requireWrittenAsMember(signer, writtenAsMember);
+                requireWrittenAsMember(signer, writtenAsMember, mode);
                 if (!NodeIdentity.isNodeId(payload.joinerNodeId())) {
                     throw new CoordinationException("JOINER_NOT_A_NODE_ID");
                 }
@@ -102,61 +116,80 @@ public final class MembershipProjection {
                     throw new CoordinationException("JOIN_REQUEST_EXISTS");
                 }
             }
-            case JOIN_ANSWERED -> {
-                JoinAnswered payload = JoinAnswered.decode(event.payload());
-                requireShared();
-                JoinRequest request = requests.get(payload.requestId());
-                if (request == null || !request.joinerNodeId().equals(payload.joinerNodeId())) {
-                    throw new CoordinationException("JOIN_REQUEST_NOT_FOUND");
-                }
-                if (request.accepted().isPresent()) {
-                    throw new CoordinationException("JOIN_ALREADY_ANSWERED");
-                }
-                if (signer.equals(ownerNodeId)) {
-                    requireRevision(payload.revision());
-                } else if (policy != JoinPolicy.ANY_MEMBER || !payload.accepted() || !writtenAsMember) {
-                    throw new CoordinationException("JOIN_ANSWER_NOT_THE_OWNERS");
-                }
-            }
-            case JOIN_POLICY_SET -> {
-                JoinPolicySet payload = JoinPolicySet.decode(event.payload());
-                requireOwner(signer);
-                requireRevision(payload.revision());
-            }
+            case JOIN_ANSWERED -> validateAnswer(JoinAnswered.decode(event.payload()), signer, writtenAsMember, mode);
+            case JOIN_POLICY_SET -> requireOwnerStatement(signer, JoinPolicySet.decode(event.payload()).revision(), mode);
             case MEMBER_REMOVED -> {
                 MemberRemoved payload = MemberRemoved.decode(event.payload());
-                requireOwner(signer);
-                requireRevision(payload.revision());
+                requireOwnerStatement(signer, payload.revision(), mode);
+                if (!members.contains(payload.nodeId()) && !everMembers.contains(payload.nodeId())) {
+                    // A member accepted by another member's entry this computer has not applied yet.
+                    throw missing(mode, "NOT_A_REMOVABLE_MEMBER");
+                }
                 if (!members.contains(payload.nodeId()) || payload.nodeId().equals(ownerNodeId)) {
                     throw new CoordinationException("NOT_A_REMOVABLE_MEMBER");
                 }
             }
             case MEMBER_CARD -> {
                 MemberCard.decode(event.payload());
-                requireWrittenAsMember(signer, writtenAsMember);
+                requireWrittenAsMember(signer, writtenAsMember, mode);
             }
-            case OWNER_CHANGED -> validateOwnerChange(OwnerChanged.decode(event.payload()), signer, writtenAsMember);
+            case OWNER_CHANGED -> validateOwnerChange(OwnerChanged.decode(event.payload()), signer, writtenAsMember, mode);
             default -> {
             }
         }
     }
 
-    private void validateOwnerChange(OwnerChanged payload, String signer, boolean writtenAsMember) throws IOException {
-        requireShared();
+    /**
+     * Judges an answer so that every computer ends the same whatever order the answers arrive in: the owner's answer
+     * decides and takes its revision, even over a member's acceptance applied before it; a member's acceptance counts
+     * only while no answer is applied, under the policy of the revision it was written at.
+     */
+    private void validateAnswer(JoinAnswered payload, String signer, boolean writtenAsMember, ApplyMode mode) throws IOException {
+        requireShared(mode);
+        JoinRequest request = requests.get(payload.requestId());
+        if (request == null) {
+            // The request is in the inviting member's log, which may arrive after the answer.
+            throw missing(mode, "JOIN_REQUEST_NOT_FOUND");
+        }
+        if (!request.joinerNodeId().equals(payload.joinerNodeId())) {
+            throw new CoordinationException("JOIN_REQUEST_NOT_FOUND");
+        }
+        if (payload.revision() > revision) {
+            // Written after owner statements this computer has not applied yet.
+            throw missing(mode, "STATEMENT_REVISION_STALE");
+        }
+        if (signer.equals(ownerNodeId)) {
+            requireRevision(payload.revision());
+            if (request.answeredByOwner()) {
+                throw new CoordinationException("JOIN_ALREADY_ANSWERED");
+            }
+            return;
+        }
+        if (request.accepted().isPresent()) {
+            throw new CoordinationException("JOIN_ALREADY_ANSWERED");
+        }
+        if (policyAt(payload.revision()) != JoinPolicy.ANY_MEMBER || !payload.accepted() || !writtenAsMember) {
+            throw new CoordinationException("JOIN_ANSWER_NOT_THE_OWNERS");
+        }
+    }
+
+    private void validateOwnerChange(OwnerChanged payload, String signer, boolean writtenAsMember, ApplyMode mode) throws IOException {
+        requireShared(mode);
         String newOwner = NodeIdentity.deriveNodeId(payload.ownerPublicKey());
         if (!members.contains(newOwner)) {
-            throw new CoordinationException("NEW_OWNER_NOT_A_MEMBER");
+            throw everMembers.contains(newOwner) ? new CoordinationException("NEW_OWNER_NOT_A_MEMBER") : missing(mode, "NEW_OWNER_NOT_A_MEMBER");
         }
         if (payload.recoverySignature().length == 0) {
-            requireOwner(signer);
-            requireRevision(payload.revision());
+            requireOwnerStatement(signer, payload.revision(), mode);
             return;
         }
         // The recovery key speaks for the owner from any member's computer, at the revision it saw or an earlier one,
         // once: a used signature never authorises a later change back.
-        requireWrittenAsMember(signer, writtenAsMember);
-        if (recoveryPublicKey.length == 0 || payload.revision() > revision
-                || usedRecoveryStatements.contains(java.util.HexFormat.of().formatHex(payload.recoverySignature()))) {
+        requireWrittenAsMember(signer, writtenAsMember, mode);
+        if (payload.revision() > revision) {
+            throw missing(mode, "RECOVERY_STATEMENT_INVALID");
+        }
+        if (recoveryPublicKey.length == 0 || usedRecoveryStatements.contains(java.util.HexFormat.of().formatHex(payload.recoverySignature()))) {
             throw new CoordinationException("RECOVERY_STATEMENT_INVALID");
         }
         try {
@@ -189,26 +222,13 @@ public final class MembershipProjection {
             }
             case JOIN_REQUESTED -> {
                 JoinRequested payload = JoinRequested.decode(event.payload());
-                requests.putIfAbsent(payload.requestId(), new JoinRequest(payload.requestId(), payload.joinerNodeId(), signer, Optional.empty()));
+                requests.putIfAbsent(payload.requestId(), new JoinRequest(payload.requestId(), payload.joinerNodeId(), signer, Optional.empty(), false));
             }
-            case JOIN_ANSWERED -> {
-                JoinAnswered payload = JoinAnswered.decode(event.payload());
-                JoinRequest request = requests.get(payload.requestId());
-                if (request == null || request.accepted().isPresent()) {
-                    return;
-                }
-                requests.put(payload.requestId(), new JoinRequest(request.requestId(), request.joinerNodeId(), request.inviterNodeId(),
-                        Optional.of(payload.accepted())));
-                if (payload.accepted()) {
-                    admit(payload.joinerNodeId());
-                }
-                if (signer.equals(ownerNodeId)) {
-                    revision++;
-                }
-            }
+            case JOIN_ANSWERED -> applyAnswer(JoinAnswered.decode(event.payload()), signer);
             case JOIN_POLICY_SET -> {
-                policy = JoinPolicySet.decode(event.payload()).policy();
                 revision++;
+                policy = JoinPolicySet.decode(event.payload()).policy();
+                policies.put(revision, policy);
             }
             case MEMBER_REMOVED -> {
                 MemberRemoved payload = MemberRemoved.decode(event.payload());
@@ -237,30 +257,78 @@ public final class MembershipProjection {
         }
     }
 
+    private void applyAnswer(JoinAnswered payload, String signer) {
+        JoinRequest request = requests.get(payload.requestId());
+        if (request == null) {
+            return;
+        }
+        if (signer.equals(ownerNodeId)) {
+            revision++;
+            boolean wasAccepted = request.accepted().orElse(false);
+            requests.put(request.requestId(), new JoinRequest(request.requestId(), request.joinerNodeId(), request.inviterNodeId(),
+                    Optional.of(payload.accepted()), true));
+            if (payload.accepted()) {
+                admit(request.joinerNodeId());
+            } else if (wasAccepted) {
+                // The owner's decline decides over a member's acceptance that arrived first; the joiner's log stays copied.
+                members.remove(request.joinerNodeId());
+                cards.remove(request.joinerNodeId());
+            }
+            return;
+        }
+        if (request.accepted().isEmpty() && payload.accepted()) {
+            requests.put(request.requestId(), new JoinRequest(request.requestId(), request.joinerNodeId(), request.inviterNodeId(),
+                    Optional.of(true), false));
+            admit(request.joinerNodeId());
+        }
+    }
+
     private void admit(String node) {
         members.add(node);
         everMembers.add(node);
         removedHeads.remove(node);
     }
 
-    private void requireShared() throws CoordinationException {
+    private JoinPolicy policyAt(long statementRevision) {
+        Map.Entry<Long, JoinPolicy> set = policies.floorEntry(statementRevision);
+        return set == null ? JoinPolicy.OWNER_ONLY : set.getValue();
+    }
+
+    /**
+     * What an entry that refers to something this computer has not applied yet meets: on this computer's own append a
+     * refusal, on arrival a wait, so the entry applies once what it refers to has arrived, the same on every computer.
+     */
+    private static CoordinationException missing(ApplyMode mode, String code) {
+        return mode.checking() ? new CoordinationException(code) : new MissingReferenceException(code);
+    }
+
+    private void requireShared(ApplyMode mode) throws CoordinationException {
         if (!shared) {
-            throw new CoordinationException("PROJECT_NOT_SHARED");
+            throw missing(mode, "PROJECT_NOT_SHARED");
         }
     }
 
-    private void requireWrittenAsMember(String node, boolean writtenAsMember) throws CoordinationException {
-        requireShared();
+    private void requireWrittenAsMember(String node, boolean writtenAsMember, ApplyMode mode) throws CoordinationException {
+        requireShared(mode);
         if (!writtenAsMember) {
-            throw new CoordinationException("NOT_A_MEMBER");
+            // A computer whose acceptance has not arrived here yet, unless it is one this computer saw removed.
+            throw everMembers.contains(node) ? new CoordinationException("NOT_A_MEMBER") : missing(mode, "NOT_A_MEMBER");
         }
     }
 
-    private void requireOwner(String node) throws CoordinationException {
-        requireShared();
-        if (!node.equals(ownerNodeId)) {
+    /**
+     * An owner statement: written by the owner at the revision it holds. One written at a later revision waits for the
+     * statements before it, which may include the change that made its writer the owner.
+     */
+    private void requireOwnerStatement(String signer, long stated, ApplyMode mode) throws CoordinationException {
+        requireShared(mode);
+        if (stated > revision) {
+            throw missing(mode, "STATEMENT_REVISION_STALE");
+        }
+        if (!signer.equals(ownerNodeId)) {
             throw new CoordinationException("NOT_THE_OWNER");
         }
+        requireRevision(stated);
     }
 
     private void requireRevision(long stated) throws CoordinationException {
@@ -275,45 +343,68 @@ public final class MembershipProjection {
         }
     }
 
-    /** @return whether the project has been shared */
+    /**
+     * Returns whether the project has been shared.
+     *
+     * @return whether the project has been shared
+     */
     public synchronized boolean shared() {
         return shared;
     }
 
-    /** @return the owner's computer, or empty before the project is shared */
+    /**
+     * Returns the owner's computer, or empty before the project is shared.
+     *
+     * @return the owner's computer, or empty before the project is shared
+     */
     public synchronized Optional<String> owner() {
         return Optional.ofNullable(ownerNodeId);
     }
 
-    /** @return the recovery key's public half, empty when the project has none */
+    /**
+     * Returns the recovery key's public half, empty when the project has none.
+     *
+     * @return the recovery key's public half, empty when the project has none
+     */
     public synchronized byte[] recoveryPublicKey() {
         return recoveryPublicKey.clone();
     }
 
-    /** @return the number of owner statements applied: the revision the next one is written at */
+    /**
+     * Returns the number of owner statements applied: the revision the next one is written at.
+     *
+     * @return the number of owner statements applied: the revision the next one is written at
+     */
     public synchronized long revision() {
         return revision;
     }
 
-    /** @return who may answer a join besides the owner */
+    /**
+     * Returns who may answer a join besides the owner.
+     *
+     * @return who may answer a join besides the owner
+     */
     public synchronized JoinPolicy policy() {
         return policy;
     }
 
-    /** @return the current members, the owner first */
+    /**
+     * Returns the current members, the owner first.
+     *
+     * @return the current members, the owner first
+     */
     public synchronized Set<String> members() {
         return Set.copyOf(members);
     }
 
     /**
-     * Whether a computer belongs to the project now. In a project that is not shared, every computer does: nothing
-     * here decides anything there.
+     * Whether a computer belongs to the shared project now; in a project that is not shared, none does.
      *
      * @param node the computer
      * @return whether it is a member
      */
     public synchronized boolean isMember(String node) {
-        return !shared || members.contains(node);
+        return shared && members.contains(node);
     }
 
     /**
@@ -338,17 +429,29 @@ public final class MembershipProjection {
         return head == null ? OptionalLong.empty() : OptionalLong.of(head);
     }
 
-    /** @return the join requests, oldest first */
+    /**
+     * Returns the join requests, oldest first.
+     *
+     * @return the join requests, oldest first
+     */
     public synchronized List<JoinRequest> requests() {
         return List.copyOf(requests.values());
     }
 
-    /** @return the join requests no one has answered yet, oldest first */
+    /**
+     * Returns the join requests no one has answered yet, oldest first.
+     *
+     * @return the join requests no one has answered yet, oldest first
+     */
     public synchronized List<JoinRequest> openRequests() {
         return requests.values().stream().filter(request -> request.accepted().isEmpty()).toList();
     }
 
-    /** @return each member's retained invitation, by computer */
+    /**
+     * Returns each member's retained invitation, by computer.
+     *
+     * @return each member's retained invitation, by computer
+     */
     public synchronized Map<String, String> cards() {
         return Map.copyOf(cards);
     }

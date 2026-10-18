@@ -135,6 +135,7 @@ public final class ProjectSharing {
      *
      * @param root          the project folder
      * @param coordination  the project's coordination folder
+     * @param membership    this computer's membership entries
      * @param nodeId        the node an accepted request came from
      * @param codeRemoteUrl the URL the invitation carried, or {@code null} when it carried none
      * @throws Refusal {@code NOT_A_LEADER} on a member

@@ -36,6 +36,8 @@ public final class MembershipView {
     private long refreshedAt;
 
     /**
+     * Reads the membership of one project on this computer.
+     *
      * @param root      this computer's coordination folder
      * @param projectId the project
      * @param self      this computer's node, which is never among the computers it exchanges with

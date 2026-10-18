@@ -116,7 +116,7 @@ final class MembershipStoreTest {
         PredictionEventStore storeA = store("a");
         MembershipProjection membership = storeA.membershipProjection();
         assertFalse(membership.shared());
-        assertTrue(membership.isMember(UUID.randomUUID().toString()));
+        assertFalse(membership.isMember(UUID.randomUUID().toString()), "an unshared project fails closed: no one is a member");
         assertTrue(membership.logCopied(c.nodeId()));
         assertTrue(membership.owner().isEmpty());
     }
@@ -446,6 +446,171 @@ final class MembershipStoreTest {
         assertEquals(1, after.openRequests().size());
         assertEquals(Set.of(a.nodeId()), after.members());
         assertTrue(reopened.collaborationProjection().activeIntents().isEmpty());
+    }
+
+    /** The first {@code count} entries of {@code writer}'s log in {@code from} that {@code to} lacks, placed in {@code to}. */
+    private static void pullUpTo(PredictionEventStore from, String fromLog, PredictionEventStore to, String writer, int count)
+            throws Exception {
+        List<byte[]> entries = from.entriesAfter(fromLog, to.logHeads().getOrDefault(writer, 0L), count, Integer.MAX_VALUE);
+        to.placeCopies(writer, entries);
+    }
+
+    /** A wait is reported as waiting, never as an entry that counts for nothing. */
+    private static void assertWaiting(PredictionEventStore store, String code) throws Exception {
+        assertEquals(1, store.problems().size(), store.problems().toString());
+        assertTrue(store.problems().getFirst().contains("waiting " + code), store.problems().toString());
+    }
+
+    private static void assertSameMembership(MembershipProjection expected, MembershipProjection actual) {
+        assertEquals(expected.owner(), actual.owner());
+        assertEquals(expected.members(), actual.members());
+        assertEquals(expected.revision(), actual.revision());
+        assertEquals(expected.policy(), actual.policy());
+    }
+
+    @Test
+    void anAnswerArrivingBeforeItsRequestWaitsAndThenAppliesLikeAtTheOwner() throws Exception {
+        PredictionEventStore[] stores = sharedWithB(new byte[0]);
+        PredictionEventStore storeA = stores[0];
+        PredictionEventStore storeB = stores[1];
+        UUID id = UUID.randomUUID();
+        put(storeB, b, PredictionEventType.JOIN_REQUESTED, request(id, c));
+        pull(storeB, PredictionEventStore.OWN_LOG, storeA, b.nodeId());
+        put(storeA, a, PredictionEventType.JOIN_ANSWERED, answer(id, c, true, 1));
+        assertEquals(Set.of(a.nodeId(), b.nodeId(), c.nodeId()), storeA.membershipProjection().members());
+        assertEquals(2, storeA.membershipProjection().revision());
+
+        // The answer is in the owner's log, the request in B's: a computer that pulls the owner first sees the answer first.
+        PredictionEventStore storeC = store("c");
+        pull(storeA, PredictionEventStore.OWN_LOG, storeC, a.nodeId());
+        assertEquals(Set.of(a.nodeId(), b.nodeId()), storeC.membershipProjection().members(), "the answer waits for its request");
+        assertEquals(1, storeC.membershipProjection().revision());
+        assertWaiting(storeC, "JOIN_REQUEST_NOT_FOUND");
+
+        pull(storeB, PredictionEventStore.OWN_LOG, storeC, b.nodeId());
+        assertSameMembership(storeA.membershipProjection(), storeC.membershipProjection());
+        assertEquals(Set.of(a.nodeId(), b.nodeId(), c.nodeId()), storeC.membershipProjection().members());
+        assertEquals(storeA.events().size(), storeC.events().size());
+        assertTrue(storeC.problems().isEmpty(), storeC.problems().toString());
+
+        put(storeA, a, PredictionEventType.JOIN_POLICY_SET, new JoinPolicySet(JoinPolicy.ANY_MEMBER, 2).encode());
+        pull(storeA, PredictionEventStore.OWN_LOG, storeC, a.nodeId());
+        assertSameMembership(storeA.membershipProjection(), storeC.membershipProjection());
+        assertEquals(3, storeC.membershipProjection().revision());
+        assertEquals(JoinPolicy.ANY_MEMBER, storeC.membershipProjection().policy());
+        assertTrue(storeC.problems().isEmpty(), storeC.problems().toString());
+    }
+
+    @Test
+    void theOwnersDeclineDecidesOverAMembersAcceptanceWhicheverArrivesFirst() throws Exception {
+        PredictionEventStore[] stores = sharedWithB(new byte[0]);
+        PredictionEventStore storeA = stores[0];
+        PredictionEventStore storeB = stores[1];
+        put(storeA, a, PredictionEventType.JOIN_POLICY_SET, new JoinPolicySet(JoinPolicy.ANY_MEMBER, 1).encode());
+        sync(storeA, a, storeB, b);
+        UUID id = UUID.randomUUID();
+        put(storeB, b, PredictionEventType.JOIN_REQUESTED, request(id, c));
+        pull(storeB, PredictionEventStore.OWN_LOG, storeA, b.nodeId());
+        // The owner declines without B's acceptance; B accepts without the owner's decline: both at revision 2.
+        put(storeA, a, PredictionEventType.JOIN_ANSWERED, answer(id, c, false, 2));
+        put(storeB, b, PredictionEventType.JOIN_ANSWERED, answer(id, c, true, 2));
+
+        // Decline first: A's whole log, then B's request, so the decline applies before B's acceptance arrives.
+        PredictionEventStore declineFirst = store("decline-first");
+        pull(storeA, PredictionEventStore.OWN_LOG, declineFirst, a.nodeId());
+        pullUpTo(storeB, PredictionEventStore.OWN_LOG, declineFirst, b.nodeId(), 1);
+        assertEquals(3, declineFirst.membershipProjection().revision());
+        pullUpTo(storeB, PredictionEventStore.OWN_LOG, declineFirst, b.nodeId(), 1);
+
+        // Acceptance first: A's log up to the policy, then B's request and acceptance, then the decline.
+        PredictionEventStore acceptFirst = store("accept-first");
+        pullUpTo(storeA, PredictionEventStore.OWN_LOG, acceptFirst, a.nodeId(), 4);
+        pull(storeB, PredictionEventStore.OWN_LOG, acceptFirst, b.nodeId());
+        assertTrue(acceptFirst.membershipProjection().isMember(c.nodeId()), "the acceptance counts while no answer is applied");
+        assertEquals(2, acceptFirst.membershipProjection().revision(), "a member's acceptance is not an owner statement");
+        pull(storeA, PredictionEventStore.OWN_LOG, acceptFirst, a.nodeId());
+
+        for (PredictionEventStore end : List.of(declineFirst, acceptFirst, storeA)) {
+            assertEquals(Set.of(a.nodeId(), b.nodeId()), end.membershipProjection().members(), "the owner decides: the joiner is out");
+            assertEquals(3, end.membershipProjection().revision());
+            assertTrue(end.membershipProjection().openRequests().isEmpty());
+        }
+        assertSameMembership(declineFirst.membershipProjection(), acceptFirst.membershipProjection());
+        assertSameMembership(storeA.membershipProjection(), acceptFirst.membershipProjection());
+        assertFalse(acceptFirst.membershipProjection().cards().containsKey(c.nodeId()));
+        assertTrue(acceptFirst.problems().isEmpty(), acceptFirst.problems().toString());
+        assertEquals(1, declineFirst.problems().size(), "the late acceptance is a fact that counts for nothing: " + declineFirst.problems());
+        assertTrue(declineFirst.problems().getFirst().contains("JOIN_ALREADY_ANSWERED"), declineFirst.problems().toString());
+    }
+
+    @Test
+    void aMembersAcceptanceIsJudgedByThePolicyOfTheRevisionItCarries() throws Exception {
+        PredictionEventStore[] stores = sharedWithB(new byte[0]);
+        PredictionEventStore storeA = stores[0];
+        PredictionEventStore storeB = stores[1];
+        put(storeA, a, PredictionEventType.JOIN_POLICY_SET, new JoinPolicySet(JoinPolicy.ANY_MEMBER, 1).encode());
+        sync(storeA, a, storeB, b);
+        UUID wide = UUID.randomUUID();
+        put(storeB, b, PredictionEventType.JOIN_REQUESTED, request(wide, c));
+        put(storeB, b, PredictionEventType.JOIN_ANSWERED, answer(wide, c, true, 2));
+        // The owner narrows the policy again, before B's acceptance reaches it.
+        put(storeA, a, PredictionEventType.JOIN_POLICY_SET, new JoinPolicySet(JoinPolicy.OWNER_ONLY, 2).encode());
+        assertEquals(JoinPolicy.OWNER_ONLY, storeA.membershipProjection().policy());
+
+        PredictionEventStore storeC = store("c");
+        pull(storeA, PredictionEventStore.OWN_LOG, storeC, a.nodeId());
+        pull(storeB, PredictionEventStore.OWN_LOG, storeC, b.nodeId());
+        assertEquals(JoinPolicy.OWNER_ONLY, storeC.membershipProjection().policy());
+        assertTrue(storeC.membershipProjection().isMember(c.nodeId()), "written under ANY_MEMBER, valid after OWNER_ONLY is back");
+        assertEquals(3, storeC.membershipProjection().revision());
+        assertTrue(storeC.problems().isEmpty(), storeC.problems().toString());
+
+        // One written at an OWNER_ONLY revision is refused where it is written ...
+        UUID narrow = UUID.randomUUID();
+        pull(storeA, PredictionEventStore.OWN_LOG, storeB, a.nodeId());
+        put(storeB, b, PredictionEventType.JOIN_REQUESTED, request(narrow, NodeIdentity.generate()));
+        String joiner = storeB.membershipProjection().openRequests().getFirst().joinerNodeId();
+        assertEquals("JOIN_ANSWER_NOT_THE_OWNERS", refusal(storeB, b, PredictionEventType.JOIN_ANSWERED,
+                new JoinAnswered(narrow, joiner, true, 3).encode()));
+
+        // ... and counts for nothing where it arrives, however it got there.
+        List<byte[]> bLog = storeB.entriesAfter(PredictionEventStore.OWN_LOG, 0, 100, Integer.MAX_VALUE);
+        byte[] previous = PredictionEvent.decode(bLog.getLast()).digest();
+        byte[] forged = PredictionEvent.create(new ProjectId(project), new PredictionId(UUID.randomUUID()),
+                new EventSequence(bLog.size() + 1L), PredictionEventType.JOIN_ANSWERED, new NodeId(b.nodeId()),
+                new JoinAnswered(narrow, joiner, true, 3).encode(), previous, b, System.currentTimeMillis()).encoded();
+        pull(storeB, PredictionEventStore.OWN_LOG, storeC, b.nodeId());
+        assertEquals(1, storeC.placeCopies(b.nodeId(), List.of(forged)));
+        assertFalse(storeC.membershipProjection().isMember(joiner));
+        assertEquals(1, storeC.problems().size(), storeC.problems().toString());
+        assertTrue(storeC.problems().getFirst().contains("JOIN_ANSWER_NOT_THE_OWNERS"), storeC.problems().toString());
+    }
+
+    @Test
+    void anOwnerStatementOfALaterRevisionWaitsForTheStatementsBeforeIt() throws Exception {
+        PredictionEventStore[] stores = sharedWithB(new byte[0]);
+        PredictionEventStore storeA = stores[0];
+        PredictionEventStore storeB = stores[1];
+        // A hands the project to B at revision 1; B, now the owner, sets the policy at revision 2.
+        put(storeA, a, PredictionEventType.OWNER_CHANGED, ownerChange(b, new byte[0], 1, new byte[0]));
+        sync(storeA, a, storeB, b);
+        put(storeB, b, PredictionEventType.JOIN_POLICY_SET, new JoinPolicySet(JoinPolicy.ANY_MEMBER, 2).encode());
+        sync(storeA, a, storeB, b);
+
+        PredictionEventStore storeC = store("c");
+        pullUpTo(storeA, PredictionEventStore.OWN_LOG, storeC, a.nodeId(), 3);
+        pull(storeB, PredictionEventStore.OWN_LOG, storeC, b.nodeId());
+        assertEquals(1, storeC.membershipProjection().revision(), "B's statement is of revision 2, ahead of the one this computer holds");
+        assertEquals(JoinPolicy.OWNER_ONLY, storeC.membershipProjection().policy());
+        assertEquals(a.nodeId(), storeC.membershipProjection().owner().orElseThrow());
+        assertWaiting(storeC, "STATEMENT_REVISION_STALE");
+
+        pull(storeA, PredictionEventStore.OWN_LOG, storeC, a.nodeId());
+        assertEquals(b.nodeId(), storeC.membershipProjection().owner().orElseThrow());
+        assertEquals(3, storeC.membershipProjection().revision());
+        assertEquals(JoinPolicy.ANY_MEMBER, storeC.membershipProjection().policy());
+        assertSameMembership(storeB.membershipProjection(), storeC.membershipProjection());
+        assertTrue(storeC.problems().isEmpty(), storeC.problems().toString());
     }
 
     private WorkIntent lane(String participant, String path) {

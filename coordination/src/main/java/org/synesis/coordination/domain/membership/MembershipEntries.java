@@ -49,7 +49,11 @@ public final class MembershipEntries {
             recoveryPublicKey = requireKey(recoveryPublicKey, true);
         }
 
-        /** @return the encoded payload */
+        /**
+         * Returns the encoded payload.
+         *
+         * @return the encoded payload
+         */
         public byte[] encode() {
             return WireFormat.encode(MAGIC, out -> {
                 KEYS.writeBytes(out, ownerPublicKey);
@@ -58,6 +62,8 @@ public final class MembershipEntries {
         }
 
         /**
+         * Decodes and validates one payload.
+         *
          * @param encoded bytes
          * @return the payload
          * @throws IOException when malformed
@@ -84,7 +90,11 @@ public final class MembershipEntries {
             requireText(joinerNodeId);
         }
 
-        /** @return the encoded payload */
+        /**
+         * Returns the encoded payload.
+         *
+         * @return the encoded payload
+         */
         public byte[] encode() {
             return WireFormat.encode(MAGIC, out -> {
                 writeUuid(out, requestId);
@@ -93,6 +103,8 @@ public final class MembershipEntries {
         }
 
         /**
+         * Decodes and validates one payload.
+         *
          * @param encoded bytes
          * @return the payload
          * @throws IOException when malformed
@@ -121,7 +133,11 @@ public final class MembershipEntries {
             requireRevision(revision);
         }
 
-        /** @return the encoded payload */
+        /**
+         * Returns the encoded payload.
+         *
+         * @return the encoded payload
+         */
         public byte[] encode() {
             return WireFormat.encode(MAGIC, out -> {
                 writeUuid(out, requestId);
@@ -132,6 +148,8 @@ public final class MembershipEntries {
         }
 
         /**
+         * Decodes and validates one payload.
+         *
          * @param encoded bytes
          * @return the payload
          * @throws IOException when malformed
@@ -157,7 +175,11 @@ public final class MembershipEntries {
             requireRevision(revision);
         }
 
-        /** @return the encoded payload */
+        /**
+         * Returns the encoded payload.
+         *
+         * @return the encoded payload
+         */
         public byte[] encode() {
             return WireFormat.encode(MAGIC, out -> {
                 TEXT.writeText(out, policy.name());
@@ -166,6 +188,8 @@ public final class MembershipEntries {
         }
 
         /**
+         * Decodes and validates one payload.
+         *
          * @param encoded bytes
          * @return the payload
          * @throws IOException when malformed, or the policy is unknown
@@ -195,7 +219,11 @@ public final class MembershipEntries {
             requireRevision(revision);
         }
 
-        /** @return the encoded payload */
+        /**
+         * Returns the encoded payload.
+         *
+         * @return the encoded payload
+         */
         public byte[] encode() {
             return WireFormat.encode(MAGIC, out -> {
                 TEXT.writeText(out, nodeId);
@@ -205,6 +233,8 @@ public final class MembershipEntries {
         }
 
         /**
+         * Decodes and validates one payload.
+         *
          * @param encoded bytes
          * @return the payload
          * @throws IOException when malformed
@@ -228,12 +258,18 @@ public final class MembershipEntries {
             requireText(invitation);
         }
 
-        /** @return the encoded payload */
+        /**
+         * Returns the encoded payload.
+         *
+         * @return the encoded payload
+         */
         public byte[] encode() {
             return WireFormat.encode(MAGIC, out -> TEXT.writeText(out, invitation));
         }
 
         /**
+         * Decodes and validates one payload.
+         *
          * @param encoded bytes
          * @return the payload
          * @throws IOException when malformed
@@ -295,7 +331,11 @@ public final class MembershipEntries {
             return buffer.array();
         }
 
-        /** @return the encoded payload */
+        /**
+         * Returns the encoded payload.
+         *
+         * @return the encoded payload
+         */
         public byte[] encode() {
             return WireFormat.encode(MAGIC, out -> {
                 KEYS.writeBytes(out, ownerPublicKey);
@@ -306,6 +346,8 @@ public final class MembershipEntries {
         }
 
         /**
+         * Decodes and validates one payload.
+         *
          * @param encoded bytes
          * @return the payload
          * @throws IOException when malformed

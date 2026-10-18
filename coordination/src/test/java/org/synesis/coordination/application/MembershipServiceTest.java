@@ -7,14 +7,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.membership.MembershipProjection;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationPeers;
+import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.link.identity.NodeIdentity;
 
 /**
@@ -147,5 +152,58 @@ final class MembershipServiceTest {
         service.requestJoin(joiner.nodeId());
 
         assertEquals(head, new PredictionEventStore(root, project).logHeads().get(PredictionEventStore.OWN_LOG));
+    }
+
+    private PredictionEventStore storeHoldingACopyOfAnotherLog() throws Exception {
+        NodeIdentity other = NodeIdentity.generate();
+        PredictionEventStore otherStore = new PredictionEventStore(root.resolve("other"), project);
+        UUID intentId = UUID.randomUUID();
+        new WorkIntentService(otherStore, other).announce(new WorkIntent(intentId, project, "agt-other", "codex", UUID.randomUUID(),
+                "Build a board", "CRUD", "base", List.of(ResourceSelector.pathExact("src/o.py")), 1, UUID.randomUUID(),
+                WorkIntent.defaultAuthorityLineage(intentId), WorkIntent.Status.ANNOUNCED, WorkIntent.Role.PRODUCER, List.of()));
+        PredictionEventStore mine = new PredictionEventStore(root, project);
+        mine.placeCopies(other.nodeId(), otherStore.entriesAfter(PredictionEventStore.OWN_LOG, 0, 100, Integer.MAX_VALUE));
+        assertTrue(mine.logHeads().containsKey(other.nodeId()));
+        return mine;
+    }
+
+    @Test
+    void aComputerWithADialLineNeverNamesItselfTheOwner() throws Exception {
+        ReplicationPeers.rememberDialed(root, NodeIdentity.generate().nodeId(), "synesis-link-invitation");
+        long head = new PredictionEventStore(root, project).logHeads().getOrDefault(PredictionEventStore.OWN_LOG, 0L);
+
+        assertEquals("JOINED_ANOTHER_PROJECT", assertThrows(IOException.class, () -> service.share(Optional.empty())).getMessage());
+
+        assertFalse(membership().shared());
+        assertEquals(head, new PredictionEventStore(root, project).logHeads().getOrDefault(PredictionEventStore.OWN_LOG, 0L));
+    }
+
+    @Test
+    void aComputerHoldingACopyOfAnotherLogNeverNamesItselfTheOwner() throws Exception {
+        MembershipService withCopy = new MembershipService(storeHoldingACopyOfAnotherLog(), owner);
+
+        assertEquals("JOINED_ANOTHER_PROJECT", assertThrows(IOException.class, () -> withCopy.share(Optional.empty())).getMessage());
+
+        assertFalse(membership().shared());
+    }
+
+    @Test
+    void aStepFiveOwnerFileSharesEvenWithMemberLogsCopiedAndALineDialed() throws Exception {
+        ReplicationSettings.leader(Set.of(joiner.nodeId())).write(root);
+        ReplicationPeers.rememberDialed(root, NodeIdentity.generate().nodeId(), "synesis-link-invitation");
+        MembershipService migrating = new MembershipService(storeHoldingACopyOfAnotherLog(), owner);
+
+        assertTrue(migrating.share(Optional.empty()));
+
+        assertEquals(owner.nodeId(), membership().owner().orElseThrow());
+    }
+
+    @Test
+    void aStepFiveMemberFileDoesNotShare() throws Exception {
+        ReplicationSettings.member(NodeIdentity.generate().nodeId()).write(root);
+        ReplicationPeers.rememberDialed(root, NodeIdentity.generate().nodeId(), "synesis-link-invitation");
+
+        assertEquals("JOINED_ANOTHER_PROJECT", assertThrows(IOException.class,
+                () -> new MembershipService(new PredictionEventStore(root, project), owner).share(Optional.empty())).getMessage());
     }
 }

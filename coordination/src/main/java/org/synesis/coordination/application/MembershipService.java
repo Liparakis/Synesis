@@ -33,6 +33,8 @@ public final class MembershipService {
     private final ProjectAppends appends;
 
     /**
+     * Writes this computer's membership entries to its log.
+     *
      * @param store  this computer's log
      * @param signer this computer
      */
@@ -53,6 +55,10 @@ public final class MembershipService {
         return appends.call(current -> {
             if (current.membershipProjection().shared()) {
                 return false;
+            }
+            // A computer that joined another's project waits for that owner's entries: it never names itself the owner.
+            if (joinedAnother(current)) {
+                throw new CoordinationException("JOINED_ANOTHER_PROJECT");
             }
             byte[] recoveryKey = recovery.map(RecoveryKey::publicKey).orElse(new byte[0]);
             current.append(UUID.randomUUID(), PredictionEventType.PROJECT_SHARED, signer.nodeId(),
@@ -217,6 +223,21 @@ public final class MembershipService {
     public boolean isMember(String nodeId) throws IOException, GeneralSecurityException {
         MembershipProjection membership = appends.fresh().membershipProjection();
         return membership.shared() && membership.members().contains(nodeId);
+    }
+
+    /**
+     * Whether this computer joined another computer's project: it dialed an inviter, or holds a copy of another
+     * computer's log. A step-5 owner's settings file says it shared its own (its copies are its members' logs).
+     */
+    private static boolean joinedAnother(PredictionEventStore current) throws IOException, GeneralSecurityException {
+        Optional<org.synesis.coordination.persistence.ReplicationSettings> settings =
+                org.synesis.coordination.persistence.ReplicationSettings.read(current.rootDirectory());
+        if (settings.isPresent() && !settings.get().shared() && !settings.get().isMember()) {
+            return false;
+        }
+        boolean dialed = !org.synesis.coordination.persistence.ReplicationPeers.read(current.rootDirectory()).dialed().isEmpty();
+        boolean copies = current.logHeads().keySet().stream().anyMatch(log -> !log.equals(PredictionEventStore.OWN_LOG));
+        return dialed || copies;
     }
 
     private static Optional<JoinRequest> waitingRequest(MembershipProjection membership, String joinerNodeId) {

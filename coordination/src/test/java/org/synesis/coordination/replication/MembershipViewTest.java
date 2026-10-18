@@ -147,9 +147,9 @@ final class MembershipViewTest {
 
     @Test
     void anUnreadableLogTrustsNoOne() throws Exception {
-        ReplicationPeers.rememberDialed(root, other.nodeId(), LINK);
-        assertTrue(view.admitted(other.nodeId()));
+        // A computer with a dial line cannot share (JOINED_ANOTHER_PROJECT), so the line is left from before it shared.
         service().share(Optional.empty());
+        ReplicationPeers.rememberDialed(root, other.nodeId(), LINK);
         Path own;
         try (var logs = Files.walk(root.resolve("events"))) {
             own = logs.filter(Files::isRegularFile).findFirst().orElseThrow();
