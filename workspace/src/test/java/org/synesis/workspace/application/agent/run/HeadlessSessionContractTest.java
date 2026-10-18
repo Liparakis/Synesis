@@ -73,13 +73,40 @@ final class HeadlessSessionContractTest {
         assertFalse(claude.startCommand(PROJECT, named).stream().anyMatch(argument -> argument.contains("conn-instance-7f3a")), "Claude Code needs no argument for it");
         assertEquals(java.util.Map.of(), claude.environment(new HeadlessOptions(null, null)), "without an identity the server chooses its own");
 
-        assertEquals(java.util.Map.of(), codex.environment(named), "Codex does not pass its environment to an MCP server");
+        assertEquals(java.util.Map.of("SYNESIS_MCP_CONNECTION_INSTANCE_ID", "conn-instance-7f3a"), codex.environment(named),
+                "Codex gives its hooks its environment, though not its MCP servers");
         assertEquals(List.of("codex", "exec", "--json", "--cd", PROJECT.toString(), "--config", "sandbox_mode=read-only", "--config", "mcp_servers.synesis.default_tools_approval_mode=approve", "--model", "gpt-6-luna", "--config",
                 "mcp_servers.synesis.env.SYNESIS_MCP_CONNECTION_INSTANCE_ID=conn-instance-7f3a", "-"), codex.startCommand(PROJECT, named));
         List<String> resume = codex.resumeCommand(PROJECT, "01a12165-781c-70e0-b010-e8d2c048e4e5", named);
         assertTrue(resume.indexOf("mcp_servers.synesis.env.SYNESIS_MCP_CONNECTION_INSTANCE_ID=conn-instance-7f3a") < resume.indexOf("-"), "the prompt marker stays last: " + resume);
 
         assertThrows(IllegalArgumentException.class, () -> new HeadlessOptions(null, null).withConnection("conn \" --config x=y"));
+    }
+
+    /**
+     * Codex 0.163 runs a hook headless only when trusted (ADR-0099, 2026-10-18). A controller agent is given Synesis's
+     * own Stop hook on the command line with its trust pinned to that hook's hash, for that run only; nothing else is
+     * trusted and the global bypass is never passed.
+     */
+    @Test
+    void aControllerCodexAgentIsGivenSynesissOwnStopHookTrustedForThatRunOnly() {
+        HeadlessSession codex = ProviderRegistry.find("codex").headlessSession().orElseThrow();
+        Path launcher = Path.of("plain-launcher", "synesis").toAbsolutePath().normalize();
+        HeadlessOptions agent = new HeadlessOptions(null, null).withHookLauncher(launcher).withConnection("conn-instance-7f3a");
+        boolean windows = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win");
+
+        for (List<String> command : List.of(codex.startCommand(PROJECT, agent), codex.resumeCommand(PROJECT, "01a12165-781c-70e0-b010-e8d2c048e4e5", agent))) {
+            String hook = command.get(command.indexOf("hooks.Stop=[{hooks=[{type='command',command='" + launcher + " hook codex',timeout=660}]}]"));
+            assertEquals("--config", command.get(command.indexOf(hook) - 1));
+            String trust = command.stream().filter(argument -> argument.startsWith("hooks.state=")).findFirst().orElseThrow();
+            assertEquals("hooks.state={'" + (windows ? "C:\\<session-flags>\\config.toml" : "/<session-flags>/config.toml") + ":stop:0:0'={trusted_hash='sha256:", trust.substring(0, trust.indexOf("sha256:") + 7));
+            assertEquals("-", command.getLast(), "the prompt marker stays last");
+            assertFalse(command.stream().anyMatch(argument -> argument.contains("bypass") || argument.contains("trust_level")), "no other hook and no project is trusted: " + command);
+        }
+        assertFalse(codex.startCommand(PROJECT, new HeadlessOptions(null, null).withHookLauncher(launcher)).stream().anyMatch(argument -> argument.startsWith("hooks.")),
+                "an agent the controller did not start is given no hook");
+        assertFalse(codex.startCommand(PROJECT, new HeadlessOptions(null, null).withHookLauncher(Path.of("Program Files", "synesis").toAbsolutePath()).withConnection("conn-instance-7f3a"))
+                .stream().anyMatch(argument -> argument.startsWith("hooks.")), "a launcher no shell can run unquoted gets no hook; the controller still wakes the agent");
     }
 
     @Test
@@ -104,5 +131,48 @@ final class HeadlessSessionContractTest {
 
         ProviderAgentProcesses elsewhere = new ProviderAgentProcesses(temp.resolve("logs"), "", false);
         assertEquals(List.of("codex", "exec"), elsewhere.executable(List.of("codex", "exec")), "other platforms start a script like any executable");
+
+        String trust = "hooks.state={'C:\\<session-flags>\\config.toml:stop:0:0'={trusted_hash='sha256:00'}}";
+        assertEquals(List.of("cmd.exe", "/d", "/c", codexShim.toAbsolutePath().toString(), "--config", "\"" + trust + "\""), processes.executable(List.of("codex", "--config", trust)),
+                "an argument the interpreter would read as a redirection is quoted");
+    }
+
+    /** On Windows a script shim receives an argument holding interpreter operators exactly as Synesis built it. */
+    @Test
+    void aScriptShimOnWindowsReceivesTheHookArgumentsIntact(@TempDir Path temp) throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win"));
+        Path shims = Files.createDirectories(temp.resolve("shims"));
+        Path javaExecutable = Path.of(System.getProperty("java.home"), "bin", "java.exe");
+        Files.writeString(shims.resolve("codex.cmd"), "@\"" + javaExecutable + "\" -cp \"%ECHO_CLASSPATH%\" " + ArgumentEcho.class.getName() + " %*\r\n");
+        List<String> arguments = List.of("exec", "--config", "hooks.Stop=[{hooks=[{type='command',command='C:\\synesis\\bin\\synesis.exe hook codex',timeout=660}]}]",
+                "--config", "hooks.state={'C:\\<session-flags>\\config.toml:stop:0:0'={trusted_hash='sha256:49c0'}}", "-");
+        List<String> command = new java.util.ArrayList<>(List.of("codex"));
+        command.addAll(arguments);
+
+        ProcessBuilder builder = new ProcessBuilder(new ProviderAgentProcesses(temp.resolve("logs"), shims.toString(), true).executable(command)).redirectErrorStream(true);
+        builder.environment().put("ECHO_CLASSPATH", System.getProperty("java.class.path"));
+        Process echo = builder.start();
+        List<String> received = new String(echo.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).lines().filter(line -> line.startsWith("ARG=")).map(line -> line.substring(4)).toList();
+        assertTrue(echo.waitFor(60, java.util.concurrent.TimeUnit.SECONDS));
+
+        assertEquals(arguments, received);
+    }
+
+    /** Prints each argument it was started with on a line of its own. */
+    public static final class ArgumentEcho {
+
+        private ArgumentEcho() {
+        }
+
+        /**
+         * Prints the arguments.
+         *
+         * @param arguments the arguments
+         */
+        public static void main(String[] arguments) {
+            for (String argument : arguments) {
+                System.out.println("ARG=" + argument);
+            }
+        }
     }
 }

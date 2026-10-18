@@ -155,8 +155,10 @@ public interface ProviderIntegration {
      * @param effort               provider reasoning-effort level, or {@code null} for the default
      * @param connectionInstanceId identity the Synesis MCP server of this process must use, or
      *                             {@code null} to let the server choose its own
+     * @param hookLauncher         the Synesis launcher a provider hook given with the session runs, or
+     *                             {@code null} when the session is given no hook of its own
      */
-    record HeadlessOptions(String model, String effort, String connectionInstanceId) {
+    record HeadlessOptions(String model, String effort, String connectionInstanceId, Path hookLauncher) {
 
         private static final java.util.regex.Pattern TOKEN = java.util.regex.Pattern.compile("[A-Za-z0-9][A-Za-z0-9._:\\[\\]-]{0,127}");
 
@@ -182,7 +184,18 @@ public interface ProviderIntegration {
          * @param effort provider reasoning-effort level, or {@code null}
          */
         public HeadlessOptions(String model, String effort) {
-            this(model, effort, null);
+            this(model, effort, null, null);
+        }
+
+        /**
+         * Creates options for one connection identity, with no hook of the session's own.
+         *
+         * @param model                provider model name, or {@code null}
+         * @param effort               provider reasoning-effort level, or {@code null}
+         * @param connectionInstanceId connection identity, or {@code null}
+         */
+        public HeadlessOptions(String model, String effort, String connectionInstanceId) {
+            this(model, effort, connectionInstanceId, null);
         }
 
         /**
@@ -192,7 +205,17 @@ public interface ProviderIntegration {
          * @return options carrying the identity
          */
         public HeadlessOptions withConnection(String identity) {
-            return new HeadlessOptions(model, effort, identity);
+            return new HeadlessOptions(model, effort, identity, hookLauncher);
+        }
+
+        /**
+         * Returns these options with the launcher a provider hook given with the session runs.
+         *
+         * @param launcher absolute Synesis launcher path
+         * @return options carrying the launcher
+         */
+        public HeadlessOptions withHookLauncher(Path launcher) {
+            return new HeadlessOptions(model, effort, connectionInstanceId, launcher);
         }
     }
 
@@ -359,6 +382,16 @@ public interface ProviderIntegration {
      */
     default String trustStatus() {
         return "NOT_APPLICABLE";
+    }
+
+    /**
+     * Says what a trust state other than {@code NOT_APPLICABLE} asks of the person, when it is a step they take in the
+     * provider rather than something wrong with the installation.
+     *
+     * @return one line for the person, or an empty string
+     */
+    default String trustNote() {
+        return "";
     }
 
     /**

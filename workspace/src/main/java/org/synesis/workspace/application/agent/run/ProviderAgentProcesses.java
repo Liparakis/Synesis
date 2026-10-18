@@ -28,6 +28,8 @@ import java.util.function.Function;
  */
 public final class ProviderAgentProcesses implements AgentRunController.AgentProcesses {
 
+    private static final java.util.regex.Pattern CMD_OPERATOR = java.util.regex.Pattern.compile("[<>&|^]");
+
     private final Path logDirectory;
     private final String pathVariable;
     private final boolean windows;
@@ -127,6 +129,9 @@ public final class ProviderAgentProcesses implements AgentRunController.AgentPro
                 List<String> resolved = new ArrayList<>(command);
                 resolved.set(0, candidate.toAbsolutePath().toString());
                 if (!extension.equals(".exe")) {
+                    // The interpreter reads < > & | ^ outside quotes as its own operators, and the
+                    // runtime quotes an argument only for a space. A Codex hook's trust key holds < and >.
+                    resolved.replaceAll(argument -> CMD_OPERATOR.matcher(argument).find() && !argument.contains("\"") ? "\"" + argument + "\"" : argument);
                     resolved.addAll(0, List.of("cmd.exe", "/d", "/c"));
                 }
                 return resolved;

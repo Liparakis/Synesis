@@ -53,11 +53,11 @@ public final class ProviderApplicationService {
     }
 
     /**
-     * Resolves the stable or configured launcher path.
+     * Resolves the stable or configured launcher path, the one provider hooks run.
      *
      * @return resolved launcher path
      */
-    Path launcherPath() {
+    public Path launcherPath() {
         return ProviderLauncherResolution.launcher();
     }
 
@@ -191,9 +191,8 @@ public final class ProviderApplicationService {
      * Evaluates whether a provider integration may admit agent work.
      *
      * <p>A project-local MCP entry alone is not an installation: initialization
-     * may create that entry before the provider hook and metadata exist. Codex's documented
-     * {@code DEGRADED} trust-review state remains admissible, while missing metadata or any
-     * broken/unknown status fails closed.</p>
+     * may create that entry before the provider hook and metadata exist. A {@code DEGRADED} state
+     * remains admissible, while missing metadata or any broken/unknown status fails closed.</p>
      *
      * @param location initialized project location
      * @param id       canonical provider identifier
