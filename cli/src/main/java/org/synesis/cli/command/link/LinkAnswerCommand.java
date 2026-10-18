@@ -35,7 +35,14 @@ public final class LinkAnswerCommand extends LinkOperationCommand {
 
     @Override
     String begin(RuntimeControl control) throws IOException, RuntimeControl.Rejected {
-        control.command("answer", Map.of("operationId", operation, "answerUri", answer));
+        try {
+            control.command("answer", Map.of("operationId", operation, "answerUri", answer));
+        } catch (RuntimeControl.Rejected unknown) {
+            // An answer pasted after the invitation ended is told why it ended, not only that the operation is gone.
+            if (!"OPERATION_NOT_FOUND".equals(unknown.code()) || endedOperation(control, operation) == null) {
+                throw unknown;
+            }
+        }
         runtime.terminal().stdout("OPERATION_ID=" + operation);
         return operation;
     }

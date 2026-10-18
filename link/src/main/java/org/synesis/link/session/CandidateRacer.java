@@ -245,6 +245,8 @@ public final class CandidateRacer implements AutoCloseable {
         if (failure == null && session != null) {
           closeLate(session);
         }
+        // An attempt that timed out may still be dialing, and must not connect once the race stopped waiting for it.
+        cancel(attempt);
         addDiagnostic(pair,
             failure == null ? ConnectionFailureCategory.NOT_CONTROL_READY : category(failure));
         if (running == 0 && (next >= pairs.size() || started >= policy.maxAttempts())) {

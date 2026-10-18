@@ -12,10 +12,13 @@ import java.net.URI;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletionException;
 import org.synesis.link.onboarding.OnboardingFailure;
+import org.synesis.link.onboarding.OnboardingFailureCode;
 import org.synesis.link.protocol.CompactAnswer;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.IncompatibleVersionException;
@@ -53,6 +56,11 @@ final class ControlPlaneOnboardingEndpoints {
     private static final int MAX_LINK_LENGTH = 65_536;
 
     /**
+     * How many ended operations are remembered, so that a client which polls can still say how one ended.
+     */
+    private static final int MAX_ENDED_OPERATIONS = 32;
+
+    /**
      * Owner of Link invitation, import, and teardown operations.
      */
     private final ControlPlaneLinkOperations linkOperations;
@@ -83,6 +91,19 @@ final class ControlPlaneOnboardingEndpoints {
     private final Map<String, Instant> operationExpiry = new HashMap<>();
 
     /**
+     * How the most recently ended operations ended, by operation id, oldest first. Guarded by {@link #operationLock}.
+     */
+    private final Map<String, Ended> ended = new LinkedHashMap<>() {
+        @java.io.Serial
+        private static final long serialVersionUID = 1L;
+
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Ended> eldest) {
+            return size() > MAX_ENDED_OPERATIONS;
+        }
+    };
+
+    /**
      * Creates the onboarding endpoints over a Link operation owner.
      *
      * @param linkOperations supported Link operation owner
@@ -110,14 +131,18 @@ final class ControlPlaneOnboardingEndpoints {
     /**
      * Describes the non-sensitive pending operations for the snapshot.
      *
-     * <p>Invitation and answer links are deliberately omitted; only ids, states, and expiry are exposed.
+     * <p>Invitation and answer links are deliberately omitted; only ids, states, and expiry are exposed. An operation
+     * that ended stays listed in {@code endedOperations} for a while, failed ones with their reason, so that no client
+     * has to report a bare failure.
      *
-     * @return {@code pendingHosts} and {@code pendingJoins}
+     * @return {@code pendingHosts}, {@code pendingJoins}, {@code joinRequests} and {@code endedOperations}
      */
     Map<String, Object> pending() {
         List<Map<String, Object>> pendingHosts = new ArrayList<>();
         List<Map<String, Object>> pendingJoins = new ArrayList<>();
+        List<Map<String, Object>> endedOperations = new ArrayList<>();
         synchronized (operationLock) {
+            ended.forEach((operationId, how) -> endedOperations.add(how.describe(operationId)));
             for (Map.Entry<String, PendingHost> host : hosts.entrySet()) {
                 Instant expiresAt = operationExpiry.get(host.getKey());
                 if (expiresAt == null) {
@@ -137,7 +162,7 @@ final class ControlPlaneOnboardingEndpoints {
         for (ControlPlaneLinkOperations.JoinRequest request : linkOperations.joinRequests()) {
             joinRequests.add(ordered("nodeId", request.nodeId(), "requestedAt", request.requestedAt().toString(), "expiresAt", request.expiresAt().toString()));
         }
-        return ordered("pendingHosts", pendingHosts, "pendingJoins", pendingJoins, "joinRequests", joinRequests);
+        return ordered("pendingHosts", pendingHosts, "pendingJoins", pendingJoins, "joinRequests", joinRequests, "endedOperations", endedOperations);
     }
 
     /**
@@ -322,14 +347,14 @@ final class ControlPlaneOnboardingEndpoints {
         // Not marked running: a join dials until its invitation expires, and cancelling or expiry
         // must be able to close it, which ends the dialing.
         Thread.ofVirtual().start(() -> {
-            boolean connected = false;
+            Ended outcome = Ended.failed(Ended.JOIN, OnboardingFailureCode.INTERNAL.name());
             try {
                 prepared.connect();
-                connected = true;
+                outcome = Ended.connected(Ended.JOIN);
             } catch (OnboardingFailure failed) {
-                // The operation leaves the pending list without a peer in the network view.
+                outcome = Ended.failed(Ended.JOIN, failed);
             } finally {
-                finish(joins, operationId, prepared, connected && prepared.retainsSession());
+                finish(joins, operationId, prepared, outcome, prepared.retainsSession());
             }
         });
         Map<String, Object> response = newResponse();
@@ -388,6 +413,7 @@ final class ControlPlaneOnboardingEndpoints {
                 throw failure(404, "OPERATION_NOT_FOUND", "onboarding operation is not available");
             }
             operationExpiry.remove(operationId);
+            ended.put(operationId, Ended.failed(pending instanceof PendingHost ? Ended.HOST : Ended.JOIN, Ended.CANCELLED));
         }
         closeQuietly(pending);
         sendJson(exchange, 200, operationResult(operationId, "CANCELLED"));
@@ -495,20 +521,25 @@ final class ControlPlaneOnboardingEndpoints {
     }
 
     /**
-     * Retires a finished operation and closes its handle unless the established session must outlive it.
+     * Retires a finished operation and closes its handle unless the established session must outlive it. How it ended
+     * is remembered only while it was still pending: a cancelled or expired operation was retired, with its reason, by
+     * whoever closed it.
      *
      * @param registry    {@link #hosts} or {@link #joins}
      * @param operationId operation id
      * @param prepared    the handle that ran
-     * @param retain      whether the handle now owns a live session and must stay open
+     * @param outcome     how it ended
+     * @param retains     whether a connected handle owns a live session and must stay open
      * @param <T>         handle type
      */
-    private <T extends AutoCloseable> void finish(Map<String, T> registry, String operationId, T prepared, boolean retain) {
+    private <T extends AutoCloseable> void finish(Map<String, T> registry, String operationId, T prepared, Ended outcome, boolean retains) {
         synchronized (operationLock) {
-            registry.remove(operationId, prepared);
-            operationExpiry.remove(operationId);
+            if (registry.remove(operationId, prepared)) {
+                operationExpiry.remove(operationId);
+                ended.put(operationId, outcome);
+            }
         }
-        if (!retain) {
+        if (!(outcome.connected() && retains)) {
             closeQuietly(prepared);
         }
     }
@@ -520,7 +551,13 @@ final class ControlPlaneOnboardingEndpoints {
      * @param prepared    the host handle
      */
     private void monitorHost(String operationId, PendingHost prepared) {
-        prepared.completion().whenComplete((ignored, failure) -> finish(hosts, operationId, prepared, failure == null && prepared.retainsSession()));
+        prepared.completion().whenComplete((ignored, failure) -> {
+            Throwable cause = failure instanceof CompletionException wrapped ? wrapped.getCause() : failure;
+            Ended outcome = cause == null ? Ended.connected(Ended.HOST)
+                    : cause instanceof OnboardingFailure onboarding ? Ended.failed(Ended.HOST, onboarding)
+                    : Ended.failed(Ended.HOST, OnboardingFailureCode.INTERNAL.name());
+            finish(hosts, operationId, prepared, outcome, prepared.retainsSession());
+        });
     }
 
     /**
@@ -555,6 +592,7 @@ final class ControlPlaneOnboardingEndpoints {
                 if (join != null) {
                     expired.add(join);
                 }
+                ended.put(entry.getKey(), Ended.failed(host != null ? Ended.HOST : Ended.JOIN, Ended.EXPIRED));
                 return true;
             });
         }
@@ -572,6 +610,65 @@ final class ControlPlaneOnboardingEndpoints {
             value.close();
         } catch (Exception ignored) {
             // Best-effort teardown: nothing useful can be done about a failed close.
+        }
+    }
+
+    /**
+     * How one operation ended: {@code CONNECTED}, or {@code FAILED} with a reason code and a one-line explanation the
+     * person can act on. The reasons are the Link failure codes, {@link #EXPIRED} and {@link #CANCELLED}.
+     *
+     * @param kind    {@link #HOST} for an invitation this computer made, {@link #JOIN} for one it opened
+     * @param reason  the failure code, or {@code null} when it connected
+     * @param message the explanation, or {@code null} when it connected
+     * @param endedAt when it ended
+     */
+    private record Ended(String kind, String reason, String message, Instant endedAt) {
+
+        static final String HOST = "HOST";
+        static final String JOIN = "JOIN";
+        static final String EXPIRED = "EXPIRED";
+        static final String CANCELLED = "CANCELLED";
+
+        static Ended connected(String kind) {
+            return new Ended(kind, null, null, Instant.now());
+        }
+
+        static Ended failed(String kind, OnboardingFailure failure) {
+            if (failure.mismatch() != null) {
+                return new Ended(kind, OnboardingFailureCode.INCOMPATIBLE_VERSION.name(), failure.mismatch().message(), Instant.now());
+            }
+            return failed(kind, failure.code().name());
+        }
+
+        static Ended failed(String kind, String reason) {
+            return new Ended(kind, reason, explanation(HOST.equals(kind), reason), Instant.now());
+        }
+
+        boolean connected() {
+            return reason == null;
+        }
+
+        private static String explanation(boolean host, String reason) {
+            return switch (reason) {
+                case EXPIRED -> host ? "the invitation expired before the other computer connected; make a new invitation"
+                        : "the invitation expired before this computer could connect; ask for a new invitation";
+                case CANCELLED -> "the operation was cancelled";
+                case "HOST_TIMEOUT" -> "nobody connected before the invitation expired; make a new invitation";
+                case "CONNECTION_FAILED" -> host ? "the other computer connected but the connection could not be completed; make a new invitation"
+                        : "no connection was made before the invitation expired; on different networks the owner pastes this computer's answer link";
+                case "NO_USABLE_CANDIDATE" -> "the invitation names no address this computer can reach";
+                case "HOST_IDENTITY_MISMATCH" -> "the computer that answered is not the one that made the invitation";
+                default -> "the connection could not be made";
+            };
+        }
+
+        Map<String, Object> describe(String operationId) {
+            Map<String, Object> view = ordered("operationId", operationId, "kind", kind, "state", connected() ? "CONNECTED" : "FAILED", "endedAt", endedAt.toString());
+            if (!connected()) {
+                view.put("reason", reason);
+                view.put("message", message);
+            }
+            return view;
         }
     }
 

@@ -106,7 +106,10 @@ replaces it. `follow` and `share` stop the project's runtime if the installation
 
 `link invite` and `link join` end with `LINK_STATE=CONNECTED` and `PEER_NODE_ID=<the other computer>`, or
 `LINK_STATE=WAITING` when `--wait-seconds` (default 300) ran out and `LINK_STATE=FAILED` when the invitation ended
-without a session. `CONNECTED` means the session exists, not that A accepted it. The connection stays with the project's
+without a session, followed by `LINK_FAILURE=<reason>` and `LINK_FAILURE_DETAIL=<what happened and what to do>`
+(`EXPIRED` when nobody connected in time; `link answer` after the invitation expired says the same). A join that
+returned `WAITING` keeps dialing in the project's runtime until the invitation expires, so the answer can still be
+pasted after it. `CONNECTED` means the session exists, not that A accepted it. The connection stays with the project's
 runtime after the command ends. Once A has accepted, B pulls A's log and sends its entries to A, and A merges B's lanes
 without an agent of its own. `synesis coordination status` on B shows `REPLICATION_STATE`. On A it shows one line per
 member, `REPLICATION_MEMBER=<node> STATE=CONNECTED since=<time>` while that member's session is up and

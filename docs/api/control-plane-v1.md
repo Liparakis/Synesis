@@ -253,6 +253,14 @@ still dialing stops.
 At most 16 pending onboarding handles are retained in memory. Expired or
 completed handles are closed; links are not written to project state.
 
+The snapshot's `onboarding.endedOperations` lists the last 32 operations that
+ended, oldest first, each `{operationId, kind, state, endedAt}` with `kind`
+`HOST` (an invitation this computer made) or `JOIN` (one it opened) and `state`
+`CONNECTED` or `FAILED`. A failed one adds `reason` and `message`, a one-line
+explanation for the person: `EXPIRED` (the invitation expired with nobody
+connected), `CANCELLED`, or the Link failure code, such as `CONNECTION_FAILED`
+or `INCOMPATIBLE_VERSION`. The list is in memory only, like the pending handles.
+
 ### Project selection and discovery
 
 These routes use the authenticated session described above. The POST commands

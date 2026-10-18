@@ -117,7 +117,7 @@ abstract class LinkOperationCommand implements Callable<Integer> {
                 if (reportNewPeer(control, before)) {
                     return ExitCodes.OK;
                 }
-                runtime.terminal().stdout("LINK_STATE=FAILED");
+                reportFailure(control, operation);
                 return ExitCodes.COMMAND_FAILED;
             }
             if (System.nanoTime() >= deadline) {
@@ -137,6 +137,43 @@ abstract class LinkOperationCommand implements Callable<Integer> {
             }
         }
         return false;
+    }
+
+    /**
+     * Says why an operation ended without a new session: the reason the runtime recorded for it, or, for one that
+     * connected, that its session was already gone.
+     */
+    private void reportFailure(RuntimeControl control, String operation) throws IOException, RuntimeControl.Rejected {
+        Map<?, ?> how = endedOperation(control, operation);
+        String reason;
+        String detail;
+        if (how == null) {
+            reason = "OPERATION_UNKNOWN";
+            detail = "the project's runtime no longer knows this operation, for example because it restarted";
+        } else if ("CONNECTED".equals(how.get("state"))) {
+            reason = "SESSION_ENDED";
+            detail = "the other computer connected, but the session ended at once";
+        } else {
+            reason = String.valueOf(how.get("reason"));
+            detail = String.valueOf(how.get("message"));
+        }
+        runtime.terminal().stdout("LINK_STATE=FAILED");
+        runtime.terminal().stdout("LINK_FAILURE=" + reason);
+        runtime.terminal().stdout("LINK_FAILURE_DETAIL=" + detail);
+    }
+
+    /**
+     * @return how the runtime says the operation ended, or {@code null} while it is pending or once it is forgotten
+     */
+    static Map<?, ?> endedOperation(RuntimeControl control, String operation) throws IOException, RuntimeControl.Rejected {
+        if (control.read("snapshot").get("onboarding") instanceof Map<?, ?> onboarding && onboarding.get("endedOperations") instanceof List<?> ended) {
+            for (Object entry : ended) {
+                if (entry instanceof Map<?, ?> how && operation.equals(how.get("operationId"))) {
+                    return how;
+                }
+            }
+        }
+        return null;
     }
 
     private static Set<String> sessionIds(RuntimeControl control) throws IOException, RuntimeControl.Rejected {

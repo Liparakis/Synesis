@@ -811,7 +811,8 @@ public final class Onboarding {
 
     /**
      * Returns the completion stage for the host wait, which completes after descriptor exchange
-     * and the configured session callback have finished.
+     * and the configured session callback have finished. A failed wait completes it with the
+     * {@link OnboardingFailure} the wait threw, and {@link #close()} with a cancellation.
      *
      * @return host wait completion
      */
@@ -821,8 +822,15 @@ public final class Onboarding {
 
     private PeerSession awaitConnection(boolean keepAlive) throws OnboardingFailure {
       try {
-        PeerSession session = endpoint.established().get(
-            CompactBootstrapInvitation.MAX_LIFETIME.toSeconds() + 30, TimeUnit.SECONDS);
+        PeerSession session;
+        try {
+          session = endpoint.established().get(
+              CompactBootstrapInvitation.MAX_LIFETIME.toSeconds() + 30, TimeUnit.SECONDS);
+        } catch (java.util.concurrent.TimeoutException nobody) {
+          throw failure(OnboardingFailureCode.HOST_TIMEOUT, nobody);
+        }
+        // A peer that authenticated and then sent no descriptor did connect: that is a failed connection, not a host
+        // nobody joined.
         remoteDescriptor.get(12, TimeUnit.SECONDS);
         emit(OnboardingEventType.DESCRIPTORS_EXCHANGED, "");
         emitSession(session);
@@ -833,12 +841,13 @@ public final class Onboarding {
         }
         compactCompletion.complete(null);
         return session;
-      } catch (java.util.concurrent.TimeoutException timeout) {
-        compactCompletion.completeExceptionally(timeout);
-        throw failure(OnboardingFailureCode.HOST_TIMEOUT, timeout);
-      } catch (Exception failure) {
+      } catch (OnboardingFailure failure) {
         compactCompletion.completeExceptionally(failure);
-        throw failure(OnboardingFailureCode.CONNECTION_FAILED, failure);
+        throw failure;
+      } catch (Exception cause) {
+        OnboardingFailure failure = failure(OnboardingFailureCode.CONNECTION_FAILED, cause);
+        compactCompletion.completeExceptionally(failure);
+        throw failure;
       }
     }
 
