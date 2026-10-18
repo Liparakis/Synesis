@@ -190,7 +190,23 @@ public final class ControlBranchAdvancementService {
         store.append(UUID.randomUUID(), PredictionEventType.CONTROL_BRANCH_ADVANCED, identity.nodeId(), payload.encode(), identity);
     }
 
-    private void appendLaneIntegrated(TaskSnapshotRecord snap, PredictionEventStore store, NodeIdentity identity) throws IOException, GeneralSecurityException {
+    /**
+     * Records a snapshot integrated outside an ordinary advance: a combine lane's snapshot, once the re-merge that used
+     * it is on this copy of {@code main} (ADR-0098 step 5, designer item 22). Writes what an advance writes for each of
+     * its lanes: {@code TASK_INTEGRATED}, the lane's ownership released, and {@code SESSION_FINALIZED}.
+     *
+     * @param snapshot the snapshot
+     * @param store    the log, under the caller's append lock
+     * @param identity this computer
+     * @throws IOException              when an entry is refused
+     * @throws GeneralSecurityException when signing fails
+     */
+    public static void recordIntegrated(TaskSnapshotRecord snapshot, PredictionEventStore store, NodeIdentity identity)
+            throws IOException, GeneralSecurityException {
+        appendLaneIntegrated(snapshot, store, identity);
+    }
+
+    private static void appendLaneIntegrated(TaskSnapshotRecord snap, PredictionEventStore store, NodeIdentity identity) throws IOException, GeneralSecurityException {
         TaskSnapshotPayload payload = new TaskSnapshotPayload(snap.taskId(),
                 snap.snapshotId(),
                 snap.nodeId(),
@@ -207,7 +223,7 @@ public final class ControlBranchAdvancementService {
         store.append(UUID.randomUUID(), PredictionEventType.SESSION_FINALIZED, identity.nodeId(), payload.encode(), identity);
     }
 
-    private void releaseExactOwnership(TaskSnapshotRecord snap, PredictionEventStore store, NodeIdentity identity) throws IOException, GeneralSecurityException {
+    private static void releaseExactOwnership(TaskSnapshotRecord snap, PredictionEventStore store, NodeIdentity identity) throws IOException, GeneralSecurityException {
         for (var entry : store.coordinationProjection().ownerships().entrySet()) {
             OwnershipClaim claim = entry.getValue();
             if (claim.taskId().equals(snap.taskId()) && claim.ownerNodeId().equals(snap.nodeId())) {

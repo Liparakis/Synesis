@@ -249,6 +249,50 @@ public final class IntegrationWorkspaceService {
     }
 
     /**
+     * Gives a combine lane's worktree both versions to combine (ADR-0098 step 5, designer item 22): the worktree is
+     * moved to the commit the advance could not be merged onto, the advance is merged in without committing, Git's
+     * conflict markers stay in the files, and the index is reset to the base so the agent's change is everything it
+     * finishes with. A marker records the combine, so a repeated call after a crash leaves the worktree as it is.
+     *
+     * @param controlRoot the control checkout, whose repository holds both versions
+     * @param worktree    the combine lane's worktree, clean apart from Synesis's own files
+     * @param combine     the combine
+     * @throws IOException when the worktree is not clean, belongs to another combine, or Git fails
+     */
+    public void materializeCombineRepresentation(Path controlRoot, Path worktree, org.synesis.coordination.domain.task.CombinePayload combine)
+            throws IOException {
+        Objects.requireNonNull(controlRoot, "controlRoot");
+        Objects.requireNonNull(worktree, "worktree");
+        Objects.requireNonNull(combine, "combine");
+        Path target = worktree.toAbsolutePath().normalize();
+        if (!Files.isDirectory(target) || !Files.exists(target.resolve(".git")) || target.equals(controlRoot.toAbsolutePath().normalize())) {
+            throw new IOException("COMBINE_WORKTREE_INVALID");
+        }
+        Path marker = target.resolve(".synesis/local/combine-materialization.txt");
+        String expectedMarker = combine.combineId() + "\n" + combine.base() + "\n" + combine.theirs() + "\n";
+        if (Files.exists(marker)) {
+            if (!expectedMarker.equals(Files.readString(marker))) {
+                throw new IOException("COMBINE_MATERIALIZATION_MARKER_MISMATCH");
+            }
+            return;
+        }
+        String status = GitProcessRunner.run(target, "status", "--porcelain", "--untracked-files=all");
+        List<String> unmanagedChanges = status.lines().filter(line -> !line.isBlank()).filter(line -> !managedWorkspaceMetadata(line)).toList();
+        if (!unmanagedChanges.isEmpty()) {
+            throw new IOException("COMBINE_TARGET_DIRTY:" + unmanagedChanges.getFirst());
+        }
+        GitProcessRunner.run(target, "checkout", "-q", "--detach", combine.base());
+        writeRepairMarker(marker, expectedMarker);
+        try {
+            GitProcessRunner.run(target, "merge", "--no-ff", "--no-commit", combine.theirs());
+        } catch (IOException conflict) {
+            // Expected: the re-merge could not make this merge. The markers in the files are the agent's to resolve.
+        }
+        GitProcessRunner.runOptional(target, "merge", "--quit");
+        GitProcessRunner.run(target, "reset", "-q");
+    }
+
+    /**
      * Result of an integration attempt inside the dedicated integration worktree.
      *
      * @param worktreePath         absolute path to integration worktree

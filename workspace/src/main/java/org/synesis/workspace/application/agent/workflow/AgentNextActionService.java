@@ -855,7 +855,28 @@ public final class AgentNextActionService {
                 + "`) on every integration, so running or reporting it is not a part to claim.";
         claimRequired.put("instruction", "This session holds no lane. Read the project goal with read_file, " + choice
                 + "ensure_session with a task (goal, acceptance, claims). Calling ensure_session without a task changes nothing." + validation);
+        // Two copies of main that Git could not merge wait for an agent to combine them; nothing reaches main until one
+        // change holds both (ADR-0098 step 5, designer item 22).
+        List<Map<String, Object>> combines = combineCandidates(store, participantId, location);
+        if (!combines.isEmpty()) {
+            claimRequired.put("combineCandidates", combines);
+            claimRequired.put("instruction", "This session holds no lane, and two copies of main could not be merged: take the combine lane first by calling ensure_session "
+                    + "with combineCandidates[0].ensureSession. Your worktree then holds both versions with Git's conflict markers; make one change that keeps both, "
+                    + "with no markers left, and finish the lane as usual. If both cannot be kept, send a message to combineCandidates[0].authors saying why, and keep "
+                    + "the lane open until they answer." + validation);
+        }
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, claimRequired);
+    }
+
+    /** The combines this session may take, as its next action offers them; none when this computer is unknown. */
+    private static List<Map<String, Object>> combineCandidates(PredictionEventStore store, String participantId, ProjectLocation location) {
+        try {
+            String node = location.loadOrCreateIdentity().nodeId();
+            return org.synesis.workspace.application.collaboration.CombineLaneJoin.offeredTo(store, List.of(participantId), node).stream()
+                    .map(combine -> org.synesis.workspace.application.collaboration.CombineLaneJoin.describe(store, combine)).toList();
+        } catch (Exception unreadable) {
+            return List.of();
+        }
     }
 
     /**

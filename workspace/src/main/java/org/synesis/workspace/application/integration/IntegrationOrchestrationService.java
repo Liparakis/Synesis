@@ -124,7 +124,7 @@ public final class IntegrationOrchestrationService {
         this.projectService = new ProjectApplicationService();
         this.processExecutor = new ProjectProcessExecutor();
         this.bindingService = new ProviderSessionBindingService();
-        this.remerges = new RemergeService(projectService, processExecutor);
+        this.remerges = new RemergeService(projectService, processExecutor, this::finalizeIntegratedLanes);
     }
 
     /**
@@ -451,6 +451,15 @@ public final class IntegrationOrchestrationService {
                 .map(identity.nodeId()::equals).orElse(false);
     }
 
+    /**
+     * Whether this computer's pass merges a snapshot: one of its own lanes, and not a combine lane's, whose result the
+     * re-merge uses instead (ADR-0098 step 5, designer item 22).
+     */
+    static boolean mergedByThisPass(PredictionEventStore store, NodeIdentity identity, TaskSnapshotRecord snapshot) {
+        return ownLane(store, identity, snapshot)
+                && store.taskCompletionProjection().combineOfGroup(snapshot.provenance().workGroupId()).isEmpty();
+    }
+
     private static boolean isAncestor(Path workdir, String base, String head) {
         try {
             return GitProcessRunner.isAncestor(workdir, base, head);
@@ -538,7 +547,7 @@ public final class IntegrationOrchestrationService {
             // Only what the pass may integrate: work still waiting for its review fetches nothing, so a computer that is
             // away holds up only its own reviewed work.
             PredictionEventStore current = new PredictionEventStore(store.rootDirectory(), store.projectId());
-            IntegrationCandidatePolicy.reviewAcceptedInOrder(current).stream().filter(snapshot -> ownLane(current, identity, snapshot))
+            IntegrationCandidatePolicy.reviewAcceptedInOrder(current).stream().filter(snapshot -> mergedByThisPass(current, identity, snapshot))
                     .forEach(snapshot -> snapshots.put(snapshot.provenance().snapshotRef(), snapshot.commitSha()));
         } catch (IOException | java.security.GeneralSecurityException unreadable) {
             return null;
@@ -676,16 +685,29 @@ public final class IntegrationOrchestrationService {
             }
         }
 
-        List<TaskSnapshotRecord> snapshots = IntegrationCandidatePolicy.currentRevisions(store).stream().filter(snapshot -> ownLane(store, identity, snapshot)).toList();
+        List<TaskSnapshotRecord> snapshots = IntegrationCandidatePolicy.currentRevisions(store).stream().filter(snapshot -> mergedByThisPass(store, identity, snapshot)).toList();
         Optional<OperatorRequest> validationFailing = ValidationFailureGuard.reconcile(controlRoot, store, identity, !snapshots.isEmpty());
         if (snapshots.isEmpty()) {
-            List<TaskSnapshotRecord> pendingReviews = store.taskCompletionProjection().pendingReviewSnapshots().stream().filter(snapshot -> ownLane(store, identity, snapshot)).toList();
+            List<TaskSnapshotRecord> pendingReviews = store.taskCompletionProjection().pendingReviewSnapshots().stream().filter(snapshot -> mergedByThisPass(store, identity, snapshot)).toList();
             if (!pendingReviews.isEmpty()) {
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("state", TaskCompletionState.REVIEW_PENDING.value());
                 result.put("reviewPending", true);
                 result.put("snapshotIds", pendingReviews.stream().map(TaskSnapshotRecord::snapshotId).toList());
                 return new AgentResponse(AgentStatus.WAITING, AgentReason.VALIDATION_REQUIRED, AgentNextAction.WAIT, result);
+            }
+            // A combine lane's finished work is merged by the re-merge, which waits for its review: told to retry, its
+            // agent would only poll (ADR-0098 step 5, designer item 22).
+            List<String> combined = store.taskCompletionProjection().allSnapshots().stream().filter(snapshot -> ownLane(store, identity, snapshot))
+                    .filter(snapshot -> store.taskCompletionProjection().combineOfGroup(snapshot.provenance().workGroupId()).isPresent()
+                            && store.workGroupProjection().group(snapshot.provenance().workGroupId())
+                                    .filter(group -> group.status() == org.synesis.coordination.domain.collaboration.WorkGroup.Status.ACTIVE).isPresent())
+                    .filter(snapshot -> store.taskCompletionProjection().snapshotState(snapshot.snapshotId()).orElse(null) != TaskCompletionState.INTEGRATED)
+                    .map(TaskSnapshotRecord::snapshotId).toList();
+            if (!combined.isEmpty()) {
+                return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_PENDING, AgentNextAction.WAIT, Map.of("combinePending", true,
+                        "snapshotIds", combined, "instruction", "The combined version is merged with the re-merge of the two copies of main, which lands "
+                                + "once the original reviewer accepts it again. Nothing more is needed from this lane; wait."));
             }
             return NOTHING_TO_INTEGRATE;
         }
@@ -728,7 +750,7 @@ public final class IntegrationOrchestrationService {
         // work group travel through one guarded integration attempt so a
         // project gate can validate their complete change set together.
         List<TaskSnapshotRecord> allSnapshots = store.taskCompletionProjection().allSnapshots();
-        List<TaskSnapshotRecord> eligible = IntegrationCandidatePolicy.reviewAcceptedInOrder(store).stream().filter(snapshot -> ownLane(store, identity, snapshot)).toList();
+        List<TaskSnapshotRecord> eligible = IntegrationCandidatePolicy.reviewAcceptedInOrder(store).stream().filter(snapshot -> mergedByThisPass(store, identity, snapshot)).toList();
         if (eligible.isEmpty()) {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("state", "review_acceptance_required");

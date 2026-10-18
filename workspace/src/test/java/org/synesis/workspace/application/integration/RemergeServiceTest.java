@@ -20,15 +20,18 @@ import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.ReviewValidationPayload;
+import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.CombinePayload;
 import org.synesis.coordination.domain.task.RemergeSnapshotPayload;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
 import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -137,10 +140,14 @@ class RemergeServiceTest {
 
     /** A verdict on the snapshot through an issued grant, consumed first as the rules require. */
     private void verdict(Lane lane, String snapshotId, LaneGrant grant, String result) throws Exception {
+        verdict(lane, snapshotId, grant, result, AUTHOR);
+    }
+
+    private void verdict(Lane lane, String snapshotId, LaneGrant grant, String result, String producer) throws Exception {
         store.append(grant.grantId(), PredictionEventType.LANE_GRANT_CONSUMED, self.nodeId(), CollaborationCodec.encodeLaneGrant(grant), self);
         store.append(UUID.randomUUID(), PredictionEventType.REVIEW_VALIDATION_RECORDED, self.nodeId(),
                 new ReviewValidationPayload(grant.grantId(), lane.group(), lane.lane(), grant.targetParticipant(), 1, lane.task(), snapshotId,
-                        result, "REJECTED".equals(result) ? "not good enough" : null, AUTHOR).encode(), self);
+                        result, "REJECTED".equals(result) ? "not good enough" : null, producer).encode(), self);
     }
 
     private LaneGrant grantFor(String snapshotId) throws Exception {
@@ -291,22 +298,170 @@ class RemergeServiceTest {
         assertEquals(0, events(PredictionEventType.REMERGE_SNAPSHOT_CREATED).size());
     }
 
-    @Test
-    void aMergeGitCannotMakeWritesNothingAndLeavesTheBranch() throws Exception {
+    /** Both copies added {@code shared.txt}: Git cannot merge this copy's one advance onto the other head. */
+    private record Conflict(Lane lane, String own, String otherHead) {
+    }
+
+    private Conflict conflict() throws Exception {
         NodeIdentity other = lowerNode();
         Lane lane = lane("snap_a", "shared.txt", true);
+        releaseAuthorLane(lane);
         String own = ownMain("shared.txt", "own side");
         ownAdvance(base, own, lane.snapshotId());
         String otherHead = commit("other", base, "shared.txt", "other side");
         otherAdvance(other, otherHead);
+        return new Conflict(lane, own, otherHead);
+    }
+
+    /** The merge pass released the author's lane when it integrated it, which frees the paths it claimed. */
+    private void releaseAuthorLane(Lane lane) throws Exception {
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(project.root.resolve(".synesis/coordination"))) {
+            new WorkIntentService(project.store(), self).releaseAfterIntegration(lock,
+                    project.store().taskCompletionProjection().findSnapshotById(lane.snapshotId()).orElseThrow());
+        }
+    }
+
+    private CombinePayload combine() throws Exception {
+        List<CombinePayload> combines = project.store().taskCompletionProjection().combines();
+        assertEquals(1, combines.size(), "one combine");
+        return combines.getFirst();
+    }
+
+    /** What a combine agent does: takes the combine lane as a participant this computer introduced, who is not the author. */
+    private Lane combineLane(CombinePayload combine) throws Exception {
+        UUID lane = UUID.randomUUID();
+        WorkIntent intent = new WorkIntent(lane, project.location.projectId(), "agt-combiner", "codex", combine.taskId(), "combine", "both versions",
+                combine.base(), List.of(ResourceSelector.pathExact("shared.txt")), 1, combine.workGroupId(), WorkIntent.defaultAuthorityLineage(lane),
+                WorkIntent.Status.ANNOUNCED);
+        assertTrue(new WorkIntentService(store, self).announce(intent).acquired(), "the combine lane is granted");
+        return new Lane(null, combine.taskId(), lane, combine.workGroupId());
+    }
+
+    /** The combine lane's snapshot: a commit on the combine's base that keeps both sides' lines, recorded on the log. */
+    private String combineSnapshot(CombinePayload combine, Lane lane, String snapshotId, long epoch, boolean reviewRequired) throws Exception {
+        String commit = commit("combine-" + snapshotId, combine.base(), "shared.txt", "own side\nother side");
+        project.git("update-ref", "refs/synesis/snapshots/" + snapshotId, commit);
+        SnapshotProvenance provenance = new SnapshotProvenance(lane.group(), lane.lane(), WorkIntent.defaultAuthorityLineage(lane.lane()), "agt-combiner",
+                "session-agt-combiner", epoch, List.of(), List.of(), List.of("PATH:shared.txt"), "refs/synesis/snapshots/" + snapshotId, "integrity",
+                "artifacts");
+        store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, self.nodeId(),
+                new TaskSnapshotPayload(lane.task(), snapshotId, self.nodeId(), "supervisor", "worker", "session-agt-combiner", combine.base(), commit,
+                        List.of("shared.txt"), List.of(), "combined", provenance, reviewRequired).encode(), self);
+        return commit;
+    }
+
+    @Test
+    void aMergeGitCannotMakeOpensOneCombineAndLeavesTheBranch() throws Exception {
+        Conflict conflict = conflict();
+        long groups = events(PredictionEventType.WORK_GROUP_CREATED).size();
+        long combines = events(PredictionEventType.COMBINE_REQUIRED).size();
+        int entries = project.store().events().size();
+
+        run();
+
+        assertEquals(conflict.own(), project.head(), "the branch is unchanged");
+        assertEquals("", project.git("status", "--porcelain", "--untracked-files=no"));
+        assertEquals(combines + 1, events(PredictionEventType.COMBINE_REQUIRED).size(), "exactly one COMBINE_REQUIRED");
+        assertEquals(groups + 1, events(PredictionEventType.WORK_GROUP_CREATED).size(), "exactly one work group, the combine's");
+        assertEquals(entries + 2, project.store().events().size(), "nothing else was written: no re-merge snapshot, grant or advance");
+        CombinePayload combine = combine();
+        assertEquals(RemergeService.remergeId(conflict.otherHead(), conflict.own()), combine.remergeId());
+        assertEquals(conflict.otherHead(), combine.base(), "the first advance conflicted, so it was to be merged onto the other head");
+        assertEquals(conflict.otherHead(), combine.otherHead());
+        assertEquals(conflict.own(), combine.ownHead());
+        assertEquals(conflict.own(), combine.theirs(), "the advance's head");
+        assertEquals(List.of(conflict.lane().snapshotId()), combine.snapshotIds());
+        WorkGroup group = project.store().workGroupProjection().group(combine.workGroupId()).orElseThrow();
+        assertEquals(WorkGroup.Status.ACTIVE, group.status());
+        assertEquals(conflict.otherHead(), project.git("rev-parse", "refs/synesis/remerge-base/" + combine.combineId()),
+                "the commit to combine onto is kept reachable");
+
+        run();
+        run();
+
+        assertEquals(entries + 2, project.store().events().size(), "later runs write nothing more");
+        assertEquals(conflict.own(), project.head());
+    }
+
+    @Test
+    void aCombineLanesResultIsMergedReviewedAgainLandedAndTheCombineLaneIsClosed() throws Exception {
+        Conflict conflict = conflict();
+        run();
+        CombinePayload combine = combine();
+        Lane combiner = combineLane(combine);
+        String combined = combineSnapshot(combine, combiner, "snap_combine", 1, false);
+
+        run();
+
+        RemergeSnapshotPayload remerge = built(conflict.otherHead(), conflict.own());
+        String result = project.git("rev-parse", "refs/synesis/remerge/" + RemergeService.remergeId(conflict.otherHead(), conflict.own()));
+        assertEquals(result, remerge.result());
+        assertEquals(List.of(result, combine.base(), combine.theirs()), List.of(project.git("rev-list", "--parents", "-n", "1", result).split("\\s+")),
+                "the merge commit has the combine's base and the advance's head as parents");
+        assertEquals(project.git("rev-parse", combined + "^{tree}"), project.git("rev-parse", result + "^{tree}"), "and the combine lane's tree");
+        assertEquals(REVIEWER, grantFor(remerge.snapshot().snapshotId()).targetParticipant(), "the original reviewer reviews the re-merge snapshot");
+        assertEquals(conflict.own(), project.head(), "main has not moved before the review");
+
+        verdict(conflict.lane(), remerge.snapshot().snapshotId(), grantFor(remerge.snapshot().snapshotId()), "ACCEPTED");
+        run();
+
+        String landed = project.head();
+        assertEquals(result, landed);
+        assertTrue(project.isAncestorOfHead(conflict.own()));
+        assertTrue(project.isAncestorOfHead(conflict.otherHead()));
+        assertTrue(project.git("show", "HEAD:shared.txt").contains("own side"));
+        assertTrue(project.git("show", "HEAD:shared.txt").contains("other side"));
+        assertEquals(result, landedFrom(conflict.otherHead()).integrationCommitSha());
+        assertEquals(List.of(), MainMeeting.audit(project.root, project.store(), conflict.otherHead(), landed), "the other computer's view takes it");
+
+        run();
+
+        assertEquals(TaskCompletionState.INTEGRATED, project.state("snap_combine"), "the combine lane's snapshot is recorded integrated");
+        assertTrue(project.store().collaborationProjection().activeIntents().stream().noneMatch(intent -> intent.intentId().equals(combiner.lane())),
+                "and its lane is released");
+        assertEquals(WorkGroup.Status.COMPLETED, project.store().workGroupProjection().group(combine.workGroupId()).orElseThrow().status(),
+                "so the combine's work group closes");
+        assertEquals(landed, project.head());
+    }
+
+    @Test
+    void withoutACombineSnapshotRepeatedRunsNeitherLandNorWriteAnything() throws Exception {
+        Conflict conflict = conflict();
+        run();
         int entries = project.store().events().size();
 
         run();
         run();
 
-        assertEquals(own, project.head());
-        assertEquals(entries, project.store().events().size(), "no re-merge entry, grant or advance");
-        assertEquals("", project.git("status", "--porcelain", "--untracked-files=no"));
+        assertEquals(entries, project.store().events().size());
+        assertEquals(conflict.own(), project.head());
+        assertEquals("", project.git("for-each-ref", "refs/synesis/remerge/"), "no result was built");
+        assertEquals(0, events(PredictionEventType.REMERGE_SNAPSHOT_CREATED).size());
+    }
+
+    @Test
+    void aCombineSnapshotTheReviewerRejectedIsNotUsedButALaterOneIs() throws Exception {
+        Conflict conflict = conflict();
+        run();
+        CombinePayload combine = combine();
+        Lane combiner = combineLane(combine);
+        combineSnapshot(combine, combiner, "snap_combine_1", 1, true);
+        LaneGrant grant = new LaneGrant(UUID.randomUUID(), combiner.group(), combiner.lane(), REVIEWER, 1, true);
+        store.append(grant.grantId(), PredictionEventType.LANE_GRANT_ISSUED, self.nodeId(), CollaborationCodec.encodeLaneGrant(grant), self);
+        verdict(combiner, "snap_combine_1", grant, "REJECTED", "agt-combiner");
+        assertEquals(TaskCompletionState.REVIEW_REJECTED, project.state("snap_combine_1"));
+        int entries = project.store().events().size();
+
+        run();
+
+        assertEquals(entries, project.store().events().size(), "the refused result is not merged");
+        assertEquals("", project.git("for-each-ref", "refs/synesis/remerge/"));
+
+        String second = combineSnapshot(combine, combiner, "snap_combine_2", 2, false);
+        run();
+
+        assertEquals(project.git("rev-parse", second + "^{tree}"),
+                project.git("rev-parse", built(conflict.otherHead(), conflict.own()).result() + "^{tree}"), "the later snapshot is the one used");
     }
 
     @Test

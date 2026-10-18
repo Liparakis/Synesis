@@ -56,6 +56,8 @@ public final class TaskCompletionProjection {
     private final Map<SnapshotId, Map<String, String>> verdicts = new LinkedHashMap<>();
     /** Each re-merge snapshot, by its ID (ADR-0098 step 5): reviewed, never integrated by itself. */
     private final Map<SnapshotId, RemergeSnapshotPayload> remerges = new LinkedHashMap<>();
+    /** Each combine a re-merge asked for, by its ID (ADR-0098 step 5, designer item 22). */
+    private final Map<String, CombinePayload> combines = new LinkedHashMap<>();
     private final ApplyMode mode;
 
     /**
@@ -85,6 +87,7 @@ public final class TaskCompletionProjection {
         validationRefusals.putAll(source.validationRefusals);
         source.verdicts.forEach((snapshot, byReviewer) -> verdicts.put(snapshot, new LinkedHashMap<>(byReviewer)));
         remerges.putAll(source.remerges);
+        combines.putAll(source.combines);
     }
 
     /**
@@ -152,6 +155,7 @@ public final class TaskCompletionProjection {
             case COMPLETION_UNWOUND -> processCompletionUnwound(event);
             case TASK_SNAPSHOT_CREATED -> processSnapshotCreated(event);
             case REMERGE_SNAPSHOT_CREATED -> processRemergeSnapshot(event);
+            case COMBINE_REQUIRED -> processCombineRequired(event);
             case REVIEW_VALIDATION_RECORDED -> processReviewValidation(event);
             case TASK_WAITING_FOR_DEPENDENCIES -> processWaitingForDependencies(event);
             case INTEGRATION_ATTEMPT_STARTED -> processAttemptStarted(event);
@@ -736,6 +740,51 @@ public final class TaskCompletionProjection {
      */
     public synchronized List<RemergeSnapshotPayload> remerge(String remergeId) {
         return remerges.values().stream().filter(remerge -> remerge.remergeId().equals(remergeId)).toList();
+    }
+
+    /**
+     * Applies a combine a re-merge asked for (ADR-0098 step 5, designer item 22). Every snapshot it names must be known
+     * (it is held back until they arrive) and, on this computer's own append, integrated: a combine re-merges work that
+     * reached a copy of {@code main}.
+     *
+     * @param event event to apply
+     * @throws IOException when the payload is malformed or, on this computer's own append, unlawful
+     */
+    private void processCombineRequired(PredictionEvent event) throws IOException {
+        CombinePayload combine = CombinePayload.decode(event.payload());
+        for (String snapshotId : combine.snapshotIds()) {
+            TaskSnapshotRecord snapshot = snapshotsById.get(new SnapshotId(snapshotId));
+            if (snapshot == null) {
+                throw new MissingReferenceException("COMBINE_SNAPSHOT_NOT_FOUND");
+            }
+            if (mode.checking() && snapshotStates.get(snapshot.snapshotIdentity()) != TaskCompletionState.INTEGRATED) {
+                throw new CoordinationException("COMBINE_SNAPSHOT_NOT_INTEGRATED");
+            }
+        }
+        if (mode.checking() && combines.containsKey(combine.combineId())) {
+            throw new CoordinationException("COMBINE_EXISTS");
+        }
+        combines.putIfAbsent(combine.combineId(), combine);
+    }
+
+    /**
+     * Returns every combine a re-merge asked for, in the order they were recorded.
+     *
+     * @return the combines
+     */
+    public synchronized List<CombinePayload> combines() {
+        return List.copyOf(combines.values());
+    }
+
+    /**
+     * Returns the combine whose lane works in a work group, when the group is a combine's.
+     *
+     * @param workGroupId work group ID
+     * @return the combine, or empty for any other group
+     */
+    public synchronized Optional<CombinePayload> combineOfGroup(UUID workGroupId) {
+        CoordinationNullException.requireNonNull(workGroupId, "work group ID");
+        return combines.values().stream().filter(combine -> combine.workGroupId().equals(workGroupId)).findFirst();
     }
 
     /**

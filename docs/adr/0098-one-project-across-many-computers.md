@@ -910,6 +910,36 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     node ID is higher than every writer in the way does it re-merge, onto the lowest of them, one at a time. Every
     other computer waits and fast-forwards to the result. A computer that cannot see a higher writer's copy yet may
     re-merge too; the higher one then re-merges onto that result, and the lower never does, so the rounds still end.
+22. **The combine lane** (item 4, ADR-0100 "The combine lane"). Today's repair lane cannot be its vehicle as it is:
+    it needs a live source lane at a `REPAIR_REQUIRED` task and seeds from this copy's head, while a re-merge conflict
+    is between lanes that ended long ago and the other copy of `main`. So the combine lane keeps the repair lane's
+    shape (one source, an agent other than the author, the same `ensure_session` call with `repairIntentId` and
+    `repairSnapshotId`) and changes what it is seeded from and where its work goes:
+    - **Opening.** When Git cannot merge one of its advances, the re-merge keeps what it built so far under
+      `refs/synesis/remerge/<id>/base` and writes `COMBINE_REQUIRED` (new, compatibility 9 not yet released): the
+      re-merge, the base it was merging onto, the advance's head, and the advance's snapshots. It acts for those
+      lanes, so only their computer writes it. One advance at a time, so each combine has one source.
+    - **Who combines.** Any agent of the re-merging computer that holds no lane and authored none of the advance's
+      snapshots; its next action offers the combine, and a stopped one is woken for it. Agents of other computers are
+      not offered it: the re-merging computer must close the combine lane when the re-merge lands, and a computer
+      writes only for its own agents (NOT BUILT: a combine lane on another computer).
+    - **The lane.** Joining opens an ordinary producer lane in a work group of its own (`combine-group:<id>`, created
+      with the combine, so a closed original group does not refuse it), on a task of its own, based at the re-merge's
+      base, claiming the advance's lanes' paths. The agent's worktree is moved to that base and given both versions:
+      the advance's changes merged in with Git's conflict markers left in the files, the index at the base. The agent
+      makes one change that holds both and finishes the lane as usual. If it cannot, it messages the authors of both
+      sides (ADR-0093) and keeps the lane open; nothing reaches `main` until one change holds both.
+    - **Its result.** The combine lane's snapshot is never merged by an ordinary pass. The next re-merge pass makes
+      the advance's merge commit from it, with the snapshot's tree and both parents (the base and the advance's head),
+      goes on with the remaining advances, and runs the validation command. The merged lane's re-merge snapshot then
+      carries the combined version, so the original reviewer reviews the result, as for any re-merge (item 14); the
+      combine snapshot is not reviewed a second time on its own.
+    - **Closing.** When the re-merge lands, the re-merging computer records the combine snapshot integrated and
+      releases the combine lane, as the merge pass does for its own lanes; its work group then closes. Until then a
+      merge pass answers the combining agent WAIT with the reason, not RETRY, so it does not poll.
+    - **Not covered yet:** a second advance of the same re-merge that conflicts after the first was combined (built
+      on the combine's base, untested), a combine lane on another computer, and a combine the agent cannot make:
+      its messages go to the authors, and the lane stays open until someone changes it.
 
 ### Step 6: Membership in the owner's log
 

@@ -101,7 +101,8 @@ class PredictionWireFormatTest {
             entry(PredictionEventType.CONVERSATION_MESSAGE_SENT, 78),
             entry(PredictionEventType.CONVERSATION_MESSAGES_DELIVERED, 79),
             entry(PredictionEventType.INTEGRATION_VALIDATION_REFUSED, 80),
-            entry(PredictionEventType.REMERGE_SNAPSHOT_CREATED, 81)
+            entry(PredictionEventType.REMERGE_SNAPSHOT_CREATED, 81),
+            entry(PredictionEventType.COMBINE_REQUIRED, 82)
     );
 
     @Test

@@ -19,9 +19,12 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
+import org.synesis.coordination.domain.collaboration.ReviewPolicy;
+import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.CombinePayload;
 import org.synesis.coordination.domain.task.RemergeSnapshotPayload;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
 import org.synesis.coordination.domain.task.TaskCompletionState;
@@ -60,23 +63,55 @@ final class RemergeService {
     /** The ref that keeps a re-merge's result reachable until it lands. */
     private static final String RESULT_PREFIX = "refs/synesis/remerge/";
 
+    /** The ref that keeps the commit a combine lane combines onto reachable. */
+    static final String BASE_PREFIX = "refs/synesis/remerge-base/";
+
     /**
-     * Re-merges that could not be built or will not land, in this process: Git could not merge, the validation command
-     * failed, or a review rejected it. Each is reported once and not tried again until the heads change; the combine
-     * lane that would resolve them is NOT BUILT.
+     * Re-merges that could not be built or will not land, in this process: Git could not merge this copy's old head, the
+     * validation command failed, or a review rejected it. Each is reported once and not tried again until the heads
+     * change. An advance Git cannot merge is not one of them: it opens a combine lane.
      */
     private static final Set<String> STOPPED = ConcurrentHashMap.newKeySet();
 
     private final ProjectApplicationService projectService;
     private final ProjectProcessExecutor processExecutor;
+    private final LaneFinisher finisher;
+
+    /** Ends lanes whose snapshot was recorded integrated, as the merge pass does for its own lanes. */
+    @FunctionalInterface
+    interface LaneFinisher {
+
+        /**
+         * Releases the lanes of integrated snapshots.
+         *
+         * @param lock        the held append lock
+         * @param controlRoot the control checkout
+         * @param snapshots   the integrated snapshots
+         * @param store       the log, read after the integration was recorded
+         * @param identity    this computer
+         * @throws Exception when a lane cannot be released
+         */
+        void finish(ProjectAppendLock lock, Path controlRoot, List<TaskSnapshotRecord> snapshots, PredictionEventStore store,
+                NodeIdentity identity) throws Exception;
+    }
 
     /** One lane of one re-merged advance: the original snapshot and the merge commit that carries it now. */
     private record Lane(TaskSnapshotRecord original, String base, String merged) {
     }
 
-    RemergeService(ProjectApplicationService projectService, ProjectProcessExecutor processExecutor) {
+    RemergeService(ProjectApplicationService projectService, ProjectProcessExecutor processExecutor, LaneFinisher finisher) {
         this.projectService = Objects.requireNonNull(projectService, "projectService");
         this.processExecutor = Objects.requireNonNull(processExecutor, "processExecutor");
+        this.finisher = Objects.requireNonNull(finisher, "finisher");
+    }
+
+    /** A service whose combine lanes are only released, with no provider session to complete. */
+    RemergeService(ProjectApplicationService projectService, ProjectProcessExecutor processExecutor) {
+        this(projectService, processExecutor, (lock, controlRoot, snapshots, store, identity) -> {
+            for (TaskSnapshotRecord snapshot : snapshots) {
+                new org.synesis.coordination.application.WorkIntentService(store, identity).releaseAfterIntegration(lock, snapshot);
+            }
+        });
     }
 
     /**
@@ -98,6 +133,13 @@ final class RemergeService {
     void run(Path controlRoot, PredictionEventStore store, NodeIdentity identity) {
         try {
             PredictionEventStore current = new PredictionEventStore(store.rootDirectory(), store.projectId());
+            if (!current.taskCompletionProjection().combines().isEmpty()) {
+                try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+                    if (lock.isHeld()) {
+                        closeCombines(lock, controlRoot, new PredictionEventStore(store.rootDirectory(), store.projectId()), identity);
+                    }
+                }
+            }
             List<PredictionEvent> events = current.events();
             Map<String, String> heads = new TreeMap<>(MainMeeting.lastHeads(events));
             heads.remove(identity.nodeId());
@@ -136,7 +178,7 @@ final class RemergeService {
             if (!STOPPED.contains(remergeId)) {
                 remerge(controlRoot, current, identity, events, remergeId, own, other);
             }
-        } catch (IOException | GeneralSecurityException | RuntimeException failure) {
+        } catch (Exception failure) {
             LOG.log(System.Logger.Level.WARNING, "The re-merge could not run; the next pass tries again.", failure);
         }
     }
@@ -145,7 +187,8 @@ final class RemergeService {
      * Builds the re-merge once, then on every pass records what is not on the log yet and lands it when its reviews
      * allow. Each step can be repeated after a crash: the result is kept under its ref before anything is written, the
      * lanes are read back from the result's merge commits, an entry is written only when it is missing, and the
-     * advance is written before the branch moves.
+     * advance is written before the branch moves. An advance Git cannot merge opens a combine lane, and the build
+     * waits for its result (designer item 22).
      */
     private void remerge(Path controlRoot, PredictionEventStore store, NodeIdentity identity, List<PredictionEvent> events,
             String remergeId, String own, String other) throws IOException, GeneralSecurityException {
@@ -157,10 +200,15 @@ final class RemergeService {
         }
         String result = GitProcessRunner.runOptional(controlRoot, "rev-parse", "--verify", "-q", RESULT_PREFIX + remergeId + "^{commit}");
         if (result.isEmpty()) {
-            result = build(controlRoot, remergeId, own, other, missing);
-            if (result == null) {
+            Build built = build(controlRoot, store, remergeId, own, other, missing);
+            if (built.conflicted() != null) {
+                openCombine(controlRoot, store, identity, remergeId, own, other, built.conflicted(), built.base());
                 return;
             }
+            if (built.result() == null) {
+                return;
+            }
+            result = built.result();
         }
         List<Lane> lanes = lanes(controlRoot, store, remergeId, other, result, missing);
         if (lanes == null) {
@@ -177,38 +225,130 @@ final class RemergeService {
     }
 
     /**
-     * Makes the re-merge's commits in a worktree at the other head and keeps the result under its ref.
-     *
-     * @return the result, or {@code null} when Git could not merge or the validation failed
+     * What one build reached: the result, or the advance Git could not merge and the commit it was merged onto, or
+     * neither when the build stopped or waits for a combine lane.
      */
-    private String build(Path controlRoot, String remergeId, String own, String other, List<MainMeeting.Advance> missing)
-            throws IOException {
+    private record Build(String result, MainMeeting.Advance conflicted, String base) {
+
+        static final Build NONE = new Build(null, null, null);
+    }
+
+    /**
+     * Makes the re-merge's commits in a worktree and keeps the result under its ref. It starts from the other head, or
+     * from the base of the last combine this re-merge opened, which holds every step before it. An advance a combine
+     * lane combined is merged with the combine's tree.
+     */
+    private Build build(Path controlRoot, PredictionEventStore store, String remergeId, String own, String other,
+            List<MainMeeting.Advance> missing) throws IOException {
+        List<CombinePayload> combines = store.taskCompletionProjection().combines().stream()
+                .filter(combine -> combine.remergeId().equals(remergeId)).toList();
+        String start = combines.isEmpty() ? other : combines.getLast().base();
         Path worktree = ExternalWorktrees.root(controlRoot, "remerge").resolve(remergeId).toAbsolutePath().normalize();
         // Left by a pass that died while building: its commits are named by nothing, so it is built again.
         ExternalWorktrees.removeBestEffort(worktree);
         Files.createDirectories(worktree.getParent());
-        GitProcessRunner.run(controlRoot, "worktree", "add", "--detach", worktree.toString(), other);
+        GitProcessRunner.run(controlRoot, "worktree", "add", "--detach", worktree.toString(), start);
         try {
             GitProcessRunner.run(worktree, "config", "user.name", "Synesis Integrator");
             GitProcessRunner.run(worktree, "config", "user.email", "integrator@synesis.org");
             for (MainMeeting.Advance advance : missing) {
-                if (!GitProcessRunner.isAncestor(worktree, advance.to(), "HEAD")
-                        && !merge(worktree, advance.to(), "Synesis re-merge of " + String.join(", ", advance.snapshotIds()), remergeId)) {
-                    return null;
+                if (GitProcessRunner.isAncestor(worktree, advance.to(), "HEAD")) {
+                    continue;
+                }
+                String base = GitProcessRunner.run(worktree, "rev-parse", "HEAD");
+                Optional<CombinePayload> combine = combines.stream()
+                        .filter(candidate -> candidate.theirs().equals(advance.to()) && candidate.base().equals(base)).findFirst();
+                if (combine.isPresent()) {
+                    Optional<TaskSnapshotRecord> combined = combined(controlRoot, store, combine.get());
+                    if (combined.isEmpty()) {
+                        return Build.NONE;
+                    }
+                    String tree = GitProcessRunner.run(worktree, "rev-parse", combined.get().commitSha() + "^{tree}");
+                    String merged = GitProcessRunner.run(worktree, "commit-tree", tree, "-p", base, "-p", advance.to(), "-m",
+                            "Synesis combine of " + String.join(", ", advance.snapshotIds()));
+                    GitProcessRunner.run(worktree, "reset", "-q", "--hard", merged);
+                    continue;
+                }
+                if (!merge(worktree, advance.to(), "Synesis re-merge of " + String.join(", ", advance.snapshotIds()))) {
+                    return new Build(null, advance, base);
                 }
             }
-            if (!GitProcessRunner.isAncestor(worktree, own, "HEAD")
-                    && !merge(worktree, own, "Synesis re-merge of this copy of main", remergeId)) {
-                return null;
+            if (!GitProcessRunner.isAncestor(worktree, own, "HEAD") && !merge(worktree, own, "Synesis re-merge of this copy of main")) {
+                stop(remergeId, "Git could not merge this copy's old head " + own);
+                return Build.NONE;
             }
             String result = GitProcessRunner.run(worktree, "rev-parse", "HEAD");
             if (!validates(controlRoot, worktree, remergeId)) {
-                return null;
+                return Build.NONE;
             }
             GitProcessRunner.run(controlRoot, "update-ref", RESULT_PREFIX + remergeId, result);
-            return result;
+            return new Build(result, null, null);
         } finally {
             ExternalWorktrees.removeBestEffort(worktree);
+        }
+    }
+
+    /**
+     * Opens the combine lane for an advance Git could not merge: keeps the commit it was merged onto under its ref,
+     * creates the combine's own work group, and writes {@code COMBINE_REQUIRED}, each once.
+     */
+    private static void openCombine(Path controlRoot, PredictionEventStore store, NodeIdentity identity, String remergeId, String own,
+            String other, MainMeeting.Advance advance, String base) throws IOException, GeneralSecurityException {
+        CombinePayload combine = new CombinePayload("cb-" + digest(remergeId + "\n" + advance.to() + "\n" + base), remergeId, other, own,
+                base, advance.to(), advance.snapshotIds());
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) {
+                throw new IOException("the append lock is not held");
+            }
+            PredictionEventStore current = new PredictionEventStore(store.rootDirectory(), store.projectId());
+            if (current.taskCompletionProjection().combines().stream().anyMatch(known -> known.combineId().equals(combine.combineId()))) {
+                return;
+            }
+            GitProcessRunner.run(controlRoot, "update-ref", BASE_PREFIX + combine.combineId(), base);
+            if (current.workGroupProjection().group(combine.workGroupId()).isEmpty()) {
+                WorkGroup group = new WorkGroup(combine.workGroupId(), current.projectId(),
+                        "Combine " + String.join(", ", advance.snapshotIds()) + " with the other copy of main",
+                        "One change that holds both versions: the other copy of main and the work of " + String.join(", ", advance.snapshotIds()),
+                        1, WorkGroup.Status.ACTIVE, ReviewPolicy.none());
+                current.append(group.workGroupId(), PredictionEventType.WORK_GROUP_CREATED, identity.nodeId(),
+                        CollaborationCodec.encodeWorkGroup(group), identity);
+            }
+            current.append(nameUuid("combine:" + combine.combineId()), PredictionEventType.COMBINE_REQUIRED, identity.nodeId(),
+                    combine.encode(), identity);
+        }
+        LOG.log(System.Logger.Level.WARNING, "Re-merge {0}: Git could not merge {1} onto {2}; combine lane {3} is open for an agent other than its authors.",
+                remergeId, advance.to(), base, combine.combineId());
+    }
+
+    /**
+     * The combine lane's result for a combine: its task's latest snapshot made on the combine's base and not refused,
+     * once its commit is here.
+     */
+    private static Optional<TaskSnapshotRecord> combined(Path controlRoot, PredictionEventStore store, CombinePayload combine) {
+        var completion = store.taskCompletionProjection();
+        List<TaskSnapshotRecord> made = completion.allSnapshots().stream()
+                .filter(snapshot -> snapshot.taskId().equals(combine.taskId()) && snapshot.baseCommit().equals(combine.base()))
+                .filter(snapshot -> !completion.snapshotState(snapshot.snapshotId()).map(TaskCompletionState::refused).orElse(false))
+                .toList();
+        return made.isEmpty() || !hasCommit(controlRoot, made.getLast().commitSha()) ? Optional.empty() : Optional.of(made.getLast());
+    }
+
+    /**
+     * Records the combine lanes of this computer's agents integrated and releases them, once the re-merge that used
+     * them is on this copy's {@code main}: both the base and the advance they combined are in it. The caller holds the
+     * append lock.
+     */
+    private void closeCombines(ProjectAppendLock lock, Path controlRoot, PredictionEventStore store, NodeIdentity identity)
+            throws Exception {
+        for (CombinePayload combine : store.taskCompletionProjection().combines()) {
+            Optional<TaskSnapshotRecord> combined = combined(controlRoot, store, combine);
+            if (combined.isEmpty() || store.taskCompletionProjection().snapshotState(combined.get().snapshotId()).orElse(null) == TaskCompletionState.INTEGRATED
+                    || !IntegrationOrchestrationService.ownLane(store, identity, combined.get())
+                    || !GitProcessRunner.isAncestor(controlRoot, combine.base(), "HEAD") || !GitProcessRunner.isAncestor(controlRoot, combine.theirs(), "HEAD")) {
+                continue;
+            }
+            ControlBranchAdvancementService.recordIntegrated(combined.get(), store, identity);
+            finisher.finish(lock, controlRoot, List.of(combined.get()), new PredictionEventStore(store.rootDirectory(), store.projectId()), identity);
         }
     }
 
@@ -245,13 +385,13 @@ final class RemergeService {
         return lanes;
     }
 
-    /** One merge commit; a merge Git cannot make stops the re-merge (the combine lane is NOT BUILT). */
-    private static boolean merge(Path worktree, String commit, String message, String remergeId) throws IOException {
+    /** One merge commit; a merge Git cannot make is undone, leaving the worktree at the base. */
+    private static boolean merge(Path worktree, String commit, String message) throws IOException {
         try {
             GitProcessRunner.run(worktree, "merge", "--no-ff", "-m", message, commit);
             return true;
         } catch (IOException conflict) {
-            stop(remergeId, "Git could not merge " + commit + ": " + conflict.getMessage());
+            GitProcessRunner.runOptional(worktree, "merge", "--abort");
             return false;
         }
     }
@@ -395,7 +535,7 @@ final class RemergeService {
 
     private static void stop(String remergeId, String why) {
         if (STOPPED.add(remergeId)) {
-            LOG.log(System.Logger.Level.WARNING, "Re-merge {0} stopped: {1}. Resolving it needs the combine lane, which is not built yet.",
+            LOG.log(System.Logger.Level.WARNING, "Re-merge {0} stopped: {1}. It is tried again once either copy of main moves.",
                     remergeId, why);
         }
     }

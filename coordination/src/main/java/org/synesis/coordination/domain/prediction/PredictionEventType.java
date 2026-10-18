@@ -347,7 +347,12 @@ public enum PredictionEventType {
      * its own integrations again on top of the other copy (ADR-0098 step 5). It is reviewed again like a snapshot,
      * never integrates by itself, and changes no task's state.
      */
-    REMERGE_SNAPSHOT_CREATED(81);
+    REMERGE_SNAPSHOT_CREATED(81),
+    /**
+     * Records that Git could not merge one advance of a re-merge, so an agent other than its authors combines the two
+     * versions in a combine lane (ADR-0098 step 5). It acts for the advance's lanes.
+     */
+    COMBINE_REQUIRED(82);
 
 
     private static final Map<Integer, PredictionEventType> BY_WIRE_CODE = Arrays.stream(values())

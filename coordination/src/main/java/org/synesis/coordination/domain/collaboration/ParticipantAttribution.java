@@ -10,6 +10,7 @@ import org.synesis.coordination.domain.integration.ValidationRefusalPayload;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.task.CompletionPreparedPayload;
 import org.synesis.coordination.domain.task.CompletionUnwoundPayload;
+import org.synesis.coordination.domain.task.CombinePayload;
 import org.synesis.coordination.domain.task.RemergeSnapshotPayload;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.coordination.exception.CoordinationException;
@@ -126,6 +127,7 @@ final class ParticipantAttribution {
                  INTEGRATION_BLOCKED, REPAIR_REQUIRED, CONTROL_BRANCH_ADVANCED ->
                     producers(view, IntegrationAttemptPayload.decode(payload).taskSnapshotIds());
             case TASK_INTEGRATED -> producers(view, List.of(TaskSnapshotPayload.decode(payload).snapshotId()));
+            case COMBINE_REQUIRED -> producers(view, CombinePayload.decode(payload).snapshotIds());
             case REMERGE_SNAPSHOT_CREATED ->
                     List.of(RemergeSnapshotPayload.decode(payload).snapshot().provenance().participantIdentity());
             case INTEGRATION_VALIDATION_REFUSED ->
