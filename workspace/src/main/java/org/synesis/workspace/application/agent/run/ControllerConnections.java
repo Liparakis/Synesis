@@ -25,8 +25,9 @@ import org.synesis.workspace.lifecycle.reconciliation.ReconciliationService;
 public final class ControllerConnections implements AgentRunController.Connections {
 
     /**
-     * How often an end is offered to the lease store. Each attempt waits two seconds for the
-     * project lock, which a session being admitted or a snapshot being taken can hold for longer.
+     * How often an end is offered to the lease store when the run is over. Each attempt waits two
+     * seconds for the project lock, which a session being admitted or a snapshot being taken can hold
+     * for longer. While the run lives an end is offered once per observation instead.
      */
     private static final int END_RECORD_ATTEMPTS = 15;
 
@@ -55,23 +56,31 @@ public final class ControllerConnections implements AgentRunController.Connectio
 
     @Override
     public void ended(String connectionInstanceId) {
-        // A process that never reached Synesis, or a provider that did not pass the identity on,
-        // left no lease under this name; there is then nothing to close.
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
-        // An end that is not recorded leaves the lane looking held by a live session until the
-        // abrupt-loss grace period passes, and the agent resumed to continue it is offered nothing.
         for (int attempt = 0; attempt < END_RECORD_ATTEMPTS; attempt++) {
-            if (leases.markClosedCleanly(projectRoot, connectionInstanceId)) {
-                // The MCP server's own close recovered the lane at once; a kept session's server
-                // no longer closes it, and with every agent stopped nobody else would.
-                try {
-                    new ReconciliationService().reconcileEligible(projectRoot);
-                } catch (Exception unavailable) {
-                    // The next admission or inbox read reconciles it.
-                }
+            if (end(connectionInstanceId)) {
                 return;
             }
         }
+    }
+
+    @Override
+    public boolean end(String connectionInstanceId) {
+        // A process that never reached Synesis, or a provider that did not pass the identity on,
+        // left no lease under this name; there is then nothing to close. An end that is not recorded
+        // leaves a kept lease naming the controller, so the lane looks held by a live session for as
+        // long as the controller lives, and the agent resumed to continue it is offered nothing.
+        if (!leases.markClosedCleanly(projectRoot, Objects.requireNonNull(connectionInstanceId, "connectionInstanceId"))) {
+            return false;
+        }
+        // The MCP server's own close recovered the lane at once; a kept session's server no longer
+        // closes it, and with every agent stopped nobody else would.
+        try {
+            new ReconciliationService().reconcileEligible(projectRoot);
+        } catch (Exception unavailable) {
+            // The next admission or inbox read reconciles it.
+        }
+        return true;
     }
 
     @Override

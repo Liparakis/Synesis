@@ -110,6 +110,28 @@ final class AgentRunControllerTest {
         assertEquals(List.of(3), script.resumedAtTicks);
     }
 
+    /**
+     * An end the project lock refused was given up, and the lease went on naming the controller for
+     * an agent that had ended, its lane looking held by a live session until the run ended. It is
+     * offered again at each observation until it is recorded.
+     */
+    @Test
+    void anEndTheProjectCouldNotRecordIsOfferedAgainUntilItIsRecorded() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.busyEnds = 2;
+        script.lifetimes(1, 20, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(5).announced();
+        script.at(3).head(9).progressAfter(5).laneEnded("claude#1");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        List<String> conn1 = script.connections.stream().filter(line -> line.endsWith(" conn-1")).toList();
+        assertEquals(List.of("open conn-1", "busy conn-1", "busy conn-1", "ended conn-1"), conn1, "the end is offered at each look until the project records it");
+        assertTrue(script.connections.indexOf("ended conn-1") < script.connections.indexOf("ended conn-2"), "while the run goes on: " + script.connections);
+    }
+
     @Test
     void runWhereEveryLaneWasCancelledIsNotReportedAsCompleted() throws Exception {
         Script script = new Script();
@@ -705,6 +727,8 @@ final class AgentRunControllerTest {
         private boolean endlessProgress;
         /** Whether the controller's sessions can be kept, as real leases opened by its own children can. */
         private boolean keepSessions;
+        /** How many attempts to record an end the project refuses first, as a busy project lock does. */
+        private int busyEnds;
         private int tick;
         private int launched;
 
@@ -735,6 +759,17 @@ final class AgentRunControllerTest {
                 @Override
                 public void ended(String connectionInstanceId) {
                     connections.add("ended " + connectionInstanceId);
+                }
+
+                @Override
+                public boolean end(String connectionInstanceId) {
+                    if (busyEnds > 0) {
+                        busyEnds--;
+                        connections.add("busy " + connectionInstanceId);
+                        return false;
+                    }
+                    ended(connectionInstanceId);
+                    return true;
                 }
 
                 @Override

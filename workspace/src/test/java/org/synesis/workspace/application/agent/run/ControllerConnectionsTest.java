@@ -81,6 +81,36 @@ final class ControllerConnectionsTest {
                 "an end met by a busy project lock must still be recorded");
     }
 
+    /** While the run lives an end is tried once, so a busy lock costs one look and the end is offered again. */
+    @Test
+    void anEndTriedWhileTheLockIsBusyIsNotRecordedAndIsRecordedWhenOfferedAgain(@TempDir Path temp) throws Exception {
+        Path project = Files.createDirectories(temp.resolve("project"));
+        new ProjectApplicationService().init(project);
+        SessionLeaseStore store = new SessionLeaseStore();
+        ControllerConnections connections = new ControllerConnections(project, new SessionLeaseService());
+        String ended = connections.open();
+        store.save(project, activeLease(ended));
+
+        CountDownLatch held = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread holder = Thread.ofPlatform().start(() -> {
+            try (ProjectAppendLock _ = ProjectAppendLock.acquire(project.resolve(".synesis").resolve("coordination"))) {
+                held.countDown();
+                release.await();
+            } catch (Exception failure) {
+                throw new IllegalStateException(failure);
+            }
+        });
+        held.await();
+        assertFalse(connections.end(ended), "a busy project records nothing");
+        assertEquals(SessionLeaseState.ACTIVE, store.load(project, ended).orElseThrow().leaseState());
+        release.countDown();
+        holder.join();
+
+        assertTrue(connections.end(ended));
+        assertEquals(SessionLeaseState.CLOSED_CLEANLY, store.load(project, ended).orElseThrow().leaseState());
+    }
+
     /**
      * A busy project lock decides nothing: ending the session over it would send a waiting agent's
      * lane to recovery although the controller will resume it.

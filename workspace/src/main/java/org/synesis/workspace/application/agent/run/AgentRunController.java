@@ -130,6 +130,8 @@ public final class AgentRunController {
         OptionalLong seenBeforeExit = OptionalLong.empty();
         // Why the run last said it waits with every agent stopped, so each wait is reported once.
         Wait reportedWait = null;
+        // Ended connections the project could not record yet, offered again at every observation.
+        List<String> unrecordedEnds = new ArrayList<>();
         try {
             int index = 0;
             long headAtStart = observer.observe().headSequence();
@@ -150,13 +152,14 @@ public final class AgentRunController {
                     seenBeforeExit = OptionalLong.of(heads.removeFirst().sequence());
                 }
                 heads.addLast(new HeadAt(now, observation.headSequence()));
+                unrecordedEnds.removeIf(connections::end);
                 for (Agent agent : agents) {
                     if (agent.process != null && !agent.process.isAlive()) {
                         agent.exited(observation.lastActivitySequence(agent.spec.provider(), agent.connectionId), seenBeforeExit, observation.progressedSince(agent.startedAtSequence),
                                 agent.holdsOpenLane(observation));
                         listener.accept("AGENT_EXITED=" + agent.label() + " exitCode=" + agent.exitCode);
                     }
-                    keepOrEnd(agent, observation, request.maxResumesPerAgent(), listener);
+                    keepOrEnd(agent, observation, request.maxResumesPerAgent(), listener, unrecordedEnds);
                 }
                 boolean awaitingDeadline = false;
                 if (!observation.complete()) {
@@ -239,9 +242,11 @@ public final class AgentRunController {
                     agent.process.stop();
                 }
                 if (!agent.connectionEnded) {
-                    agent.endConnection(connections);
+                    agent.endConnection(connections, unrecordedEnds);
                 }
             }
+            // Nothing offers them again once the run is over, so these wait for the project.
+            unrecordedEnds.forEach(connections::ended);
         }
     }
 
@@ -251,7 +256,7 @@ public final class AgentRunController {
      * that its end of input no longer closes it. A session that could not be kept was closed by its
      * own MCP server, so it is ended and the agent's next process gets a new identity.
      */
-    private void keepOrEnd(Agent agent, Observation observation, int maxResumes, Consumer<String> listener) {
+    private void keepOrEnd(Agent agent, Observation observation, int maxResumes, Consumer<String> listener, List<String> unrecordedEnds) {
         if (agent.connectionEnded) {
             return;
         }
@@ -264,7 +269,7 @@ public final class AgentRunController {
             return;
         }
         if (agent.process == null) {
-            agent.endConnection(connections);
+            agent.endConnection(connections, unrecordedEnds);
         }
     }
 
@@ -421,11 +426,27 @@ public final class AgentRunController {
         String open();
 
         /**
-         * Records that a connection has ended: no process of this controller will use it again.
+         * Records that a connection has ended: no process of this controller will use it again. Waits
+         * a bounded time for the project when it is busy.
          *
          * @param connectionInstanceId identity returned by {@link #open()}
          */
         void ended(String connectionInstanceId);
+
+        /**
+         * Records that a connection has ended, as {@link #ended} does, but tries once instead of
+         * waiting. The controller offers an end that could not be recorded again at each observation,
+         * and waits for it when the run ends, so a busy project never leaves the lease of an agent that
+         * has ended naming the controller.
+         *
+         * @param connectionInstanceId identity returned by {@link #open()}
+         * @return {@code true} when the end is recorded or there was nothing to record; {@code false}
+         *         when the project could not record it now
+         */
+        default boolean end(String connectionInstanceId) {
+            ended(connectionInstanceId);
+            return true;
+        }
 
         /**
          * Keeps the session of a connection alive while the controller can still start a process on
@@ -769,8 +790,11 @@ public final class AgentRunController {
             return spec.options().withConnection(identity);
         }
 
-        private void endConnection(Connections connections) {
-            connections.ended(connectionId);
+        /** Reports its current connection ended; an end the project could not record yet is kept to be offered again. */
+        private void endConnection(Connections connections, List<String> unrecordedEnds) {
+            if (!connections.end(connectionId)) {
+                unrecordedEnds.add(connectionId);
+            }
             connectionEnded = true;
         }
 
