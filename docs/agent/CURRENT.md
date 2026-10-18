@@ -1,3 +1,43 @@
+# 2026-10-18 — ADR-0098 step 3: code moves over Link, and the PC + VM goal completes with no Git remote
+
+Built on `adr-0098-step3-code-over-link` (design in ADR-0098 "Build design", step 3, and the calls made while building
+it). Code moves between computers as resumable `git bundle` pieces over Link (`SCX1`: at most 150 MB per piece, 256 KiB
+chunks each with a SHA-256, `git bundle verify` and an fsck'd fetch); a computer serves only refs and commits its log
+names. Agents' processes ask their own coordination server on the loopback `/code` route. A member's hand-in pushes
+nothing; the leader's merge pass fetches the reviewed snapshots it may merge, outside the integration lock; members
+follow `main` after pulls that name a head they lack; `code.remote` is an optional mirror; `link join --into <folder>`
+copies the project into an empty folder over Link. Compatibility 7. Also: a join answered after its first dialing round
+now connects (`LateAnswerTest`), and every `LINK_STATE=FAILED` names `LINK_FAILURE`.
+
+**Defects found by the real runs and fixed (ADR-0099, 2026-10-18 fixes 9 and 10).** Run A1 (`mp17-link`) stopped at 6 of 7
+modules: both PC agents had finished their lanes and stopped, and nothing resumed a stopped agent for a review it could
+take (`AgentRunController`). Run A2 (`mp18-link`) stopped at 7 snapshots: an agent with no lane asked to review, stopped,
+and was not resumed when the author accepted, and its session had already been ended. Each fix has a test that fails
+before it.
+
+**Real runs, this PC (leader, two `claude:sonnet:medium`) and the VM (member, two `codex:gpt-6-luna:high`), no Git
+remote on either, joined by the one link with the answer link (this PC has no "Synesis Link" firewall rule).** The PC
+ran the CLI from `installDist` with a `synesis.cmd` shim: Go is not installed on this OS, and the installer needs it.
+- Run A3, `mp21-link`, remaster66: **COMPLETED** on both (166 s here, 159 s on the VM). WorkGroup COMPLETED; `master`
+  equal on both (`6ff0c11`); `python -m unittest` 44 OK on both; `cli.py slug "Hello World!"` prints `hello-world`, an
+  unknown command prints the usage line and returns 2. Every review by a non-author; PC Claude reviewed VM Codex's work.
+  Real current-build acceptance proven for: joining over Link into an empty folder, code over Link in both directions,
+  the leader merging member work fetched over Link, `main` following on the member, cross-computer review, WorkGroup
+  completion, with no Git remote.
+- Run B, `big450c`: a 450 MB history joined over Link in four pieces (141.6, 141.6, 141.6, 47.2 MB); the VM's cable was
+  cut with 151 chunks of the first piece and none finished, restored 40 s later; the VM redialed (`REDIAL_OK`) and went
+  on from chunk 151; `master` equal, `git fsck` clean. (The VM's ingress was policed to 20 Mbit/s for IPv4 and IPv6 so
+  the cut landed inside a piece; two earlier tries at LAN speed cut between pieces and also ended equal.)
+- Runs A1 and A2: PARTIAL, as above. Evidence: `D:\SynesisAcceptance\offline\STEP3-RUNS.md`.
+
+**Gates.** Linux gate (Podman) on `1ebeb275`: 1,918 tests, 0 failures, 3 skipped. Windows: the touched classes of every
+piece. The full Windows gate was not run on this branch.
+
+**Open.** The leader does not pass a commit from one member to another (a member's reviewer gets another member's snapshot
+once the leader holds it; always true with two computers). The invitation's mirror is not set for a joiner that used
+`--into`. Public members of `CodeRemote` were removed with every caller migrated, not deprecated (ADR-0098, open to the
+owner).
+
 # 2026-10-18 — ADR-0099's known limits fixed, and Codex agents get a Stop hook
 
 The owner asked on 2026-10-18 to fix every limit ADR-0099's amendment listed and to re-test Codex's hooks (USER-STATED);

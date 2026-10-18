@@ -763,7 +763,9 @@ losing their lanes.
 
 1. **The compatibility number.** DONE.
 2. **One fixed leader.** DONE 2026-10-16 (run 7), with a Git remote. The baseline.
-3. **Code over Link.** Link becomes the path code always takes.
+3. **Code over Link.** Link becomes the path code always takes. DONE 2026-10-18 (remaster66, `1ebeb275`): run 7's goal
+   COMPLETED on the PC and the VM with no Git remote, `main` equal on both (`6ff0c11`); a 450 MB history joined in four
+   pieces, cut in the middle of the first and resumed from chunk 151 (`docs/agent/CURRENT.md`, 2026-10-18).
    - **Built:** the Link code mover ("Code over Link"); `code.remote` optional; a reviewer fetches a snapshot from its
      author's computer, the leader fetches before it merges, and members follow `main`, all over Link; joining fetches
      the repository over Link.
