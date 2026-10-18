@@ -102,7 +102,14 @@ class PredictionWireFormatTest {
             entry(PredictionEventType.CONVERSATION_MESSAGES_DELIVERED, 79),
             entry(PredictionEventType.INTEGRATION_VALIDATION_REFUSED, 80),
             entry(PredictionEventType.REMERGE_SNAPSHOT_CREATED, 81),
-            entry(PredictionEventType.COMBINE_REQUIRED, 82)
+            entry(PredictionEventType.COMBINE_REQUIRED, 82),
+            entry(PredictionEventType.PROJECT_SHARED, 83),
+            entry(PredictionEventType.JOIN_REQUESTED, 84),
+            entry(PredictionEventType.JOIN_ANSWERED, 85),
+            entry(PredictionEventType.JOIN_POLICY_SET, 86),
+            entry(PredictionEventType.MEMBER_REMOVED, 87),
+            entry(PredictionEventType.MEMBER_CARD, 88),
+            entry(PredictionEventType.OWNER_CHANGED, 89)
     );
 
     @Test

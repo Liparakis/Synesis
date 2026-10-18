@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -17,7 +16,6 @@ import org.synesis.coordination.persistence.CodeTransferMessage;
 import org.synesis.coordination.persistence.LoopbackExchange;
 import org.synesis.coordination.persistence.ReplicationExchange;
 import org.synesis.coordination.replication.LeaderReplication;
-import org.synesis.coordination.replication.MemberReplication;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
 
 import org.synesis.link.session.PeerSession;
@@ -26,17 +24,16 @@ import org.synesis.workspace.application.control.CodeExchange;
 import org.synesis.workspace.application.control.CodeOverLink;
 
 /**
- * The replication side a coordination server currently plays on its Link sessions (ADR-0098): the leader's, which
- * serves the members the role file names, or a member's, which follows one leader.
+ * The replication side a coordination server plays on its Link sessions (ADR-0098). Since step 6 every computer of a
+ * project plays the same one: it serves the members the membership entries name and pulls each one it is connected
+ * to; before the owner's entries arrive, the computers it dialed (designer items 13 and 15).
  *
- * <p>The Link owner is built once and asks this object per frame and per session, so a computer that follows a
- * project link becomes a member of the inviter without restarting: the member side takes over from the leader side,
- * which a computer without members never used. The change is one way here; going back to leader needs the role file
- * and a restart, as before. The role file stays the authority for every other process, and is written before
- * {@link #becomeMember} is called.
+ * <p>The Link owner is built once and asks this object per frame and per session. A computer that follows a project
+ * link needs no change of side: the inviter it dialed is trusted from then on, and the owner's entries decide once they
+ * arrive.</p>
  *
  * <p>Code over Link ({@code SCX1}, ADR-0098 step 3) rides on the same sessions and the same peers: the code side
- * serves exactly the nodes this side serves, a member's leader or a leader's current members, and asks them.</p>
+ * serves exactly the nodes this side serves, and asks them.</p>
  */
 final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
 
@@ -46,33 +43,26 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
     private final Path coordination;
     private final UUID projectId;
     private final CodeOverLink code;
-    private volatile MemberReplication member;
-    private volatile String leaderNodeId;
-    private volatile LeaderReplication leader;
-    private volatile MergeDriver mergeDriver;
+    private final String self;
+    private final LeaderReplication leader;
+    private final MergeDriver mergeDriver;
 
     /**
      * @param coordination the project's coordination folder
      * @param projectId    the project
      * @param repository   the project's control checkout, whose code moves over Link, or {@code null} for none
-     * @param member       the member side, or {@code null}
-     * @param leaderNodeId the leader of that member side
-     * @param leader       the leader side, or {@code null} when this is a member
+     * @param self         this computer's node
+     * @param leader       the shared side
      * @param mergeDriver  this computer's merge pass, or {@code null}
      */
-    ReplicationSide(Path coordination, UUID projectId, Path repository, MemberReplication member, String leaderNodeId, LeaderReplication leader,
-            MergeDriver mergeDriver) {
+    ReplicationSide(Path coordination, UUID projectId, Path repository, String self, LeaderReplication leader, MergeDriver mergeDriver) {
         this.coordination = coordination;
         this.projectId = projectId;
         this.code = repository == null ? null : new CodeOverLink(repository, coordination, projectId, this);
-        this.member = member;
-        this.leaderNodeId = leaderNodeId;
+        this.self = self;
         this.leader = leader;
         this.mergeDriver = mergeDriver;
-        if (member != null) {
-            member.whenPulled(this::afterMemberPull);
-        }
-        if (leader != null && code != null) {
+        if (code != null) {
             // Every computer takes another's newer main, the owner's computer too (ADR-0098 step 5).
             leader.whenPulled(code::mainMayHaveMoved);
         }
@@ -97,62 +87,48 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
                 return serving != null && returning(remoteNodeId) ? serving.serve(payload)
                         : CompletableFuture.completedFuture(CodeTransferCodec.encode(new CodeTransferMessage.Unavailable(CodeTransferMessage.NOT_SERVED)));
             }
-            MemberReplication asMember = member;
-            if (asMember != null) {
-                return asMember.handler().handle(remoteNodeId, payload);
-            }
-            LeaderReplication asLeader = leader;
-            if (asLeader != null) {
-                return asLeader.handler().handle(remoteNodeId, payload);
-            }
-            CompletionStage<byte[]> closed = CompletableFuture.failedFuture(new IllegalStateException("the replication side is closed"));
-            return closed;
+            return leader.handler().handle(remoteNodeId, payload);
         };
     }
 
     /**
-     * Attaches the session when its peer is the leader (for a member); the leader side takes every session and serves
-     * a peer only while its settings name it.
+     * Attaches every session; a peer is served only while it is admitted, so a node accepted later is served from then
+     * on, over the session it holds (ADR-0098 step 4).
      */
     void attach(PeerSession session) {
-        MemberReplication asMember = member;
-        if (asMember != null) {
-            if (session.remoteNodeId().equals(leaderNodeId)) {
-                asMember.attach(session);
-            }
-            return;
-        }
-        LeaderReplication asLeader = leader;
-        if (asLeader != null) {
-            // A node accepted later is served from then on, over this session (ADR-0098 step 4).
-            asLeader.attach(session);
-        }
+        leader.attach(session);
     }
 
     /**
-     * @return whether the node is one this computer redials or admits again: its leader, or one of its members
+     * @return whether the node is one this computer redials or admits again: a member, or before sharing a computer
+     *         it dialed
      */
     boolean returning(String nodeId) {
-        if (member != null) {
-            return nodeId.equals(leaderNodeId);
-        }
-        LeaderReplication asLeader = leader;
-        return asLeader != null && asLeader.isMember(nodeId);
+        return leader.isMember(nodeId);
     }
 
     @Override
     public Map<String, ReplicationExchange> live() {
-        MemberReplication asMember = member;
-        LeaderReplication asLeader = leader;
-        Map<String, PeerSession> sessions = asMember != null ? asMember.liveSessions() : asLeader != null ? asLeader.liveSessions() : Map.of();
         Map<String, ReplicationExchange> live = new HashMap<>();
-        sessions.forEach((node, session) -> live.put(node, exchange(session)));
+        leader.liveSessions().forEach((node, session) -> live.put(node, exchange(session)));
         return live;
     }
 
+    /**
+     * Whether this computer joined another's project rather than shared its own: the owner is another computer, or,
+     * before the owner's entries arrive, it dialed an inviter.
+     */
     @Override
     public boolean member() {
-        return member != null;
+        java.util.Optional<String> owner = leader.membership().flatMap(view -> view.owner());
+        if (owner.isPresent()) {
+            return !owner.get().equals(self);
+        }
+        try {
+            return !org.synesis.coordination.persistence.ReplicationPeers.read(coordination).dialed().isEmpty();
+        } catch (org.synesis.coordination.exception.CoordinationException unreadable) {
+            return false;
+        }
     }
 
     /** One request and one answer on a session, with the failures of {@link ReplicationExchange}. */
@@ -191,51 +167,14 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
     }
 
     /**
-     * Makes this side a member of {@code leaderNode}, and the loopback server its agents' relay.
+     * Called when this computer follows a project link. Since ADR-0098 step 6 nothing changes side: the inviter was
+     * recorded as dialed before this call, so the shared side trusts it from now on.
      *
-     * @param leaderNode the inviter
-     * @param server     the started loopback server of this computer
-     * @throws IOException when the member side cannot be set up, or this computer already follows another leader
+     * @param inviter the inviter
+     * @param server  the started loopback server of this computer
      */
-    synchronized void becomeMember(String leaderNode, CoordinationHttpServer server) throws IOException {
-        if (member != null) {
-            if (!leaderNode.equals(leaderNodeId)) {
-                throw new IOException("FOLLOWING_ANOTHER_LEADER");
-            }
-            return;
-        }
-        MemberReplication created = new MemberReplication(coordination, projectId, leaderNode);
-        created.whenPulled(this::afterMemberPull);
-        // The leader side and the member side relay through one loopback server and record one endpoint file, so
-        // the leader side is retired first: closed afterwards, it removed the file the member had just recorded, and
-        // this computer's agents then found no coordination server (PC + VM run of 2026-10-18). The merge driver
-        // stays: a member merges its own lanes too (ADR-0098 step 5).
-        if (leader != null) {
-            leader.close();
-            leader = null;
-        }
-        try {
-            created.serve(server);
-        } catch (IOException | RuntimeException failed) {
-            created.close();
-            throw failed;
-        }
-        leaderNodeId = leaderNode;
-        member = created;
-    }
-
-    /**
-     * After a member's pull that brought entries: its code may follow another computer's main, and its own merge pass
-     * may have work (a review accepted on another computer, a copy of main to re-merge onto).
-     */
-    private void afterMemberPull() {
-        if (code != null) {
-            code.mainMayHaveMoved();
-        }
-        MergeDriver asMerge = mergeDriver;
-        if (asMerge != null) {
-            asMerge.onMemberEntry();
-        }
+    void becomeMember(String inviter, CoordinationHttpServer server) {
+        // Nothing to switch; kept for the gateway the join calls.
     }
 
     @Override
@@ -248,17 +187,9 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
             }
             code.close();
         }
-        MemberReplication asMember = member;
-        MergeDriver asMerge = mergeDriver;
-        LeaderReplication asLeader = leader;
-        if (asMember != null) {
-            asMember.close();
+        if (mergeDriver != null) {
+            mergeDriver.close();
         }
-        if (asMerge != null) {
-            asMerge.close();
-        }
-        if (asLeader != null) {
-            asLeader.close();
-        }
+        leader.close();
     }
 }

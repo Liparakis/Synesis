@@ -986,6 +986,82 @@ Today membership is `replication.properties` on each computer; join requests liv
 6. **The third computer:** a Podman container with the Linux build and the VM's Claude and Codex sign-ins (owner's
    answer 14), with host networking. If the VM cannot reach it over QUIC, a clone of the VM instead.
 
+Decided while building step 6 (designer, 2026-10-18; each open to the owner):
+
+7. **Membership is a projection like the others.** A new stage, `MembershipProjection`, applies the membership
+   entries in each computer's applied order. Whether an entry counts is judged by the same rules on the writer's own
+   append and on arrival (`AppendAdmission`), and one that fails counts for nothing, as in step 4. A project with no
+   `PROJECT_SHARED` is not shared: membership checks nothing there. The owner's statements come from one log, but
+   they refer to entries of other logs (a request in the inviting member's log, a member's acceptance), so an arriving
+   entry that refers to what this computer has not applied yet waits for it, as a missing reference does in step 4:
+   an answer before its request, an entry of a computer whose acceptance has not arrived, an owner statement of a
+   later revision. Every computer then ends with the same membership whatever the order. Only the old owner's line and
+   a recovery change can still cross (item 12). (Corrected after the code review of step 6.)
+8. **The entries** (wire codes 83 to 89): `PROJECT_SHARED` {owner public key, recovery public key or none}, written
+   once by the owner's computer, whose node key it names; `JOIN_REQUESTED` {request, joiner node}, written by
+   the member that holds the joiner's session (the session was authenticated with the joiner's key, and nothing needs
+   the key itself, so a step-5 migration can write one for a member whose key it never saw); `JOIN_ANSWERED` {request, joiner, accepted or declined,
+   revision}; `JOIN_POLICY_SET` {OWNER_ONLY or ANY_MEMBER, revision}; `MEMBER_REMOVED` {node, the head of its log the
+   owner had seen, revision}; `MEMBER_CARD` {the member's retained invitation}; `OWNER_CHANGED` {owner public key,
+   recovery public key or none, revision, the recovery key's signature or none}. The revision is the number of owner
+   statements applied before it; a statement is written at the revision its writer holds, so an old one cannot be
+   replayed later.
+9. **Who may write what.** `JOIN_REQUESTED` and `MEMBER_CARD`: any member. `JOIN_ANSWERED`: the owner; under
+   `ANY_MEMBER` also any member, accepting only (a decline is the owner's), judged by the policy in force at the
+   revision the answer carries. `JOIN_POLICY_SET` and `MEMBER_REMOVED`: the owner. `OWNER_CHANGED`: the owner, or any
+   member carrying a valid recovery signature over the project, the action, the new keys and the revision. The owner's
+   answer decides and always takes its revision, even over a member's acceptance applied before it (a decline then
+   removes the joiner again); a member's acceptance counts only while no answer is applied. A computer that joined
+   another's project (it dialed an inviter, or holds another computer's log) never shares one itself.
+10. **Members and logs.** The members are the owner and every accepted joiner not removed. A computer serves and pulls
+    only members; it copies every log of anyone who was ever a member, so a removed computer's log stays complete. An
+    entry of a removed computer's log after the head its removal names counts for nothing. One the computer had
+    already applied before the removal reached it stays applied there (an applied entry is a fact, as in step 4); the
+    removal also ends the removed computer's lanes everywhere, so its claims are freed the same on every computer.
+11. **The recovery key.** 256 random bits, shown once as 24 BIP-39 English words (the standard list, 2048 words with a
+    checksum), stored nowhere. The words give back the bits; SHA-256 over a fixed domain and the bits gives the 32-byte
+    Ed25519 seed. `project share` prints the words. A project shared before step 6 gets no recovery key from its
+    migration (nothing is shown to a person there); running `project share` again on the owner's computer then writes
+    an `OWNER_CHANGED` with the same owner and a new recovery key, and prints its words. The same command rotates it.
+12. **Recovery.** `project recover` on any member asks for the 24 words and writes `OWNER_CHANGED` naming that
+    computer's node key as the owner's. The old owner's statements written after that change, at its revision or
+    later, count for nothing wherever they arrive after it; any applied earlier stay (NOT BUILT: undoing them).
+13. **Everyone pulls from everyone.** The leader and member sides become one shared side: it serves the members and
+    pulls each member it is connected to. Each member writes a `MEMBER_CARD` with its retained invitation, and dials
+    every other member's card it does not hold a session with. Two members that cannot reach each other still get each
+    other's entries through any member both reach, because every member serves every log it holds.
+14. **`replication.properties`** is written as `role=shared` and an optional `code.remote`. A step-5 file is migrated
+    at the server's start: an owner's (`role=leader`) writes `PROJECT_SHARED` (no recovery key) and accepts each listed
+    member; a member's (`role=member`) keeps its inviter as the first computer it dials and waits for the owner's
+    entries. Compatibility 10.
+15. **Before the owner's entries arrive.** A computer that holds no `PROJECT_SHARED` has no members to go by. It
+    trusts the computers it dialed with an invitation (the `dial` lines of `replication.peers`): it pulls from them and
+    keeps a copy of every log they serve, as a step-5 member did. Once `PROJECT_SHARED` and its acceptance arrive,
+    membership decides. A computer that has neither shared nor dialed serves no one.
+16. **One side, one gateway.** `LeaderReplication` is now every computer's side (its member list read from a
+    `MembershipView` of the log); `MemberReplication` is no longer run, and `becomeMember` changes nothing, because the
+    joiner's inviter is recorded as dialed before it is called. The class keeps its name for now; renaming it is left
+    to the simplification after step 7 (ADR-0101).
+17. **Joining and the commands.** A computer that holds a joiner writes `JOIN_REQUESTED` at once (sharing its project
+    first if it never was), so the request outlives the process and every member sees it; `link accept` writes the
+    acceptance, `link decline` the owner's decline. Every computer's invitation is a project link. `project share`
+    writes `PROJECT_SHARED` and prints the recovery words once; `project add-member` lets a node in by name (a request
+    and its acceptance at once) and `project remove-member` writes `MEMBER_REMOVED`. `project follow` still writes a
+    step-5 member file, which stays trusted until the computer joins by a link. `coordination status` prints the owner,
+    whether a recovery key is set, each member's connection and the waiting requests.
+18. **Before a lane, a joined computer follows `main`.** What a step-5 member did from its settings file, a computer
+    that is not the owner (as the log says) now does: it brings its checkout to the newest copy it can reach.
+19. **Member cards.** A member's card is a retained invitation of its own listener whose invitation counts as used
+    from the start: the listener admits any node the membership names, without a capability, so every member may dial
+    the same card again and again, expired or not, and nobody else gets in with it (a joiner comes in by an
+    invitation made for it). A card whose link names another computer than its writer is not dialed, and a newer card
+    of a member replaces the dial of its older one. Each computer hosts
+    one card once it belongs, publishes it (`MEMBER_CARD`, written again only when it changes), keeps its port in
+    `replication.card`, and listens on that port again after a restart. Every 15 s it dials the card of each member
+    it holds no session with; of two members the lower node ID dials first, and the other dials too after 60 s
+    without a session, so a pair reachable in one direction only is still linked. A dial then redials on its own for
+    as long as the member is one.
+
 ### Step 7: Disputes, takeovers and the trash
 
 1. **Disputes:** both reviewers are told in their next answer and woken (ADR-0099); a reviewer's new verdict replaces
@@ -1094,9 +1170,24 @@ The two-homes run with the friend's PC is repeated after step 5 as a check, not 
 
 ## Unresolved
 
+- **Left by the code review of step 6** (2026-10-18), each recorded rather than built: before `PROJECT_SHARED`
+  arrives a joiner trusts its inviter about who the owner is (the project link does not name the owner); a
+  re-admitted computer's removal head is forgotten; an old recovery statement stays usable until the recovery key is
+  rotated; a member that runs `link accept` before the owner answers gets `MEMBER_NOT_SAVED` rather than "waiting for
+  the owner"; `MembershipView` replays the log in a store of its own and serves a removed member for up to half a
+  second; `MemberReplication`, the settings-based `LeaderReplication` constructors and `becomeMember` are dead in
+  production; `LinkRuntimeOwner` has grown past 1,200 lines and its card code could be a class of its own; the
+  `MemberAdmission` callbacks other than `admit` are defaults, so another implementation could skip the durable
+  request. For the simplification after step 7 (ADR-0101).
+
 - **Every throw an arriving entry can reach.** Classified on 2026-10-18 in ADR-0100, "Every rule an arriving entry
   can reach", and built in step 4; what still depends on order is designer item 18.
 - **The diverged-copy rule with three or more copies** is reasoned, not proven. The property test of step 5 checks it.
+- **A claim-lock test that failed once under load.** `ClaimLockTest.ofTwoOverlappingClaimsMadeAtTheSameMomentExactly
+  TheLowerNodesStands`, race 3, failed in the whole Linux gate on 2026-10-18 (31ac93cc): both overlapping claims
+  stood (the member's claim got no `OVERLAPPING_CLAIM`). It passed alone five times in a row. Either the test's timing
+  is too tight for a loaded machine or the 5 s wait for connected computers lets both stand when an answer comes late;
+  which one is not known yet. To look at, and to fix only if it shows a real race. (FLAKY, step 4.)
 - **A third computer for step 6:** whether QUIC from the VM reaches a Podman container on this PC.
   (REQUIRES-MEASUREMENT.)
 - **Home routers:** the UDP mapping lifetime, against the 15 s pull. (REQUIRES-MEASUREMENT.)

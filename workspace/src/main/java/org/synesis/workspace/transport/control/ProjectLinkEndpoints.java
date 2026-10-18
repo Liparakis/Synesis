@@ -68,9 +68,9 @@ final class ProjectLinkEndpoints {
      * Creates the invitation this computer hands out, and changes nothing else: no role file is written, so a computer
      * that has none keeps working exactly as before until it accepts a joiner (ADR-0098, "Joining, revised").
      *
-     * <p>On a leader or an unshared project it is a signed project link naming the code remote when the project has an
-     * explicit {@code code.remote} or exactly one Git remote; the response says which remote and URL, or why there is
-     * none. On a member it is the plain connection invitation, as before.
+     * <p>It is a signed project link naming the code remote when the project has an explicit {@code code.remote} or
+     * exactly one Git remote; the response says which remote and URL, or why there is none. Since ADR-0098 step 6 a
+     * member's invitation is a project link too: the member holds the joiner's session and records its request.
      *
      * @param exchange HTTP exchange
      * @param body     the {@code invite} body
@@ -82,10 +82,7 @@ final class ProjectLinkEndpoints {
         Path coordination = coordination();
         ProjectSharing.Leader leader;
         try {
-            if (ProjectSharing.isMember(coordination)) {
-                sendJson(exchange, 201, onboarding.startInvitation(body, link -> link));
-                return;
-            }
+            // Any member invites to the project (ADR-0098 step 6): it holds the joiner's session and records the request.
             leader = ProjectSharing.invitationRemote(location.root(), coordination);
         } catch (ProjectSharing.Refusal refusal) {
             throw refused(refusal);

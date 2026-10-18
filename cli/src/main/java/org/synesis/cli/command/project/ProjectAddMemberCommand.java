@@ -1,6 +1,6 @@
 package org.synesis.cli.command.project;
 
-import java.util.Set;
+import org.synesis.coordination.application.MembershipService;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 
@@ -9,7 +9,7 @@ import picocli.CommandLine.Command;
 /**
  * Allows a computer to follow this project as a member.
  */
-@Command(name = "add-member", description = "Allow a computer to follow this project (leader only).", mixinStandardHelpOptions = true)
+@Command(name = "add-member", description = "Let a computer into this project by its node ID (the owner, or any member when the project allows it).", mixinStandardHelpOptions = true)
 public final class ProjectAddMemberCommand extends ProjectMemberCommand {
 
     /**
@@ -22,7 +22,14 @@ public final class ProjectAddMemberCommand extends ProjectMemberCommand {
     }
 
     @Override
-    boolean change(Set<String> members, String node) {
-        return members.add(node);
+    boolean change(MembershipService membership, String node) throws Exception {
+        // A computer let in by name: shared by this computer if it is not yet, asked for and accepted at once.
+        membership.share(java.util.Optional.empty());
+        if (membership.isMember(node)) {
+            return false;
+        }
+        membership.requestJoin(node);
+        membership.answer(node, true);
+        return true;
     }
 }

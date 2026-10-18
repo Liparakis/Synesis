@@ -13,7 +13,10 @@ package org.synesis.link.protocol;
  * format byte of the handshake envelope. A build that finds a different number refuses to go on,
  * with an {@link IncompatibleVersionException} before it parses anything else.
  *
- * <p>It stands at 9: every computer merges its own lanes, so logs carry integration entries
+ * <p>It stands at 10: who belongs to a project is in the logs (the membership entries, among them
+ * {@code PROJECT_SHARED} and {@code MEMBER_CARD}, which a build at 9 would not apply), and every
+ * member dials every other member's card (ADR-0098 step 6). It was 9 when every computer began
+ * merging its own lanes, so logs carry integration entries
  * from every computer and the re-merge entry {@code REMERGE_SNAPSHOT_CREATED}, which a build at 8
  * would not apply (ADR-0098 step 5). It was 8 when every computer began writing its own log, and
  * the replication protocol pulled per log and checked claims between connected computers
@@ -32,7 +35,7 @@ package org.synesis.link.protocol;
 public final class LinkCompatibility {
 
   /** The compatibility number of this build. */
-  public static final int CURRENT = 9;
+  public static final int CURRENT = 10;
 
   private LinkCompatibility() {
   }

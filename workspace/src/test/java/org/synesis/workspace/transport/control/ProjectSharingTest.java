@@ -17,7 +17,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.synesis.coordination.application.MembershipService;
+import org.synesis.coordination.domain.membership.MembershipProjection;
+import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
+import org.synesis.coordination.persistence.ReplicationPeers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -64,6 +68,22 @@ final class ProjectSharingTest {
     Path root = Files.createDirectories(temp.resolve(name));
     GitProcessRunner.run(temp, "clone", owner.root().toString(), root.toString());
     return service.initReplica(root, owner.identity(), false).location();
+  }
+
+  private MembershipService membership() throws Exception {
+    return new MembershipService(new PredictionEventStore(owner.coordinationDirectory(), owner.projectId()), ownerNode);
+  }
+
+  private MembershipProjection projection() throws Exception {
+    return new PredictionEventStore(owner.coordinationDirectory(), owner.projectId()).membershipProjection();
+  }
+
+  private void admit(String node, String url) throws Exception {
+    ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), membership(), node, url);
+  }
+
+  private static String newNode() throws Exception {
+    return NodeIdentity.generate().nodeId();
   }
 
   private static String follow(ProjectLocation location, ProjectInvitation invitation, String ownNodeId) throws Exception {
@@ -126,106 +146,177 @@ final class ProjectSharingTest {
   }
 
   @Test
-  void aMemberIsRecognizedAndHasNoMembersToAdmit() throws Exception {
+  void aStepFiveMemberFileIsStillRecognizedAndASharedFileIsNotAMemberFile() throws Exception {
     assertFalse(ProjectSharing.isMember(owner.coordinationDirectory()));
+    ReplicationSettings.sharedProject(null).write(owner.coordinationDirectory());
+    assertFalse(ProjectSharing.isMember(owner.coordinationDirectory()), "a role=shared file names no leader");
     ReplicationSettings.member("sl1-leader").write(owner.coordinationDirectory());
 
     assertTrue(ProjectSharing.isMember(owner.coordinationDirectory()));
-    assertEquals("NOT_A_LEADER", assertThrows(ProjectSharing.Refusal.class, () -> ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-x", URL)).code());
   }
 
   @Test
-  void followingMakesTheComputerAMemberOfTheInviterAndReusesTheRemoteThatHasTheUrl() throws Exception {
+  void followingMakesTheComputerASharedProjectComputerThatDialedTheInviterAndReusesTheRemoteThatHasTheUrl() throws Exception {
     ProjectLocation friend = member("friend");
     GitProcessRunner.run(friend.root(), "remote", "add", "upstream", "git@example.test:org/project.git");
     GitProcessRunner.run(friend.root(), "remote", "add", "code", "https://EXAMPLE.test/org/project");
+    ProjectInvitation invitation = invitation(URL);
 
-    String remote = follow(friend, invitation(URL), "sl1-friend");
+    String remote = follow(friend, invitation, newNode());
 
     assertEquals("code", remote, "the remote whose URL matches, spelled differently");
-    assertEquals(ReplicationSettings.member(ownerNode.nodeId()).withCodeRemote("code"), ReplicationSettings.read(friend.coordinationDirectory()).orElseThrow());
+    assertEquals(ReplicationSettings.sharedProject("code"), ReplicationSettings.read(friend.coordinationDirectory()).orElseThrow());
+    assertEquals(java.util.Map.of(ownerNode.nodeId(), invitation.invitation().shareLink()), ReplicationPeers.read(friend.coordinationDirectory()).dialed(),
+        "the inviter is recorded as dialed with the link: until the owner's entries arrive it is who this computer trusts");
+  }
+
+  @Test
+  void followingDropsTheRecordsOfEveryOtherNodeFromAnEarlierRole() throws Exception {
+    ProjectLocation friend = member("friend");
+    String stale = newNode();
+    ReplicationPeers.rememberDialed(friend.coordinationDirectory(), stale, "synesis://old-link");
+
+    follow(friend, invitation(URL), newNode());
+
+    assertEquals(Set.of(ownerNode.nodeId()), ReplicationPeers.read(friend.coordinationDirectory()).dialed().keySet());
   }
 
   @Test
   void followingAddsARemoteForTheUrlWhenNoneMatchesAndRefusesToTakeOverAnotherSynesisRemote() throws Exception {
     ProjectLocation friend = member("friend");
 
-    assertEquals(ProjectSharing.ADDED_REMOTE, follow(friend, invitation(URL), "sl1-friend"));
+    assertEquals(ProjectSharing.ADDED_REMOTE, follow(friend, invitation(URL), newNode()));
     assertEquals(URL, GitProcessRunner.run(friend.root(), "remote", "get-url", "synesis").strip());
 
     ProjectLocation other = member("other");
     GitProcessRunner.run(other.root(), "remote", "add", "synesis", "https://elsewhere.test/x.git");
-    assertEquals("CODE_REMOTE_NAME_TAKEN", assertThrows(ProjectSharing.Refusal.class, () -> follow(other, invitation(URL), "sl1-other")).code());
+    assertEquals("CODE_REMOTE_NAME_TAKEN", assertThrows(ProjectSharing.Refusal.class, () -> follow(other, invitation(URL), newNode())).code());
     assertTrue(ReplicationSettings.read(other.coordinationDirectory()).isEmpty(), "a refusal writes nothing");
+    assertTrue(ReplicationPeers.read(other.coordinationDirectory()).dialed().isEmpty(), "and records no inviter");
   }
 
   @Test
   void followingWithoutAnUrlSetsNoRemote() throws Exception {
     ProjectLocation friend = member("friend");
 
-    assertNull(follow(friend, invitation(null), "sl1-friend"));
-    assertNull(ReplicationSettings.read(friend.coordinationDirectory()).orElseThrow().codeRemote());
+    assertNull(follow(friend, invitation(null), newNode()));
+    assertEquals(ReplicationSettings.sharedProject(null), ReplicationSettings.read(friend.coordinationDirectory()).orElseThrow());
   }
 
   @Test
   void followingIsRefusedWhenItWouldStrandWork() throws Exception {
     ProjectLocation friend = member("friend");
     ProjectInvitation invitation = invitation(URL);
+    String self = newNode();
 
     assertEquals("INVITER_IS_THIS_COMPUTER", assertThrows(ProjectSharing.Refusal.class, () -> follow(friend, invitation, ownerNode.nodeId())).code());
 
     new ReplicationSettings(null, Set.of("sl1-someone"), null).write(friend.coordinationDirectory());
-    assertEquals("ALREADY_A_LEADER", assertThrows(ProjectSharing.Refusal.class, () -> follow(friend, invitation, "sl1-friend")).code());
+    assertEquals("ALREADY_A_LEADER", assertThrows(ProjectSharing.Refusal.class, () -> follow(friend, invitation, self)).code(),
+        "a step-5 leader file with members still refuses: it has members of its own not yet migrated");
 
     ReplicationSettings.member("sl1-another").write(friend.coordinationDirectory());
-    assertEquals("FOLLOWING_ANOTHER_LEADER", assertThrows(ProjectSharing.Refusal.class, () -> follow(friend, invitation, "sl1-friend")).code());
+    assertEquals("FOLLOWING_ANOTHER_LEADER", assertThrows(ProjectSharing.Refusal.class, () -> follow(friend, invitation, self)).code());
     assertEquals("sl1-another", ReplicationSettings.read(friend.coordinationDirectory()).orElseThrow().leaderNodeId());
 
     ProjectLocation withLog = member("withLog");
     Files.createDirectories(withLog.coordinationDirectory().resolve("events"));
     Files.writeString(withLog.coordinationDirectory().resolve("events/00000000000000000001.sce"), "x");
-    assertEquals("LOG_NOT_EMPTY", assertThrows(ProjectSharing.Refusal.class, () -> follow(withLog, invitation, "sl1-friend")).code());
+    assertEquals("LOG_NOT_EMPTY", assertThrows(ProjectSharing.Refusal.class, () -> follow(withLog, invitation, self)).code());
+    assertTrue(ReplicationPeers.read(withLog.coordinationDirectory()).dialed().isEmpty(), "a refusal records no inviter");
   }
 
   @Test
-  void followingTheSameLeaderAgainIsAllowed() throws Exception {
+  void followingTheSameInviterAgainIsAllowed() throws Exception {
     ProjectLocation friend = member("friend");
-    follow(friend, invitation(URL), "sl1-friend");
+    String self = newNode();
+    follow(friend, invitation(URL), self);
 
-    assertEquals(ProjectSharing.ADDED_REMOTE, follow(friend, invitation(URL), "sl1-friend"));
+    assertEquals(ProjectSharing.ADDED_REMOTE, follow(friend, invitation(URL), self));
+    assertEquals(ReplicationSettings.sharedProject(ProjectSharing.ADDED_REMOTE), ReplicationSettings.read(friend.coordinationDirectory()).orElseThrow());
   }
 
   @Test
-  void acceptingMakesTheComputerTheLeaderAndAddsTheNodeOnceWithTheRemoteTheLinkCarried() throws Exception {
+  void acceptingSharesTheProjectAndAdmitsTheNodeOnceAsEntriesWithTheRemoteTheLinkCarried() throws Exception {
     GitProcessRunner.run(owner.root(), "remote", "add", "origin", URL);
+    String friend = newNode();
 
-    ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-friend", URL);
-    ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-friend", URL);
-    assertEquals(ReplicationSettings.leader(Set.of("sl1-friend")).withCodeRemote("origin"), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow());
+    admit(friend, URL);
 
-    ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-second", "https://EXAMPLE.test/org/project");
-    assertEquals(Set.of("sl1-friend", "sl1-second"), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow().members());
+    assertEquals(ReplicationSettings.sharedProject("origin"), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow(),
+        "the file says only that the project is shared; who belongs is in the log");
+    MembershipProjection membership = projection();
+    assertTrue(membership.shared());
+    assertEquals(ownerNode.nodeId(), membership.owner().orElseThrow());
+    assertEquals(Set.of(ownerNode.nodeId(), friend), membership.members());
+    assertEquals(1, membership.requests().size());
+    assertEquals(0, membership.openRequests().size());
+
+    String second = newNode();
+    admit(second, "https://EXAMPLE.test/org/project");
+    assertEquals(Set.of(ownerNode.nodeId(), friend, second), projection().members());
+  }
+
+  @Test
+  void acceptingAMemberAgainIsIdempotentSoARetryAfterALostResponseOrAnUnwrittenFileWorks() throws Exception {
+    GitProcessRunner.run(owner.root(), "remote", "add", "origin", URL);
+    String friend = newNode();
+    admit(friend, URL);
+    Files.delete(owner.coordinationDirectory().resolve(ReplicationSettings.FILE));
+
+    admit(friend, URL);
+
+    assertEquals(ReplicationSettings.sharedProject("origin"), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow());
+    assertEquals(1, projection().requests().size(), "no second request is written");
   }
 
   @Test
   void acceptingWithoutAUrlOrWithOneNoRemoteHasNamesNoMirrorBecauseCodeMovesOverLink() throws Exception {
     GitProcessRunner.run(owner.root(), "remote", "add", "origin", URL);
+    String friend = newNode();
+    String second = newNode();
 
-    ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-friend", null);
-    assertEquals(ReplicationSettings.leader(Set.of("sl1-friend")), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow());
+    admit(friend, null);
+    assertEquals(ReplicationSettings.sharedProject(null), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow());
 
-    ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-second", "https://example.test/other.git");
-    assertEquals(ReplicationSettings.leader(Set.of("sl1-friend", "sl1-second")), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow());
+    admit(second, "https://example.test/other.git");
+    assertEquals(ReplicationSettings.sharedProject(null), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow());
+    assertEquals(Set.of(ownerNode.nodeId(), friend, second), projection().members());
   }
 
   @Test
   void aMirrorAlreadyNamedStaysWhenALaterInvitationCarriedNoUrl() throws Exception {
     GitProcessRunner.run(owner.root(), "remote", "add", "origin", URL);
-    ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-friend", URL);
+    admit(newNode(), URL);
 
-    ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), "sl1-second", null);
+    admit(newNode(), null);
 
-    assertEquals(ReplicationSettings.leader(Set.of("sl1-friend", "sl1-second")).withCodeRemote("origin"), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow());
+    assertEquals(ReplicationSettings.sharedProject("origin"), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow());
+  }
+
+  @Test
+  void acceptingOverAStepFiveLeaderFileRewritesItAsSharedKeepingTheCodeRemote() throws Exception {
+    GitProcessRunner.run(owner.root(), "remote", "add", "origin", URL);
+    ReplicationSettings.leader(Set.of("sl1-old")).withCodeRemote("origin").write(owner.coordinationDirectory());
+
+    admit(newNode(), null);
+
+    assertEquals(ReplicationSettings.sharedProject("origin"), ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow());
+  }
+
+  @Test
+  void aComputerThatIsNotTheOwnerCannotAcceptUnderTheOwnerOnlyPolicyAndNothingIsWritten() throws Exception {
+    String friend = newNode();
+    admit(friend, null);
+    NodeIdentity friendIdentity = NodeIdentity.generate();
+    PredictionEventStore store = new PredictionEventStore(owner.coordinationDirectory(), owner.projectId());
+    assertFalse(store.membershipProjection().members().contains(friendIdentity.nodeId()));
+    MembershipService stranger = new MembershipService(store, friendIdentity);
+
+    assertThrows(java.io.IOException.class, () -> ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), stranger, newNode(), null),
+        "a computer that is not a member writes no request");
+    assertEquals(Set.of(ownerNode.nodeId(), friend), projection().members());
+    assertEquals(0, projection().openRequests().size());
   }
 
   @Test
@@ -237,10 +328,10 @@ final class ProjectSharingTest {
     try {
       List<Future<?>> done = new java.util.ArrayList<>();
       for (int index = 0; index < accepts; index++) {
-        String node = "sl1-friend-" + index;
+        String node = newNode();
         done.add(pool.submit(() -> {
           start.await();
-          ProjectSharing.admit(owner.root(), owner.coordinationDirectory(), node, URL);
+          admit(node, URL);
           return null;
         }));
       }
@@ -252,7 +343,7 @@ final class ProjectSharingTest {
       pool.shutdownNow();
     }
 
-    assertEquals(accepts, ReplicationSettings.read(owner.coordinationDirectory()).orElseThrow().members().size());
+    assertEquals(accepts + 1, projection().members().size(), "every accepted node and the owner");
   }
 
   /**
@@ -262,10 +353,11 @@ final class ProjectSharingTest {
   @Test
   void followingWaitsForTheProjectLockSoAnEntryAppendedMeanwhileStopsItAndNothingIsWritten() throws Exception {
     ProjectLocation friend = member("friend");
+    String self = newNode();
     ExecutorService pool = Executors.newSingleThreadExecutor();
     ProjectAppendLock held = ProjectAppendLock.acquire(friend.coordinationDirectory());
     try {
-      Future<String> following = pool.submit(() -> follow(friend, invitation(URL), "sl1-friend"));
+      Future<String> following = pool.submit(() -> follow(friend, invitation(URL), self));
       Thread.sleep(300);
       assertFalse(following.isDone(), "the open waits for the lock");
       assertTrue(ReplicationSettings.read(friend.coordinationDirectory()).isEmpty());
@@ -286,15 +378,29 @@ final class ProjectSharingTest {
   @Test
   void followingPutsTheRoleAndTheRemoteBackWhenTheRunningSideCannotSwitch() throws Exception {
     ProjectLocation friend = member("friend");
+    String self = newNode();
 
-    assertThrows(java.io.IOException.class, () -> ProjectSharing.follow(friend.root(), friend.coordinationDirectory(), invitation(URL), "sl1-friend",
+    assertThrows(java.io.IOException.class, () -> ProjectSharing.follow(friend.root(), friend.coordinationDirectory(), invitation(URL), self,
         () -> {
           throw new java.io.IOException("FOLLOWING_ANOTHER_LEADER");
         }));
 
     assertTrue(ReplicationSettings.read(friend.coordinationDirectory()).isEmpty(), "the file never names a leader the running side does not follow");
     assertFalse(GitProcessRunner.run(friend.root(), "remote").contains(ProjectSharing.ADDED_REMOTE), "the remote this call added is removed");
-    assertEquals(ProjectSharing.ADDED_REMOTE, follow(friend, invitation(URL), "sl1-friend"), "opening the same link again works");
+    assertEquals(ProjectSharing.ADDED_REMOTE, follow(friend, invitation(URL), self), "opening the same link again works");
+  }
+
+  @Test
+  void followingThatCannotSwitchTheRunningSideLeavesNoDialedInviterToTrust() throws Exception {
+    ProjectLocation friend = member("friend");
+
+    assertThrows(java.io.IOException.class, () -> ProjectSharing.follow(friend.root(), friend.coordinationDirectory(), invitation(URL), newNode(),
+        () -> {
+          throw new java.io.IOException("FOLLOWING_ANOTHER_LEADER");
+        }));
+
+    assertTrue(ReplicationPeers.read(friend.coordinationDirectory()).dialed().isEmpty(),
+        "before sharing the dialed lines are who the computer trusts: a failed follow must not leave the inviter there");
   }
 
   @Test

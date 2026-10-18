@@ -352,7 +352,39 @@ public enum PredictionEventType {
      * Records that Git could not merge one advance of a re-merge, so an agent other than its authors combines the two
      * versions in a combine lane (ADR-0098 step 5). It acts for the advance's lanes.
      */
-    COMBINE_REQUIRED(82);
+    COMBINE_REQUIRED(82),
+    /**
+     * Shares the project: the owner's computer names its node key as the owner key, and the recovery key's public half
+     * (ADR-0098 step 6). The first membership entry.
+     */
+    PROJECT_SHARED(83),
+    /**
+     * Records that a member holds a joining computer's session and asks for it to be let in; durable, unlike the
+     * in-memory requests before step 6.
+     */
+    JOIN_REQUESTED(84),
+    /**
+     * Accepts or declines a join request: the owner's statement, or under the any-member policy any member's
+     * acceptance.
+     */
+    JOIN_ANSWERED(85),
+    /**
+     * The owner says who may answer a join request besides itself.
+     */
+    JOIN_POLICY_SET(86),
+    /**
+     * The owner removes a computer; entries of its log after the head this names count for nothing, and its lanes end.
+     */
+    MEMBER_REMOVED(87),
+    /**
+     * A member's retained invitation of its own listener, which the other members dial.
+     */
+    MEMBER_CARD(88),
+    /**
+     * Moves ownership to another member's node key or replaces the recovery key; signed by the owner, or carrying the
+     * recovery key's signature.
+     */
+    OWNER_CHANGED(89);
 
 
     private static final Map<Integer, PredictionEventType> BY_WIRE_CODE = Arrays.stream(values())

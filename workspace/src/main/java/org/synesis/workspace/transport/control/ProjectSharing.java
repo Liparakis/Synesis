@@ -135,25 +135,31 @@ public final class ProjectSharing {
      *
      * @param root          the project folder
      * @param coordination  the project's coordination folder
+     * @param membership    this computer's membership entries
      * @param nodeId        the node an accepted request came from
      * @param codeRemoteUrl the URL the invitation carried, or {@code null} when it carried none
      * @throws Refusal {@code NOT_A_LEADER} on a member
      * @throws IOException when the lock cannot be taken or the role file cannot be written
      */
     @SuppressWarnings("try") // the lock is held for its scope only
-    public static void admit(Path root, Path coordination, String nodeId, String codeRemoteUrl) throws Refusal, IOException {
+    public static void admit(Path root, Path coordination, org.synesis.coordination.application.MembershipService membership, String nodeId, String codeRemoteUrl)
+            throws Refusal, IOException {
+        // The acceptance is an entry of this computer's log (ADR-0098 step 6): the owner's, or under the any-member
+        // policy any member's. A project accepted into for the first time is shared by this computer first.
+        try {
+            membership.share(Optional.empty());
+            membership.requestJoin(nodeId);
+            membership.answer(nodeId, true);
+        } catch (java.security.GeneralSecurityException unsigned) {
+            throw new IOException("the acceptance could not be signed", unsigned);
+        }
         try (ProjectAppendLock ignored = ProjectAppendLock.acquire(coordination)) {
             Optional<ReplicationSettings> found = read(coordination);
-            if (found.isPresent() && found.get().isMember()) {
-                throw new Refusal("NOT_A_LEADER");
-            }
             String remote = codeRemoteUrl == null ? null : remoteWithUrl(root, codeRemoteUrl);
             if (remote == null) {
                 remote = found.map(ReplicationSettings::codeRemote).orElse(null);
             }
-            Set<String> members = new LinkedHashSet<>(found.map(ReplicationSettings::members).orElse(Set.of()));
-            members.add(nodeId);
-            ReplicationSettings wanted = new ReplicationSettings(null, members, remote);
+            ReplicationSettings wanted = ReplicationSettings.sharedProject(remote);
             if (found.isEmpty() || !found.get().equals(wanted)) {
                 wanted.write(coordination);
             }
@@ -220,17 +226,28 @@ public final class ProjectSharing {
                     ? remoteFor(root, invitation.codeRemoteUrl().get())
                     : found.map(ReplicationSettings::codeRemote).orElse(null);
             boolean addedRemote = ADDED_REMOTE.equals(remote) && !hadAddedRemote;
-            ReplicationSettings member = ReplicationSettings.member(leader);
+            Path peersFile = coordination.resolve(ReplicationPeers.FILE);
+            byte[] peersBefore = Files.exists(peersFile) ? Files.readAllBytes(peersFile) : null;
             try {
-                (remote == null ? member : member.withCodeRemote(remote)).write(coordination);
-                // A member reconnects to its leader only; records of any other node (from an earlier role) must not be resumed.
+                ReplicationSettings.sharedProject(remote).write(coordination);
+                // A joiner reconnects to its inviter only; records of any other node (from an earlier role) must not be
+                // resumed. The inviter is recorded as dialed now: until the owner's entries arrive, the computers this
+                // one dialed are the ones it trusts (ADR-0098 step 6, designer item 15).
                 ReplicationPeers.retainOnly(coordination, Set.of(leader));
+                ReplicationPeers.rememberDialed(coordination, leader, invitation.invitation().shareLink());
                 live.run();
             } catch (IOException | RuntimeException failed) {
                 if (found.isPresent()) {
                     found.get().write(coordination);
                 } else {
                     Files.deleteIfExists(coordination.resolve(ReplicationSettings.FILE));
+                }
+                // The inviter is trusted by its dial line until the owner's entries arrive: a join that failed must not
+                // leave it trusted.
+                if (peersBefore == null) {
+                    Files.deleteIfExists(peersFile);
+                } else {
+                    Files.write(peersFile, peersBefore);
                 }
                 if (addedRemote) {
                     GitProcessRunner.runResult(root, "remote", "remove", ADDED_REMOTE);

@@ -80,6 +80,15 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
          * @param nodeId the node admitted
          */
         void hosted(int port, String nodeId);
+
+        /**
+         * This computer hosts its member card, the retained invitation every member dials (ADR-0098 step 6).
+         *
+         * @param port the port the card's invitation is hosted on
+         * @param link the card's invitation link
+         */
+        default void card(int port, String link) {
+        }
     }
 
     /**
@@ -98,6 +107,25 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
          * @throws java.io.IOException when the list cannot be saved; the request then stays pending
          */
         void admit(String nodeId, String codeRemoteUrl) throws java.io.IOException;
+
+        /**
+         * Records that this computer holds a joiner's session and asks for it to be let in, so the request outlives
+         * this process and every member sees it (ADR-0098 step 6).
+         *
+         * @param nodeId the joining node
+         * @throws java.io.IOException when the request cannot be recorded; the session is still held
+         */
+        default void requested(String nodeId) throws java.io.IOException {
+        }
+
+        /**
+         * Records that the request of a joiner is declined.
+         *
+         * @param nodeId the joining node
+         * @throws java.io.IOException when the answer cannot be recorded, for example because only the owner declines
+         */
+        default void declined(String nodeId) throws java.io.IOException {
+        }
     }
 
     private record Held(String nodeId, Instant requestedAt, Instant expiresAt, int port, String codeRemoteUrl) {
@@ -219,6 +247,10 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
      * Join requests by node id. A request outlives its session and ends with the invitation it used.
      */
     private final ConcurrentMap<String, Held> requests = new ConcurrentHashMap<>();
+    /** The join handle of this owner that dials each host, so a member's card is dialed once (ADR-0098 step 6). */
+    private final ConcurrentMap<String, LiveJoin> dialers = new ConcurrentHashMap<>();
+    /** This computer's member card while its listener is open: the link, and the handle that keeps it open. */
+    private volatile String cardLink;
 
     /**
      * The code remote URL each project link carried, by the connection invitation it wraps, so that accepting a
@@ -497,6 +529,11 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
         requests.put(session.remoteNodeId(), new Held(session.remoteNodeId(), now,
                 expiresAt == null ? now.plus(org.synesis.link.protocol.CompactBootstrapInvitation.MAX_LIFETIME) : expiresAt, port, projectUrls.get(connectionLink)));
         record("JOIN_REQUESTED peer=" + session.remoteNodeId());
+        try {
+            admission.requested(session.remoteNodeId());
+        } catch (java.io.IOException | RuntimeException unrecorded) {
+            record("JOIN_REQUEST_NOT_RECORDED peer=" + session.remoteNodeId() + " cause=" + unrecorded.getMessage());
+        }
         publish(OnboardingEventType.SESSION_CREATED, "JOIN_REQUESTED");
     }
 
@@ -563,6 +600,11 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     @Override
     public void declineJoin(String nodeId) throws JoinRequestException {
         Held held = pendingRequest(nodeId);
+        try {
+            admission.declined(nodeId);
+        } catch (java.io.IOException | RuntimeException unrecorded) {
+            throw new JoinRequestException("DECLINE_NOT_SAVED");
+        }
         requests.remove(nodeId, held);
         closeHeld(nodeId);
         record("JOIN_DECLINED peer=" + nodeId);
@@ -662,6 +704,100 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
     }
 
     /**
+     * Hosts this computer's member card: a retained invitation of its own listener, which every member may dial again
+     * and again, since the listener admits any node the returning rule names (ADR-0098 step 6, designer item 13). A
+     * card already hosted by this owner is returned as it is.
+     *
+     * @return the card's invitation link
+     * @throws OnboardingFailure when the listener cannot be opened
+     */
+    public synchronized String hostCard() throws OnboardingFailure {
+        if (cardLink != null) {
+            return cardLink;
+        }
+        ensureOpen();
+        // Its invitation counts as used from the start: only members reach it, never the capability it carries.
+        LiveHost card = new LiveHost(onboarding.createRetainedCard(applicationHandler, this::acceptSession,
+                peer -> !closed.get() && returningPeers.test(peer)));
+        handles.add(card);
+        String link = card.invitationLink();
+        cardLink = link;
+        int port = card.listeningPort();
+        try {
+            memory.card(port, link);
+        } catch (RuntimeException ignored) {
+            // The memory serves the next restart; it does not decide this card.
+        }
+        record("CARD_HOSTED port=" + port);
+        return link;
+    }
+
+    /**
+     * Listens again on the port this computer's card was hosted on before a restart, admitting any member, so the
+     * card already in the log reaches it again with no new one.
+     *
+     * @param port the card's port
+     * @param link the card's invitation link
+     */
+    public synchronized void resumeCard(int port, String link) {
+        try {
+            ensureOpen();
+            Onboarding.ResumedHost resumed = onboarding.resumeRetainedHost(port, applicationHandler, this::acceptSession,
+                    peer -> !closed.get() && returningPeers.test(peer));
+            handles.add(resumed);
+            cardLink = link;
+            record("CARD_RESUMED port=" + resumed.listeningPort());
+        } catch (OnboardingFailure | RuntimeException failure) {
+            record("CARD_RESUME_FAILED port=" + port + " cause=" + (failure.getCause() != null ? failure.getCause() : failure)
+                    + "; a new card is hosted and published");
+        }
+    }
+
+    /**
+     * Dials another member's card, unless a session with it is held or a handle of this owner dials that card already;
+     * the handle then redials on its own for as long as the member is named. A handle that dials an older card of the
+     * same member is replaced, and a card whose link names another computer than the member is not dialed.
+     *
+     * @param nodeId the member
+     * @param link   its card's invitation link
+     * @return whether a dial was started now
+     */
+    public boolean dialCard(String nodeId, String link) {
+        if (sessions.containsKey(nodeId)) {
+            return false;
+        }
+        try {
+            if (!org.synesis.link.protocol.CompactBootstrapInvitation.fromShareLink(link).hostNodeId().equals(nodeId)) {
+                record("CARD_REFUSED peer=" + nodeId + " reason=the card names another computer");
+                return false;
+            }
+        } catch (java.io.IOException | RuntimeException unreadable) {
+            record("CARD_REFUSED peer=" + nodeId + " reason=not an invitation");
+            return false;
+        }
+        LiveJoin current = dialers.get(nodeId);
+        if (current != null && link.equals(current.link)) {
+            return false;
+        }
+        if (current != null) {
+            current.close();
+        }
+        resumeDialing(link);
+        LiveJoin started = dialers.get(nodeId);
+        return started != null && link.equals(started.link);
+    }
+
+    /**
+     * Whether a session with a node is held now.
+     *
+     * @param nodeId the node
+     * @return whether one is
+     */
+    public boolean connectedTo(String nodeId) {
+        return sessions.containsKey(nodeId);
+    }
+
+    /**
      * Creates the join handle for a link and wires it to this owner.
      */
     private LiveJoin retainJoin(String link, JoinFactory factory) throws OnboardingFailure {
@@ -672,7 +808,7 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
             // The handle is set before connect() can run, and a redial runs only after connect() returned.
             dialer.get().watch(session);
         });
-        LiveJoin result = new LiveJoin(delegate);
+        LiveJoin result = new LiveJoin(delegate, link);
         dialer.set(result);
         handles.add(result);
         return result;
@@ -949,6 +1085,13 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
         }
 
         /**
+         * @return the UDP port the invitation is hosted on
+         */
+        private int listeningPort() {
+            return delegate.listeningPort();
+        }
+
+        /**
          * Starts waiting for the peer.
          *
          * <p>Called after the handle is registered so that {@link #close()} can cancel it.
@@ -1044,12 +1187,19 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
         private volatile String peer;
 
         /**
+         * The invitation link this handle dials.
+         */
+        private final String link;
+
+        /**
          * Wraps a prepared join.
          *
          * @param delegate underlying Link join operation
+         * @param link     the invitation link it dials
          */
-        private LiveJoin(Onboarding.PreparedJoin delegate) {
+        private LiveJoin(Onboarding.PreparedJoin delegate, String link) {
             this.delegate = delegate;
+            this.link = link;
             this.redialer = new Redialer(this::redialWanted, delegate::redial, REDIAL_FIRST, REDIAL_CAP, LinkRuntimeOwner.this::record);
         }
 
@@ -1070,9 +1220,16 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
          * @return false, after closing this handle, when the rule no longer names the host
          */
         private boolean resume() {
-            peer = delegate.hostNodeId();
-            if (!returningPeers.test(peer)) {
-                record("DIAL_RESUME_SKIPPED peer=" + peer + " reason=not named any more");
+            String host = delegate.hostNodeId();
+            if (!returningPeers.test(host)) {
+                record("DIAL_RESUME_SKIPPED peer=" + host + " reason=not named any more");
+                close();
+                return false;
+            }
+            peer = host;
+            if (dialers.putIfAbsent(host, this) != null) {
+                // Another handle of this owner dials it already; this one closes without forgetting that one.
+                peer = null;
                 close();
                 return false;
             }
@@ -1087,6 +1244,8 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
          */
         private void watch(PeerSession session) {
             peer = session.remoteNodeId();
+            // This handle redials the host from now on, so a member card of the same host is not dialed again.
+            dialers.putIfAbsent(peer, this);
             session.terminalCompletion().whenComplete((ignored, failure) -> redialer.start());
         }
 
@@ -1129,6 +1288,10 @@ public final class LinkRuntimeOwner implements ControlPlaneLinkOperations, Suppl
                 handles.remove(this);
                 redialer.close();
                 delegate.close();
+                String host = peer;
+                if (host != null) {
+                    dialers.remove(host, this);
+                }
             }
         }
     }

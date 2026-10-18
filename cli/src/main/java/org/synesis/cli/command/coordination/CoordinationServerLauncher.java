@@ -19,11 +19,11 @@ import org.synesis.cli.ui.StaticResourceHandler;
 import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationCard;
 import org.synesis.coordination.persistence.ReplicationPeers;
 import org.synesis.coordination.persistence.ReplicationReplay;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.replication.LeaderReplication;
-import org.synesis.coordination.replication.MemberReplication;
 import org.synesis.coordination.replication.ReplicationJournal;
 import org.synesis.coordination.transport.http.CoordinationHttpServer;
 
@@ -106,9 +106,14 @@ final class CoordinationServerLauncher {
             }
             var identityDirectory = CoordinationCliSupport.identity(location, identity);
             var node = CoordinationCliSupport.loadIdentity(identityDirectory);
-            // A folder whose replication settings cannot be read must not be served as a leader's.
-            var replicationSettings = ReplicationSettings.read(projectData);
+            // A folder whose replication settings cannot be read must not be served.
+            ReplicationSettings.read(projectData);
             var store = new PredictionEventStore(projectData, location.projectId());
+            // A step-5 project's membership moves into the logs once (ADR-0098 step 6, designer item 14).
+            if (org.synesis.coordination.application.SharedSettingsMigration.migrate(projectData, store, node)) {
+                runtime.terminal().stderr("COORDINATION_SETTINGS_MIGRATED=role=shared");
+            }
+            var membership = new org.synesis.coordination.application.MembershipService(store, node);
             var service = new CoordinationService(store, node);
             if (!isLoopback(host)) {
                 runtime.terminal().stderr("COORDINATION_ERROR=LOOPBACK_ONLY");
@@ -117,26 +122,46 @@ final class CoordinationServerLauncher {
             var eventHub = new ControlPlaneEventHub();
             var controlOnboarding = new Onboarding(identityDirectory.resolve("link"), eventHub::publish,
                     Onboarding.stunServerFromEnvironment());
-            // A member's agents reach the leader through this server; the Link session arrives at attach.
-            var memberReplication = replicationSettings.filter(ReplicationSettings::isMember).isPresent()
-                    ? MemberReplication.open(projectData, location.projectId()) : null;
-            // A project with no role file is an unshared leader: it serves nobody until its person accepts a joiner.
-            // The leader's merge pass follows a member's entry without an agent of the leader's calling in.
-            // Every computer merges its own lanes (ADR-0098 step 5), a member as well as the owner's computer.
+            // Every computer merges its own lanes (ADR-0098 step 5), and plays the same replication side (step 6): it
+            // serves the members, and before the owner's entries arrive the computers it dialed. An unshared project
+            // serves nobody until its person accepts a joiner.
             var mergeDriver = MergeDriver.forProject(location.root(), projectData, location.projectId(), node, MERGE_DELAY_MILLIS).repeatEvery(MERGE_INTERVAL_MILLIS);
-            var leaderReplication = memberReplication == null
-                    ? LeaderReplication.serving(projectData, location.projectId(), mergeDriver::onMemberEntry) : null;
-            var side = new ReplicationSide(projectData, location.projectId(), location.root(), memberReplication,
-                    replicationSettings.map(ReplicationSettings::leaderNodeId).orElse(null), leaderReplication, mergeDriver);
+            var leaderReplication = LeaderReplication.shared(projectData, location.projectId(), node.nodeId(), mergeDriver::onMemberEntry);
+            var side = new ReplicationSide(projectData, location.projectId(), location.root(), node.nodeId(), leaderReplication, mergeDriver);
             var journal = new ReplicationJournal(projectData);
             var linkOwner = linkOwner(controlOnboarding, node, eventHub, location.identity(), side, journal, projectData,
-                    (nodeId, codeRemoteUrl) -> {
-                        try {
-                            ProjectSharing.admit(location.root(), projectData, nodeId, codeRemoteUrl);
-                        } catch (ProjectSharing.Refusal refused) {
-                            throw new java.io.IOException(refused.code(), refused);
+                    new LinkRuntimeOwner.MemberAdmission() {
+                        @Override
+                        public void admit(String nodeId, String codeRemoteUrl) throws java.io.IOException {
+                            try {
+                                ProjectSharing.admit(location.root(), projectData, membership, nodeId, codeRemoteUrl);
+                            } catch (ProjectSharing.Refusal refused) {
+                                throw new java.io.IOException(refused.code(), refused);
+                            }
+                        }
+
+                        @Override
+                        public void requested(String nodeId) throws java.io.IOException {
+                            // A computer that invites shares its project, so the request has a project to be in.
+                            try {
+                                membership.share(java.util.Optional.empty());
+                                membership.requestJoin(nodeId);
+                            } catch (java.security.GeneralSecurityException unsigned) {
+                                throw new java.io.IOException("the request could not be signed", unsigned);
+                            }
+                        }
+
+                        @Override
+                        public void declined(String nodeId) throws java.io.IOException {
+                            try {
+                                membership.answer(nodeId, false);
+                            } catch (java.security.GeneralSecurityException unsigned) {
+                                throw new java.io.IOException("the answer could not be signed", unsigned);
+                            }
                         }
                     });
+            // Every member hosts its card and dials the others' (ADR-0098 step 6, "Links").
+            var memberLinks = new MemberLinks(linkOwner, leaderReplication.membership().orElseThrow(), membership, node.nodeId());
             var readModel = new ControlPlaneReadModel(location, service, runtime.providerService(), new DoctorService(), new LinkNetworkProjection(linkOwner), projectRegistry);
             var serverRef = new java.util.concurrent.atomic.AtomicReference<CoordinationHttpServer>();
             var control = new ControlPlaneHttpHandler(readModel, service, linkOwner, eventHub, new ControlPlaneHttpHandler.SelectionGateway() {
@@ -172,18 +197,16 @@ final class CoordinationServerLauncher {
             // The replication side is listed last so it stops first: it answers on the sessions the link owner holds.
             try (control;
                     linkOwner;
+                    memberLinks;
                     var lifecycleHost = new ProjectRuntimeHost(location, node);
                     var server = new CoordinationHttpServer(service, new InetSocketAddress(host, port), lifecycleHost.handler(), control, new StaticResourceHandler());
                     side) {
                 server.start();
                 serverRef.set(server);
-                if (memberReplication != null) {
-                    memberReplication.serve(server);
-                } else if (leaderReplication != null) {
-                    // Its agents' claims are checked with the connected members through this server (ADR-0098 step 4).
-                    leaderReplication.serve(server);
-                }
+                // Its agents' claims are checked with the connected members through this server (ADR-0098 step 4).
+                leaderReplication.serve(server);
                 side.serveCode(server);
+                memberLinks.start();
                 Thread parentWatcher = parentPid > 0 ? parentWatcher(parentPid) : null;
                 String endpoint = "http://" + hostForUrl(server.address().getHostString()) + ":" + server.address().getPort();
                 try {
@@ -254,6 +277,7 @@ final class CoordinationServerLauncher {
         peers.dialed().values().forEach(owner::resumeDialing);
         if (hostingMayResume) {
             peers.hosted().forEach(owner::resumeHosting);
+            ReplicationCard.read(coordination).ifPresent(card -> owner.resumeCard(card.port(), card.link()));
             return owner;
         }
         try {
@@ -304,6 +328,11 @@ final class CoordinationServerLauncher {
             @Override
             public void hosted(int port, String nodeId) {
                 save(() -> ReplicationPeers.rememberHosted(coordination, port, nodeId));
+            }
+
+            @Override
+            public void card(int port, String link) {
+                save(() -> new ReplicationCard(port, link).write(coordination));
             }
 
             private void save(PeersWrite write) {

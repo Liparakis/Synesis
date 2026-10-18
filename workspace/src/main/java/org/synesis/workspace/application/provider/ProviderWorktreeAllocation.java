@@ -58,7 +58,8 @@ final class ProviderWorktreeAllocation {
                 // Its own copy is always reachable: with no computer that holds a newer one answering,
                 // the lane starts from it, and the merge of the two copies later settles the difference.
                 try {
-                    if (CodeExchange.followLeaderIfMember(location.coordinationDirectory(), location.projectId(), location.root())) {
+                    if (CodeExchange.followLeaderIfMember(location.coordinationDirectory(), location.projectId(), location.root(),
+                            location.loadOrCreateIdentity().nodeId())) {
                         String followed = currentCommit(location.root());
                         baseCommit = validCommit(followed) ? followed : baseCommit;
                     }

@@ -322,7 +322,7 @@ public final class Onboarding {
       PeerSession.ApplicationStreamHandler applicationHandler,
       Consumer<PeerSession> sessionAction) throws OnboardingFailure {
     return createCompactInvitation(expectedPeer, openRouterPort, applicationHandler, sessionAction,
-        null);
+        null, false);
   }
 
   /**
@@ -349,12 +349,30 @@ public final class Onboarding {
       Consumer<PeerSession> sessionAction, Predicate<String> returningPeers)
       throws OnboardingFailure {
     return createCompactInvitation(expectedPeer, openRouterPort, applicationHandler, sessionAction,
-        Objects.requireNonNull(returningPeers, "returning peers"));
+        Objects.requireNonNull(returningPeers, "returning peers"), false);
+  }
+
+  /**
+   * Opens a member card: a retained host whose invitation counts as used from the start, so every peer
+   * {@code returningPeers} names may connect to it, again and again, and nobody can connect with the
+   * capability it carries (ADR-0098 step 6, "Links"). The link it returns names this computer's key and
+   * endpoints, for the members to dial.
+   *
+   * @param applicationHandler optional handler for non-bootstrap application payloads
+   * @param sessionAction      callback invoked for each admitted session
+   * @param returningPeers     who may connect; read at every connection
+   * @return the open card
+   * @throws OnboardingFailure if identity, listener, candidate, or compact-signing setup fails
+   */
+  public PreparedHost createRetainedCard(PeerSession.ApplicationStreamHandler applicationHandler,
+      Consumer<PeerSession> sessionAction, Predicate<String> returningPeers) throws OnboardingFailure {
+    return createCompactInvitation(null, false, applicationHandler, sessionAction,
+        Objects.requireNonNull(returningPeers, "returning peers"), true);
   }
 
   private PreparedHost createCompactInvitation(String expectedPeer, boolean openRouterPort,
       PeerSession.ApplicationStreamHandler applicationHandler,
-      Consumer<PeerSession> sessionAction, Predicate<String> returningPeers)
+      Consumer<PeerSession> sessionAction, Predicate<String> returningPeers, boolean invitationUsed)
       throws OnboardingFailure {
     Objects.requireNonNull(sessionAction, "session action");
     IdentityBootstrap.Result local = loadIdentity();
@@ -374,7 +392,7 @@ public final class Onboarding {
           localDescriptor, remoteDescriptor, applicationHandler);
       endpoint = OnboardingEndpoint.openServer(local.identity(), expectedPeer, sessionId,
           capability, bootstrapHandler, stunServer, returningPeers,
-          session -> acceptReturning(session, sessionAction), retainedReplay);
+          session -> acceptReturning(session, sessionAction), retainedReplay, invitationUsed);
       endpoint.onIncompatiblePeer(mismatch -> emit(OnboardingEventType.INCOMPATIBLE_PEER, mismatch.message()));
       emit(OnboardingEventType.SESSION_CREATED, "");
       emit(OnboardingEventType.LISTENER_READY, "");

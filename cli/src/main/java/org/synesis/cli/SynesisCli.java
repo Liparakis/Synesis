@@ -66,6 +66,8 @@ import org.synesis.cli.command.project.ProjectAddMemberCommand;
 import org.synesis.cli.command.project.ProjectCommand;
 import org.synesis.cli.command.project.ProjectFollowCommand;
 import org.synesis.cli.command.project.ProjectRemoveMemberCommand;
+import org.synesis.cli.command.project.ProjectRecoverCommand;
+import org.synesis.cli.command.project.ProjectJoinPolicyCommand;
 import org.synesis.cli.command.project.ProjectShareCommand;
 import org.synesis.cli.command.project.ProjectCreateCommand;
 import org.synesis.cli.command.project.ProjectValidationClearCommand;
@@ -165,6 +167,8 @@ public final class SynesisCli {
         command.getSubcommands().get("project").addSubcommand("share", new ProjectShareCommand(runtime));
         command.getSubcommands().get("project").addSubcommand("add-member", new ProjectAddMemberCommand(runtime));
         command.getSubcommands().get("project").addSubcommand("remove-member", new ProjectRemoveMemberCommand(runtime));
+        command.getSubcommands().get("project").addSubcommand("recover", new ProjectRecoverCommand(runtime));
+        command.getSubcommands().get("project").addSubcommand("join-policy", new ProjectJoinPolicyCommand(runtime));
         command.getSubcommands().get("project").addSubcommand("follow", new ProjectFollowCommand(runtime));
         command.getSubcommands().get("project").addSubcommand("validation", new CommandLine(new ProjectValidationCommand()).addSubcommand("set", new ProjectValidationSetCommand(runtime))
                 .addSubcommand("show", new ProjectValidationShowCommand(runtime)).addSubcommand("clear", new ProjectValidationClearCommand(runtime)));

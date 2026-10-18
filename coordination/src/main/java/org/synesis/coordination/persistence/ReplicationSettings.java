@@ -24,17 +24,19 @@ import org.synesis.coordination.exception.CoordinationNullException;
  * the log reads it, so a process cannot append locally by not knowing it is a member (invariant 1). A missing file
  * is a leader, which is every log today. A file that cannot be read or parsed is an error, never a leader.</p>
  *
- * <p>The format is strict and line based: {@code role=leader} or {@code role=member} first, then for a member one
- * {@code leader=<node ID>}, for a leader any number of {@code member=<node ID>}, and in either case at most one
- * {@code code.remote=<name>}: the name of the remote of the project's clone through which code moves between
- * computers. It is a name, never a URL, and is never guessed: a computer with a role and no code remote refuses
- * the operations that need one. Nothing else is accepted.</p>
+ * <p>The format is strict and line based. Since ADR-0098 step 6 it is {@code role=shared} and at most one
+ * {@code code.remote=<name>}: who belongs to the project is in the owner's log, not here (designer item 14). A step-5
+ * file is still read, for its migration: {@code role=leader} or {@code role=member} first, then for a member one
+ * {@code leader=<node ID>}, for a leader any number of {@code member=<node ID>}. The code remote is the name of the
+ * remote of the project's clone through which code may also move between computers. It is a name, never a URL, and
+ * is never guessed. Nothing else is accepted.</p>
  *
- * @param leaderNodeId the leader's node, for a member; null for the leader
- * @param members      nodes allowed to propose, for the leader; empty for a member
+ * @param leaderNodeId the leader's node, for a step-5 member; null otherwise
+ * @param members      the members a step-5 leader's file names; empty otherwise
  * @param codeRemote   name of the remote code moves through; null when none is configured
+ * @param shared       whether the file is a step-6 {@code role=shared} file
  */
-public record ReplicationSettings(String leaderNodeId, Set<String> members, String codeRemote) {
+public record ReplicationSettings(String leaderNodeId, Set<String> members, String codeRemote, boolean shared) {
 
     /**
      * Name of the file in the coordination folder.
@@ -57,6 +59,30 @@ public record ReplicationSettings(String leaderNodeId, Set<String> members, Stri
      */
     public ReplicationSettings {
         members = Set.copyOf(members);
+        if (shared && (leaderNodeId != null || !members.isEmpty())) {
+            throw new IllegalArgumentException("a shared file names no leader and no members");
+        }
+    }
+
+    /**
+     * Step-5 settings, with or without a code remote.
+     *
+     * @param leaderNodeId the leader's node, for a member; null for the leader
+     * @param members      nodes the leader names
+     * @param codeRemote   name of the remote code moves through; null when none
+     */
+    public ReplicationSettings(String leaderNodeId, Set<String> members, String codeRemote) {
+        this(leaderNodeId, members, codeRemote, false);
+    }
+
+    /**
+     * The settings of a computer in a shared project (ADR-0098 step 6).
+     *
+     * @param codeRemote name of the remote code may also move through; null when none
+     * @return the settings
+     */
+    public static ReplicationSettings sharedProject(String codeRemote) {
+        return new ReplicationSettings(null, Set.of(), codeRemote, true);
     }
 
     /**
@@ -76,7 +102,7 @@ public record ReplicationSettings(String leaderNodeId, Set<String> members, Stri
      * @return the settings including the remote
      */
     public ReplicationSettings withCodeRemote(String remoteName) {
-        return new ReplicationSettings(leaderNodeId, members, CoordinationNullException.requireNonNull(remoteName, "code remote"));
+        return new ReplicationSettings(leaderNodeId, members, CoordinationNullException.requireNonNull(remoteName, "code remote"), shared);
     }
 
     /**
@@ -151,6 +177,8 @@ public record ReplicationSettings(String leaderNodeId, Set<String> members, Stri
                     throw new CoordinationException(INVALID);
                 }
                 codeRemote = name;
+            } else if (role.equals("shared")) {
+                throw new CoordinationException(INVALID);
             } else if (role.equals("member") && leader == null) {
                 leader = nodeId(value(lines[index], "leader"));
             } else if (role.equals("leader")) {
@@ -169,6 +197,7 @@ public record ReplicationSettings(String leaderNodeId, Set<String> members, Stri
                 yield new ReplicationSettings(leader, Set.of(), codeRemote);
             }
             case "leader" -> new ReplicationSettings(null, members, codeRemote);
+            case "shared" -> sharedProject(codeRemote);
             default -> throw new CoordinationException(INVALID);
         };
     }
@@ -195,7 +224,7 @@ public record ReplicationSettings(String leaderNodeId, Set<String> members, Stri
      * @throws IOException when the file cannot be written
      */
     public void write(Path coordinationRoot) throws IOException {
-        StringBuilder text = new StringBuilder(isMember() ? "role=member\nleader=" + leaderNodeId + "\n"
+        StringBuilder text = new StringBuilder(shared ? "role=shared\n" : isMember() ? "role=member\nleader=" + leaderNodeId + "\n"
                 : "role=leader\n");
         members.stream().sorted().forEach(member -> text.append("member=").append(member).append('\n'));
         if (codeRemote != null) {

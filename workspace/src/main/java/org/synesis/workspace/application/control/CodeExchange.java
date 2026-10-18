@@ -144,6 +144,46 @@ public final class CodeExchange {
     }
 
     /**
+     * What a computer that joined a shared project does before it gives out a new lane: brings its checkout up to the
+     * newest copy of {@code main} it can reach ({@link #followLeader}). The owner's computer does not, nor does a
+     * single computer (ADR-0098 step 6: who joined is read from the log, no longer from a member's settings file).
+     *
+     * @param coordinationDirectory the folder holding {@code replication.properties}
+     * @param project               the project
+     * @param controlRoot           the control checkout
+     * @param self                  this computer's node
+     * @return true when this computer joined and its checkout was brought up to date
+     * @throws CodeRemote.Refused {@link CodeRemote#UNAVAILABLE} when no copy can be had now, or the role file's code
+     */
+    public static boolean followLeaderIfMember(Path coordinationDirectory, UUID project, Path controlRoot, String self) throws CodeRemote.Refused {
+        Optional<CodeExchange> exchange = of(coordinationDirectory, project);
+        if (exchange.isEmpty()) {
+            return false;
+        }
+        if (exchange.get().member) {
+            return exchange.get().followLeader(controlRoot);
+        }
+        if (!joinedAnother(coordinationDirectory, project, self)) {
+            return false;
+        }
+        return exchange.get().followMain(controlRoot);
+    }
+
+    /** Whether the log names another computer as the owner, or before the owner's entries arrive this one dialed an inviter. */
+    private static boolean joinedAnother(Path coordinationDirectory, UUID project, String self) {
+        try {
+            Optional<String> owner = new org.synesis.coordination.persistence.PredictionEventStore(coordinationDirectory, project)
+                    .membershipProjection().owner();
+            if (owner.isPresent()) {
+                return !owner.get().equals(self);
+            }
+            return !org.synesis.coordination.persistence.ReplicationPeers.read(coordinationDirectory).dialed().isEmpty();
+        } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException unreadable) {
+            return false;
+        }
+    }
+
+    /**
      * Makes sure each snapshot ref the log names is here and names its commit: what the leader's merge pass needs
      * before it decides anything. A ref that is here already is left as it is, for the pass's checks.
      *
@@ -172,6 +212,10 @@ public final class CodeExchange {
         if (!member) {
             return false;
         }
+        return followMain(controlRoot);
+    }
+
+    private boolean followMain(Path controlRoot) throws CodeRemote.Refused {
         try {
             ask(new CodeTransferMessage.Fetch(project, "HEAD"));
         } catch (CodeRemote.Refused overLink) {
