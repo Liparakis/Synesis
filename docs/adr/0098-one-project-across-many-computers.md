@@ -624,6 +624,15 @@ agents' processes reach it by HTTP on loopback (`LoopbackExchange`). No Java cod
 10. **Bundle commands** run with a 10-minute bound, outside every lock, through `GitProcessRunner` with its output cap;
     Git writes and reads the bundle file itself, so nothing streams through the runner.
 11. **Compatibility 7.**
+12. **Following `main` before a lane is best effort** (designer, 2026-10-18, after real run s5-run5). A computer's own
+    copy of `main` is always reachable, so when no computer or mirror that may hold a newer one answers (not connected,
+    no answer, timed out: `CODE_REMOTE_UNAVAILABLE`), the lane starts from this computer's own `main` and its agent is
+    not held up. The lane's workspace marker records it (`baseFrom: LOCAL_MAIN` and the reason), so a later re-merge
+    of that lane is expected, not a fault. Only a local failure still stops the lane (role settings that cannot be
+    read, a checkout Git cannot use). Before this rule, a partitioned member's first `ensure_session` failed with
+    `workspace_not_ready` and `request_human_help`, and the member did no work for the whole partition. The same rule
+    holds wherever an agent waits for code another computer holds (a reviewer's snapshot, a validator's
+    implementation, a repair's snapshot): the wait is a retry, never a request for a person.
 
 Calls made while building it (designer, 2026-10-18):
 

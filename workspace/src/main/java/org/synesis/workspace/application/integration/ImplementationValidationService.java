@@ -26,6 +26,7 @@ import org.synesis.workspace.agent.AgentFailures;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
 import org.synesis.workspace.application.control.CodeExchange;
+import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderManualService;
@@ -161,6 +162,10 @@ public final class ImplementationValidationService {
             if (ex instanceof java.io.IOException ioFailure && ioFailure.getMessage() != null
                     && ioFailure.getMessage().startsWith("VALIDATION_WORKSPACE")) {
                 return blocked(ioFailure.getMessage(), AgentReason.TASK_NOT_READY);
+            }
+            if (ex instanceof CodeRemote.Refused refused && refused.retryable()) {
+                // The implementation is on a computer that does not answer now; it is asked for again on the retry.
+                return blocked(refused.code(), AgentReason.TASK_NOT_READY);
             }
             return AgentFailures.internal(request.projectRoot(), "capability.validate", ex, null);
         }

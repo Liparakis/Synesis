@@ -518,7 +518,7 @@ public final class IntegrationOrchestrationService {
                 exchange.get().publishControlBranch(controlRoot);
             }
         } catch (CodeRemote.Refused refused) {
-            if (CodeRemote.UNAVAILABLE.equals(refused.code())) {
+            if (refused.retryable()) {
                 LOG.log(System.Logger.Level.WARNING, "The control branch was not pushed; the next pass tries again. {0}", refused.getMessage());
             }
         }

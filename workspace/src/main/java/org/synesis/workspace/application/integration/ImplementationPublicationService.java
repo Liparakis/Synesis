@@ -70,7 +70,7 @@ public final class ImplementationPublicationService {
     /** Nothing was published; an unreachable mirror is tried again, unreadable settings need the operator. */
     private static AgentResponse codeRemoteRefusal(CodeRemote.Refused refused) {
         return blocked(refused.code(), AgentReason.POLICY_DENIED,
-                CodeRemote.UNAVAILABLE.equals(refused.code()) ? AgentNextAction.RETRY : AgentNextAction.REQUEST_HUMAN_HELP);
+                refused.retryable() ? AgentNextAction.RETRY : AgentNextAction.REQUEST_HUMAN_HELP);
     }
 
     private static boolean validTreeHash(String value) {

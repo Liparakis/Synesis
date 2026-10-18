@@ -35,6 +35,7 @@ import org.synesis.workspace.application.agent.workflow.AgentTaskCompletionServi
 import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
+import org.synesis.workspace.application.control.CodeRemote;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.session.SessionAuthorityResolver;
@@ -280,7 +281,9 @@ final class McpSessionEstablishment {
                     AgentNextAction.RETRY,
                     object("repairJoined", true, "intentId", joined.intent().intentId().toString(), "claimEpoch", joined.intent().version()));
         } catch (Exception repairFailure) {
-            return policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "reason", repairFailure.getMessage() == null ? "REPAIR_JOIN_FAILED" : repairFailure.getMessage());
+            // The snapshot to repair is on a computer that does not answer now: the join is asked again, not a person.
+            AgentNextAction next = repairFailure instanceof CodeRemote.Refused refused && refused.retryable() ? AgentNextAction.RETRY : AgentNextAction.REQUEST_HUMAN_HELP;
+            return policyDenied(next, "reason", repairFailure.getMessage() == null ? "REPAIR_JOIN_FAILED" : repairFailure.getMessage());
         }
     }
 

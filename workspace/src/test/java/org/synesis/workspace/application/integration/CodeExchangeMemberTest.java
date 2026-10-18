@@ -38,9 +38,9 @@ import org.synesis.workspace.application.agent.workflow.AgentTaskCompletionServi
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.IntegrationValidationRefusalTest.Project;
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
+import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.test.CodeLinkPair;
 import org.synesis.workspace.test.ProviderTestSupport;
 import org.synesis.workspace.test.TestGit;
@@ -317,34 +317,48 @@ class CodeExchangeMemberTest {
     }
 
     @Test
-    void aMemberThatCannotFetchTellsTheAgentAndTheInstallWhyAndStartsOnceItCan() throws Exception {
-        String url = TestGit.output(memberRoot, "remote", "get-url", "origin");
+    void aMemberThatCanReachNeitherTheLeaderNorTheMirrorStartsItsLaneFromItsOwnMainAndFollowsOnceItCan() throws Exception {
         TestGit.run(memberRoot, "remote", "set-url", "origin", temp.resolve("gone.git").toString());
-        // Neither the leader over Link nor the mirror can be reached; the mirror's reason is the one shown.
+        // Neither the leader over Link nor the mirror can be reached, as when the two computers are partitioned.
         replicate(true, false);
-
-        Map<String, String> status = new ProviderApplicationService().status(member, "codex").values();
-        assertEquals("FAILED", status.get("WORKTREE_BINDING_STATUS"), status.toString());
-        assertEquals("CODE_REMOTE_UNAVAILABLE", status.get("WORKTREE_BINDING_DIAGNOSTIC"), status.toString());
-        assertTrue(status.get("WORKTREE_BINDING_DETAIL").contains("git fetch origin"), status.toString());
+        String ownMain = memberHead();
+        leader.git("commit", "--allow-empty", "-m", "main moved on the owner's computer");
+        String leaderMain = leader.head();
 
         AgentResponse ensured = new AgentSessionService().ensureSession(new SessionResolutionRequest(memberRoot, "codex", "m-1", null, false));
-        Map<String, Object> answer = ensured.toMap();
-        assertEquals(AgentStatus.BLOCKED, ensured.status(), ensured.toJson());
-        assertEquals("workspace_not_ready", answer.get("reason"));
-        assertEquals("request_human_help", answer.get("nextAction"));
-        Map<?, ?> result = (Map<?, ?>) answer.get("result");
-        assertEquals("CODE_REMOTE_UNAVAILABLE", result.get("diagnostic"));
-        assertTrue(String.valueOf(result.get("detail")).contains("does not appear to be a git repository"), ensured.toJson());
-        assertTrue(String.valueOf(result.get("detail")).contains("git fetch origin"), ensured.toJson());
-        assertEquals(answer, new WorkspaceReadinessService().assess(member, "codex", "m-1").response().toMap(), "every operation gives the same answer");
 
-        TestGit.run(memberRoot, "remote", "set-url", "origin", url);
+        assertEquals(AgentStatus.READY, ensured.status(), ensured.toJson());
+        ProviderSessionBindingService.Binding cutOff = bindings.find(member, "codex", "m-1").orElseThrow();
+        assertEquals(ownMain, cutOff.baseCommit(), "the lane starts from this computer's own main");
+        assertEquals(ownMain, TestGit.output(Path.of(cutOff.worktreePath()), "rev-parse", "HEAD"));
+        assertTrue(new WorkspaceReadinessService().assess(member, "codex", "m-1").ready(), "every operation finds the workspace ready");
+        Map<String, Object> marker = laneMarker(cutOff);
+        assertEquals("LOCAL_MAIN", marker.get("baseFrom"), marker.toString());
+        assertTrue(String.valueOf(marker.get("baseFromReason")).contains("git fetch origin"), "the mirror's reason is kept: " + marker);
+
         link.reconnect();
-        AgentResponse recovered = new AgentSessionService().ensureSession(new SessionResolutionRequest(memberRoot, "codex", "m-1", null, false));
+        new AgentSessionService().ensureSession(new SessionResolutionRequest(memberRoot, "codex", "m-2", null, false));
 
-        assertEquals(AgentStatus.READY, recovered.status(), recovered.toJson());
-        assertNull(bindings.find(member, "codex", "m-1").orElseThrow().lastSeenDetail(), "the explanation goes with the failure");
+        ProviderSessionBindingService.Binding connected = bindings.find(member, "codex", "m-2").orElseThrow();
+        assertEquals(leaderMain, connected.baseCommit(), "once the leader answers, a new lane starts from its main");
+        assertNull(laneMarker(connected).get("baseFrom"), "a lane based on the followed main is not marked");
+    }
+
+    @Test
+    void aMemberCutOffFromTheLeaderRunsItsLaneAndMergesItOntoItsOwnMain() throws Exception {
+        replicate(false, false);
+        startLane("m-1", "src/a.txt");
+
+        AgentResponse finished = finish("m-1");
+
+        assertTrue(memberAppended().contains(PredictionEventType.TASK_INTEGRATED), finished.toJson());
+        TestGit.output(memberRoot, "cat-file", "-e", "HEAD:src/a.txt");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> laneMarker(ProviderSessionBindingService.Binding binding) throws IOException {
+        Path marker = Path.of(binding.worktreePath()).resolve(".synesis/local/workspace-binding.json");
+        return (Map<String, Object>) ProviderJson.parse(Files.readString(marker));
     }
 
     @Test

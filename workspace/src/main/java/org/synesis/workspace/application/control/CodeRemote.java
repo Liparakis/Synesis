@@ -252,5 +252,15 @@ public final class CodeRemote {
         public String code() {
             return code;
         }
+
+        /**
+         * Tells whether the refusal passes with time: no computer or mirror that holds the code answered now. Any other
+         * code (role settings that cannot be read) needs a person.
+         *
+         * @return true for {@link CodeRemote#UNAVAILABLE}
+         */
+        public boolean retryable() {
+            return UNAVAILABLE.equals(code);
+        }
     }
 }
