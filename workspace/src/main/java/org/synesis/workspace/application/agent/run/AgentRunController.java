@@ -175,13 +175,21 @@ public final class AgentRunController {
                         // an agent whose lane ended while it was stopped: it is resumed once, in a new
                         // session, to take the next piece of work, as a Claude agent woken by its Stop
                         // hook for its lane ending does in the same process.
-                        boolean laneEnded = agent.heldLaneAtStop && !agent.holdsOpenLane(observation);
+                        boolean holdsLane = agent.holdsOpenLane(observation);
+                        boolean laneEnded = agent.heldLaneAtStop && !holdsLane;
                         // Only once its end is recorded: the close is what lets its lane be held for continuation.
-                        boolean fencedLaneWaits = agent.fencedLaneToContinue && agent.holdsOpenLane(observation) && !unrecordedEnds.contains(agent.connectionId);
-                        if (!agent.resumable(request.maxResumesPerAgent()) || !(laneEnded || agent.holdsOpenLane(observation))) {
+                        boolean fencedLaneWaits = agent.fencedLaneToContinue && holdsLane && !unrecordedEnds.contains(agent.connectionId);
+                        if (!agent.resumable(request.maxResumesPerAgent())) {
                             continue;
                         }
-                        if (!laneEnded && observation.heldByOperator(agent.spec.provider())) {
+                        // The other exception: a review only an agent without a lane can take. A
+                        // foreign author's snapshot waited for ever while both agents here that could
+                        // review it had stopped with their lanes integrated.
+                        List<String> reviews = laneEnded || holdsLane ? List.of() : agent.reviewsToTry(observation.reviewsOffered(agent.spec.provider(), agent.connectionIds), agents);
+                        if (!holdsLane && !laneEnded && reviews.isEmpty()) {
+                            continue;
+                        }
+                        if (holdsLane && observation.heldByOperator(agent.spec.provider())) {
                             // Its published work waits for an operator. Resumed, it took its lane
                             // back, published the same work again and was refused again: eleven
                             // times in one real run, each on another lane's progress.
@@ -191,10 +199,11 @@ public final class AgentRunController {
                         boolean deadlinePassed = answerDeadline.isPresent() && now >= answerDeadline.getAsLong() && answerDeadline.getAsLong() != agent.resumedForDeadline;
                         OptionalLong message = agent.newestUnreadMessage(observation);
                         boolean messageWaiting = agent.unreadMessageWaiting(observation);
-                        if (laneEnded || fencedLaneWaits || observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || messageWaiting) {
+                        if (laneEnded || !reviews.isEmpty() || fencedLaneWaits || observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || messageWaiting) {
                             if (deadlinePassed) {
                                 agent.resumedForDeadline = answerDeadline.getAsLong();
                             }
+                            agent.resumedForReview.addAll(reviews);
                             agent.fencedLaneToContinue = false;
                             // Whatever it is resumed for, it reads its messages then. A message
                             // it stops without acting on does not resume it again.
@@ -359,7 +368,8 @@ public final class AgentRunController {
         ALL_WORK_CANCELLED,
         /**
          * Every agent has stopped and resuming any would change nothing: nothing has progressed
-         * since it stopped, or no lane it took is still open. Nothing is left that could progress
+         * since it stopped, or no lane it took is still open, and no agent without a lane has a
+         * review it may take and has not tried. Nothing is left that could progress
          * without them either: no foreign participant holds a lane, and no other computer of the
          * project is connected while an agent here could come back to a lane of its own.
          */
@@ -707,6 +717,22 @@ public final class AgentRunController {
         default OptionalLong newestOperatorAnswerFor(String provider, String connectionInstanceId) {
             return OptionalLong.empty();
         }
+
+        /**
+         * Returns the snapshots waiting for a review that the agent behind these connections may take
+         * up, as {@code get_next_action} offers them to a session that holds no lane: review required,
+         * its author active, no reviewer holding it, and authored in its lineage by none of the
+         * current sessions behind these connections. A stopped agent with no lane of its own is
+         * resumed for such a snapshot, and for each one once while it stays offered (ADR-0099).
+         *
+         * @param provider              provider identifier
+         * @param connectionInstanceIds every connection the agent's processes have had
+         * @return the snapshots' identifiers, empty when there are none, a connection holds a lane,
+         *         or no connection's session is known
+         */
+        default List<String> reviewsOffered(String provider, List<String> connectionInstanceIds) {
+            return List.of();
+        }
     }
 
     /**
@@ -794,6 +820,8 @@ public final class AgentRunController {
         private long stoppedAtSequence;
         private long resumedForDeadline = Long.MIN_VALUE;
         private long resumedForMessage;
+        /** The snapshots waiting for review that it was resumed, without a lane, to look at. */
+        private final Set<String> resumedForReview = new java.util.HashSet<>();
         /** Every connection this agent's processes have had, oldest first. */
         private final List<String> connectionIds = new ArrayList<>();
         private int exitCode;
@@ -885,6 +913,18 @@ public final class AgentRunController {
         private boolean unreadMessageWaiting(Observation observation) {
             OptionalLong message = newestUnreadMessage(observation);
             return message.isPresent() && message.getAsLong() > Math.max(stoppedAtSequence, resumedForMessage);
+        }
+
+        /**
+         * Of the reviews offered to it now, those it has not been resumed for and that no running agent
+         * of the run was resumed for. Each agent tries a review once and one agent at a time, so a
+         * review nobody here takes costs at most one resume per agent. A review it is no longer
+         * offered (taken, then given up) is forgotten, so being offered it again is a new offer.
+         */
+        private List<String> reviewsToTry(List<String> offered, List<Agent> agents) {
+            resumedForReview.retainAll(offered);
+            return offered.stream().filter(snapshot -> !resumedForReview.contains(snapshot))
+                    .filter(snapshot -> agents.stream().noneMatch(other -> other.process != null && other.resumedForReview.contains(snapshot))).toList();
         }
 
         private boolean resumable(int maxResumes) {

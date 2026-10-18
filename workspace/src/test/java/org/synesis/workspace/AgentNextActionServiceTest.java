@@ -41,6 +41,8 @@ import org.synesis.workspace.agent.AgentNextAction;
 import org.synesis.workspace.agent.AgentReason;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.agent.run.AgentRunController;
+import org.synesis.workspace.application.agent.run.EventLogObserver;
 import org.synesis.workspace.application.agent.session.AgentSessionService;
 import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
@@ -388,6 +390,12 @@ class AgentNextActionServiceTest {
         assertEquals("ensure_session", ((Map<String, Object>) offered.getFirst().get("reviewerIntent")).get("tool"));
         // The only candidate is the owner's own snapshot, and a session that holds a lane takes no second one.
         assertTrue(CollaborationResponseMapper.openReviewCandidates(location, owner.intent().participant()).isEmpty());
+
+        // The run controller resumes a stopped agent with no lane for exactly what this offers (ADR-0099).
+        AgentRunController.Observation observed = new EventLogObserver(location).observe();
+        assertEquals(List.of("snap_fresh"), observed.reviewsOffered("codex", List.of("fresh-newcomer")));
+        assertEquals(List.of(), observed.reviewsOffered("codex", List.of("fresh-newcomer", "fresh-owner")), "an agent one of whose sessions is the author is not offered the review");
+        assertEquals(List.of(), observed.reviewsOffered("codex", List.of("never-connected")), "nothing is offered to a connection with no session");
     }
 
     private static final String VALIDATION_SENTENCE = " Synesis runs this project's validation command (`python -m unittest`) on every integration, so running or reporting it is not a part to claim.";

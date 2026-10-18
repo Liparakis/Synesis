@@ -15,6 +15,7 @@ import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.replication.ReplicationJournal;
+import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
 import org.synesis.workspace.application.collaboration.ParticipantActivity;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.integration.ConsumerAbsenceGuard;
@@ -204,6 +205,12 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                         .map(lane -> store.operatorRequestProjection().all().stream().filter(request -> request.raisedBy().equals(lane.authorityLineageId().toString()))
                                 .map(request -> operatorClosings.get(request.id())).filter(Objects::nonNull).mapToLong(Long::longValue).max())
                         .orElse(OptionalLong.empty());
+            }
+
+            @Override
+            public List<String> reviewsOffered(String provider, List<String> connectionInstanceIds) {
+                return CollaborationResponseMapper.openReviewSnapshots(store,
+                        connectionInstanceIds.stream().map(connection -> participantOf(provider, connection)).filter(Objects::nonNull).distinct().toList());
             }
 
             @Override

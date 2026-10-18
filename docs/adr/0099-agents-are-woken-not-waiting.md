@@ -420,7 +420,8 @@ project runtime lives (`MergeDriver.repeatEvery`); a pass with nothing to merge 
 - Java API, additive: `SessionLeaseService.keep`, `ProviderSessionTerminalizationService.openAuthority`, and a default
   method `keep` on `AgentRunController.Connections` (an implementation without it keeps the old behaviour).
 - Changed by the fixes of 2026-10-18. Additive unless said otherwise: `Connections.end`, `Observation.sessionFenced` and
-  `Observation.newestOperatorAnswerFor` (default methods); `SessionLeaseService.reserveKeeper` and `releaseKeeper`;
+  `Observation.newestOperatorAnswerFor` (default methods), and `Observation.reviewsOffered` (default) with
+  `CollaborationResponseMapper.openReviewSnapshots` (fix 9); `SessionLeaseService.reserveKeeper` and `releaseKeeper`;
   `HeadlessOptions.hookLauncher` with `withHookLauncher` (a fourth record component: the two- and three-argument
   constructors stay, so callers compile unchanged; a record pattern over three components would not);
   `ProviderIntegration.trustNote` (default); `ProviderApplicationService.launcherPath` made public. Local file
@@ -489,9 +490,32 @@ before it. The ADR stays Proposed. Source-level evidence only: none of these has
 8. **Windows test.** `LeaseKeeperTest` proved the keeper fence with the test JVM's parent, which a fresh Windows 11
    install hides from `ProcessHandle.parent()`. It now starts a process through a launcher that exits, so the process
    descends from nothing in the JVM, and checks that before using it.
+9. **A review only an agent here without a lane could take (the failure VERIFIED in a real PC and VM run, mp17-link, 2026-10-18).**
+   Both Claude agents on the PC stopped with their lanes integrated. Ten minutes later a Codex agent on the VM
+   published work whose review is mandatory, and the other Codex agent there held a lane of its own, so it could not
+   take the review. The controller printed `AGENT_RUN_WAITING=FOREIGN_LANE_OPEN` and resumed nobody: a stopped agent
+   was resumed only for its own open lane, once when that lane ended while it was stopped, or for a message or an
+   answer deadline of its lane. The goal stopped at 6 of 7 modules. Now a stopped agent that holds no lane is also
+   resumed when the log offers it a review it may take, the candidates `get_next_action` offers a session without a
+   lane (`reviewCandidatesFor`: review required and pending, author active as Decision 3 says, no reviewer holding
+   it, not authored in its lineage by the current session behind any connection the agent had), read through
+   `Observation.reviewsOffered`. Each agent is resumed once per snapshot while it stays offered, and one agent here
+   at a time per snapshot: if it stops without taking it, the next stopped agent is tried, once. A snapshot taken and
+   then given up is offered again, and counts as a new offer. Such a resume needs the agent to be under
+   `--max-resumes`, and one that records nothing counts as idle; the publication that offers the review is progress
+   and resets the count, so in practice only a budget of 0 stops it. It gets the same neutral prompt, and a new
+   connection when its connection ended, as after a lane ends. This is a rule change agents can see: more resumes,
+   at most one per agent per offer. A Claude agent's Stop hook has no
+   matching gap to close: it holds only an agent that was told WAIT with a lane, and one without a lane stops and is
+   resumed by the controller. Source-level evidence only. No real run has shown it yet.
 
 ### Not done
 
+- Fix 9 counts only agents resumed for a review as looking at it. A running agent here with no lane may see the same
+  review and a stopped one be resumed for it at the same moment; the claim settles it, at the cost of one resume. An
+  agent none of whose connections has a known session is never resumed for a review. `AgentRunController`'s resume
+  loop now weighs five reasons and three exceptions inline in a file of about 930 lines; the next wake reason should
+  move that decision into its own method first.
 - A lane its agent cancelled does not start a fresh session on `ensure_session`: the session is told its lane is
   closed (`CLOSE`), as an existing test requires so that cancelled work is not announced again, and a task in the same
   process is refused. The controller starts such an agent again on a new connection once its lane has ended. The owner

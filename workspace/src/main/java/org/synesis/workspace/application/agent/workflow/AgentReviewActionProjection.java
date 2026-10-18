@@ -639,12 +639,25 @@ static List<Map<String, Object>> reviewCandidates(PredictionEventStore store) {
      * @return the open candidates the participant did not produce and whose author is active
      */
     static List<Map<String, Object>> reviewCandidatesFor(PredictionEventStore store, String participantId) {
+        return reviewCandidatesFor(store, List.of(participantId));
+    }
+
+    /**
+     * Lists the review candidates that every one of several participants may take up, as
+     * {@link #reviewCandidatesFor(PredictionEventStore, String)} decides for one: the sessions an
+     * agent has had, where the work any of them produced is the agent's own.
+     *
+     * @param store        current project projection
+     * @param participants exact participant handles
+     * @return the open candidates none of the participants produced and whose author is active
+     */
+    static List<Map<String, Object>> reviewCandidatesFor(PredictionEventStore store, java.util.Collection<String> participants) {
         var collaboration = store.collaborationProjection();
-        ParticipantId caller = new ParticipantId(participantId);
+        List<ParticipantId> callers = participants.stream().map(ParticipantId::new).toList();
         return reviewCandidates(store).stream().filter(candidate -> store.taskCompletionProjection().findSnapshotById(String.valueOf(candidate.get(NextActionKeys.SNAPSHOT_ID))).filter(snapshot -> {
             WorkIntent producer = reviewProducerIntent(store, snapshot);
-            boolean ownWork = ReviewAdmissionRules.authoredInLineage(store, caller, snapshot.provenance().lineageIdentity())
-                    || snapshot.provenance().participant().equals(participantId) || producer != null && producer.participant().equals(participantId);
+            boolean ownWork = callers.stream().anyMatch(caller -> ReviewAdmissionRules.authoredInLineage(store, caller, snapshot.provenance().lineageIdentity()))
+                    || participants.contains(snapshot.provenance().participant()) || producer != null && participants.contains(producer.participant());
             boolean authorAbsent = producer != null && collaboration.participantState(producer.participant()).orElse(null) != Participant.State.ACTIVE;
             return !ownWork && !authorAbsent;
         }).isPresent()).toList();
