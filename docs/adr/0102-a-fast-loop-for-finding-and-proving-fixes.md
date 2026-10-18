@@ -54,8 +54,12 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
 3. **Shorter splits.** A Link split lasts long enough for the work to happen apart, about 5 minutes, not 20. The split
    stays a firewall partition that drops only traffic between the two computers (ADR-0100, "The lab"), never a pulled
    cable, so agents keep their model provider.
-4. **Build once, copy to the VM.** The CLI distribution is plain Java; the PC's `installDist` output is copied to the VM
-   (which has its own JDK), with no Podman container build. This also removes the risk that starting or stopping the
+4. **Build once, copy to the VM.** The PC builds the CLI distribution and copies it to the VM (which has its own JDK),
+   with no Podman container build. The distribution is Java except for one jar: the Link's QUIC native library is
+   chosen per platform at build time (`synesisNativeQuicClassifier`, `link/build.gradle.kts`), so the VM's copy is a
+   second build with `-PsynesisNativeQuicClassifier=linux-x86_64` (MEASURED 2026-10-19: a Windows build on the VM failed
+   every Link dial with `UnsatisfiedLinkError netty_quiche42_linux_x86_64`, which `link join` reported only as
+   `PROJECT_RUNTIME_UNAVAILABLE`). This also removes the risk that starting or stopping the
    Podman machine breaks the VM's bridged network (MEASURED 2026-10-18: a Podman stop cut the VM off until a reset).
 5. **One script per run.** Create the project, share it, invite, join `--into`, answer, accept, install providers on each
    computer, start the watchers, start agents, split, heal, collect evidence and validate (copies of `main` equal, logs
