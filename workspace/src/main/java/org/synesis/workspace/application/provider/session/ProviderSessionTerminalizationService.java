@@ -177,9 +177,10 @@ public final class ProviderSessionTerminalizationService {
     private static boolean hasOpenGrant(PredictionEventStore store, String participant, Set<java.util.UUID> intentIds) {
         for (LaneGrant grant : store.workGroupProjection().grants()) {
             boolean exact = grant.targetParticipant().equals(participant) || intentIds.contains(grant.targetIntentId());
-            // A revoked grant is finished: its review was released to another reviewer and no verdict on it is taken.
-            if (exact && !store.workGroupProjection().grantSuperseded(grant.grantId()) && (store.workGroupProjection().grantAvailable(grant.grantId()) || (store.workGroupProjection().grantConsumed(grant.grantId())
-                    && !store.workGroupProjection().grantRevoked(grant.identity()) && store.workGroupProjection().reviewValidationForGrant(grant.grantId()).isEmpty()))) {
+            // The projection's one rule for what a grant still obliges. A revoked grant is finished (its review was
+            // released to another reviewer), and a continuation grant is no review at all: it restores a lane, takes
+            // no verdict, and counted here it held a successor's session open for ever.
+            if (exact && store.workGroupProjection().grantUnresolved(grant.identity())) {
                 return true;
             }
         }

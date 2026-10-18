@@ -389,6 +389,10 @@ static AgentResponse pendingReviewRequestResponse(Map<String, Object> collaborat
             }
         }
         remergeGrants(store, List.of(participant)).forEach(grant -> groups.add(grant.workGroupId()));
+        // A review still owed counts whether or not the participant produced anything: the session's open authority
+        // lists it (PENDING_REVIEW), so the lane's answer must project the review that finishes it, not a CLOSE.
+        var workGroups = store.workGroupProjection();
+        workGroups.grants().stream().filter(grant -> participant.equals(grant.targetParticipant()) && workGroups.grantUnresolved(grant.identity())).forEach(grant -> groups.add(grant.workGroupId()));
         return Set.copyOf(groups);
     }
 
