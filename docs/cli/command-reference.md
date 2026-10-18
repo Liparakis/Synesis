@@ -70,6 +70,13 @@ as progress, so two idle agents cannot wake each other. A resumed agent is a new
 connection and therefore a new session; it regains its lane through the ordinary
 recovery and continuation path.
 
+Before it starts any agent, the command asks the installation daemon for the
+project's runtime, starting both when they are not running, and prints
+`PROJECT_RUNTIME=READY`. When they cannot be started, a project shared with
+another computer is refused with `ERROR=PROJECT_RUNTIME_UNAVAILABLE`, because
+its agents reach that computer only through the runtime; a project on one
+computer prints `PROJECT_RUNTIME=UNAVAILABLE` and starts the agents.
+
 That path starts when a connection is known to have ended. A provider that kills
 its MCP server instead of closing it leaves no such proof, and Synesis would
 otherwise wait out its five-minute abrupt-loss grace period. The command gives

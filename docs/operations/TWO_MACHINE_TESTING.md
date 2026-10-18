@@ -135,12 +135,23 @@ the member catches up with a pull (within 15 seconds) once the link is back.
 **A restart of either coordination server recovers by itself.** Each computer writes down, in `replication.peers` in the
 project's coordination folder (local, excluded from version control, never sent to a peer), the host it dialed and its
 invitation link, and the UDP port it hosted an invitation on with the node IDs it admitted. When the server starts again
-(`synesis project share`/`follow` stop it, the next `synesis link ...` starts it) the computer that dialed dials the same
+(`synesis project share`/`follow` stop it, and after a reboot nothing runs; `synesis agents run` and every `synesis link ...`
+start it) the computer that dialed dials the same
 host again, and the computer that hosted listens on the same port again and admits exactly the nodes it admitted before
 that its role still names. No new invitation is needed. `replication.log` says what happened: `DIAL_RESUMED`,
 `HOST_RESUMED` and, when something cannot resume, `DIAL_RESUME_SKIPPED`/`HOST_RESUME_SKIPPED` (the role no longer names
 the peer), `PEERS_IGNORED` (the file cannot be read) or `HOST_RESUME_FAILED`. `remove-member` and `follow` drop the
 records of nodes the role no longer names.
+
+`synesis agents run` asks the installation daemon for the project's runtime before it starts any agent, starting the
+daemon and the runtime when they are not running, and prints `PROJECT_RUNTIME=READY`. In a shared project (a
+`replication.properties` in the coordination folder) it refuses with `ERROR=PROJECT_RUNTIME_UNAVAILABLE` and the `REASON`
+when they cannot be started, rather than start agents that would not reach the other computer; in a project on one
+computer it prints `PROJECT_RUNTIME=UNAVAILABLE` with `PROJECT_RUNTIME_REASON` and starts the agents. An interactive agent
+session does not start it: its MCP server (`synesis-mcp`) does not start the daemon. After a
+reboot, run `synesis link requests` (or `synesis agents run`) in the project folder before opening such a session there.
+A `replication.endpoint` left from before the reboot is not taken for a connection: a process that finds nothing listening
+there treats the other computer as not connected.
 
 What still needs a new `link invite` and `link join`: the hosting computer's port was taken by another program when it
 started again (`HOST_RESUME_FAILED`), the dialing computer can no longer reach the endpoints of the invitation (the host's

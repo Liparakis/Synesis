@@ -1,5 +1,6 @@
 package org.synesis.cli.command.agents;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,7 +12,11 @@ import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.ProjectOptions;
+import org.synesis.cli.daemon.DaemonClient;
 import org.synesis.cli.exit.ExitCodes;
+import org.synesis.cli.terminal.Terminal;
+
+import org.synesis.coordination.persistence.ReplicationSettings;
 
 import org.synesis.workspace.application.agent.run.AgentRunController;
 import org.synesis.workspace.application.agent.run.ControllerConnections;
@@ -39,6 +44,7 @@ import picocli.CommandLine.Option;
 public final class AgentsRunCommand implements Callable<Integer> {
 
     private final CliRuntime runtime;
+    private final ProjectRuntime projectRuntime;
     @Option(names = "--agent", required = true, paramLabel = "<provider[:model[:effort]]>",
             description = "Agent to start; repeat for several. Example: claude:sonnet:low or codex.")
     private List<String> agents;
@@ -61,7 +67,57 @@ public final class AgentsRunCommand implements Callable<Integer> {
      * @param runtime composed CLI runtime
      */
     public AgentsRunCommand(CliRuntime runtime) {
+        this(runtime, project -> DaemonClient.request("PROJECT_RUNTIME", project, null, false));
+    }
+
+    AgentsRunCommand(CliRuntime runtime, ProjectRuntime projectRuntime) {
         this.runtime = runtime;
+        this.projectRuntime = projectRuntime;
+    }
+
+    /**
+     * The project's runtime, the coordination server that holds its Link sessions, as the installation daemon owns it.
+     */
+    @FunctionalInterface
+    interface ProjectRuntime {
+
+        /**
+         * Returns once the runtime runs, starting the daemon and the runtime when they do not.
+         *
+         * @param project project directory
+         * @throws IOException when the daemon or the runtime cannot be started
+         */
+        void ensure(Path project) throws IOException;
+    }
+
+    /**
+     * Makes sure the project's runtime runs before agents start. A shared project's agents reach the other computer only
+     * through it: without it their log is not replicated, their claims are not checked with that computer, and no
+     * code comes over Link. Nothing else starts it after a reboot, so a shared project refuses to start agents without
+     * it. A role file that cannot be read still marks the project shared. A single computer's agents need nothing
+     * from it, so there it is only reported.
+     *
+     * @param location       project
+     * @param projectRuntime the daemon's runtime of the project
+     * @param terminal       where the outcome is reported
+     * @return whether agents may start
+     */
+    static boolean ensureRuntime(ProjectLocation location, ProjectRuntime projectRuntime, Terminal terminal) {
+        try {
+            projectRuntime.ensure(location.root());
+            terminal.stdout("PROJECT_RUNTIME=READY");
+            return true;
+        } catch (IOException unavailable) {
+            if (Files.exists(location.coordinationDirectory().resolve(ReplicationSettings.FILE))) {
+                terminal.stderr("ERROR=PROJECT_RUNTIME_UNAVAILABLE");
+                terminal.stderr("REASON=" + unavailable.getMessage());
+                terminal.stderr("HINT=this project is shared with another computer, which its agents reach only through the runtime; no agent was started");
+                return false;
+            }
+            terminal.stderr("PROJECT_RUNTIME=UNAVAILABLE");
+            terminal.stderr("PROJECT_RUNTIME_REASON=" + unavailable.getMessage());
+            return true;
+        }
     }
 
     /**
@@ -116,6 +172,9 @@ public final class AgentsRunCommand implements Callable<Integer> {
             return ExitCodes.USAGE;
         } catch (Exception failure) {
             runtime.terminal().stderr("ERROR=PROJECT_NOT_CONFIGURED");
+            return ExitCodes.LOCAL_CONFIGURATION;
+        }
+        if (!ensureRuntime(location, projectRuntime, runtime.terminal())) {
             return ExitCodes.LOCAL_CONFIGURATION;
         }
         Path logDirectory = AdministrativeStateLocator.applicationStateRoot().resolve("agent-runs").resolve(location.projectId().toString()).resolve("run-" + UUID.randomUUID());
