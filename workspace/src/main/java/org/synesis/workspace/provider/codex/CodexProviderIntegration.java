@@ -165,7 +165,6 @@ public final class CodexProviderIntegration implements ProviderIntegration {
         return "^apply_patch$";
     }
 
-
     @Override
     public boolean sharesHookFileWithUser() {
         return true;

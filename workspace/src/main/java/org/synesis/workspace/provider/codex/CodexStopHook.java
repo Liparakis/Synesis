@@ -34,7 +34,10 @@ final class CodexStopHook {
      * A launcher path Codex can run unquoted through any shell it uses (PowerShell, cmd, sh) and that a TOML literal
      * string holds as it is: no space, quote, or shell metacharacter.
      */
-    private static final Pattern PLAIN_PATH = Pattern.compile("[\\p{L}\\p{N}._\\\\/:~+-]+");
+    private static final Pattern PLAIN_PATH = Pattern.compile("[\\p{L}\\p{N}._/:~+-]+");
+
+    /** On Windows the separator is a backslash, which PowerShell and cmd take literally; sh would not. */
+    private static final Pattern PLAIN_WINDOWS_PATH = Pattern.compile("[\\p{L}\\p{N}._\\\\/:~+-]+");
 
     private CodexStopHook() {
     }
@@ -49,7 +52,7 @@ final class CodexStopHook {
      */
     static List<String> arguments(Path launcher, boolean windows) {
         String path = launcher.toAbsolutePath().normalize().toString();
-        if (!PLAIN_PATH.matcher(path).matches()) {
+        if (!(windows ? PLAIN_WINDOWS_PATH : PLAIN_PATH).matcher(path).matches()) {
             return List.of();
         }
         String command = path + " hook codex";

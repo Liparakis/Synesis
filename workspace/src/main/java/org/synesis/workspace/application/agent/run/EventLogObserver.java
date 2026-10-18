@@ -135,6 +135,15 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         java.util.Set<String> laneRequests = store.operatorRequestProjection().all().stream().filter(request -> !request.raisedBySynesis())
                 .map(org.synesis.coordination.domain.operator.OperatorRequest::id).collect(java.util.stream.Collectors.toUnmodifiableSet());
         boolean otherComputerConnected = otherComputerConnected(coordination);
+        // Where the operator closed each request, read once for every agent's question.
+        Map<String, Long> operatorClosings = new HashMap<>();
+        for (int index = 0; index < events.size(); index++) {
+            java.util.Optional<String> closed = events.get(index).type() == org.synesis.coordination.domain.prediction.PredictionEventType.OPERATOR_REQUEST_CLOSED
+                    ? closedRequest(events.get(index)) : java.util.Optional.empty();
+            if (closed.isPresent()) {
+                operatorClosings.put(closed.get(), index + 1L);
+            }
+        }
         return new AgentRunController.Observation() {
 
             @Override
@@ -191,16 +200,10 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                 if (participant == null) {
                     return OptionalLong.empty();
                 }
-                return WorkspaceCollaborationService.laneOf(store, participant).map(lane -> {
-                    java.util.Set<String> asked = store.operatorRequestProjection().all().stream().filter(request -> request.raisedBy().equals(lane.authorityLineageId().toString()))
-                            .map(org.synesis.coordination.domain.operator.OperatorRequest::id).collect(java.util.stream.Collectors.toUnmodifiableSet());
-                    for (int index = events.size() - 1; index >= 0 && !asked.isEmpty(); index--) {
-                        if (events.get(index).type() == org.synesis.coordination.domain.prediction.PredictionEventType.OPERATOR_REQUEST_CLOSED && closes(events.get(index), asked)) {
-                            return OptionalLong.of(index + 1L);
-                        }
-                    }
-                    return OptionalLong.empty();
-                }).orElse(OptionalLong.empty());
+                return WorkspaceCollaborationService.laneOf(store, participant)
+                        .map(lane -> store.operatorRequestProjection().all().stream().filter(request -> request.raisedBy().equals(lane.authorityLineageId().toString()))
+                                .map(request -> operatorClosings.get(request.id())).filter(Objects::nonNull).mapToLong(Long::longValue).max())
+                        .orElse(OptionalLong.empty());
             }
 
             @Override
@@ -294,12 +297,12 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         }
     }
 
-    /** Whether an operator closing names one of these requests. */
-    private static boolean closes(PredictionEvent event, java.util.Set<String> requests) {
+    /** The request an operator closing names, or empty when the payload cannot be read. */
+    private static java.util.Optional<String> closedRequest(PredictionEvent event) {
         try {
-            return requests.contains(org.synesis.coordination.domain.operator.OperatorRequest.closedRequestId(event.payload()));
+            return java.util.Optional.of(org.synesis.coordination.domain.operator.OperatorRequest.closedRequestId(event.payload()));
         } catch (IOException malformed) {
-            return false;
+            return java.util.Optional.empty();
         }
     }
 

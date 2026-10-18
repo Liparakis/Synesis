@@ -28,7 +28,7 @@ import java.util.function.Function;
  */
 public final class ProviderAgentProcesses implements AgentRunController.AgentProcesses {
 
-    private static final java.util.regex.Pattern CMD_OPERATOR = java.util.regex.Pattern.compile("[<>&|^]");
+    private static final java.util.regex.Pattern CMD_QUOTED = java.util.regex.Pattern.compile("[\\s<>&|^]");
 
     private final Path logDirectory;
     private final String pathVariable;
@@ -128,13 +128,22 @@ public final class ProviderAgentProcesses implements AgentRunController.AgentPro
                 }
                 List<String> resolved = new ArrayList<>(command);
                 resolved.set(0, candidate.toAbsolutePath().toString());
-                if (!extension.equals(".exe")) {
-                    // The interpreter reads < > & | ^ outside quotes as its own operators, and the
-                    // runtime quotes an argument only for a space. A Codex hook's trust key holds < and >.
-                    resolved.replaceAll(argument -> CMD_OPERATOR.matcher(argument).find() && !argument.contains("\"") ? "\"" + argument + "\"" : argument);
-                    resolved.addAll(0, List.of("cmd.exe", "/d", "/c"));
+                if (extension.equals(".exe")) {
+                    return resolved;
                 }
-                return resolved;
+                // The interpreter reads < > & | ^ outside quotes as its own operators (a Codex hook's
+                // trust key holds < and >), and /c alone strips the first and last quote of a line that
+                // starts with one, which breaks a shim in a folder with a space. So the line goes as one
+                // argument under /s, which strips only the quotes around it, with each argument that holds
+                // a space or an operator quoted inside it.
+                StringBuilder line = new StringBuilder("\"");
+                for (String argument : resolved) {
+                    if (argument.contains("\"")) {
+                        throw new IOException("a provider argument holds a quote: " + argument);
+                    }
+                    line.append(line.length() == 1 ? "" : " ").append(CMD_QUOTED.matcher(argument).find() ? "\"" + argument + "\"" : argument);
+                }
+                return List.of("cmd.exe", "/d", "/s", "/c", line.append('"').toString());
             }
         }
         throw new IOException("provider executable not found on PATH: " + name);

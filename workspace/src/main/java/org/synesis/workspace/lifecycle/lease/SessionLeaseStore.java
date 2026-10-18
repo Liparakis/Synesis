@@ -177,7 +177,7 @@ public final class SessionLeaseStore {
      * lease checks it.
      *
      * @param pid              process ID of the keeper
-     * @param processStartTime its start time in epoch milliseconds, or -1 when unknown
+     * @param processStartTime its start time in epoch milliseconds
      */
     record KeeperReservation(long pid, long processStartTime) {
     }

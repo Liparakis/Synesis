@@ -176,7 +176,8 @@ public final class AgentRunController {
                         // session, to take the next piece of work, as a Claude agent woken by its Stop
                         // hook for its lane ending does in the same process.
                         boolean laneEnded = agent.heldLaneAtStop && !agent.holdsOpenLane(observation);
-                        boolean fencedLaneWaits = agent.fencedLaneToContinue && agent.holdsOpenLane(observation);
+                        // Only once its end is recorded: the close is what lets its lane be held for continuation.
+                        boolean fencedLaneWaits = agent.fencedLaneToContinue && agent.holdsOpenLane(observation) && !unrecordedEnds.contains(agent.connectionId);
                         if (!agent.resumable(request.maxResumesPerAgent()) || !(laneEnded || agent.holdsOpenLane(observation))) {
                             continue;
                         }
@@ -441,8 +442,9 @@ public final class AgentRunController {
         void ended(String connectionInstanceId);
 
         /**
-         * Records that a connection has ended, as {@link #ended} does, but tries once instead of
-         * waiting. The controller offers an end that could not be recorded again at each observation,
+         * Records that a connection has ended, as {@link #ended} does, but makes one attempt (which may
+         * wait the project lock's two seconds) instead of many. The controller offers an end that could
+         * not be recorded again at each observation,
          * and waits for it when the run ends, so a busy project never leaves the lease of an agent that
          * has ended naming the controller.
          *

@@ -64,6 +64,32 @@ class LeaseKeeperTest {
         }
     }
 
+    /**
+     * A reserved keeper is named only when it is alive, has the reserved start time, and the process opening the lease
+     * descends from it (ADR-0099, 2026-10-18); otherwise the opener names itself, as before.
+     */
+    @Test
+    void aReservationNamingAProcessTheOpenerDoesNotDescendFromOrADeadOneNamesNobody(@TempDir Path temp) throws Exception {
+        Path root = project(temp);
+        long self = ProcessHandle.current().pid();
+        ProcessHandle foreign = foreignProcess();
+        Process child = longLivedChild();
+        try {
+            long foreignStart = foreign.info().startInstant().orElseThrow().toEpochMilli();
+            store.saveKeeper(root, "conn-foreign-keeper", foreign.pid(), foreignStart);
+            assertEquals(self, leases.createOrRenewLease(root, "proj-1", "codex", "conn-foreign-keeper", "node", "sess-1", policy).processIdentity().pid());
+
+            long childStart = child.toHandle().info().startInstant().orElseThrow().toEpochMilli();
+            child.destroyForcibly();
+            child.waitFor(10, TimeUnit.SECONDS);
+            store.saveKeeper(root, "conn-dead-keeper", child.pid(), childStart);
+            assertEquals(self, leases.createOrRenewLease(root, "proj-1", "codex", "conn-dead-keeper", "node", "sess-1", policy).processIdentity().pid());
+        } finally {
+            foreign.destroyForcibly();
+            child.destroyForcibly();
+        }
+    }
+
     @Test
     void aClosedLeaseIsNotReopenedAndAMissingOneIsNotCreated(@TempDir Path temp) throws Exception {
         Path root = project(temp);

@@ -126,26 +126,30 @@ final class HeadlessSessionContractTest {
         ProviderAgentProcesses processes = new ProviderAgentProcesses(temp.resolve("logs"), shims + java.io.File.pathSeparator + binaries, true);
 
         assertEquals(List.of(claude.toAbsolutePath().toString(), "-p"), processes.executable(List.of("claude", "-p")));
-        assertEquals(List.of("cmd.exe", "/d", "/c", codexShim.toAbsolutePath().toString(), "exec"), processes.executable(List.of("codex", "exec")));
+        assertEquals(List.of("cmd.exe", "/d", "/s", "/c", "\"" + codexShim.toAbsolutePath() + " exec\""), processes.executable(List.of("codex", "exec")));
         assertThrows(IOException.class, () -> processes.executable(List.of("gemini")));
 
         ProviderAgentProcesses elsewhere = new ProviderAgentProcesses(temp.resolve("logs"), "", false);
         assertEquals(List.of("codex", "exec"), elsewhere.executable(List.of("codex", "exec")), "other platforms start a script like any executable");
 
         String trust = "hooks.state={'C:\\<session-flags>\\config.toml:stop:0:0'={trusted_hash='sha256:00'}}";
-        assertEquals(List.of("cmd.exe", "/d", "/c", codexShim.toAbsolutePath().toString(), "--config", "\"" + trust + "\""), processes.executable(List.of("codex", "--config", trust)),
+        assertEquals(List.of("cmd.exe", "/d", "/s", "/c", "\"" + codexShim.toAbsolutePath() + " --config \"" + trust + "\"\""), processes.executable(List.of("codex", "--config", trust)),
                 "an argument the interpreter would read as a redirection is quoted");
+        assertThrows(IOException.class, () -> processes.executable(List.of("codex", "say \"hi\"")), "a quote inside an argument would end the line early");
     }
 
-    /** On Windows a script shim receives an argument holding interpreter operators exactly as Synesis built it. */
+    /**
+     * On Windows a script shim in a folder with a space receives arguments holding spaces and interpreter operators
+     * exactly as Synesis built them.
+     */
     @Test
     void aScriptShimOnWindowsReceivesTheHookArgumentsIntact(@TempDir Path temp) throws Exception {
         org.junit.jupiter.api.Assumptions.assumeTrue(System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win"));
-        Path shims = Files.createDirectories(temp.resolve("shims"));
+        Path shims = Files.createDirectories(temp.resolve("my shims"));
         Path javaExecutable = Path.of(System.getProperty("java.home"), "bin", "java.exe");
         Files.writeString(shims.resolve("codex.cmd"), "@\"" + javaExecutable + "\" -cp \"%ECHO_CLASSPATH%\" " + ArgumentEcho.class.getName() + " %*\r\n");
         List<String> arguments = List.of("exec", "--config", "hooks.Stop=[{hooks=[{type='command',command='C:\\synesis\\bin\\synesis.exe hook codex',timeout=660}]}]",
-                "--config", "hooks.state={'C:\\<session-flags>\\config.toml:stop:0:0'={trusted_hash='sha256:49c0'}}", "-");
+                "--config", "hooks.state={'C:\\<session-flags>\\config.toml:stop:0:0'={trusted_hash='sha256:49c0'}}", "--cd", "C:\\a project", "-");
         List<String> command = new java.util.ArrayList<>(List.of("codex"));
         command.addAll(arguments);
 

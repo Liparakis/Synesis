@@ -323,7 +323,9 @@ public final class SessionLeaseService {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(connectionInstanceId, "connectionInstanceId");
         ProcessHandle keeper = ProcessHandle.current();
-        store.saveKeeper(controlRoot, connectionInstanceId, keeper.pid(), keeper.info().startInstant().map(java.time.Instant::toEpochMilli).orElse(-1L));
+        // Without its start time a reused pid could not be told from the keeper, so nothing is reserved.
+        long start = keeper.info().startInstant().map(java.time.Instant::toEpochMilli).orElseThrow(() -> new IOException("keeper start time unknown"));
+        store.saveKeeper(controlRoot, connectionInstanceId, keeper.pid(), start);
     }
 
     /**
@@ -337,12 +339,15 @@ public final class SessionLeaseService {
         store.deleteKeeper(Objects.requireNonNull(controlRoot, "controlRoot"), Objects.requireNonNull(connectionInstanceId, "connectionInstanceId"));
     }
 
-    /** The reserved keeper of a connection, when it is alive and the calling process descends from it. */
+    /**
+     * The reserved keeper of a connection, when it is alive, its start time is the reserved one, and the calling
+     * process descends from it. Any doubt names the caller itself, as before.
+     */
     private Optional<SessionProcessIdentity> reservedKeeper(Path controlRoot, String connectionInstanceId, long now) {
         ProcessHandle self = ProcessHandle.current();
         return store.loadKeeper(controlRoot, connectionInstanceId)
                 .flatMap(reserved -> ProcessHandle.of(reserved.pid())
-                        .filter(keeper -> keeper.isAlive() && keeper.info().startInstant().map(java.time.Instant::toEpochMilli).map(start -> start == reserved.processStartTime()).orElse(true)))
+                        .filter(keeper -> keeper.isAlive() && keeper.info().startInstant().map(java.time.Instant::toEpochMilli).map(start -> start == reserved.processStartTime()).orElse(false)))
                 .filter(keeper -> keeper.pid() == self.pid() || keeper.descendants().anyMatch(descendant -> descendant.pid() == self.pid()))
                 .map(keeper -> identityOf(keeper, now, UUID.randomUUID().toString()));
     }
