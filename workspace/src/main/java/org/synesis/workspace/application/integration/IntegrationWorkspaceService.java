@@ -249,20 +249,28 @@ public final class IntegrationWorkspaceService {
     }
 
     /**
-     * Gives a combine lane's worktree both versions to combine (ADR-0098 step 5, designer item 22): the worktree is
-     * moved to the commit the advance could not be merged onto, the advance is merged in without committing, Git's
-     * conflict markers stay in the files, and the index is reset to the base so the agent's change is everything it
-     * finishes with. A marker records the combine, so a repeated call after a crash leaves the worktree as it is.
+     * Gives a combine lane's worktree both versions to combine (ADR-0098 step 5, designer items 22 and 26): the
+     * session's branch is moved to the commit the advance could not be merged onto, the advance is merged in without
+     * committing, Git's conflict markers stay in the files, and the index is reset to the base so the agent's change is
+     * everything it finishes with. The branch is moved, not HEAD detached, so the worktree stays the session's by
+     * every check its binding is verified with (s5-run8). Only a worktree still at the commit it was made at is moved,
+     * so no commit of its own is left behind. A marker records the combine, so a repeated call after a crash leaves the
+     * worktree as it is.
      *
      * @param controlRoot the control checkout, whose repository holds both versions
      * @param worktree    the combine lane's worktree, clean apart from Synesis's own files
+     * @param branch      the session's branch, which the worktree must be on
+     * @param head        the commit the worktree was made at, which it must still be at
      * @param combine     the combine
-     * @throws IOException when the worktree is not clean, belongs to another combine, or Git fails
+     * @throws IOException when the worktree is not clean, not on {@code branch} at {@code head}, belongs to another
+     *                     combine, or Git fails
      */
-    public void materializeCombineRepresentation(Path controlRoot, Path worktree, org.synesis.coordination.domain.task.CombinePayload combine)
-            throws IOException {
+    public void materializeCombineRepresentation(Path controlRoot, Path worktree, String branch, String head,
+            org.synesis.coordination.domain.task.CombinePayload combine) throws IOException {
         Objects.requireNonNull(controlRoot, "controlRoot");
         Objects.requireNonNull(worktree, "worktree");
+        Objects.requireNonNull(branch, "branch");
+        Objects.requireNonNull(head, "head");
         Objects.requireNonNull(combine, "combine");
         Path target = worktree.toAbsolutePath().normalize();
         if (!Files.isDirectory(target) || !Files.exists(target.resolve(".git")) || target.equals(controlRoot.toAbsolutePath().normalize())) {
@@ -281,7 +289,13 @@ public final class IntegrationWorkspaceService {
         if (!unmanagedChanges.isEmpty()) {
             throw new IOException("COMBINE_TARGET_DIRTY:" + unmanagedChanges.getFirst());
         }
-        GitProcessRunner.run(target, "checkout", "-q", "--detach", combine.base());
+        if (!branch.equals(GitProcessRunner.runOptional(target, "symbolic-ref", "-q", "--short", "HEAD").trim())) {
+            throw new IOException("COMBINE_WORKTREE_INVALID");
+        }
+        if (!head.equals(GitProcessRunner.run(target, "rev-parse", "HEAD").trim())) {
+            throw new IOException("COMBINE_WORKTREE_HAS_COMMITS");
+        }
+        GitProcessRunner.run(target, "checkout", "-q", "-B", branch, combine.base());
         writeRepairMarker(marker, expectedMarker);
         try {
             GitProcessRunner.run(target, "merge", "--no-ff", "--no-commit", combine.theirs());

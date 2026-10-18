@@ -18,6 +18,8 @@ import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
+import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 
 /**
  * Who may take a combine lane, and taking it (ADR-0098 step 5, designer item 22; ADR-0100 "The combine lane"). A
@@ -91,22 +93,21 @@ public final class CombineLaneJoin {
     /**
      * Takes a combine lane: an ordinary producer lane in the combine's work group, on its task, at the commit the
      * advance could not be merged onto, claiming the combined lanes' paths. The session's worktree is moved to that
-     * commit and given both versions with Git's conflict markers left in. A repeated call returns the lane it opened.
+     * commit, on its own branch, and given both versions with Git's conflict markers left in; its binding records that
+     * commit as its base. A repeated call returns the lane it opened.
      *
      * @param store       current projection
      * @param identity    this computer
-     * @param projectId   the project
-     * @param controlRoot the control checkout
-     * @param worktree    the session's worktree
+     * @param location    the project
+     * @param binding     the session's binding
      * @param participant the session's participant handle
-     * @param sessionId   the session
-     * @param provider    the session's provider
      * @param combine     the combine
      * @return the claim result
      * @throws Exception when the combine may not be taken, the worktree cannot be prepared, or the lane is refused
      */
-    static ClaimResult join(PredictionEventStore store, NodeIdentity identity, UUID projectId, Path controlRoot, Path worktree,
-            String participant, String sessionId, String provider, CombinePayload combine) throws Exception {
+    static ClaimResult join(PredictionEventStore store, NodeIdentity identity, ProjectLocation location, ProviderSessionBindingService.Binding binding,
+            String participant, CombinePayload combine) throws Exception {
+        String sessionId = binding.sessionId();
         UUID targetId = laneId(combine, sessionId);
         Optional<WorkIntent> existing = store.collaborationProjection().intent(targetId);
         if (existing.isPresent()) {
@@ -125,12 +126,15 @@ public final class CombineLaneJoin {
             snapshot.provenance().claimSelectors().forEach(encoded -> ResourceSelector.parse(encoded).ifPresent(claims::add));
         }
         // The worktree first: a lane is never announced without both versions in place, and a repeated call after a
-        // crash finds the worktree already prepared.
-        new IntegrationWorkspaceService().materializeCombineRepresentation(controlRoot, worktree, combine);
+        // crash finds the worktree already prepared. Then its binding, so the worktree is judged against the combine's
+        // base and not against this computer's main (s5-run8).
+        new IntegrationWorkspaceService().materializeCombineRepresentation(location.root(), Path.of(binding.worktreePath()), binding.branch(), binding.baseCommit(),
+                combine);
+        new ProviderSessionBindingService().recordCombineBase(location, binding, combine.base());
         WorkIntent target = new WorkIntent(targetId,
-                projectId,
+                location.projectId(),
                 participant,
-                provider,
+                binding.provider(),
                 combine.taskId(),
                 "Combine the work of " + String.join(", ", combine.snapshotIds()) + " with the other copy of main",
                 "One change that holds both versions, with no conflict markers left; its authors ("
@@ -145,6 +149,20 @@ public final class CombineLaneJoin {
                 List.of(),
                 List.of());
         return new WorkIntentService(store, identity).announce(target);
+    }
+
+    /**
+     * The base of the combine lane a session holds open (ADR-0098 step 5, designer item 26): its worktree is judged
+     * against this commit, the other copy of {@code main}, instead of this computer's control head.
+     *
+     * @param store     current projection
+     * @param sessionId the session
+     * @return the combine's base, or empty when the session holds no open combine lane
+     */
+    public static Optional<String> heldBase(PredictionEventStore store, String sessionId) {
+        return store.taskCompletionProjection().combines().stream()
+                .filter(combine -> store.collaborationProjection().intent(laneId(combine, sessionId)).filter(lane -> lane.status() == WorkIntent.Status.ANNOUNCED).isPresent())
+                .map(CombinePayload::base).reduce((older, newer) -> newer);
     }
 
     /**

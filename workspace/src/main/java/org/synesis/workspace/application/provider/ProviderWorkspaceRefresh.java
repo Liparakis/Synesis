@@ -20,6 +20,7 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 import static org.synesis.workspace.application.provider.ProviderBindingFile.read;
 import static org.synesis.workspace.application.provider.ProviderBindingFile.write;
+import static org.synesis.workspace.application.provider.ProviderSessionCoordinationFacts.atJudgedBase;
 import static org.synesis.workspace.application.provider.ProviderSessionCoordinationFacts.hasActiveManagedAttachment;
 import static org.synesis.workspace.application.provider.ProviderWorkspaceVerification.verifyWorkspace;
 import static org.synesis.workspace.application.provider.ProviderWorktreeAllocation.withWorktree;
@@ -48,7 +49,7 @@ final class ProviderWorkspaceRefresh {
         }
         try {
             Path worker = Path.of(binding.worktreePath());
-            return Files.isDirectory(worker) && binding.baseCommit().equals(currentCommit(worker)) && binding.baseCommit().equals(currentCommit(location.root()));
+            return Files.isDirectory(worker) && binding.baseCommit().equals(currentCommit(worker)) && atJudgedBase(location, binding, currentCommit(location.root()));
         } catch (Exception failure) {
             return false;
         }

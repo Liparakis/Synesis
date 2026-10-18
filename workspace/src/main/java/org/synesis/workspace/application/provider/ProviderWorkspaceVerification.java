@@ -19,6 +19,7 @@ import static org.synesis.workspace.application.provider.ProviderBindingFile.req
 import static org.synesis.workspace.application.provider.ProviderBindingFile.sessionsDirectory;
 import static org.synesis.workspace.application.provider.ProviderBindingFile.write;
 import static org.synesis.workspace.application.provider.ProviderBindingFile.writeText;
+import static org.synesis.workspace.application.provider.ProviderSessionCoordinationFacts.atJudgedBase;
 import static org.synesis.workspace.application.provider.ProviderSessionCoordinationFacts.hasActiveManagedAttachment;
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.git;
 import static org.synesis.workspace.application.provider.ProviderWorktreeGitFacts.isBaseAncestor;
@@ -104,7 +105,7 @@ final class ProviderWorkspaceVerification {
             if (!binding.baseCommit().equals(currentWorkerHead) && (!allowCommittedGeneration || !isWorktreeClean(binding))) {
                 return new WorkspaceCheck(false, "WORKSPACE_GENERATION_MISMATCH");
             }
-            if (requireCurrentControlBase && !binding.baseCommit().equals(git(root, "rev-parse", "HEAD"))) {
+            if (requireCurrentControlBase && !atJudgedBase(location, binding, git(root, "rev-parse", "HEAD"))) {
                 return new WorkspaceCheck(false, "CONTROL_BASE_ADVANCED");
             }
             return new WorkspaceCheck(true, "WORKSPACE_VERIFIED");

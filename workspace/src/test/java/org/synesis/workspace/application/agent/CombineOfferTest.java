@@ -29,6 +29,9 @@ import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.agent.session.AgentSessionService;
+import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.agent.completion.CompleteTaskRequest;
 import org.synesis.workspace.application.agent.run.EventLogObserver;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
@@ -210,6 +213,27 @@ final class CombineOfferTest {
         assertTrue(events(PredictionEventType.CONTROL_BRANCH_ADVANCED).stream().noneMatch(event -> names(event, snapshot.snapshotId())));
         assertEquals(fixture.base, TestGit.output(fixture.root, "rev-parse", "HEAD"), "main did not move");
         assertEquals("other\n", Files.readString(fixture.root.resolve(CombineFixture.FILE)).replace("\r\n", "\n"));
+    }
+
+    @Test
+    void anAgentCombinesAndFinishesWhileThisComputersMainIsTheOtherCopy() throws Exception {
+        String ownMain = fixture.divergeThisCopyOfMain();
+        String apart = "combine-apart";
+        fixture.session(apart);
+        fixture.collaboration.joinRepair(fixture.root, CombineFixture.PROVIDER, apart, fixture.authorLane.intentId(), fixture.authorSnapshot.snapshotId());
+        AgentResponse ready = new AgentSessionService().ensureSession(new SessionResolutionRequest(fixture.root, CombineFixture.PROVIDER, apart, null, false));
+        assertEquals(AgentStatus.READY, ready.status(), "s5-run8 answered WORKSPACE_STALE_DIRTY: " + ready.toJson());
+        Path worktree = Path.of(fixture.binding(apart).worktreePath());
+        Files.writeString(worktree.resolve(CombineFixture.FILE), "both\n");
+
+        AgentResponse finished = new AgentTaskCompletionService().completeTask(new CompleteTaskRequest(fixture.root, CombineFixture.PROVIDER, apart, "combined both versions"));
+
+        List<TaskSnapshotRecord> made = fixture.store().taskCompletionProjection().allSnapshots().stream().filter(snapshot -> snapshot.taskId().equals(fixture.combine.taskId())).toList();
+        assertEquals(1, made.size(), "finishing created the combine's snapshot; the response was " + finished.toJson());
+        assertEquals(fixture.combine.base(), made.getFirst().baseCommit());
+        assertEquals(List.of(CombineFixture.FILE), made.getFirst().changedPaths());
+        assertEquals("both", TestGit.output(fixture.root, "show", made.getFirst().commitSha() + ":" + CombineFixture.FILE).trim());
+        assertEquals(ownMain, TestGit.output(fixture.root, "rev-parse", "HEAD"), "this computer's main did not move");
     }
 
     private static boolean names(PredictionEvent event, String snapshotId) {

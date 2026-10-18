@@ -1042,6 +1042,29 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     - *Not covered:* a log already written with ordinary lanes in a combine's group (this run's) stays stuck; and an
       ordinary lane merged onto this computer's `main` while its re-merge waits for a combine moves the head the
       re-merge started from (untested).
+26. **A combine lane judged against the wrong `main`** (s5-run8, 2026-10-18: PC and VM partitioned for 20 minutes right
+    after the join; apart, each computer finished the goal, PC `main` 90570ed, VM `main` fefbe78). After the heal the
+    PC, the higher node ID, re-merged onto the VM's copy; its primes advance (`snap_7e60ae27…`) met the VM's primes,
+    so it wrote `COMBINE_REQUIRED` with base fefbe78. A fresh PC agent took the combine (item 22): the join moved its
+    worktree to fefbe78 with HEAD detached and left the markers in, but its binding still named the session's branch
+    and the PC's `main` (90570ed) as its base. Every later call was answered `workspace_stale` (no branch, a HEAD that
+    is not the binding's base, a base that is not this computer's `main`), and `ensure_session` tried to refresh a
+    dirty worktree onto 90570ed and refused `WORKSPACE_STALE_DIRTY`; the agent asked for a person after 68 s. The
+    s5-run7 combine never reached this: its join was refused (item 25) and the agent worked in an ordinary lane at the
+    VM's own `main`, so no worktree had been moved yet in a real run. **Rule:** a combine lane's worktree is judged
+    against the combine's base, not this computer's `main`. The join moves the session's own branch to that base
+    instead of detaching HEAD, and only a worktree still on its branch at its recorded base is moved
+    (`COMBINE_WORKTREE_HAS_COMMITS`); then it records that base in the session's binding, so a refused move leaves the
+    binding as it was, and the branch, ancestry and generation checks hold as for any lane. Where every other lane
+    must be based at this computer's control head, a session's binding may instead be based at the base of the
+    combine lane that session holds open (`ProviderSessionCoordinationFacts.atJudgedBase`); unreadable coordination
+    state answers with the control head alone. Its markers are then the lane's own uncommitted work, not a stale
+    worktree to refresh, and the agent reads, edits, runs commands and finishes there. Once the lane ends, the
+    session's next `ensure_session` gives it a fresh worktree at this computer's `main`.
+    - *Not covered:* a crash after the worktree is prepared and before its binding and lane are written leaves a
+      moved, dirty worktree with no lane, which `ensure_session` cannot refresh (as a crash before the announcement
+      did before this rule); a combine lane continued or taken over by another session; and the re-merge's use of a
+      combine snapshot whose base is the other copy's `main` is still untested in a real run.
 
 ### Step 6: Membership in the owner's log
 

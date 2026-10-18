@@ -214,8 +214,7 @@ final class WorkIntentAnnouncement {
         // (ADR-0098 step 5, designer item 22).
         java.util.Optional<org.synesis.coordination.domain.task.CombinePayload> combine = CombineLaneJoin.openFor(store, snapshotId, binding.sessionId());
         if (combine.isPresent()) {
-            return CombineLaneJoin.join(store, identity, location.projectId(), location.root(), Path.of(binding.worktreePath()),
-                    participantHandle(binding.sessionId()), binding.sessionId(), provider, combine.get());
+            return CombineLaneJoin.join(store, identity, location, binding, participantHandle(binding.sessionId()), combine.get());
         }
         // A combined snapshot is integrated and its lane ended, so the repair path below can only fail, and naming
         // that lane as not found hid why (s5-run7).

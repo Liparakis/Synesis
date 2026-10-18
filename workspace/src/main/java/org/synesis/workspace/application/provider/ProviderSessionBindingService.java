@@ -212,6 +212,35 @@ public final class ProviderSessionBindingService {
     }
 
     /**
+     * Records that a session's worktree was moved to the base of the combine lane it takes (ADR-0098 step 5, designer
+     * item 26): while the lane is open the worktree is judged against that base, the other copy of {@code main}, and
+     * not against this computer's control head. Written only once the worktree is there, so a refused move leaves the
+     * binding as it was; a repeated call changes nothing.
+     *
+     * @param location initialized project location
+     * @param binding  the session's binding
+     * @param base     the combine's base, where the worktree now is
+     * @throws BindingException when the binding is not bound to a worktree at {@code base}
+     */
+    public synchronized void recordCombineBase(ProjectLocation location, Binding binding, String base) throws BindingException {
+        try {
+            Path bindingPath = bindingPath(location, binding.provider(), binding.providerInstanceFingerprint());
+            Binding current = read(bindingPath);
+            if (!current.sessionId().equals(binding.sessionId()) || current.state() != ProviderBindingStatus.BOUND || current.worktreePath() == null
+                    || !base.equals(currentCommit(Path.of(current.worktreePath())))) {
+                throw new BindingException("COMBINE_BINDING_NOT_READY", "The session's worktree is not at the combine's base");
+            }
+            if (!current.baseCommit().equals(base)) {
+                persist(bindingPath, current.withBaseCommit(base));
+            }
+        } catch (BindingException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new BindingException("SESSION_BINDING_FAILED", "Could not record the combine's base", failure);
+        }
+    }
+
+    /**
      * Normalizes the caller's connection evidence (trimmed, or the project/provider fallback nonce
      * when absent) and hashes it into the fingerprint that names the binding file.
      */
@@ -811,6 +840,11 @@ public final class ProviderSessionBindingService {
         Binding withWorktreeVerification(String controlCheckoutPath, String gitCommonDir, boolean verified, String trustState) {
             return withWorkspace(SCHEMA_VERSION, worktreeId, worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir, "ALLOCATED", verified ? "VERIFIED" : "UNVERIFIED",
                     verified ? "WORKTREE_VERIFIED" : "WORKTREE_NOT_REGISTERED", null, System.currentTimeMillis(), trustState);
+        }
+
+        Binding withBaseCommit(String newBaseCommit) {
+            return withWorkspace(schemaVersion, worktreeId, worktreePath, controlCheckoutPath, branch, newBaseCommit, gitCommonDir, creationState, verificationState, lastSeenState, lastSeenDetail,
+                    System.currentTimeMillis(), providerTrustState);
         }
 
         Binding withVerifiedWorkspaceTrust(long verifiedAt) {

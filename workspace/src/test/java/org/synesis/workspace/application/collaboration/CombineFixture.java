@@ -176,6 +176,21 @@ public final class CombineFixture {
     }
 
     /**
+     * Moves this computer's {@code main} off the combine's base, as a real re-merge finds it (s5-run8): the two copies
+     * of {@code main} diverged, and the combine's base is the other copy's, not this computer's control head.
+     *
+     * @return this computer's new control head
+     * @throws Exception when Git fails
+     */
+    public String divergeThisCopyOfMain() throws Exception {
+        TestGit.run(root, "reset", "-q", "--hard", "HEAD~1");
+        Files.writeString(root.resolve("src/own.txt"), "own\n");
+        TestGit.run(root, "add", "src/own.txt");
+        TestGit.run(root, "commit", "-q", "-m", "this copy of main");
+        return TestGit.output(root, "rev-parse", "HEAD");
+    }
+
+    /**
      * Ensures a session of this project.
      *
      * @param connection connection instance
