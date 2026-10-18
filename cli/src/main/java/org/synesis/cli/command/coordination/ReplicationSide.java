@@ -195,24 +195,25 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
         if (code != null) {
             created.whenPulled(code::mainMayHaveMoved);
         }
+        // The leader side and the member side relay through one loopback server and record one endpoint file, so
+        // the leader side is retired first: closed afterwards, it removed the file the member had just recorded, and
+        // this computer's agents then found no coordination server (PC + VM run of 2026-10-18).
+        if (mergeDriver != null) {
+            mergeDriver.close();
+            mergeDriver = null;
+        }
+        if (leader != null) {
+            leader.close();
+            leader = null;
+        }
         try {
             created.serve(server);
         } catch (IOException | RuntimeException failed) {
             created.close();
             throw failed;
         }
-        LeaderReplication retiredLeader = leader;
-        MergeDriver retiredMerge = mergeDriver;
         leaderNodeId = leaderNode;
         member = created;
-        leader = null;
-        mergeDriver = null;
-        if (retiredMerge != null) {
-            retiredMerge.close();
-        }
-        if (retiredLeader != null) {
-            retiredLeader.close();
-        }
     }
 
     @Override

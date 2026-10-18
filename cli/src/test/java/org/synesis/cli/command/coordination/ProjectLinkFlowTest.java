@@ -34,6 +34,7 @@ import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.persistence.LoopbackExchange;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.replication.LeaderReplication;
@@ -165,6 +166,8 @@ final class ProjectLinkFlowTest {
             serverRef.set(server);
             if (member != null) {
                 member.serve(server);
+            } else if (leader != null) {
+                leader.serve(server);
             }
             side.serveCode(server);
             this.endpoint = URI.create("http://127.0.0.1:" + server.address().getPort());
@@ -469,6 +472,8 @@ final class ProjectLinkFlowTest {
         assertEquals(ownerHead, GitProcessRunner.run(joined, "rev-parse", "HEAD").strip(), "the friend's copy holds the owner's head");
         assertEquals(ownerBranch, GitProcessRunner.run(joined, "symbolic-ref", "--short", "HEAD").strip(), "under the owner's branch name");
         assertEquals("the owner's work\n", Files.readString(joined.resolve("board.txt")).replace("\r\n", "\n"));
+        assertTrue(Files.isRegularFile(joined.resolve(".synesis/coordination").resolve(LoopbackExchange.ENDPOINT_FILE)),
+                "the friend's agents can still find their computer's server after it became a member");
     }
 
     @Test
