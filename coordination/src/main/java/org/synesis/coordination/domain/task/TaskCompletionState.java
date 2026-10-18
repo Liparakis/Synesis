@@ -71,7 +71,8 @@ public enum TaskCompletionState {
 
     /**
      * Two reviewers recorded different verdicts on the snapshot, each on its own computer (ADR-0100 row 4). It counts
-     * as rejected until one of them records a new verdict, so it is not integrated and its lane owes a correction.
+     * as rejected, so it is not integrated and its lane owes a correction. A reviewer replacing its own verdict, which
+     * would end the dispute, comes with ADR-0098 step 7; until then the author publishes a new revision.
      */
     REVIEW_DISPUTED("review_disputed"),
 

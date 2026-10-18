@@ -96,11 +96,11 @@ public final class PredictionEventStore implements ProjectionView {
     /**
      * The order in which entries took effect here.
      */
-    private final AppliedOrder order;
+    private AppliedOrder order;
     /**
      * Every projection of this copy, and how an entry is judged and applied.
      */
-    private final Projections projections;
+    private Projections projections;
     /**
      * Entries that took effect, in local order: the entry at index {@code n} has local revision {@code n + 1}.
      */
@@ -240,8 +240,14 @@ public final class PredictionEventStore implements ProjectionView {
                     }
                     continue;
                 }
-                order.append(List.of(new AppliedOrder.Line(AppliedOrder.SELF, sequence, "")));
-                take(AppliedOrder.SELF, event);
+                try {
+                    order.append(List.of(new AppliedOrder.Line(AppliedOrder.SELF, sequence, "")));
+                    take(AppliedOrder.SELF, event);
+                } catch (IOException | RuntimeException failed) {
+                    // The entry is placed; whether its line or its effect made it, the disk decides on reload.
+                    forgetAndReload();
+                    throw failed;
+                }
                 faultAt(AppendBoundary.AFTER_PROJECTION);
                 return event;
             }
@@ -323,20 +329,27 @@ public final class PredictionEventStore implements ProjectionView {
                         pending.put(peer.getKey(), copy.subList(from, Math.min(copy.size(), from + ARRIVALS_PER_ROUND)));
                     }
                 }
-                ArrivalOrder.Round round = ArrivalOrder.take(projections, pending,
-                        role.isMember() ? role.leaderNodeId() : null, events.size());
                 List<AppliedOrder.Line> lines = new ArrayList<>();
-                for (ArrivalOrder.Taken entry : round.taken()) {
-                    lines.add(new AppliedOrder.Line(entry.log(), entry.event().sequence(), entry.code()));
-                    // Applied to the projections by the round; what is left is the bookkeeping.
-                    if (entry.code().isEmpty()) {
-                        events.add(entry.event());
-                    } else {
-                        voided.add(lines.getLast());
+                ArrivalOrder.Round round;
+                try {
+                    round = ArrivalOrder.take(projections, pending, role.isMember() ? role.leaderNodeId() : null,
+                            events.size());
+                    for (ArrivalOrder.Taken entry : round.taken()) {
+                        lines.add(new AppliedOrder.Line(entry.log(), entry.event().sequence(), entry.code()));
+                        // Applied to the projections by the round; what is left is the bookkeeping.
+                        if (entry.code().isEmpty()) {
+                            events.add(entry.event());
+                        } else {
+                            voided.add(lines.getLast());
+                        }
+                        taken.put(entry.log(), entry.event().sequence());
                     }
-                    taken.put(entry.log(), entry.event().sequence());
+                    order.append(lines);
+                } catch (IOException | RuntimeException failed) {
+                    // Applied in memory and not recorded, or recorded in part: only the disk is the truth.
+                    forgetAndReload();
+                    throw failed;
                 }
-                order.append(lines);
                 waiting = round.waiting();
                 total += lines.size();
                 if (lines.isEmpty() || !morePending()) {
@@ -461,6 +474,51 @@ public final class PredictionEventStore implements ProjectionView {
      * @throws GeneralSecurityException when signing or signature verification fails
      */
     private void refresh() throws IOException, GeneralSecurityException {
+        try {
+            catchUpWithDisk();
+        } catch (IOException | GeneralSecurityException | RuntimeException failed) {
+            // A line half applied would leave the projections ahead of what this instance counts.
+            forgetState();
+            throw failed;
+        }
+    }
+
+    /**
+     * Brings this instance up to every line written by any process of this computer, as an open would. A
+     * long-lived instance, such as the coordination server's, calls it before reading the projections.
+     *
+     * @throws IOException              when the logs or the order cannot be read
+     * @throws GeneralSecurityException when a signature cannot be checked
+     */
+    public synchronized void catchUp() throws IOException, GeneralSecurityException {
+        refresh();
+    }
+
+    /**
+     * Forgets everything applied in memory and reads it again from disk: what is on disk is the only truth after a
+     * failure part way through applying.
+     */
+    private void forgetAndReload() {
+        forgetState();
+        try {
+            catchUpWithDisk();
+        } catch (IOException | GeneralSecurityException | RuntimeException unreadable) {
+            // The next call reads again from nothing and reports what it finds.
+            forgetState();
+        }
+    }
+
+    private void forgetState() {
+        projections = new Projections(new ProjectId(projectId));
+        order = new AppliedOrder(rootDirectory);
+        events.clear();
+        voided.clear();
+        taken.clear();
+        unlinedOwn = 0;
+        waiting = List.of();
+    }
+
+    private void catchUpWithDisk() throws IOException, GeneralSecurityException {
         List<PredictionEvent> ownEntries;
         do {
             readLines();
@@ -526,6 +584,8 @@ public final class PredictionEventStore implements ProjectionView {
         if (line.applied()) {
             take(line.log(), event);
         } else {
+            // What the entry would have opened is ended here, as it was when the entry was first judged.
+            projections.collaborationProjection().countedForNothing(event);
             voided.add(line);
             taken.put(line.log(), line.sequence());
         }

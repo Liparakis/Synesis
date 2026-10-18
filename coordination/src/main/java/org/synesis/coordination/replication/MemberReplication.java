@@ -80,7 +80,7 @@ public final class MemberReplication implements AutoCloseable {
         this.root = CoordinationNullException.requireNonNull(root, "root");
         CoordinationNullException.requireNonNull(projectId, "project ID");
         this.leaderNodeId = CoordinationNullException.requireNonNull(leaderNodeId, "leader node ID");
-        this.exchange = new LogExchange(root, projectId, leaderNodeId::equals, () -> {
+        this.exchange = new LogExchange(root, projectId, leaderNodeId::equals, log -> true, () -> {
         });
         exchange.watch((node, next) -> setState(switch (next) {
             case CONNECTED -> State.CONNECTED;

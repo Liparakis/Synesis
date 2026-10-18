@@ -708,12 +708,14 @@ Decided while building step 4 (designer, 2026-10-18; each open to the owner):
     append, as today; on arrival both stand. Every reviewer accepted gives `REVIEW_ACCEPTED`, every one rejected
     `REVIEW_REJECTED`, and different verdicts `REVIEW_DISPUTED` (a new state, counted as refused, so it is never
     merged). An integration written by the owner's computer stands over any verdict, and a validation refusal over
-    every verdict but an integration, so the final state does not depend on which arrived first.
+    every verdict but an integration, so the final state does not depend on which arrived first. Ending a dispute by
+    a reviewer's new verdict comes with step 7; until then the author publishes a new revision.
 18. **Known order dependence left for later** (rare, and each needs a design of its own): a participant's lifecycle
     when its own computer and a taker both write about it (suspended against detached, ADR-0100 doubt on lifecycle
     states); two prediction steps that are siblings (`ACCEPTED_EXACT` against `CONTRACT_REVISED`) or two terminal
     steps; two revisions of one contract number; a capability request whose requester was continued on another
-    computer before the request arrived. Each applies without throwing; which of the two stands depends on the
+    computer before the request arrived; two takers of one lane on computers apart (both successors stand, but which
+    one the old lane's review requests follow depends on the order; step 7). Each applies without throwing; which of the two stands depends on the
     order.
 19. **The claim lock, made exact.** Item 4 alone lets two claims both stand: B asks A before A has claimed, A then
     claims and asks B while B's check still runs, and B's node is the higher, so A is not refused, and neither is B.
@@ -729,13 +731,17 @@ Decided while building step 4 (designer, 2026-10-18; each open to the owner):
     event stream and the conversation cursors count local revisions. The legacy `synesis events follow` stream
     still names each entry by its own log's sequence, so in a shared project its cursor is per log; it is left for
     later with that limit.
+21. **Whose logs are copied.** A signature proves who wrote an entry, not that the writer belongs to the project. The
+    owner's computer copies only the logs of the members its settings name; a member copies every log the owner's
+    computer serves, until membership is in the owner's log (step 6). An arriving entry that would have opened a lane
+    and counted for nothing ends that lane here, so the rest of its log does not wait for it for ever.
 
 Built on 2026-10-18 (branch `claude/adr-0098-step4-own-log-68db50`, source-level evidence only: no PC and VM run
-yet, so the done-when below is NOT REACHED): items 1 to 7 and 9 to 20, with the order-free rules, the property test
+yet, so the done-when below is NOT REACHED): items 1 to 21, with the order-free rules, the property test
 over three computers, and the claim lock. `synesis log problems` is `synesis coordination status`, which prints a
 `LOG_COPY=<node> <head>` line per copy and a `LOG_PROBLEM=` line per entry that counted for nothing or waits. Not
-built: the UI showing overlaps, disputes and problems; the order dependence of item 18; item 8 lands with the
-merge of step 3 (this branch sets 8 directly).
+built: the UI showing overlaps, disputes and problems; the order dependence of item 18. Item 8 is built: this branch sets
+compatibility 8 directly, and 7 comes with the merge of step 3.
 
 ### Step 5: Each computer merges its own lanes
 

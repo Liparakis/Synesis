@@ -92,6 +92,7 @@ public final class LogExchange implements AutoCloseable {
     private final Path root;
     private final UUID projectId;
     private final Predicate<String> admitted;
+    private final Predicate<String> copied;
     private final Runnable afterArrivals;
     private final Map<String, PeerSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, State> states = new ConcurrentHashMap<>();
@@ -105,6 +106,10 @@ public final class LogExchange implements AutoCloseable {
      * agent's process has its answer; meanwhile it must not count against the claim it gave way to.
      */
     private final Set<WorkIntentId> yielded = ConcurrentHashMap.newKeySet();
+    /** This computer's own claims whose check ended and that stand. */
+    private final Set<WorkIntentId> confirmed = ConcurrentHashMap.newKeySet();
+    /** The lanes active when this exchange started: their checks, if any, ended before it. */
+    private volatile Set<WorkIntentId> standingAtStart;
     private final ExecutorService requests = Executors.newCachedThreadPool(daemon("synesis-log-exchange-serve"));
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(
             daemon("synesis-log-exchange"));
@@ -119,18 +124,25 @@ public final class LogExchange implements AutoCloseable {
      * @param root          this computer's coordination folder
      * @param projectId     the project
      * @param admitted      whether a node may pull from and be pulled by this computer, read for every request
+     * @param copied        whether this computer keeps a copy of a node's log: on the owner's computer only its
+     *                      members' (a signature proves who wrote an entry, not that the writer belongs to the
+     *                      project); on a member every log the owner's computer serves, until membership is in the
+     *                      owner's log (ADR-0098 step 6)
      * @param afterArrivals called on the exchange thread after entries of another computer arrived, so the owner's
      *                      computer can act on them without an agent of its own (the merge driver); it must not block
      */
-    public LogExchange(Path root, UUID projectId, Predicate<String> admitted, Runnable afterArrivals) {
+    public LogExchange(Path root, UUID projectId, Predicate<String> admitted, Predicate<String> copied,
+            Runnable afterArrivals) {
         this.root = CoordinationNullException.requireNonNull(root, "root");
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.admitted = CoordinationNullException.requireNonNull(admitted, "admitted");
+        this.copied = CoordinationNullException.requireNonNull(copied, "copied");
         this.afterArrivals = CoordinationNullException.requireNonNull(afterArrivals, "afterArrivals");
         worker.scheduleWithFixedDelay(this::pullAll, PULL_INTERVAL_SECONDS, PULL_INTERVAL_SECONDS, TimeUnit.SECONDS);
         worker.scheduleWithFixedDelay(this::noticeAll, NOTICE_CHECK_MILLIS, NOTICE_CHECK_MILLIS,
                 TimeUnit.MILLISECONDS);
         worker.execute(this::takeWaiting);
+        worker.execute(this::rememberStandingLanes);
     }
 
     /**
@@ -259,8 +271,8 @@ public final class LogExchange implements AutoCloseable {
         if (claim == null || !seen.project().equals(projectId)) {
             return ReplicationCodec.encode(new ReplicationMessage.ClaimAnswer(""));
         }
-        Checking mine = new Checking(claim.selectors());
-        checking.put(claim.identity(), mine);
+        // A question about this claim may have arrived between its append and now, and marked it already.
+        Checking mine = checking.computeIfAbsent(claim.identity(), id -> new Checking(claim.selectors()));
         try {
             byte[] question = ReplicationCodec.encode(seen);
             Map<String, CompletableFuture<byte[]>> asked = new LinkedHashMap<>();
@@ -292,7 +304,9 @@ public final class LogExchange implements AutoCloseable {
             if (mine.lost) {
                 verdict = OVERLAPPING_CLAIM;
             }
-            if (!verdict.isEmpty()) {
+            if (verdict.isEmpty()) {
+                confirmed.add(claim.identity());
+            } else {
                 yielded.add(claim.identity());
             }
             return ReplicationCodec.encode(new ReplicationMessage.ClaimAnswer(verdict));
@@ -322,25 +336,50 @@ public final class LogExchange implements AutoCloseable {
                 }
             }
         }
-        // A fresh store: the lanes as every process of this computer has written them.
-        CollaborationProjection lanes = new PredictionEventStore(root, projectId).collaborationProjection();
+        // The lanes as every process of this computer has written them.
+        PredictionEventStore current = store();
+        current.catchUp();
+        CollaborationProjection lanes = current.collaborationProjection();
+        Set<WorkIntentId> before = standingAtStart(lanes);
         for (ClaimConflict conflict : lanes.conflicts(claim.selectors(), claim.identity())) {
             WorkIntentId lane = new WorkIntentId(UUID.fromString(conflict.intentId()));
             if (checking.containsKey(lane) || yielded.contains(lane)) {
                 continue;
             }
-            if (lanes.introducingNode(new ParticipantId(conflict.participant())).filter(sender::equals).isEmpty()) {
-                return OVERLAPPING_CLAIM;
+            java.util.Optional<String> introducer = lanes.introducingNode(new ParticipantId(conflict.participant()));
+            if (introducer.filter(sender::equals).isPresent()) {
+                continue;
             }
+            if (introducer.filter(self::equals).isPresent() && !confirmed.contains(lane) && !before.contains(lane)) {
+                // This computer's own claim, appended and not yet checked: its check has begun, so it is judged as
+                // one being checked, and the mark reaches the check when it starts.
+                Checking unchecked = checking.computeIfAbsent(lane,
+                        id -> new Checking(lanes.intent(id).map(WorkIntent::selectors).orElse(claim.selectors())));
+                if (sender.compareTo(self) < 0) {
+                    unchecked.lost = true;
+                    continue;
+                }
+            }
+            return OVERLAPPING_CLAIM;
         }
         return "";
     }
 
+    private Set<WorkIntentId> standingAtStart(CollaborationProjection lanes) {
+        Set<WorkIntentId> known = standingAtStart;
+        if (known == null) {
+            known = Set.copyOf(lanes.activeIntents().stream().map(WorkIntent::identity).toList());
+            standingAtStart = known;
+        }
+        return known;
+    }
+
     /** The lane a claim announces, or null when the entry is not a verified announcement. */
-    private static WorkIntent claimOf(ReplicationMessage.ClaimSeen seen) throws IOException {
+    private WorkIntent claimOf(ReplicationMessage.ClaimSeen seen) throws IOException {
         PredictionEvent event = PredictionEvent.decode(seen.entry());
         try {
-            if (event.type() != PredictionEventType.WORK_INTENT_ANNOUNCED || !event.verify()) {
+            if (event.type() != PredictionEventType.WORK_INTENT_ANNOUNCED || !event.projectId().equals(projectId)
+                    || !event.verify()) {
                 return null;
             }
         } catch (GeneralSecurityException unverifiable) {
@@ -418,7 +457,7 @@ public final class LogExchange implements AutoCloseable {
             Map<String, Long> mine = store().logHeads();
             for (Map.Entry<String, Long> head : list.heads().entrySet()) {
                 String log = head.getKey();
-                if (log.equals(session.localNodeId()) || divergedLogs.contains(log)) {
+                if (log.equals(session.localNodeId()) || divergedLogs.contains(log) || !copied.test(log)) {
                     continue;
                 }
                 long held = mine.getOrDefault(log, 0L);
@@ -457,6 +496,15 @@ public final class LogExchange implements AutoCloseable {
             } catch (RuntimeException hookFailed) {
                 // The entries are placed; the hook's owner tries again on its own.
             }
+        }
+    }
+
+    /** Notes the lanes that stand when this exchange starts, before any claim is asked about. */
+    private void rememberStandingLanes() {
+        try {
+            standingAtStart(store().collaborationProjection());
+        } catch (IOException | GeneralSecurityException | RuntimeException unreadable) {
+            standingAtStart = Set.of();
         }
     }
 

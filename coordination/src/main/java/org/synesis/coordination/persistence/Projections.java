@@ -18,6 +18,7 @@ import org.synesis.coordination.domain.task.CoordinationProjection;
 import org.synesis.coordination.domain.task.TaskCompletionProjection;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.CoordinationNullException;
+import org.synesis.coordination.exception.CoordinationStateException;
 import org.synesis.coordination.exception.MissingReferenceException;
 
 /**
@@ -27,6 +28,8 @@ import org.synesis.coordination.exception.MissingReferenceException;
  * when it names something not seen yet; an entry already taken is applied.
  */
 final class Projections implements ProjectionView {
+
+    private static final System.Logger LOGGER = System.getLogger(Projections.class.getName());
 
     /**
      * How one arriving entry was taken.
@@ -129,8 +132,15 @@ final class Projections implements ProjectionView {
         } catch (MissingReferenceException waiting) {
             return new Arrival(waiting.code(), true);
         } catch (CoordinationException broken) {
+            collaboration.countedForNothing(event);
             return new Arrival(broken.code(), false);
+        } catch (CoordinationStateException broken) {
+            collaboration.countedForNothing(event);
+            return new Arrival("PREDICTION_TRANSITION_INVALID", false);
         } catch (IOException | RuntimeException unreadable) {
+            collaboration.countedForNothing(event);
+            LOGGER.log(System.Logger.Level.WARNING, "An arriving entry could not be applied and counts for nothing.",
+                    unreadable);
             return new Arrival("ENTRY_UNREADABLE", false);
         } finally {
             leaderEntry = false;

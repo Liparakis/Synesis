@@ -210,6 +210,10 @@ public final class CoordinationProjection {
     private void releaseTask(PredictionEvent event) throws IOException {
         TaskId taskId = new TaskId(event.predictionId());
         CoordinationTaskView current = task(taskId).orElseThrow(() -> new MissingReferenceException("TASK_NOT_FOUND"));
+        if (!mode.checking() && current.ownerNodeId() != null && !current.ownerNodeId().equals(event.actorNodeId())) {
+            // A release by a computer that lost the claim to a lower node releases nothing (ADR-0100 row 9).
+            return;
+        }
         tasks.put(taskId, new CoordinationTaskView(current.task(), null));
     }
 

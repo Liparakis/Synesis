@@ -15,12 +15,13 @@ import java.time.Duration;
 import org.synesis.coordination.exception.CoordinationNullException;
 
 /**
- * How a process that opened a member's log reaches its computer's coordination server: an HTTP POST to the
- * loopback address the server wrote to {@code replication.endpoint} in the coordination folder when it started.
+ * How a process of a shared project reaches its computer's coordination server: an HTTP POST to the loopback
+ * address the server wrote to {@code replication.endpoint} in the coordination folder when it started.
  *
- * <p>Only the coordination server holds the Link session to the leader, so every process relays through it. A
- * missing, stale or non-loopback endpoint is "nothing sent": the proposal is refused as {@code LEADER_UNREACHABLE}
- * and nothing is appended. The file is never trusted to name a host that is not loopback.</p>
+ * <p>Only the coordination server holds the Link sessions, so a process that needs the connected computers, to
+ * have a claim checked (ADR-0098 step 4), asks through it. A missing, stale or non-loopback endpoint is "nothing
+ * sent", a {@link java.net.ConnectException}: no computer is connected. The file is never trusted to name a host that
+ * is not loopback.</p>
  */
 public final class LoopbackExchange implements ReplicationExchange {
 

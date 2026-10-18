@@ -112,6 +112,29 @@ public final class CollaborationProjection {
         throw new MissingReferenceException(code);
     }
 
+    /**
+     * Records that an arriving entry which would have opened a lane counted for nothing here (ADR-0098 step 4,
+     * designer item 11): the lane it names is ended, so later entries of its log about that lane apply with no
+     * effect instead of waiting for ever for a lane that will never be seen.
+     *
+     * @param event the entry that counted for nothing
+     */
+    public synchronized void countedForNothing(PredictionEvent event) {
+        try {
+            WorkIntent opened = switch (event.type()) {
+                case WORK_INTENT_ANNOUNCED -> CollaborationCodec.decodeIntent(event.payload());
+                case REPAIR_LANE_CREATED -> RepairLanePayload.decode(event.payload()).targetIntent();
+                case LANE_CONTINUATION_ACCEPTED -> CollaborationCodec.decodeContinuation(event.payload()).targetIntent();
+                default -> null;
+            };
+            if (opened != null && !intents.containsKey(opened.identity())) {
+                endedIntents.add(opened.identity());
+            }
+        } catch (IOException unreadable) {
+            // An entry that cannot be read names no lane.
+        }
+    }
+
     /** Removes a lane from the active ones and remembers that it ended. */
     private WorkIntent endLane(WorkIntentId id) {
         WorkIntent ended = intents.remove(id);
@@ -931,6 +954,9 @@ public final class CollaborationProjection {
             throw new CoordinationException("CLAIM_EPOCH_STALE");
         }
         Participant target = participantHistory.get(handoff.targetParticipant());
+        if (target == null && !mode.checking()) {
+            throw new MissingReferenceException("HANDOFF_TARGET_NOT_ACTIVE");
+        }
         if (target == null || mode.checking() && target.state() != Participant.State.ACTIVE) {
             throw new CoordinationException("HANDOFF_TARGET_NOT_ACTIVE");
         }

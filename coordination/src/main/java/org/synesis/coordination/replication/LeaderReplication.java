@@ -96,7 +96,7 @@ public final class LeaderReplication implements AutoCloseable {
      *
      * @param root      the leader's coordination folder
      * @param projectId the project
-     * @param members   nodes allowed to propose and pull
+     * @param members   nodes whose logs are exchanged
      */
     public LeaderReplication(Path root, UUID projectId, Set<String> members) {
         this(root, projectId, members, () -> {
@@ -104,14 +104,13 @@ public final class LeaderReplication implements AutoCloseable {
     }
 
     /**
-     * Serves one project's log and tells the owner of {@code afterMemberEntry} whenever a member's entry went on
-     * the log, so the leader can act on it without an agent of its own (the merge driver, ADR-0098).
+     * Exchanges one project's logs and tells the owner of {@code afterMemberEntry} whenever a member's entries
+     * arrived, so the leader can act on it without an agent of its own (the merge driver, ADR-0098).
      *
      * @param root             the leader's coordination folder
      * @param projectId        the project
-     * @param members          nodes allowed to propose and pull
-     * @param afterMemberEntry called after each accepted proposal, on the thread that answered it; it must not
-     *                         block
+     * @param members          nodes whose logs are exchanged
+     * @param afterMemberEntry called after entries of a member arrived, on the exchange thread; it must not block
      */
     public LeaderReplication(Path root, UUID projectId, Set<String> members, Runnable afterMemberEntry) {
         this(root, projectId, fixed(CoordinationNullException.requireNonNull(members, "members")), afterMemberEntry);
@@ -123,15 +122,16 @@ public final class LeaderReplication implements AutoCloseable {
      *
      * @param root             the leader's coordination folder
      * @param projectId        the project
-     * @param members          current nodes allowed to propose and pull; an empty set refuses everyone
-     * @param afterMemberEntry called after each accepted proposal; it must not block
+     * @param members          current nodes whose logs are exchanged; an empty set refuses everyone
+     * @param afterMemberEntry called after entries of a member arrived; it must not block
      */
     public LeaderReplication(Path root, UUID projectId, Supplier<Set<String>> members, Runnable afterMemberEntry) {
         this.afterMemberEntry = CoordinationNullException.requireNonNull(afterMemberEntry, "afterMemberEntry");
         this.root = CoordinationNullException.requireNonNull(root, "root");
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.members = CoordinationNullException.requireNonNull(members, "members");
-        this.exchange = new LogExchange(root, projectId, node -> members.get().contains(node), afterMemberEntry);
+        this.exchange = new LogExchange(root, projectId, node -> members.get().contains(node),
+                node -> members.get().contains(node), afterMemberEntry);
         notices.execute(this::writeConnections);
     }
 
@@ -153,7 +153,7 @@ public final class LeaderReplication implements AutoCloseable {
      *
      * @param root             the leader's coordination folder
      * @param projectId        the project
-     * @param afterMemberEntry called after each accepted proposal; it must not block
+     * @param afterMemberEntry called after entries of a member arrived; it must not block
      * @return the leader side
      * @throws IOException when the settings are missing, invalid, or are a member's
      */
@@ -171,7 +171,7 @@ public final class LeaderReplication implements AutoCloseable {
      *
      * @param root             the leader's coordination folder
      * @param projectId        the project
-     * @param afterMemberEntry called after each accepted proposal; it must not block
+     * @param afterMemberEntry called after entries of a member arrived; it must not block
      * @return the leader side
      */
     public static LeaderReplication serving(Path root, UUID projectId, Runnable afterMemberEntry) {
@@ -226,7 +226,7 @@ public final class LeaderReplication implements AutoCloseable {
     }
 
     /**
-     * Tells whether a node may propose and pull now.
+     * Tells whether a node's log is exchanged now.
      *
      * @param nodeId a node ID
      * @return true when the leader's settings name it as a member

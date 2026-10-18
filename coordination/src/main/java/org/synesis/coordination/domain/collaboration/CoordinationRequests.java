@@ -62,13 +62,18 @@ final class CoordinationRequests {
             throw new MissingReferenceException("REQUEST_NOT_FOUND");
         }
         if (current.status() != CoordinationRequest.Status.PENDING) {
+            String held = answeredBy.get(current.identity());
             if (current.status() == response.status()) {
+                // The same answer from a lower node makes that node the holder, or a third, different answer
+                // would be weighed against whichever came first.
+                if (held != null && answerer.compareTo(held) < 0) {
+                    answeredBy.put(current.identity(), answerer);
+                }
                 return;
             }
             if (checking) {
                 throw new CoordinationException("REQUEST_ALREADY_RESOLVED");
             }
-            String held = answeredBy.get(current.identity());
             if (held != null && held.compareTo(answerer) <= 0) {
                 return;
             }
