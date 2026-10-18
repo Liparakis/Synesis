@@ -1289,6 +1289,13 @@ The two-homes run with the friend's PC is repeated after step 5 as a check, not 
   `ofTwoAgentsClaimingAtTheSameMomentThroughTheServicesOnlyOneClaimStandsAndTheOtherIsReleased` covers through the
   services. Left as it is: the test could count a race in which both stood as one where the two checks did not
   overlap, and require enough overlapping ones. (FLAKY, test only, step 4.)
+- **Two mcp tests that failed once in the Windows gate** on 85c85b82 (2026-10-18), while other checkouts ran tests:
+  `McpSyn039SliceTest.dirtyReviewerReceivesDurableReviewDecisionAfterControlCheckoutAdvances`
+  (`MANUAL_ATTESTATION_REQUIRED` in its own setup) and
+  `SyntheticTwoProcessCollaborationTest.anUnchangedCommitPublishedAgainForANewContractRevisionReachesEveryReboundConsumer`
+  (a worktree under the shared test-state folder was not a Git repository). Both passed on Linux at the same commit, and alone on Windows with a state folder of their own
+  (`-PsynesisTestState`, 23 and 24 tests). Read as shared-state flakes: every checkout's Windows tests use
+  `Temp\synesis-test-state` unless told otherwise. (FLAKY, environment.)
 - **A third computer for step 6:** whether QUIC from the VM reaches a Podman container on this PC.
   (REQUIRES-MEASUREMENT.)
 - **Home routers:** the UDP mapping lifetime, against the 15 s pull. (REQUIRES-MEASUREMENT.)
