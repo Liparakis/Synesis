@@ -142,6 +142,53 @@ final class ControllerConnectionsTest {
         assertFalse(connections.keep(waiting), "once decided, a lease naming a process the controller did not start is not kept");
     }
 
+    /**
+     * A first process that opened its lease and reached end of input before the controller's first
+     * look (2 s) closed it, and its agent lost the session the controller meant to keep. The lease of
+     * a connection the controller opened names the controller from the start.
+     */
+    @Test
+    void aProcessThatOpensAndClosesItsLeaseBeforeTheControllerLooksLeavesTheSessionKept(@TempDir Path temp) throws Exception {
+        Path project = Files.createDirectories(temp.resolve("project"));
+        new ProjectApplicationService().init(project);
+        ControllerConnections connections = new ControllerConnections(project, new SessionLeaseService());
+        String quick = connections.open();
+
+        String javaExecutable = Path.of(System.getProperty("java.home"), "bin", System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win") ? "java.exe" : "java").toString();
+        Process server = new ProcessBuilder(javaExecutable, "-cp", System.getProperty("java.class.path"), QuickServer.class.getName(), project.toString(), quick).redirectErrorStream(true).start();
+        String output = new String(server.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(server.waitFor(60, java.util.concurrent.TimeUnit.SECONDS));
+        assertEquals(0, server.exitValue(), output);
+
+        assertTrue(connections.keep(quick), "the controller keeps the session of the process that has already closed: " + output);
+        SessionLeaseRecord kept = new SessionLeaseStore().load(project, quick).orElseThrow();
+        assertEquals(SessionLeaseState.ACTIVE, kept.leaseState());
+        assertEquals(ProcessHandle.current().pid(), kept.processIdentity().pid());
+
+        connections.ended(quick);
+        assertEquals(SessionLeaseState.CLOSED_CLEANLY, new SessionLeaseStore().load(project, quick).orElseThrow().leaseState());
+    }
+
+    /** An MCP server that opens its lease and closes it at end of input at once, as a quick first process does. */
+    public static final class QuickServer {
+
+        private QuickServer() {
+        }
+
+        /**
+         * Opens and closes the lease of one connection.
+         *
+         * @param arguments the project root and the connection identity
+         * @throws Exception when the lease cannot be written
+         */
+        public static void main(String[] arguments) throws Exception {
+            Path project = Path.of(arguments[0]);
+            SessionLeaseService leases = new SessionLeaseService();
+            leases.createOrRenewLease(project, "project", "codex", arguments[1], "node", "session-quick", new org.synesis.workspace.lifecycle.lease.SessionLeasePolicy());
+            System.out.println("CLOSED=" + leases.markClosedCleanly(project, arguments[1], ProcessHandle.current().pid()));
+        }
+    }
+
     @Test
     void processThatNeverReachedSynesisLeavesNothingToClose(@TempDir Path temp) throws Exception {
         Path project = Files.createDirectories(temp.resolve("project"));

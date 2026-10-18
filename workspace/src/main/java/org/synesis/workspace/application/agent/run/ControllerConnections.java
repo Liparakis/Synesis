@@ -51,7 +51,15 @@ public final class ControllerConnections implements AgentRunController.Connectio
 
     @Override
     public String open() {
-        return "conn-instance-" + UUID.randomUUID();
+        String identity = "conn-instance-" + UUID.randomUUID();
+        try {
+            // Its process may open its lease and reach end of input before the controller's first
+            // look; the reservation makes that lease name the controller from the start.
+            leases.reserveKeeper(projectRoot, identity);
+        } catch (IOException unwritable) {
+            // The session is then kept from the controller's first look, as before.
+        }
+        return identity;
     }
 
     @Override
@@ -72,6 +80,11 @@ public final class ControllerConnections implements AgentRunController.Connectio
         // long as the controller lives, and the agent resumed to continue it is offered nothing.
         if (!leases.markClosedCleanly(projectRoot, Objects.requireNonNull(connectionInstanceId, "connectionInstanceId"))) {
             return false;
+        }
+        try {
+            leases.releaseKeeper(projectRoot, connectionInstanceId);
+        } catch (IOException left) {
+            // No process is given this identity again, so a reservation left behind is never read.
         }
         // The MCP server's own close recovered the lane at once; a kept session's server no longer
         // closes it, and with every agent stopped nobody else would.
