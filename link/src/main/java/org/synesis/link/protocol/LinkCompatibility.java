@@ -13,8 +13,11 @@ package org.synesis.link.protocol;
  * format byte of the handshake envelope. A build that finds a different number refuses to go on,
  * with an {@link IncompatibleVersionException} before it parses anything else.
  *
- * <p>It stands at 8: every computer writes its own log, and the replication protocol pulls per
- * log and checks claims between connected computers (ADR-0098 step 4). It was 7 for code over
+ * <p>It stands at 9: every computer merges its own lanes, so logs carry integration entries
+ * from every computer and the re-merge entry {@code REMERGE_SNAPSHOT_CREATED}, which a build at 8
+ * would not apply (ADR-0098 step 5). It was 8 when every computer began writing its own log, and
+ * the replication protocol pulled per log and checked claims between connected computers
+ * (ADR-0098 step 4); 7 for code over
  * Link ({@code SCX1}, ADR-0098 step 3), and 6 for the project invitation ({@code SLP1}, ADR-0098
  * "Joining, revised"), where a joiner the owner has not accepted is held without being served,
  * which the build at 5 does not know. It was 5 for the member protocol of the replicated project
@@ -29,7 +32,7 @@ package org.synesis.link.protocol;
 public final class LinkCompatibility {
 
   /** The compatibility number of this build. */
-  public static final int CURRENT = 8;
+  public static final int CURRENT = 9;
 
   private LinkCompatibility() {
   }
