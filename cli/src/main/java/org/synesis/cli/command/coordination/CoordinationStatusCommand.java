@@ -53,6 +53,15 @@ public final class CoordinationStatusCommand implements Callable<Integer> {
             runtime.terminal().stdout("PREDICTIONS=" + store.projection().snapshot().size());
             runtime.terminal().stdout("TASKS=" + store.coordinationProjection().tasks().size());
             runtime.terminal().stdout("OWNERSHIPS=" + store.coordinationProjection().ownerships().size());
+            // Entries of other computers that counted for nothing, or wait for what they name (ADR-0098 step 4).
+            store.logHeads().forEach((log, head) -> {
+                if (!log.equals(PredictionEventStore.OWN_LOG)) {
+                    runtime.terminal().stdout("LOG_COPY=" + log + " " + head);
+                }
+            });
+            for (String problem : store.problems()) {
+                runtime.terminal().stdout("LOG_PROBLEM=" + problem);
+            }
             replication.ifPresent(settings -> {
                 runtime.terminal().stdout("REPLICATION_ROLE=" + (settings.isMember() ? "member" : "leader"));
                 if (settings.isMember()) {

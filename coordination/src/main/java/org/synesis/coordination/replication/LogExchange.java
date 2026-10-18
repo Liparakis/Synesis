@@ -100,6 +100,11 @@ public final class LogExchange implements AutoCloseable {
     private final Set<String> pullQueued = ConcurrentHashMap.newKeySet();
     /** This computer's own claims whose connected computers are being asked now. */
     private final Map<WorkIntentId, Checking> checking = new ConcurrentHashMap<>();
+    /**
+     * This computer's own claims that gave way. Each stays in the log until its release is appended, after the
+     * agent's process has its answer; meanwhile it must not count against the claim it gave way to.
+     */
+    private final Set<WorkIntentId> yielded = ConcurrentHashMap.newKeySet();
     private final ExecutorService requests = Executors.newCachedThreadPool(daemon("synesis-log-exchange-serve"));
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(
             daemon("synesis-log-exchange"));
@@ -287,6 +292,9 @@ public final class LogExchange implements AutoCloseable {
             if (mine.lost) {
                 verdict = OVERLAPPING_CLAIM;
             }
+            if (!verdict.isEmpty()) {
+                yielded.add(claim.identity());
+            }
             return ReplicationCodec.encode(new ReplicationMessage.ClaimAnswer(verdict));
         } finally {
             checking.remove(claim.identity());
@@ -317,7 +325,8 @@ public final class LogExchange implements AutoCloseable {
         // A fresh store: the lanes as every process of this computer has written them.
         CollaborationProjection lanes = new PredictionEventStore(root, projectId).collaborationProjection();
         for (ClaimConflict conflict : lanes.conflicts(claim.selectors(), claim.identity())) {
-            if (checking.containsKey(new WorkIntentId(UUID.fromString(conflict.intentId())))) {
+            WorkIntentId lane = new WorkIntentId(UUID.fromString(conflict.intentId()));
+            if (checking.containsKey(lane) || yielded.contains(lane)) {
                 continue;
             }
             if (lanes.introducingNode(new ParticipantId(conflict.participant())).filter(sender::equals).isEmpty()) {

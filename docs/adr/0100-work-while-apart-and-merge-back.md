@@ -9,7 +9,8 @@ computer always works on its own copy, and what matters is that everyone's work 
 claims are locks wherever they can be checked, every re-merge is reviewed again, agents settle disputes by talking,
 stalled work is taken over, nothing needs an administrator, there are no reservations, and no Git host is needed.
 
-No code exists for this ADR.
+The table of "When entries from two computers meet" is built by ADR-0098 step 4 (2026-10-18): every rule an arriving
+entry can reach counts as the table below says. The combine lane and the lab are still to come (ADR-0098 step 5).
 
 - **Superseded:** the trunk with branches that return, reservations, re-review by a third agent, operator requests for
   disputes, and holding an away computer's lanes until the owner releases them (listed under "Superseded").

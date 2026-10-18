@@ -649,7 +649,7 @@ so a throw makes the log unopenable. Many readers use the global sequence as a c
    - **Two facts about one thing:** both stand, and the projection keeps the set (overlapping claims, review verdicts per
      reviewer with `REVIEW_DISPUTED`, operator raises and answers, duplicate COMPLETED).
    - **Acting for another computer's participant, or a self-review:** counts for nothing, reported loudly in the UI and
-     `synesis log problems`. These do not depend on order: a participant's introduction is in its own computer's log,
+     `synesis coordination status` (`LOG_PROBLEM=`). These do not depend on order: a participant's introduction is in its own computer's log,
      before any entry acting for it.
    - Every other site is decided one by one into one of these four, in a table kept beside ADR-0100's, each with a test
      that applies the two entries in both orders.
@@ -676,7 +676,7 @@ Decided while building step 4 (designer, 2026-10-18; each open to the owner):
    arriving entry still hits counts for nothing, is reported, and its line records why; so one faulty entry never
    stops a copy.
 10. **A held-back entry holds back the rest of its own log,** because its later entries may build on it. The other
-    logs go on. A held-back entry is listed, with the code it waits on, in `synesis log problems`.
+    logs go on. A held-back entry is listed, with the code it waits on, in `synesis coordination status` (`LOG_PROBLEM=`).
 11. **Ended is not missing.** A lane that was released, completed or continued is remembered by its id, so a late
     entry of the away computer about it applies with no effect instead of waiting for ever.
 12. **`applied.order` lines** are `self <sequence>` for this computer's own log (every process that opens a store
@@ -729,6 +729,13 @@ Decided while building step 4 (designer, 2026-10-18; each open to the owner):
     event stream and the conversation cursors count local revisions. The legacy `synesis events follow` stream
     still names each entry by its own log's sequence, so in a shared project its cursor is per log; it is left for
     later with that limit.
+
+Built on 2026-10-18 (branch `claude/adr-0098-step4-own-log-68db50`, source-level evidence only: no PC and VM run
+yet, so the done-when below is NOT REACHED): items 1 to 7 and 9 to 20, with the order-free rules, the property test
+over three computers, and the claim lock. `synesis log problems` is `synesis coordination status`, which prints a
+`LOG_COPY=<node> <head>` line per copy and a `LOG_PROBLEM=` line per entry that counted for nothing or waits. Not
+built: the UI showing overlaps, disputes and problems; the order dependence of item 18; item 8 lands with the
+merge of step 3 (this branch sets 8 directly).
 
 ### Step 5: Each computer merges its own lanes
 
@@ -878,14 +885,8 @@ The two-homes run with the friend's PC is repeated after step 5 as a check, not 
 
 ## Unresolved
 
-- **Every throw an arriving entry can reach.** Projections throw while applying, not only at append. `throw new`
-  sites per projection (VERIFIED by count on this branch): `CollaborationProjection` 49, `WorkGroupProjection` 15,
-  `CapabilityRequestProjection` 13, `TaskCompletionProjection` 11, `ContractProjection` 10, `CoordinationProjection`
-  5, `PredictionProjection` 4, `OperatorRequestProjection` 3, `ConversationProjection` 2; plus `AppendAdmission`,
-  which runs as the last stage. Step 4 classifies each as "both stand", "counts for nothing, reported", or "cannot be
-  reached by an entry from another log" (malformed payloads, which the chain and signature checks already stop). Also
-  open from the 2026-10-16 audit: `CLAIM_EPOCH_STALE` is thrown in `LaneClaimService` and `WorkGroupService` too, and
-  whether the projections cover every case is not verified.
+- **Every throw an arriving entry can reach.** Classified on 2026-10-18 in ADR-0100, "Every rule an arriving entry
+  can reach", and built in step 4; what still depends on order is designer item 18.
 - **The diverged-copy rule with three or more copies** is reasoned, not proven. The property test of step 5 checks it.
 - **A third computer for step 6:** whether QUIC from the VM reaches a Podman container on this PC.
   (REQUIRES-MEASUREMENT.)

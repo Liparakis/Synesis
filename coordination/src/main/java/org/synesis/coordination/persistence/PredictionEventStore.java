@@ -417,9 +417,9 @@ public final class PredictionEventStore implements ProjectionView {
     /**
      * Returns what this copy could not take as written: entries of other computers that counted for nothing, with
      * the rule each broke, and the first entry of each log that waits for something it names, with its code.
-     * {@code synesis log problems} shows them.
+     * {@code synesis coordination status} shows them.
      *
-     * @return one line per problem, {@code <node> <sequence> <code>} or {@code <node> <sequence> waiting <code>}
+     * @return one line per problem, {@code <node> <sequence> <code>} or {@code <node> <sequence> waiting [<code>]}
      * @throws IOException              when the logs cannot be read
      * @throws GeneralSecurityException when a signature cannot be checked
      */
@@ -429,8 +429,15 @@ public final class PredictionEventStore implements ProjectionView {
         for (AppliedOrder.Line line : voided) {
             problems.add(line.log() + " " + line.sequence() + " " + line.code());
         }
-        for (ArrivalOrder.Waiting held : waiting) {
-            problems.add(held.log() + " " + held.sequence() + " waiting " + held.code());
+        discoverPeers();
+        for (Map.Entry<String, LogFolder> peer : peers.entrySet()) {
+            long next = taken.getOrDefault(peer.getKey(), 0L) + 1L;
+            if (next <= peer.getValue().verified().size()) {
+                // The code is known to the process that last tried it, the coordination server; others see the wait.
+                String code = waiting.stream().filter(held -> held.log().equals(peer.getKey())).map(ArrivalOrder.Waiting::code)
+                        .findFirst().orElse("");
+                problems.add((peer.getKey() + " " + next + " waiting " + code).strip());
+            }
         }
         return List.copyOf(problems);
     }
