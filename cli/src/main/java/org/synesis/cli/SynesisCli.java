@@ -60,6 +60,8 @@ import org.synesis.cli.command.link.LinkAnswerCommand;
 import org.synesis.cli.command.link.LinkDeclineCommand;
 import org.synesis.cli.command.link.LinkRequestsCommand;
 import org.synesis.cli.command.link.LinkCommand;
+import org.synesis.cli.command.log.LogCommand;
+import org.synesis.cli.command.log.LogDumpCommand;
 import org.synesis.cli.command.link.LinkInviteCommand;
 import org.synesis.cli.command.link.LinkJoinCommand;
 import org.synesis.cli.command.project.ProjectAddMemberCommand;
@@ -124,7 +126,7 @@ public final class SynesisCli {
         Map<String, List<String>> groups = new LinkedHashMap<>();
         groups.put("Set up", List.of("init", "provider", "doctor", "ui", "version", "help"));
         groups.put("Work with another person", List.of("host", "join", "sync", "identity"));
-        groups.put("Coordinate work", List.of("agents", "collaboration", "task", "ownership", "constraint", "events", "coordination"));
+        groups.put("Coordinate work", List.of("agents", "collaboration", "task", "ownership", "constraint", "events", "coordination", "log"));
         groups.put("Maintain a project", List.of("operator", "trash", "cleanup", "reconcile", "repair", "migrate", "project"));
         return groups;
     }
@@ -207,6 +209,8 @@ public final class SynesisCli {
         command.addSubcommand("supervisor", new SupervisorCommand());
         command.getSubcommands().get("supervisor").addSubcommand("run", new SupervisorRunCommand(runtime));
         command.getSubcommands().get("supervisor").addSubcommand("status", new SupervisorStatusCommand(runtime));
+        command.addSubcommand("log", new LogCommand());
+        command.getSubcommands().get("log").addSubcommand("dump", new LogDumpCommand(runtime));
         command.addSubcommand("events", new EventsCommand());
         command.getSubcommands().get("events").addSubcommand("follow", new EventsFollowCommand(runtime));
         command.addSubcommand("prediction", new PredictionCommand());

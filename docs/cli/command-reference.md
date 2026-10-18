@@ -135,6 +135,47 @@ running. Both roles print `REPLICATION_LAST_DISCONNECT=<reason> <time> <details>
 for the last session that ended, when there is one. Further `KEY=VALUE` fields may
 be added to these lines.
 
+## Log dump
+
+`synesis log dump [--project <dir>] [--type <TYPE>]` prints every coordination log
+this computer holds, its own and each copy of another computer's, in the order this
+computer applied the entries (ADR-0102 item 2). It only reads files: it works while
+the project's runtime is stopped, takes no lock, and creates, moves or removes
+nothing. Like every command, `--porcelain` (or output that is not a terminal) gives
+the stable `KEY=VALUE` lines below.
+
+- `LOG_DUMP=PASS`, `PROJECT_ID=<id>`, `LOG_ENTRIES=<n>` (the count after `--type`).
+- One `LOG_ENTRY=pos=<n> log=<self|node> writer=<node> seq=<n> type=<TYPE> [<note>]
+  [<field>=<value> ...]` line per entry. `pos` is the local revision, the entry's
+  position among the entries that took effect here, or `-` when it has none. `log` is
+  `self` for this computer's own log and the writer's node for a copy; `seq` is the
+  position in that log. A `<note>` says why `pos` is `-`:
+  `COUNTED_FOR_NOTHING code=<CODE>` (the entry arrived and a rule made it count for
+  nothing) or `NOT_APPLIED` (a copy's entry with no line in `applied.order` yet). The
+  fields name what the entry is about (`lane`, `group`, `task`, `snapshot`, `grant`,
+  `verdict`, `combine`, `remerge`, `attempt`, `request`, `member`, `policy`,
+  `revision`, ...); only the identifiers, refs and verdicts named for that type are
+  printed. Keys, invitations and message text are never printed. A type this build
+  does not know prints as `... seq=<n> UNKNOWN type=<wire code>`; an entry that cannot
+  be read prints `type=UNREADABLE`.
+- `LOG_PROBLEM=<log> <seq> <CODE>` for each thing that could not be read or does not
+  hold (`ENTRY_MALFORMED`, `SIGNATURE_INVALID`, `CHAIN_BROKEN`, `WRONG_SIGNER`,
+  `SEQUENCE_MISMATCH`, `OTHER_PROJECT`, `FILE_NAME_INVALID`, `FILE_UNREADABLE`) or,
+  as `applied.order <line> LINE_MALFORMED`, a line of the applied order that cannot be
+  parsed. The dump goes on after a problem.
+- The summary, from the same projections a running computer replays: `SUMMARY_LANES=<n>`
+  and one `SUMMARY_LANE=<id> state=ACTIVE|ENDED|UNKNOWN ...` per lane the logs name;
+  `SUMMARY_GROUPS` / `SUMMARY_GROUP`; `SUMMARY_SNAPSHOTS` / `SUMMARY_SNAPSHOT` (state,
+  `verdicts=<reviewer>:<verdict>,...`, `disputed=true`); `SUMMARY_GRANTS` /
+  `SUMMARY_GRANT` (state `AVAILABLE|CONSUMED|REVOKED|SUPERSEDED|UNRESOLVED`) and
+  `SUMMARY_REVIEW`; `SUMMARY_COMBINES` / `SUMMARY_COMBINE`; `SUMMARY_MEMBERSHIP` and
+  `SUMMARY_JOIN_REQUEST`. When the logs cannot be replayed (a corrupt or unknown
+  entry), the summary is the single line `SUMMARY_UNAVAILABLE=<reason>`.
+
+`--type` keeps only entries of that type (any case; `UNKNOWN` matches unknown types)
+and does not change the summary. The command is additive: further fields, notes,
+problem codes and `SUMMARY_*` lines may be added.
+
 ## Project validation
 
 A project can declare one command that must pass before its work is integrated.

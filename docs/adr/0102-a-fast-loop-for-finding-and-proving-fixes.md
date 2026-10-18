@@ -51,6 +51,15 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
    with the state each projection derives (lanes, snapshots, grants, combines, membership). One evidence script copies
    both computers' coordination folders, agent transcripts, `git log --all`, refs, worktrees and leases into one folder
    and runs the dump on each. Investigators read text, not bytes.
+
+   Built 2026-10-19 (the product half; the evidence script is not built): `synesis log dump [--project] [--data]
+   [--type]` in `cli/.../command/log`, reading through `LogDump` in the coordination module's persistence package. It
+   reads `events/`, `peers/<node>/events/` and `applied.order` directly (no lock, no write, not even the temporary-file
+   cleanup of an ordinary open) and prints `LOG_ENTRY=pos= log= writer= seq= type=` plus identifiers, refs and
+   verdicts per type, `LOG_PROBLEM=` lines for what cannot be read, and a `SUMMARY_*` block read from the projections of
+   a read-only replay (`PredictionEventStore.openReadOnly`). An unknown type prints as `UNKNOWN type=<wire code>`.
+   Documented in `docs/cli/command-reference.md`. Source-level evidence only: `LogDumpTest` (9) and
+   `LogDumpCommandTest` (3), run on Linux; not yet run against a real PC + VM project.
 3. **Shorter splits.** A Link split lasts long enough for the work to happen apart, about 5 minutes, not 20. The split
    stays a firewall partition that drops only traffic between the two computers (ADR-0100, "The lab"), never a pulled
    cable, so agents keep their model provider.
@@ -129,6 +138,7 @@ The floor is the fixer's own reasoning: about 3 to 10 minutes for a simple defec
 
 ## Not decided
 
-- Whether `synesis log dump` is a published command or a test-only tool (ASSUMED: published, under `synesis log`, since
-  people debugging a shared project need it too).
+- ~~Whether `synesis log dump` is a published command or a test-only tool~~ Settled 2026-10-19: published, additively,
+  under `synesis log` (the first command of that group), documented in `docs/cli/command-reference.md`. Its `KEY=VALUE`
+  lines follow the same rule as `coordination status`: further fields and lines may be added.
 - How many real-agent runs confirm a step once its scenarios pass (ASSUMED: one per step).

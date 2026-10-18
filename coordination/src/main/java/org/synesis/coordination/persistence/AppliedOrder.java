@@ -150,7 +150,13 @@ final class AppliedOrder {
         return -1;
     }
 
-    private static Line parse(String raw) throws CoordinationException {
+    /**
+     * Reads one line without judging the file it is in.
+     *
+     * @param raw one complete line, without its newline
+     * @return the line, or null when it is malformed
+     */
+    static Line tryParse(String raw) {
         String[] fields = raw.split(" ");
         try {
             if ((fields.length == 2 || fields.length == 3) && !fields[0].isEmpty()) {
@@ -160,8 +166,16 @@ final class AppliedOrder {
                 }
             }
         } catch (NumberFormatException malformed) {
-            // Reported below.
+            // Malformed: the caller decides what that means.
         }
-        throw new CoordinationException("invalid coordination event log");
+        return null;
+    }
+
+    private static Line parse(String raw) throws CoordinationException {
+        Line line = tryParse(raw);
+        if (line == null) {
+            throw new CoordinationException("invalid coordination event log");
+        }
+        return line;
     }
 }
