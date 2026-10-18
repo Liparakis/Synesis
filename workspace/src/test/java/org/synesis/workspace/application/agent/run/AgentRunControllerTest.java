@@ -676,6 +676,26 @@ final class AgentRunControllerTest {
         assertFalse(AgentRunController.isProgress(PredictionEventType.CONVERSATION_MESSAGES_DELIVERED));
     }
 
+    /**
+     * A lane that asked the operator and stopped to wait for the answer was resumed by nothing when the
+     * operator closed its request, and kept its lane until the run ended. The closing resumes that
+     * lane's agent once, and no other.
+     */
+    @Test
+    void theOperatorClosingALanesRequestResumesThatLanesAgentOnceAndNoOther() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "codex", "claude");
+        script.lifetimes(1, 20, 1, 1);
+        script.withoutOwnLane.add("codex#2");
+        script.at(0).head(5).announced();
+        script.at(3).head(6).operatorAnswer("claude#1", 6);
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of("start claude#1", "start codex#2", "start claude#3", "resume claude#1 session-1"), script.launches);
+        assertEquals(List.of(3), script.resumedAtTicks, "once, at the answer");
+    }
+
     @Test
     void runLeftWithAnOpenRequestARaisedByALaneSaysItNeedsAnOperator() throws Exception {
         Script script = new Script();
@@ -929,6 +949,12 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public OptionalLong newestOperatorAnswerFor(String provider, String connectionInstanceId) {
+                    Long sequence = laneHeldUnder(connectionInstanceId) ? state.operatorAnswers.get(agentOf.get(connectionInstanceId)) : null;
+                    return sequence == null ? OptionalLong.empty() : OptionalLong.of(sequence);
+                }
+
+                @Override
                 public boolean sessionFenced(String provider, String connectionInstanceId) {
                     return state.fenced.contains(agentOf.get(connectionInstanceId)) && Integer.valueOf(1).equals(ordinalOf.get(connectionInstanceId));
                 }
@@ -966,6 +992,13 @@ final class AgentRunControllerTest {
         private final Map<String, Long> messages = new java.util.HashMap<>();
         private final List<String> endedLanes = new ArrayList<>();
         private final List<String> fenced = new ArrayList<>();
+        private final Map<String, Long> operatorAnswers = new java.util.HashMap<>();
+
+        /** The operator closed, at this log position, a request the lane of this agent, by its label, put to it. */
+        private State operatorAnswer(String agent, long sequence) {
+            operatorAnswers.put(agent, sequence);
+            return this;
+        }
 
         /** The session of this agent's first connection, by its label, is suspended or held for recovery. */
         private State fenced(String agent) {

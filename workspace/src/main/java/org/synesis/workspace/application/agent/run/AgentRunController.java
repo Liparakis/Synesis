@@ -691,6 +691,20 @@ public final class AgentRunController {
         default OptionalLong newestUnreadMessageFor(String provider, String connectionInstanceId) {
             return OptionalLong.empty();
         }
+
+        /**
+         * Returns the log position at which the operator last closed a request that the lane held by the
+         * session behind one connection put to it (ADR-0093). The closing is not work and resumes nobody
+         * else, but the lane that asked may be waiting for that answer, so it resumes that lane's stopped
+         * agent once, as a message addressed to it does.
+         *
+         * @param provider             provider identifier
+         * @param connectionInstanceId connection of the agent's last process
+         * @return that position, or empty when the connection holds no lane or the operator closed nothing it asked
+         */
+        default OptionalLong newestOperatorAnswerFor(String provider, String connectionInstanceId) {
+            return OptionalLong.empty();
+        }
     }
 
     /**
@@ -859,10 +873,10 @@ public final class AgentRunController {
             return connectionIds.stream().anyMatch(identity -> observation.holdsOpenLane(spec.provider(), identity));
         }
 
-        /** The newest unread message addressed to a lane any of this agent's connections holds. */
+        /** The newest unread message, or operator answer, addressed to a lane any of this agent's connections holds. */
         private OptionalLong newestUnreadMessage(Observation observation) {
-            return connectionIds.stream().map(identity -> observation.newestUnreadMessageFor(spec.provider(), identity)).filter(OptionalLong::isPresent)
-                    .mapToLong(OptionalLong::getAsLong).max();
+            return connectionIds.stream().flatMap(identity -> java.util.stream.Stream.of(observation.newestUnreadMessageFor(spec.provider(), identity),
+                    observation.newestOperatorAnswerFor(spec.provider(), identity))).filter(OptionalLong::isPresent).mapToLong(OptionalLong::getAsLong).max();
         }
 
         /** Whether a message for its lane arrived that it has not been resumed for. */

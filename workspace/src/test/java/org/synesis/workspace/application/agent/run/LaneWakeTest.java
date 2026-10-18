@@ -21,6 +21,7 @@ import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.conversation.ConversationMessage;
+import org.synesis.coordination.domain.operator.OperatorRequest;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.link.identity.IdentityBootstrap;
@@ -80,6 +81,16 @@ class LaneWakeTest {
                 ConversationMessage.encodeSent(UUID.randomUUID(), from.authorityLineageId(), List.of(from.authorityLineageId(), to.authorityLineageId()), "Is slug() lower case?"), identity);
     }
 
+    private void askOperator(String id, WorkIntent lane) throws Exception {
+        new PredictionEventStore(location.coordinationDirectory(), project).append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, identity.nodeId(),
+                OperatorRequest.askedByLane(id, lane.authorityLineageId().toString(), "Please install the test runner", "").encodeRaised(), identity);
+    }
+
+    private void closeOperatorRequest(String id) throws Exception {
+        new PredictionEventStore(location.coordinationDirectory(), project).append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_CLOSED, identity.nodeId(),
+                OperatorRequest.encodeClosed(id, "Installed."), identity);
+    }
+
     private void noteWait(String participant) throws Exception {
         LaneWake.noteWait(location, CONNECTION, participant, null, OptionalLong.empty());
     }
@@ -114,6 +125,26 @@ class LaneWakeTest {
         noteWait("agt-a");
         message(laneB, laneA);
         assertTrue(hold(Duration.ofSeconds(10)).orElseThrow().contains("message"));
+    }
+
+    /**
+     * A lane that asked the operator and ended its turn to wait for the answer kept waiting after the
+     * operator closed its request: nothing in its lane view changed (ADR-0099 amendment).
+     */
+    @Test
+    void theOperatorClosingARequestTheLaneAskedWakesIt() throws Exception {
+        askOperator("opr_a", laneA);
+        askOperator("opr_b", laneB);
+        noteWait("agt-a");
+        closeOperatorRequest("opr_b");
+        assertEquals(Optional.empty(), hold(Duration.ofSeconds(1)), "another lane's request closing is not addressed to it");
+
+        noteWait("agt-a");
+        CompletableFuture<Optional<String>> held = CompletableFuture.supplyAsync(() -> hold(Duration.ofSeconds(20)));
+        Thread.sleep(600);
+        closeOperatorRequest("opr_a");
+
+        assertTrue(held.get(10, TimeUnit.SECONDS).orElseThrow().contains("the operator closed a request your lane put to it"));
     }
 
     @Test

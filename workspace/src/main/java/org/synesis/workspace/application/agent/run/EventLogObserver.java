@@ -186,6 +186,24 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             }
 
             @Override
+            public OptionalLong newestOperatorAnswerFor(String provider, String connectionInstanceId) {
+                String participant = participantOf(provider, connectionInstanceId);
+                if (participant == null) {
+                    return OptionalLong.empty();
+                }
+                return WorkspaceCollaborationService.laneOf(store, participant).map(lane -> {
+                    java.util.Set<String> asked = store.operatorRequestProjection().all().stream().filter(request -> request.raisedBy().equals(lane.authorityLineageId().toString()))
+                            .map(org.synesis.coordination.domain.operator.OperatorRequest::id).collect(java.util.stream.Collectors.toUnmodifiableSet());
+                    for (int index = events.size() - 1; index >= 0 && !asked.isEmpty(); index--) {
+                        if (events.get(index).type() == org.synesis.coordination.domain.prediction.PredictionEventType.OPERATOR_REQUEST_CLOSED && closes(events.get(index), asked)) {
+                            return OptionalLong.of(index + 1L);
+                        }
+                    }
+                    return OptionalLong.empty();
+                }).orElse(OptionalLong.empty());
+            }
+
+            @Override
             public OptionalLong answerDeadline(String provider) {
                 Long deadline = answerDeadlines.get(provider);
                 return deadline == null ? OptionalLong.empty() : OptionalLong.of(deadline);
@@ -271,6 +289,15 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                 case OPERATOR_REQUEST_CLOSED -> laneRequests.contains(org.synesis.coordination.domain.operator.OperatorRequest.closedRequestId(event.payload()));
                 default -> false;
             };
+        } catch (IOException malformed) {
+            return false;
+        }
+    }
+
+    /** Whether an operator closing names one of these requests. */
+    private static boolean closes(PredictionEvent event, java.util.Set<String> requests) {
+        try {
+            return requests.contains(org.synesis.coordination.domain.operator.OperatorRequest.closedRequestId(event.payload()));
         } catch (IOException malformed) {
             return false;
         }
