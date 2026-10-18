@@ -66,8 +66,21 @@ final class ProcessRuntimeHandle implements DaemonServer.RuntimeHandle {
         }
     }
 
+    /**
+     * The runtime's process for one project.
+     *
+     * <p>Nothing here reads the runtime's standard error. Left a pipe, it fills (a few kilobytes on Windows) and the
+     * runtime's next warning blocks its logging thread for good: in the PC + VM run of 2026-10-18 that was the log
+     * exchange, which then never pulled the other computer's log again while the session still showed connected. The
+     * runtime's warnings go wherever this daemon's own go.</p>
+     */
+    static ProcessBuilder command(Path project) {
+        return CliChildJvm.builder(true, List.of("coordination", "serve", "--project", project.toString(), "--port", "0", "--parent-pid", Long.toString(ProcessHandle.current().pid())))
+                .redirectError(ProcessBuilder.Redirect.INHERIT);
+    }
+
     static DaemonServer.RuntimeHandle start(Path project) throws IOException {
-        Process process = CliChildJvm.builder(true, List.of("coordination", "serve", "--project", project.toString(), "--port", "0", "--parent-pid", Long.toString(ProcessHandle.current().pid()))).start();
+        Process process = command(project).start();
         try {
             RuntimeReadyLine.Parsed ready = waitForReady(process);
             Thread drain = new Thread(() -> drain(process.getInputStream()), "synesis-project-runtime-output");
