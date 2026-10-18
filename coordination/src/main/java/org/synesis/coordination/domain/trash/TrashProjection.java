@@ -28,6 +28,12 @@ public final class TrashProjection {
     private final Map<Key, Item> items = new LinkedHashMap<>();
 
     /**
+     * Creates an empty trash, before any entry is applied.
+     */
+    public TrashProjection() {
+    }
+
+    /**
      * One piece of trashed work.
      *
      * @param trashed      the entry that trashed it
