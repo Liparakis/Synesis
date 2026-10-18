@@ -43,9 +43,9 @@ access tokens, or absolute personal paths.
 ## Two computers, one project
 
 This is the flow for one project that runs on two computers (ADR-0098): computer A (the owner) is the leader and keeps the
-authoritative log; computer B (the friend) is a member, runs its own agents, and sends each entry to A. It needs a Git
-remote that **both** computers can push to and fetch from, because code travels through it and never through the log.
-A bare repository on a shared folder or a host works.
+authoritative log; computer B (the friend) is a member, runs its own agents, and sends each entry to A. Code moves between the
+two computers over Link (ADR-0098 step 3); no Git remote is needed. A Git remote both can reach, if there is one, is an
+optional mirror.
 
 **One link does it.** The commands print `KEY=VALUE` lines; run each one in the project directory, or give
 `--project <directory>`.
@@ -55,8 +55,8 @@ A bare repository on a shared folder or a host works.
    link, `INVITE_LINK=synesis://project/SLP1-...`, and the code remote the link names, `CODE_REMOTE=<name>` and
    `CODE_REMOTE_URL=<url>` (the configured `code.remote`, or the project's only Git remote; never credentials, and only
    an `https://`, `ssh://` or `user@host:path` address). A project with several remotes and none configured, no remote, or
-   a remote that is a local path or a network share prints `CODE_REMOTE_URL=NONE` and a `NOTE=`: B could join, but A
-   cannot accept B, so add a Git remote and create a new invitation. On a computer that is a member, `link invite` makes
+   a remote that is a local path or a network share prints `CODE_REMOTE_URL=NONE` and a `NOTE=`: code then moves
+   over Link only, with no mirror. On a computer that is a member, `link invite` makes
    the plain connection invitation (no project link), as in the topology below. The command waits for B.
 2. **B (the friend) opens the link.** Click it (the installer's `synesis://` handler opens the browser UI with the link
    filled in, on the installation's home workspace if B knows no project yet; the UI first shows the inviter, the project,
