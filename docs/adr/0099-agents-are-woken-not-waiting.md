@@ -2,6 +2,12 @@
 
 ## Status
 
+**Accepted on 2026-10-18 by the repository owner** ("if 0099 is done according to the spec then it is done"), with
+the amendment of 2026-10-17 and the fixes of 2026-10-18, including their published-contract changes. Evidence: a real
+two-computer run with Codex completed on 2026-10-17 (run 6, `mp16-big`), and on 2026-10-18 the real PC + VM runs of
+ADR-0098 step 3 found two more wake gaps (fixes 9 and 10), after which run A3 (`mp21-link`) completed on both
+computers (`docs/agent/CURRENT.md`, 2026-10-18).
+
 Proposed on 2026-10-17. The two decisions marked USER-STATED were made by the owner on 2026-10-17 and are final
 for this change. Builds on ADR-0093 (conversations, waking a stopped agent), ADR-0091 (Codex headless sessions)
 and ADR-0098 (one project across many computers). It changes the agent-facing behaviour of `get_next_action`'s
