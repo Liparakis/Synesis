@@ -341,7 +341,13 @@ public enum PredictionEventType {
      * Records that the project's validation command failed on an integration candidate and which
      * snapshot is refused for it. The refused snapshot never integrates; its lane publishes again.
      */
-    INTEGRATION_VALIDATION_REFUSED(80);
+    INTEGRATION_VALIDATION_REFUSED(80),
+    /**
+     * Records a snapshot of one lane's re-merge: after two copies of {@code main} diverged, the higher node merged
+     * its own integrations again on top of the other copy (ADR-0098 step 5). It is reviewed again like a snapshot,
+     * never integrates by itself, and changes no task's state.
+     */
+    REMERGE_SNAPSHOT_CREATED(81);
 
 
     private static final Map<Integer, PredictionEventType> BY_WIRE_CODE = Arrays.stream(values())

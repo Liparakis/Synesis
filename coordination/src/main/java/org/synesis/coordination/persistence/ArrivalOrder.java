@@ -55,14 +55,12 @@ final class ArrivalOrder {
      *
      * @param projections the projections they are applied to
      * @param pending     each log's entries not taken yet, in log order, by the node whose log it is
-     * @param leaderNode  the owner's computer, whose entries keep their exemption until ADR-0098 step 5; null on the
-     *                    owner's computer itself, where no arriving entry is its own
      * @param revision    the local revision of the last entry that took effect before this round
      * @return what was taken and what still waits
      * @throws IOException when an entry that passed its trial still fails to apply, a defect of this build
      */
-    static Round take(Projections projections, Map<String, List<PredictionEvent>> pending, String leaderNode,
-            long revision) throws IOException {
+    static Round take(Projections projections, Map<String, List<PredictionEvent>> pending, long revision)
+            throws IOException {
         long next = revision + 1L;
         Map<String, Deque<PredictionEvent>> queues = new TreeMap<>();
         pending.forEach((log, entries) -> queues.put(log, new ArrayDeque<>(entries)));
@@ -76,8 +74,7 @@ final class ArrivalOrder {
                 Deque<PredictionEvent> entries = queue.getValue();
                 while (!entries.isEmpty()) {
                     PredictionEvent entry = entries.peekFirst();
-                    Projections.Arrival arrival = projections.arrive(entry,
-                            leaderNode != null && leaderNode.equals(entry.actorNodeId()), next);
+                    Projections.Arrival arrival = projections.arrive(entry, next);
                     if (arrival.held()) {
                         waiting.put(queue.getKey(), new Waiting(queue.getKey(), entry.sequence(), arrival.code()));
                         break;

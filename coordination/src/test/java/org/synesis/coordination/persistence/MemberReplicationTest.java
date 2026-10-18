@@ -28,6 +28,8 @@ import org.synesis.coordination.domain.identity.PredictionId;
 import org.synesis.coordination.domain.identity.ProjectId;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.SnapshotProvenance;
+import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.link.identity.NodeIdentity;
 
@@ -241,13 +243,61 @@ final class MemberReplicationTest {
         assertEquals(leaderStore().events().size(), memberStore().events().size());
     }
 
-    @Test
-    void aMembersOwnAppendOfALeaderOnlyTypeIsRefusedAndWritesNothing() throws Exception {
-        IOException refusal = assertThrows(IOException.class, () -> memberStore().append(UUID.randomUUID(),
-                PredictionEventType.TASK_INTEGRATED, member.nodeId(), new byte[] {1}, member));
+    static byte[] snapshotOf(WorkIntent lane, String snapshotId) {
+        String path = lane.selectors().getFirst().value();
+        return new TaskSnapshotPayload(lane.taskId(),
+                snapshotId,
+                "node",
+                "supervisor",
+                "worker",
+                "session-" + lane.participant(),
+                "base",
+                "commit-" + snapshotId,
+                List.of(path),
+                List.of(),
+                "work",
+                new SnapshotProvenance(lane.workGroupId(),
+                        lane.intentId(),
+                        lane.authorityLineageId(),
+                        lane.participant(),
+                        "session-" + lane.participant(),
+                        1,
+                        List.of(),
+                        List.of(),
+                        List.of("PATH:" + path),
+                        "refs/synesis/snapshots/" + snapshotId,
+                        "integrity",
+                        "artifacts"),
+                false).encode();
+    }
 
-        assertEquals("EVENT_TYPE_LEADER_ONLY", refusal.getMessage());
-        assertEquals(0, PredictionEventStore.recordedEvents(memberRoot));
+    @Test
+    void anIntegrationEntryNamingAnotherComputersSnapshotIsRefusedOnTheWriterAndCountsForNothingOnArrival()
+            throws Exception {
+        WorkIntent held = announceOnLeader("agt-a", "src/a.py");
+        byte[] snapshot = snapshotOf(held, "snap_a");
+        leaderStore().append(held.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, leader.nodeId(), snapshot, leader);
+        assertEquals(3, memberPullsLeader());
+        long before = memberStore().events().size();
+
+        IOException refusal = assertThrows(IOException.class, () -> memberStore().append(held.taskId(),
+                PredictionEventType.TASK_INTEGRATED, member.nodeId(), snapshot, member));
+
+        assertEquals("PARTICIPANT_NOT_OWNED_BY_SIGNER", refusal.getMessage());
+        assertEquals(0L, memberStore().logHeads().get(PredictionEventStore.OWN_LOG), "nothing was written to the member's own log");
+        assertEquals(before, memberStore().events().size());
+
+        // The same entry in a stranger's log arrives as a fact that counts for nothing.
+        NodeIdentity stranger = NodeIdentity.generate();
+        byte[] forged = entry(stranger, 1, null, PredictionEventType.TASK_INTEGRATED, held.taskId(), snapshot);
+        assertEquals(1, memberStore().placeCopies(stranger.nodeId(), List.of(forged)));
+        assertEquals(List.of(stranger.nodeId() + " 1 PARTICIPANT_NOT_OWNED_BY_SIGNER"), memberStore().problems());
+        assertEquals(before, memberStore().events().size());
+
+        // The computer that introduced the lane integrates it.
+        leaderStore().append(held.taskId(), PredictionEventType.TASK_INTEGRATED, leader.nodeId(), snapshot, leader);
+        assertEquals(1, memberPullsLeader());
+        assertEquals(before + 1, memberStore().events().size());
     }
 
     @Test
@@ -287,22 +337,29 @@ final class MemberReplicationTest {
     }
 
     @Test
-    void theLeaderMayReleaseAMembersLaneItDecidedToMerge() throws Exception {
+    void theOwnersComputerMayNotReleaseAMembersLaneButTheMemberMay() throws Exception {
         WorkIntent lane = announceOnMember(UUID.randomUUID(), "agt-b", "src/b.py");
         assertEquals(2, leaderPullsMember());
         long before = leaderStore().events().size();
 
-        // Closing a merged lane is the leader's own entry; ADR-0098 lets the leader act for any participant.
-        leaderStore().append(lane.intentId(),
+        // No computer acts for another computer's participant, the owner's computer included (ADR-0098 step 5).
+        IOException refusal = assertThrows(IOException.class, () -> leaderStore().append(lane.intentId(),
                 PredictionEventType.WORK_INTENT_RELEASED,
                 leader.nodeId(),
                 CollaborationCodec.encodeRelease(lane.intentId()),
-                leader);
+                leader));
+        assertEquals("PARTICIPANT_NOT_OWNED_BY_SIGNER", refusal.getMessage());
+        assertEquals(before, leaderStore().events().size());
+        assertEquals(1, leaderStore().collaborationProjection().activeIntents().size());
 
+        memberStore().append(lane.intentId(),
+                PredictionEventType.WORK_INTENT_RELEASED,
+                member.nodeId(),
+                CollaborationCodec.encodeRelease(lane.intentId()),
+                member);
+        assertEquals(1, leaderPullsMember());
         assertEquals(before + 1, leaderStore().events().size());
-        assertEquals(1, memberPullsLeader());
-        assertEquals(encodedSet(leaderStore()), encodedSet(memberStore()));
-        assertTrue(memberStore().collaborationProjection().activeIntents().isEmpty());
+        assertTrue(leaderStore().collaborationProjection().activeIntents().isEmpty());
     }
 
     @Test

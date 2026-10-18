@@ -166,7 +166,8 @@ public final class ControlBranchAdvancementService {
     private void finalizeIntegrationEvents(String attemptId, String expectedControlHead, String integrationCommitSha, List<TaskSnapshotRecord> snapshots, PredictionEventStore store, NodeIdentity identity)
             throws IOException, GeneralSecurityException {
         var projection = store.taskCompletionProjection();
-        boolean branchRecorded = projection.lastControlHeadAdvanced() != null && projection.lastControlHeadAdvanced().equals(integrationCommitSha);
+        String recorded = projection.lastControlHeadAdvanced(identity.nodeId());
+        boolean branchRecorded = recorded != null && recorded.equals(integrationCommitSha);
         if (!branchRecorded) {
             appendControlBranchAdvanced(attemptId, expectedControlHead, integrationCommitSha, snapshots, store, identity);
         }

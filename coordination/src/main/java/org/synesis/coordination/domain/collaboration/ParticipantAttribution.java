@@ -5,9 +5,12 @@ import java.util.List;
 import java.util.Optional;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.RequestId;
+import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
+import org.synesis.coordination.domain.integration.ValidationRefusalPayload;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.task.CompletionPreparedPayload;
 import org.synesis.coordination.domain.task.CompletionUnwoundPayload;
+import org.synesis.coordination.domain.task.RemergeSnapshotPayload;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 import org.synesis.coordination.exception.CoordinationException;
 
@@ -57,15 +60,24 @@ final class ParticipantAttribution {
      * @throws IOException with {@code PARTICIPANT_NOT_OWNED_BY_SIGNER}
      */
     static void require(PredictionEvent event, ProjectionView view) throws IOException {
-        if (view.leaderEntry()) {
-            return;
-        }
         for (ParticipantId participant : actingFor(event, view)) {
             Optional<String> introducer = view.collaborationProjection().introducingNode(participant);
             if (introducer.isPresent() && !introducer.get().equals(event.actorNodeId())) {
                 throw new CoordinationException(NOT_OWNED);
             }
         }
+    }
+
+    /** The producers of the snapshots an integration entry names, as the log knows them. */
+    private static List<ParticipantId> producers(ProjectionView view, List<String> snapshotIds) throws IOException {
+        java.util.Set<ParticipantId> producers = new java.util.LinkedHashSet<>();
+        for (String id : snapshotIds) {
+            // Not acting for nobody: the entry waits until the snapshot it names arrives.
+            producers.add(view.taskCompletionProjection().findSnapshotById(id)
+                    .orElseThrow(() -> new org.synesis.coordination.exception.MissingReferenceException("SNAPSHOT_NOT_FOUND"))
+                    .provenance().participantIdentity());
+        }
+        return List.copyOf(producers);
     }
 
     private static List<ParticipantId> actingFor(PredictionEvent event, ProjectionView view) throws IOException {
@@ -108,6 +120,16 @@ final class ParticipantAttribution {
                     List.of(CompletionUnwoundPayload.decode(payload).replacementIntent().participantIdentity());
             case PROVIDER_SESSION_TERMINALIZED ->
                     List.of(new ParticipantId(ProviderSessionTerminalPayload.decode(payload).participant()));
+            // What a merge pass writes acts for the lanes whose snapshots it names: since ADR-0098 step 5 only the
+            // computer that introduced a lane merges it.
+            case INTEGRATION_ATTEMPT_STARTED, INTEGRATION_ATTEMPT_FAILED, INTEGRATION_CONFLICTED, INTEGRATION_COMMIT_CREATED,
+                 INTEGRATION_BLOCKED, REPAIR_REQUIRED, CONTROL_BRANCH_ADVANCED ->
+                    producers(view, IntegrationAttemptPayload.decode(payload).taskSnapshotIds());
+            case TASK_INTEGRATED -> producers(view, List.of(TaskSnapshotPayload.decode(payload).snapshotId()));
+            case REMERGE_SNAPSHOT_CREATED ->
+                    List.of(RemergeSnapshotPayload.decode(payload).snapshot().provenance().participantIdentity());
+            case INTEGRATION_VALIDATION_REFUSED ->
+                    List.of(new ParticipantId(ValidationRefusalPayload.decode(payload).participant()));
             default -> List.of();
         };
     }

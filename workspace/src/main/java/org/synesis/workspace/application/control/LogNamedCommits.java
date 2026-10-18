@@ -11,6 +11,7 @@ import org.synesis.coordination.domain.integration.ImplementationEventPayload;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.task.CompletionPreparedPayload;
+import org.synesis.coordination.domain.task.RemergeSnapshotPayload;
 import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 
 /**
@@ -26,11 +27,9 @@ import org.synesis.coordination.domain.task.TaskSnapshotPayload;
 final class LogNamedCommits {
 
     private final Map<String, Naming> byCommit;
-    private final String lastAdvancedHead;
 
-    private LogNamedCommits(Map<String, Naming> byCommit, String lastAdvancedHead) {
+    private LogNamedCommits(Map<String, Naming> byCommit) {
         this.byCommit = byCommit;
-        this.lastAdvancedHead = lastAdvancedHead;
     }
 
     /** Who named one commit, and under which refs. */
@@ -45,7 +44,6 @@ final class LogNamedCommits {
      */
     static LogNamedCommits of(List<PredictionEvent> events) {
         Map<String, Naming> byCommit = new HashMap<>();
-        String lastAdvanced = null;
         Map<List<Object>, String> preparedRefs = new HashMap<>();
         for (PredictionEvent event : events) {
             try {
@@ -63,13 +61,17 @@ final class LogNamedCommits {
                             refs.add(prepared);
                         }
                     }
+                    case REMERGE_SNAPSHOT_CREATED -> {
+                        // A lane's re-merge commit, served under the re-merge snapshot's own ref (ADR-0098 step 5).
+                        TaskSnapshotPayload remerge = RemergeSnapshotPayload.decode(event.payload()).snapshot();
+                        name(byCommit, remerge.commitSha(), event.actorNodeId()).refs().add(remerge.provenance().snapshotRef());
+                    }
                     case CAPABILITY_IMPLEMENTATION_PUBLISHED ->
                             name(byCommit, ImplementationEventPayload.decode(event.payload()).commitSha(), event.actorNodeId());
                     case INTEGRATION_COMMIT_CREATED ->
                             name(byCommit, IntegrationAttemptPayload.decode(event.payload()).integrationCommitSha(), event.actorNodeId());
                     case CONTROL_BRANCH_ADVANCED -> {
-                        lastAdvanced = IntegrationAttemptPayload.decode(event.payload()).integrationCommitSha();
-                        name(byCommit, lastAdvanced, event.actorNodeId());
+                        name(byCommit, IntegrationAttemptPayload.decode(event.payload()).integrationCommitSha(), event.actorNodeId());
                     }
                     default -> {
                     }
@@ -78,22 +80,13 @@ final class LogNamedCommits {
                 // Names nothing; see the class comment.
             }
         }
-        return new LogNamedCommits(byCommit, lastAdvanced);
+        return new LogNamedCommits(byCommit);
     }
 
     private static Naming name(Map<String, Naming> byCommit, String commit, String writer) {
         Naming naming = byCommit.computeIfAbsent(commit, ignored -> new Naming(new LinkedHashSet<>(), new LinkedHashSet<>()));
         naming.writers().add(writer);
         return naming;
-    }
-
-    /**
-     * The head the last {@code CONTROL_BRANCH_ADVANCED} entry names: where {@code main} is on the leader.
-     *
-     * @return the head, or null before any
-     */
-    String lastAdvancedHead() {
-        return lastAdvancedHead;
     }
 
     /**

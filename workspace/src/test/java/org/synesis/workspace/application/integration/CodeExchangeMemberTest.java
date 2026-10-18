@@ -168,57 +168,120 @@ class CodeExchangeMemberTest {
         return TestGit.output(remote, "for-each-ref", "--format=%(refname)", "refs/synesis");
     }
 
+    private String memberHead() throws IOException {
+        return TestGit.output(memberRoot, "rev-parse", "HEAD");
+    }
+
     @Test
-    void aMembersLaneTravelsOverLinkAndTheNextLaneStartsOnTheIntegratedHead() throws Exception {
+    void aMembersLaneIsMergedByTheMembersOwnPassAndTheNextLaneStartsOnTheIntegratedHead() throws Exception {
         replicate();
         String branchBefore = TestGit.output(remote, "rev-parse", "refs/heads/" + branch);
+        String leaderHead = leader.head();
         startLane("m-1", "src/a.txt");
 
+        // Completing a task runs the member's own merge pass on the member's checkout (ADR-0098 step 5).
         AgentResponse finished = finish("m-1");
 
         assertTrue(memberAppended().contains(PredictionEventType.COMPLETION_PREPARED), finished.toJson());
         assertTrue(memberAppended().contains(PredictionEventType.TASK_SNAPSHOT_CREATED), finished.toJson());
+        assertTrue(memberAppended().contains(PredictionEventType.TASK_INTEGRATED), finished.toJson());
         assertEquals("", remoteRefs(), "the member pushed nothing: its refs stay in its clone");
         assertEquals(0, leader.count(PredictionEventType.COMPLETION_PREPARED), "nothing reached the leader before the logs were exchanged");
-        exchangeLogs();
-        String snapshotId = leader.store().taskCompletionProjection().allSnapshots().getFirst().snapshotId();
-        String snapshotCommit = leader.store().taskCompletionProjection().allSnapshots().getFirst().commitSha();
+        String snapshotId = memberStore().taskCompletionProjection().allSnapshots().getFirst().snapshotId();
+        String snapshotCommit = memberStore().taskCompletionProjection().allSnapshots().getFirst().commitSha();
         assertEquals(snapshotCommit, TestGit.output(memberRoot, "rev-parse", "refs/synesis/snapshots/" + snapshotId));
-        assertFalse(commitInLeaderClone(snapshotCommit), "the leader's clone does not hold the member's commit yet");
-
-        // After integrating, the leader releases the member's lane: its own entry, which may act for any participant.
-        AgentResponse pass = leader.pump();
-
-        assertEquals(AgentStatus.COMPLETED, pass.status(), pass.toJson());
-        assertEquals(TaskCompletionState.INTEGRATED, leader.state(snapshotId));
-        assertTrue(leader.headHas("src/a.txt"));
+        assertEquals(TaskCompletionState.INTEGRATED, memberStore().taskCompletionProjection().snapshotState(snapshotId).orElseThrow());
+        TestGit.output(memberRoot, "cat-file", "-e", "HEAD:src/a.txt");
+        assertFalse(memberHead().equals(leaderHead), "the member's main moved on its own checkout");
         assertEquals(branchBefore, TestGit.output(remote, "rev-parse", "refs/heads/" + branch), "with no mirror nothing is pushed");
 
-        // The merged lane was the group's only one, so the group completed; new work starts a new group.
+        // The leader's pass leaves the member's lane to the member's computer.
         exchangeLogs();
+        assertFalse(commitInLeaderClone(snapshotCommit), "the leader's clone does not hold the member's commit");
+        AgentResponse leaderPass = leader.pump();
+        assertFalse(leader.headHas("src/a.txt"), leaderPass.toJson());
+        assertEquals(leaderHead, leader.head(), "the leader's main did not follow yet");
+        assertEquals(0, leader.store().events().stream().filter(event -> event.type() == PredictionEventType.TASK_INTEGRATED
+                && event.actorNodeId().equals(leader.identity.nodeId())).count(), "the leader's own log holds no integration of the member's lane");
+
+        // The merged lane was the group's only one, so the group completed; new work starts a new group.
         Path next = startLane("m-2", "src/b.txt", java.util.UUID.randomUUID());
 
-        assertEquals(leader.head(), TestGit.output(memberRoot, "rev-parse", "HEAD"), "the member's checkout followed the leader");
-        assertEquals(leader.head(), bindings.find(member, "codex", "m-2").orElseThrow().baseCommit(), "the new lane is based on the integrated head");
+        assertEquals(memberHead(), bindings.find(member, "codex", "m-2").orElseThrow().baseCommit(), "the new lane is based on the integrated head");
         assertTrue(Files.exists(next.resolve("src/a.txt")), "the new lane sees the integrated work");
     }
 
     @Test
-    void aMembersCheckoutFollowsTheIntegratedHeadAsSoonAsItsLogNamesIt() throws Exception {
+    void theOwnersCopyTakesTheMembersAdvancedMainOverLinkAfterTheLogsAreExchanged() throws Exception {
+        replicate();
+        String leaderHead = leader.head();
+        startLane("m-1", "src/a.txt");
+        finish("m-1");
+        String memberMain = memberHead();
+        assertFalse(memberMain.equals(leaderHead), "the member's main moved on its own checkout");
+        assertFalse(commitInLeaderClone(memberMain), "the leader's clone does not hold the member's commit yet");
+        java.util.concurrent.CompletableFuture<String> diverged = new java.util.concurrent.CompletableFuture<>();
+        link.leader.whenDiverged(diverged::complete);
+        exchangeLogs();
+
+        link.leader.mainMayHaveMoved();
+
+        awaitLeaderHead(memberMain);
+        assertTrue(leader.headHas("src/a.txt"), "the owner's checkout holds the member's work");
+        assertFalse(diverged.isDone(), "a copy that is behind is not diverged");
+    }
+
+    @Test
+    void theOwnersCopyKeepsItsOwnCommitWhenTheMembersAdvancedMainDiverged() throws Exception {
         replicate();
         startLane("m-1", "src/a.txt");
         finish("m-1");
+        String memberMain = memberHead();
+        leader.git("commit", "--allow-empty", "-m", "the owner's own change");
+        String ownerHead = leader.head();
+        java.util.concurrent.CompletableFuture<String> diverged = new java.util.concurrent.CompletableFuture<>();
+        link.leader.whenDiverged(diverged::complete);
         exchangeLogs();
-        assertEquals(AgentStatus.COMPLETED, leader.pump().status());
+
+        link.leader.mainMayHaveMoved();
+
+        assertEquals(memberMain, diverged.get(60, java.util.concurrent.TimeUnit.SECONDS), "the member's head is reported as diverged");
+        assertEquals(ownerHead, leader.head(), "the owner's main did not move");
+        assertFalse(leader.headHas("src/a.txt"), "the member's work was not merged into the owner's checkout");
+    }
+
+    private void awaitLeaderHead(String expected) throws Exception {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
+        while (!expected.equals(leader.head()) && System.nanoTime() < deadline) {
+            Thread.sleep(200);
+        }
+        assertEquals(expected, leader.head(), "the owner's checkout took the member's advanced main");
+    }
+
+    @Test
+    void aMembersCheckoutKeepsItsOwnIntegratedHeadWhenTheOtherComputersLogIsExchanged() throws Exception {
+        replicate();
+        startLane("m-1", "src/a.txt");
+        finish("m-1");
+        String integrated = memberHead();
         exchangeLogs();
 
         link.member.mainMayHaveMoved();
+        Thread.sleep(500);
 
-        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
-        while (!leader.head().equals(TestGit.output(memberRoot, "rev-parse", "HEAD")) && System.nanoTime() < deadline) {
-            Thread.sleep(100);
-        }
-        assertEquals(leader.head(), TestGit.output(memberRoot, "rev-parse", "HEAD"), "main is equal on both computers without a new lane");
+        // Following the other computer's main is a later piece of step 5; the member's own main must not regress.
+        assertEquals(integrated, memberHead());
+    }
+
+    @Test
+    void aMembersPassWithAMirrorGivesTheMirrorTheControlBranch() throws Exception {
+        replicate(true, true);
+        startLane("m-1", "src/a.txt");
+
+        AgentResponse finished = finish("m-1");
+
+        assertTrue(memberAppended().contains(PredictionEventType.TASK_INTEGRATED), finished.toJson());
+        assertEquals(memberHead(), TestGit.output(remote, "rev-parse", "refs/heads/" + branch), "the mirror received the control branch");
     }
 
     @Test

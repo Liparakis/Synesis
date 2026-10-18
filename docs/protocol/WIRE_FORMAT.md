@@ -6,7 +6,7 @@ order, and structured rejection. Java object serialization is prohibited.
 ## Compatibility number
 
 Two builds connect only if they carry the same **compatibility number**
-(`LinkCompatibility.CURRENT`, currently `8`). It is raised whenever any format
+(`LinkCompatibility.CURRENT`, currently `9`). It is raised whenever any format
 sent between computers changes, and for nothing else; it is not the build
 string. It is an unsigned 16-bit big-endian value in a position no later
 layout may move, so a build with another number can still read it and refuse
@@ -131,7 +131,7 @@ order:
 
 | Width | Field                                                                                        |
 |------:|----------------------------------------------------------------------------------------------|
-|     2 | compatibility number (`8`)                                                                   |
+|     2 | compatibility number (`9`)                                                                   |
 |    16 | project UUID, most significant long first                                                    |
 |     8 | project creation time, epoch seconds as a signed `long`                                      |
 |     4 | project creation time, nanosecond of the second                                              |

@@ -19,6 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.persistence.CodeTransferCodec;
 import org.synesis.coordination.persistence.CodeTransferMessage;
@@ -89,6 +90,8 @@ public final class CodeOverLink implements AutoCloseable {
     private final ExecutorService serving = Executors.newFixedThreadPool(SERVING_THREADS, daemon("synesis-code-serve"));
     private final ExecutorService following = Executors.newSingleThreadExecutor(daemon("synesis-code-follow"));
     private final AtomicBoolean followQueued = new AtomicBoolean();
+    private volatile java.util.function.Consumer<String> diverged = head -> {
+    };
     private final ConcurrentHashMap<ByteBuffer, CompletableFuture<byte[]>> answering = new ConcurrentHashMap<>();
     private final Object transfers = new Object();
     private long namedAtEvents = -1;
@@ -187,13 +190,13 @@ public final class CodeOverLink implements AutoCloseable {
     }
 
     /**
-     * What a member does after a pull, on its own thread, returning at once: follows the leader's branch
-     * ({@link #followMain}) when this computer has no commit yet, or when the last {@code CONTROL_BRANCH_ADVANCED}
-     * of its log names a head its branch lacks, so that its branch follows without waiting for a lane. Requests
-     * made while one is waiting to run count once.
+     * What a computer does after a pull, on its own thread, returning at once: a member with no commit yet checks the
+     * owner's branch out ({@link #followMain}); otherwise every head another computer's pass advanced to that this copy
+     * lacks is fetched and, when this copy is behind it and the audit passes, taken by fast-forward (ADR-0098 step 5,
+     * {@link MainMeeting}). Requests made while one is waiting to run count once.
      */
     public void mainMayHaveMoved() {
-        if (!peers.member() || !followQueued.compareAndSet(false, true)) {
+        if (!followQueued.compareAndSet(false, true)) {
             return;
         }
         try {
@@ -211,22 +214,76 @@ public final class CodeOverLink implements AutoCloseable {
     }
 
     /**
-     * Moves code only when it is missing: the first checkout, or a {@code CONTROL_BRANCH_ADVANCED} head this computer
-     * does not hold. A head that is here already is only followed, so a branch that cannot fast-forward (a person's
-     * change, a detached checkout) costs nothing on the next pull.
+     * Moves code only when it is missing: the first checkout of a member, or a head another computer advanced to that
+     * this computer does not hold. A head that is here already is only compared, so a branch that cannot fast-forward
+     * (a person's change, a detached checkout) costs nothing on the next pull.
      */
     private void followAfterPull() throws IOException {
         String head = head();
-        String advanced = named().lastAdvancedHead();
-        if (head.isEmpty() || advanced != null && !CodeRemote.hasCommit(repository, advanced)) {
-            if (!(followMain() instanceof CodeTransferMessage.Fetched)) {
+        if (head.isEmpty()) {
+            if (peers.member() && !(followMain() instanceof CodeTransferMessage.Fetched)) {
                 LOG.log(System.Logger.Level.INFO, "The leader's branch could not be followed yet; the next pull tries again.");
             }
-        } else if (advanced != null) {
+            return;
+        }
+        List<PredictionEvent> events;
+        try {
+            events = new PredictionEventStore(coordination, project).events();
+        } catch (java.security.GeneralSecurityException unreadable) {
+            throw new IOException("the log could not be verified", unreadable);
+        }
+        for (String other : MainMeeting.lastHeads(events).values()) {
+            meet(other);
+        }
+    }
+
+    /**
+     * Takes another computer's head when this copy is behind it and the audit passes; leaves a diverged head to the
+     * re-merge of the higher node (designer item 5).
+     */
+    private void meet(String other) throws IOException {
+        String own = head();
+        if (!CodeRemote.hasCommit(repository, other) && !(present(other) instanceof CodeTransferMessage.Fetched)) {
+            LOG.log(System.Logger.Level.INFO, "Another computer's main could not be fetched yet; the next pull tries again.");
+            return;
+        }
+        MainMeeting.Relation relation = MainMeeting.relate(repository, own, other);
+        if (relation == MainMeeting.Relation.DIVERGED) {
+            diverged.accept(other);
+            return;
+        }
+        if (relation != MainMeeting.Relation.BEHIND) {
+            return;
+        }
+        List<String> problems;
+        try {
+            problems = MainMeeting.audit(repository, new PredictionEventStore(coordination, project), own, other);
+        } catch (java.security.GeneralSecurityException unreadable) {
+            throw new IOException("the log could not be verified", unreadable);
+        }
+        if (!problems.isEmpty()) {
+            LOG.log(System.Logger.Level.WARNING, "Another computer's main is not taken: {0}", problems);
+            return;
+        }
+        // Not while this computer's own pass moves its branch: the pass holds the integration lock.
+        try (var onePass = org.synesis.coordination.persistence.ProjectIntegrationLock.tryAcquire(coordination)) {
+            if (onePass == null) {
+                return;
+            }
             synchronized (transfers) {
-                followBranch(advanced);
+                followBranch(other);
             }
         }
+    }
+
+    /**
+     * Tells a listener of a head another computer advanced to that has diverged from this copy, so the re-merge of
+     * the higher node can start (ADR-0098 step 5, item 4).
+     *
+     * @param listener told the diverged head, on the following thread; it must return at once
+     */
+    public void whenDiverged(java.util.function.Consumer<String> listener) {
+        diverged = Objects.requireNonNull(listener, "listener");
     }
 
     /** The checked-out commit, or empty when there is no repository or no commit yet. */
@@ -341,9 +398,8 @@ public final class CodeOverLink implements AutoCloseable {
     private List<String> holdersFirst(LogNamedCommits log, String commit) {
         Map<String, ReplicationExchange> live = peers.live();
         List<String> order = new ArrayList<>();
-        if (!peers.member()) {
-            log.writers(commit).stream().filter(live::containsKey).forEach(order::add);
-        }
+        // The computers whose entries name the commit made it (ADR-0098 step 5: any computer may hold a main).
+        log.writers(commit).stream().filter(live::containsKey).forEach(order::add);
         live.keySet().stream().filter(node -> !order.contains(node)).sorted().forEach(order::add);
         return order;
     }

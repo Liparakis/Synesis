@@ -54,6 +54,8 @@ public final class TaskCompletionProjection {
      * another computer two may meet in either order (ADR-0100 row 4).
      */
     private final Map<SnapshotId, Map<String, String>> verdicts = new LinkedHashMap<>();
+    /** Each re-merge snapshot, by its ID (ADR-0098 step 5): reviewed, never integrated by itself. */
+    private final Map<SnapshotId, RemergeSnapshotPayload> remerges = new LinkedHashMap<>();
     private final ApplyMode mode;
 
     /**
@@ -82,6 +84,7 @@ public final class TaskCompletionProjection {
         integrationPriorStates.putAll(source.integrationPriorStates);
         validationRefusals.putAll(source.validationRefusals);
         source.verdicts.forEach((snapshot, byReviewer) -> verdicts.put(snapshot, new LinkedHashMap<>(byReviewer)));
+        remerges.putAll(source.remerges);
     }
 
     /**
@@ -148,6 +151,7 @@ public final class TaskCompletionProjection {
             case COMPLETION_PREPARED -> processCompletionPrepared(event);
             case COMPLETION_UNWOUND -> processCompletionUnwound(event);
             case TASK_SNAPSHOT_CREATED -> processSnapshotCreated(event);
+            case REMERGE_SNAPSHOT_CREATED -> processRemergeSnapshot(event);
             case REVIEW_VALIDATION_RECORDED -> processReviewValidation(event);
             case TASK_WAITING_FOR_DEPENDENCIES -> processWaitingForDependencies(event);
             case INTEGRATION_ATTEMPT_STARTED -> processAttemptStarted(event);
@@ -526,7 +530,28 @@ public final class TaskCompletionProjection {
     }
 
     /**
-     * Returns the integration attempt begun just before the given one, as it ended.
+     * Returns the active integration attempt of one computer's merge pass (ADR-0098 step 5: every computer merges its
+     * own lanes, each with its own attempts).
+     *
+     * @param writer the node whose pass made the attempt
+     * @return its active attempt when present
+     */
+    public synchronized Optional<IntegrationAttemptRecord> activeIntegrationAttempt(String writer) {
+        return attempts.active(writer);
+    }
+
+    /**
+     * Returns the last head one computer's merge pass advanced its control branch to.
+     *
+     * @param writer the node whose pass advanced it
+     * @return that head, or {@code null}
+     */
+    public synchronized String lastControlHeadAdvanced(String writer) {
+        return attempts.lastControlHeadAdvanced(writer);
+    }
+
+    /**
+     * Returns the integration attempt begun just before the given one by the same computer, as it ended.
      *
      * @param attemptId attempt whose predecessor is asked for
      * @return the preceding attempt, or empty when the attempt is unknown or was the first
@@ -650,6 +675,70 @@ public final class TaskCompletionProjection {
     }
 
     /**
+     * Applies a re-merge snapshot (ADR-0098 step 5, designer item 14). It is a snapshot for review only: it is not
+     * part of its task's history, so it changes no task's state, is never a candidate of a merge pass, and is found
+     * only by its ID, which is how its grant and its verdict name it.
+     *
+     * @param event event to apply
+     * @throws IOException when the payload is malformed or, on this computer's own append, unlawful
+     */
+    private void processRemergeSnapshot(PredictionEvent event) throws IOException {
+        RemergeSnapshotPayload remerge = RemergeSnapshotPayload.decode(event.payload());
+        TaskSnapshotPayload payload = remerge.snapshot();
+        TaskSnapshotRecord original = snapshotsById.get(new SnapshotId(remerge.originalSnapshotId()));
+        if (original == null) {
+            throw new MissingReferenceException("REMERGE_ORIGINAL_NOT_FOUND");
+        }
+        if (snapshotsById.containsKey(payload.snapshotIdentity())) {
+            throw new CoordinationException("SNAPSHOT_ID_EXISTS");
+        }
+        if (mode.checking() && (snapshotStates.get(original.snapshotIdentity()) != TaskCompletionState.INTEGRATED
+                || !original.provenance().laneIdentity().equals(payload.provenance().laneIdentity())
+                || !original.provenance().claimEpochIdentity().equals(payload.provenance().claimEpochIdentity())
+                || !original.provenance().participant().equals(payload.provenance().participant())
+                || !original.taskIdentity().equals(payload.taskIdentity()) || !payload.reviewRequired())) {
+            throw new CoordinationException("REMERGE_SNAPSHOT_INVALID");
+        }
+        TaskSnapshotRecord record = new TaskSnapshotRecord(payload.taskId(),
+                payload.snapshotId(),
+                payload.nodeId(),
+                payload.supervisorId(),
+                payload.workerId(),
+                payload.providerSessionId(),
+                payload.baseCommit(),
+                payload.commitSha(),
+                payload.changedPaths(),
+                payload.capabilityDependencies(),
+                payload.summary(),
+                event.createdAtEpochMillis(),
+                payload.provenance(),
+                true);
+        snapshotsById.put(payload.snapshotIdentity(), record);
+        snapshotStates.put(payload.snapshotIdentity(), TaskCompletionState.REVIEW_PENDING);
+        remerges.put(payload.snapshotIdentity(), remerge);
+    }
+
+    /**
+     * Returns the re-merge a snapshot belongs to, when it is a re-merge snapshot.
+     *
+     * @param snapshotId snapshot identity
+     * @return the re-merge payload, or empty for an ordinary snapshot
+     */
+    public synchronized Optional<RemergeSnapshotPayload> remergeOf(SnapshotId snapshotId) {
+        return Optional.ofNullable(remerges.get(CoordinationNullException.requireNonNull(snapshotId, "snapshot ID")));
+    }
+
+    /**
+     * Returns every snapshot of one re-merge, in the order they were recorded.
+     *
+     * @param remergeId the re-merge
+     * @return its snapshots' payloads
+     */
+    public synchronized List<RemergeSnapshotPayload> remerge(String remergeId) {
+        return remerges.values().stream().filter(remerge -> remerge.remergeId().equals(remergeId)).toList();
+    }
+
+    /**
      * Applies the review validation event to this projection.
      *
      * @param event event to apply
@@ -707,6 +796,18 @@ public final class TaskCompletionProjection {
     }
 
     /**
+     * Returns every verdict recorded on a snapshot, by reviewing participant: what a computer checks before it takes
+     * another computer's copy of {@code main} (ADR-0098 step 5, the audit).
+     *
+     * @param snapshotId snapshot identity
+     * @return each reviewer's latest verdict; empty when none was recorded
+     */
+    public synchronized Map<String, String> verdicts(SnapshotId snapshotId) {
+        return Map.copyOf(verdicts.getOrDefault(CoordinationNullException.requireNonNull(snapshotId, "snapshot ID"),
+                Map.of()));
+    }
+
+    /**
      * Returns the verdicts of a snapshot whose reviewers disagree (ADR-0100 row 4).
      *
      * @param snapshotId snapshot identity
@@ -746,7 +847,7 @@ public final class TaskCompletionProjection {
                 "",
                 event.createdAtEpochMillis(),
                 0L);
-        attempts.begin(payload.identity(), record);
+        attempts.begin(event.actorNodeId(), payload.identity(), record);
         for (TaskSnapshotRecord snapshot : knownSnapshots(payload)) {
             TaskCompletionState current = snapshotStates.get(snapshot.snapshotIdentity());
             requireIntegrable(current, isIntegrationEligibleState(current), REVIEW_ACCEPTANCE_REQUIRED);
@@ -881,7 +982,7 @@ public final class TaskCompletionProjection {
      */
     private void processBranchAdvanced(PredictionEvent event) throws IOException {
         IntegrationAttemptPayload payload = IntegrationAttemptPayload.decode(event.payload());
-        attempts.advanceHead(new CommitId(payload.integrationCommitSha()));
+        attempts.advanceHead(event.actorNodeId(), new CommitId(payload.integrationCommitSha()));
         attempts.finish(payload.identity(),
                 current -> current.withCommit(payload.integrationCommitSha())
                         .withOutcome(IntegrationAttemptLedger.ADVANCED, "", event.createdAtEpochMillis()));

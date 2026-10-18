@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.persistence.ReplicationRole;
 
 import org.synesis.workspace.agent.AgentReason;
@@ -31,7 +32,7 @@ import org.synesis.workspace.test.PortableTestCommand;
 
 /**
  * An integration pass keeps the project's append lock only to record, never through its worktree and test gate
- * (ADR-0098, invariant 8), runs one at a time, and runs only on the leader's log.
+ * (ADR-0098, invariant 8), runs one at a time, and merges only the lanes its own computer introduced.
  */
 class IntegrationOutsideAppendLockTest {
 
@@ -122,7 +123,7 @@ class IntegrationOutsideAppendLockTest {
     }
 
     @Test
-    void aMembersLogIntegratesNothingAndTheLeadersLogIsUnchanged(@TempDir Path root) throws Exception {
+    void aMembersPassIntegratesItsOwnLaneAndWritesOnlyToItsOwnLog(@TempDir Path root) throws Exception {
         Project project = new Project(root);
         project.declare(List.of("git", "rev-parse", "--verify", "HEAD"));
         Lane lane = project.announce("agt_lane", "src/f.txt");
@@ -133,17 +134,17 @@ class IntegrationOutsideAppendLockTest {
         try {
             AgentResponse asMember = project.pump();
 
-            assertEquals(AgentStatus.READY, asMember.status(), asMember.toString());
-            assertEquals(0, project.count(PredictionEventType.INTEGRATION_ATTEMPT_STARTED));
-            assertEquals(head, project.head());
+            // ADR-0098 step 5: every computer merges the lanes it introduced, on its own checkout.
+            assertEquals(AgentStatus.COMPLETED, asMember.status(), asMember.toString());
+            assertEquals(1, project.count(PredictionEventType.INTEGRATION_ATTEMPT_STARTED));
+            assertEquals(TaskCompletionState.INTEGRATED, project.state("snap_1"));
+            assertTrue(project.headHas("src/f.txt"));
+            assertFalse(project.head().equals(head));
+            assertTrue(project.store().events().stream().allMatch(event -> event.actorNodeId().equals(project.identity.nodeId())),
+                    "the pass wrote nothing under another computer's name");
+            assertFalse(Files.exists(coordination.resolve("peers")), "no other computer's log was touched");
         } finally {
             ReplicationRole.register(coordination, ReplicationRole.leader());
         }
-
-        AgentResponse asLeader = project.pump();
-
-        assertEquals(AgentStatus.COMPLETED, asLeader.status(), asLeader.toString());
-        assertTrue(project.headHas("src/f.txt"));
-        assertFalse(project.head().equals(head));
     }
 }

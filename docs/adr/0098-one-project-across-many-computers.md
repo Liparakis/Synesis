@@ -824,6 +824,93 @@ Today the merge pass cherry-picks reviewed snapshots onto the checked-out branch
    ever moved forward.
 8. **Compatibility 9** (new entry types), so steps 6 and 7 are 10.
 
+Decided while building step 5 (designer, 2026-10-18; each open to the owner):
+
+9. **One merge pass per computer.** Each computer's pass takes only the snapshots of lanes its node introduced, and its
+   integration attempts and last advanced head are its own (`activeIntegrationAttempt(node)`,
+   `lastControlHeadAdvanced(node)`): another computer's attempt in progress never holds this one's pass. Attribution
+   has no exemption: the owner's computer no longer acts for another computer's participant, and the types that were
+   the leader's only (the integration entries, `TASK_INTEGRATED`, `INTEGRATION_VALIDATION_REFUSED`) act for the
+   lanes whose snapshots they name, so one written by any other computer is refused on its writer and counts for
+   nothing on arrival (`PARTICIPANT_NOT_OWNED_BY_SIGNER`). `EVENT_TYPE_LEADER_ONLY` is gone.
+10. **Taking another computer's `main`.** After each pull that brought entries, on every computer, each head another
+    computer's pass advanced to (its last `CONTROL_BRANCH_ADVANCED`) that this copy lacks is fetched over Link from
+    the computer that wrote it first. When this copy is its ancestor, the head is audited and, if the audit passes,
+    taken by fast-forward while this computer's own pass is not running (the integration lock); a person's change in
+    the checkout stops it, as it stopped a member's follow in step 3. Nothing announces the move: each copy reads
+    from Git what it holds.
+11. **The audit** follows the head back advance by advance, each named by an entry (the head it moved from and to),
+    to a commit this copy holds. Every advance on the way must name snapshots this computer has seen, made on the
+    advancing computer's own lanes, each accepted by a reviewer other than its author where review is required. A
+    commit no entry names yet is not taken and waits for the next pull, with a warning in the server's log; a
+    separate loud report for a head still unnamed once its writer's log covers it is left for later.
+12. **Every computer runs a merge driver,** a member's too, nudged after each pull that brought entries, so work
+    that became mergeable on another computer (a review accepted there) and a copy of `main` to re-merge onto are
+    acted on with no agent of this computer calling in.
+13. **The re-merge** runs in this computer's merge pass, under its integration lock, when another computer's head is
+    held here, has diverged from this copy, and this computer's node ID is the higher. In a worktree at the other
+    head it makes one merge commit per own advance (`CONTROL_BRANCH_ADVANCED` of this node) whose head the other copy
+    lacks, oldest first, then one more with this copy's old head if the result does not contain it yet, then runs
+    the validation command on the result. A merge Git cannot make, or a failing validation, stops the re-merge and is
+    reported; the combine lane (today's repair lane needs a live source lane, and these lanes have ended) is NOT
+    BUILT.
+14. **A re-merge is reviewed again through today's review tools.** For each lane of each re-merged advance the pass
+    writes `REMERGE_SNAPSHOT_CREATED` (new, compatibility 9): a snapshot of the lane's re-merge commit, with the
+    original snapshot's provenance (lane, epoch, participant, group), the other head and this copy's old head. It is
+    a snapshot for review only: it never integrates by itself and changes no task's state. The pass then issues a
+    grant on it to the reviewer who accepted the original snapshot (`LANE_GRANT_ISSUED` with the snapshot ID and no
+    request, as a continuation's grants have none), and that reviewer consumes it and records its verdict with the
+    tools it already has (`work_group_join` with the grant, `review_validation`). Every check those tools run holds
+    for a lane that has ended. A reviewer whose lane ended is told of the grant by its next action and woken by it.
+15. **The re-merge lands** when every one of its snapshots is accepted by a reviewer who is not its author: the pass
+    moves this copy's branch to the result (which holds this copy's old head, so `main` moves forward), and records
+    it as an ordinary advance, `CONTROL_BRANCH_ADVANCED` from the other head to the result naming the re-merge
+    snapshots, so the other computer's audit follows it to its own head and fast-forwards. A re-merge whose basis
+    moved (this copy advanced meanwhile, or the other head is not the other computer's last) is left, and the next
+    pass builds a new one. A rejected re-merge is left as it is and reported; another reviewer when the original one
+    cannot be reached (designer item 2) is NOT BUILT.
+16. **How the re-merge is built and found again.** Its ID follows from the two heads (`rm-` and a hash of the other
+    head and this copy's head), so every pass on the same basis finds the same re-merge in the log and goes on to land
+    it; a pass on a new basis builds a new one. Each re-merge snapshot is `refs/synesis/snapshots/rms-…` at its lane's
+    merge commit, and the result is kept reachable under `refs/synesis/remerge/<id>` until it lands. A lane whose
+    original snapshot needed no review gets no re-merge snapshot; a re-merge with none lands as soon as it is built
+    and validated. A re-merge that Git cannot make, whose validation fails, or that a review rejects is reported once
+    in the server's log and not tried again by that server process until the heads change; the combine lane that
+    would resolve it is NOT BUILT. Every step can be repeated after a crash: the result is kept under its ref before
+    anything is written, each pass reads the lanes back from the result's merge commits and writes only the entries
+    that are missing (their IDs follow from the re-merge), and the advance is written before the branch moves, so a
+    pass that finds it written only moves the branch.
+17. **The reviewer is told and woken.** A re-merge snapshot is in no task's history, so no one is offered it as an open
+    review; only its grant offers it. `get_next_action` shows the grant to its reviewer whether or not that reviewer
+    still holds a lane, and the run controller resumes a stopped reviewer once for each such grant, as for a review it
+    is offered.
+18. **The audit follows every merged history.** A re-merge's advance starts from the other head, and its result also
+    holds the re-merging computer's own advances and old head. For every advance it walks, the audit also follows the
+    other parents of each merge commit the advance adds, back to commits this copy holds, whether or not the re-merge
+    needed a review; a commit no advance names stops it. An advance must move to a descendant of where it started, so
+    the walk always ends; an entry naming anything else is an invalid chain. A snapshot passes only when every verdict
+    on it is ACCEPTED and one of them is not its author's, so a disputed snapshot does not; a lane whose introduction
+    has not arrived is not proven to be the writer's, and its head waits. The same holds for the merge pass: a lane
+    whose introducer is unknown is not this computer's, and an integration entry naming a snapshot that has not
+    arrived waits for it instead of acting for no one.
+19. **"On `main`" is read from each copy.** A run on a computer is complete only when no lane is open and this copy of
+    `main` holds every head another computer's pass advanced to (`MainMeeting.holdsEveryHead`). So the run that waits
+    for a re-merge's review, or for the other copy's result to arrive, is not ended because every lane has closed.
+    `WORK_GROUP_STATUS_CHANGED` COMPLETED is unchanged and may be written by both computers (step 4 counts it once).
+20. **The mirror.** The push stays unforced, as before. A push the mirror refuses because it holds another computer's
+    diverged copy is tried again after every pass, and succeeds by fast-forward once the re-merge over Link has
+    landed. Re-merging onto the mirror's copy when the other computer is not connected (designer item 5's last clause)
+    is NOT BUILT: that copy's commits are named by entries this computer cannot have without Link, so the audit could
+    not pass.
+21. **Who re-merges among more than two copies.** Designer item 5 names two computers. With three, letting the higher
+    of every diverged pair re-merge never settled in the convergence property test: the middle computer re-merged onto
+    the lowest one's copy while the highest re-merged onto the middle one's, and every new merge commit was a new
+    divergence. So a computer first takes every copy it is behind, by fast-forward. Of the copies still diverged from
+    it, those another diverged copy already holds are dropped; the rest are "in the way". Only when this computer's
+    node ID is higher than every writer in the way does it re-merge, onto the lowest of them, one at a time. Every
+    other computer waits and fast-forwards to the result. A computer that cannot see a higher writer's copy yet may
+    re-merge too; the higher one then re-merges onto that result, and the lower never does, so the rounds still end.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

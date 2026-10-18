@@ -91,6 +91,19 @@ public final class CollaborationResponseMapper {
     }
 
     /**
+     * Names the re-merge snapshots that one of an agent's sessions is granted to review again (ADR-0098 step 5,
+     * designer item 14): the run controller resumes a stopped agent for each, as for a review it is offered.
+     *
+     * @param store    current project projection
+     * @param sessions exact participant handles of the agent's sessions
+     * @return the snapshots' identifiers, empty when there are none
+     */
+    public static List<String> remergeReviewsGranted(PredictionEventStore store, java.util.Collection<String> sessions) {
+        Objects.requireNonNull(store, "store");
+        return AgentReviewActionProjection.remergeGrants(store, sessions).stream().map(grant -> grant.snapshotId()).distinct().toList();
+    }
+
+    /**
      * Says what a session that holds no lane yet may take up, as {@code ensure_session} shows it to
      * an agent that announces right after: the held lanes to continue first, in the form
      * {@code get_next_action} offers them, or else the {@link #openReviewCandidates review

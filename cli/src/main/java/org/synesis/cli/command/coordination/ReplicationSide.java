@@ -58,7 +58,7 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
      * @param member       the member side, or {@code null}
      * @param leaderNodeId the leader of that member side
      * @param leader       the leader side, or {@code null} when this is a member
-     * @param mergeDriver  the leader's merge pass, or {@code null}
+     * @param mergeDriver  this computer's merge pass, or {@code null}
      */
     ReplicationSide(Path coordination, UUID projectId, Path repository, MemberReplication member, String leaderNodeId, LeaderReplication leader,
             MergeDriver mergeDriver) {
@@ -69,8 +69,21 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
         this.leaderNodeId = leaderNodeId;
         this.leader = leader;
         this.mergeDriver = mergeDriver;
-        if (member != null && code != null) {
-            member.whenPulled(code::mainMayHaveMoved);
+        if (member != null) {
+            member.whenPulled(this::afterMemberPull);
+        }
+        if (leader != null && code != null) {
+            // Every computer takes another's newer main, the owner's computer too (ADR-0098 step 5).
+            leader.whenPulled(code::mainMayHaveMoved);
+        }
+        if (code != null) {
+            // A diverged copy is re-merged by a pass, once its head is here (ADR-0098 step 5, designer item 13).
+            code.whenDiverged(head -> {
+                MergeDriver asMerge = this.mergeDriver;
+                if (asMerge != null) {
+                    asMerge.onMemberEntry();
+                }
+            });
         }
     }
 
@@ -192,16 +205,11 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
             return;
         }
         MemberReplication created = new MemberReplication(coordination, projectId, leaderNode);
-        if (code != null) {
-            created.whenPulled(code::mainMayHaveMoved);
-        }
+        created.whenPulled(this::afterMemberPull);
         // The leader side and the member side relay through one loopback server and record one endpoint file, so
         // the leader side is retired first: closed afterwards, it removed the file the member had just recorded, and
-        // this computer's agents then found no coordination server (PC + VM run of 2026-10-18).
-        if (mergeDriver != null) {
-            mergeDriver.close();
-            mergeDriver = null;
-        }
+        // this computer's agents then found no coordination server (PC + VM run of 2026-10-18). The merge driver
+        // stays: a member merges its own lanes too (ADR-0098 step 5).
         if (leader != null) {
             leader.close();
             leader = null;
@@ -214,6 +222,20 @@ final class ReplicationSide implements AutoCloseable, CodeOverLink.Peers {
         }
         leaderNodeId = leaderNode;
         member = created;
+    }
+
+    /**
+     * After a member's pull that brought entries: its code may follow another computer's main, and its own merge pass
+     * may have work (a review accepted on another computer, a copy of main to re-merge onto).
+     */
+    private void afterMemberPull() {
+        if (code != null) {
+            code.mainMayHaveMoved();
+        }
+        MergeDriver asMerge = mergeDriver;
+        if (asMerge != null) {
+            asMerge.onMemberEntry();
+        }
     }
 
     @Override

@@ -104,7 +104,10 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         List<PredictionEvent> events = store.events();
         List<Participant> participants = ParticipantActivity.overlay(location.root(), store.collaborationProjection().participants());
         List<WorkGroup> groups = store.workGroupProjection().groups();
-        boolean complete = WorkIntentService.hasHadWork(store) && !WorkIntentService.hasOpenWork(store);
+        // Done only once the work is on this copy's main too: a re-merge of two copies waits for its review with no lane
+        // open (ADR-0098 step 5).
+        boolean complete = WorkIntentService.hasHadWork(store) && !WorkIntentService.hasOpenWork(store)
+                && org.synesis.workspace.application.control.MainMeeting.holdsEveryHead(location.root(), events);
         java.util.Set<String> openLaneProviders = store.collaborationProjection().activeIntents().stream().map(intent -> intent.provider()).collect(java.util.stream.Collectors.toUnmodifiableSet());
         // A proposal belongs to the lane whose authority lineage it carries; that lane's provider
         // is the one whose agent has to come back when the answer period ends.
@@ -220,8 +223,10 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
 
             @Override
             public List<String> reviewsOffered(String provider, List<String> connectionInstanceIds) {
-                return CollaborationResponseMapper.openReviewSnapshots(store,
-                        connectionInstanceIds.stream().map(connection -> participantOf(provider, connection)).filter(Objects::nonNull).distinct().toList());
+                List<String> sessions = connectionInstanceIds.stream().map(connection -> participantOf(provider, connection)).filter(Objects::nonNull).distinct().toList();
+                // A re-merge to review again is offered to its original reviewer alone, whatever it holds (ADR-0098 step 5).
+                return java.util.stream.Stream.concat(CollaborationResponseMapper.openReviewSnapshots(store, sessions).stream(),
+                        CollaborationResponseMapper.remergeReviewsGranted(store, sessions).stream()).distinct().toList();
             }
 
             @Override

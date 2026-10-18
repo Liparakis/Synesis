@@ -85,6 +85,8 @@ public final class LeaderReplication implements AutoCloseable {
     private volatile CoordinationHttpServer served;
     private final Supplier<Set<String>> members;
     private final Runnable afterMemberEntry;
+    private volatile Runnable pulled = () -> {
+    };
     private final Map<String, PeerSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, MemberConnection> connections = new ConcurrentHashMap<>();
     private final Instant started = Instant.now();
@@ -131,7 +133,7 @@ public final class LeaderReplication implements AutoCloseable {
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.members = CoordinationNullException.requireNonNull(members, "members");
         this.exchange = new LogExchange(root, projectId, node -> members.get().contains(node),
-                node -> members.get().contains(node), afterMemberEntry);
+                node -> members.get().contains(node), this::afterArrivals);
         notices.execute(this::writeConnections);
     }
 
@@ -387,6 +389,25 @@ public final class LeaderReplication implements AutoCloseable {
             return refusal(malformed.code());
         }
         return refusal("REPLICATION_REQUEST_UNSUPPORTED");
+    }
+
+    /**
+     * Tells {@code listener} after each pull that brought a member's entries, so this computer's code can take a
+     * newer copy of {@code main} that a member advanced (ADR-0098 step 5). It runs on the exchange thread and must
+     * return at once.
+     *
+     * @param listener told after such a pull
+     */
+    public void whenPulled(Runnable listener) {
+        pulled = CoordinationNullException.requireNonNull(listener, "listener");
+    }
+
+    private void afterArrivals() {
+        try {
+            afterMemberEntry.run();
+        } finally {
+            pulled.run();
+        }
     }
 
     /**

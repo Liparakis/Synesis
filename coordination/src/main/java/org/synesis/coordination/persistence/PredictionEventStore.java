@@ -230,7 +230,7 @@ public final class PredictionEventStore implements ProjectionView {
                     throw new CoordinationSecurityException("event signature verification failed");
                 }
                 long revision = events.size() + 1L;
-                projections.check(event, !role.isMember(), revision);
+                projections.check(event, revision);
                 try {
                     own.place(event);
                 } catch (FileAlreadyExistsException taken) {
@@ -332,8 +332,7 @@ public final class PredictionEventStore implements ProjectionView {
                 List<AppliedOrder.Line> lines = new ArrayList<>();
                 ArrivalOrder.Round round;
                 try {
-                    round = ArrivalOrder.take(projections, pending, role.isMember() ? role.leaderNodeId() : null,
-                            events.size());
+                    round = ArrivalOrder.take(projections, pending, events.size());
                     for (ArrivalOrder.Taken entry : round.taken()) {
                         lines.add(new AppliedOrder.Line(entry.log(), entry.event().sequence(), entry.code()));
                         // Applied to the projections by the round; what is left is the bookkeeping.
