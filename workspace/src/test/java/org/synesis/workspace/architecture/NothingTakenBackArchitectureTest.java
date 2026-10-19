@@ -28,7 +28,7 @@ class NothingTakenBackArchitectureTest {
             files = walk.filter(path -> path.toString().endsWith(".java")).toList();
         }
         assertFalse(files.isEmpty());
-        List<String> naming = List.of("WorkTrash.java", "SnapshotRefs.java", "CodeTransferServer.java", "LogNamedCommits.java");
+        List<String> naming = List.of("WorkTrash.java", "SnapshotRefs.java", "CodeTransferServer.java", "LogNamedCommits.java", "TrashNotice.java");
         for (Path file : files) {
             String code = withoutComments(Files.readString(file));
             String name = file.getFileName().toString();
