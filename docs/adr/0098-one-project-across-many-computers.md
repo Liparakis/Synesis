@@ -1089,7 +1089,7 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
       review grant (the grant is then released and offered again, to the same agent first); and an agent that is live
       by its lease but never calls `get_next_action` holds the grant until its lease ends.
 
-27. **The lower computer takes the re-merged `main` on every pull, not only the pull that brought entries** (ADR-0102
+28. **The lower computer takes the re-merged `main` on every pull, not only the pull that brought entries** (ADR-0102
     scripted scenarios S1 and S2, defect 4: about 3 runs in 90, the lower computer held the new commit and every
     entry, its checkout clean and behind, for good). Taking another computer's head (step 5's fast-forward) was
     started only by a pull that placed entries. The attempt can end without a move for a reason that passes by itself:
