@@ -1240,6 +1240,19 @@ agent on each member, mandatory review; open to the owner):
     (ADR-0099 fix 13). Proved by `ProducersReviewEachOtherScenarioTest` (two computers, one agent each, both mains
     equal), `McpProducersReviewEachOtherTest` (one computer, two groups) and `WorkIntentServiceTest`. Source semantics
     only; no real run has shown it.
+21. **A session that predates the accept is used and recorded like one made after it** (scripted scenarios
+    `ThreeComputersMainMeetingScenarioTest` and `TakeoverScenarioTest`, 2026-10-19). A joiner dials, and its session is
+    attached before the owner accepts it; likewise a member's session with a computer that is admitted later. The
+    exchange kept such a session and used it for logs from the accept on, but `LeaderReplication` kept its own session
+    map and recorded only the sessions of nodes admitted at attach time. So the owner's code-over-Link peers
+    (`liveSessions`) lacked every session that predated its admission, the owner never fetched the others' newer `main`
+    (restarting it re-attached the sessions and cured it), and `replication.members` never named the joiner, so
+    `AwayLanes.away` judged nobody away and no lane could be taken over. The rule now is: `LeaderReplication` keeps and
+    records every attached session whatever the node's standing; admission is read afresh when the sessions are used
+    (`liveSessions`, the exchange's serve and pull, and the members file, which names only current members and is
+    re-evaluated every 2 seconds, written only when its lines change). A session of a computer that is not admitted
+    still carries nothing: it is served and pulled nothing, and is not offered to Code over Link. Source semantics
+    proven by the two scenario tests above (previously disabled); no real run has shown it.
 
 ### Step 7: Disputes, takeovers and the trash
 

@@ -4,7 +4,6 @@ import java.nio.file.Path;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
@@ -15,7 +14,7 @@ import org.synesis.cli.command.coordination.TestComputers.Computer;
  * Three computers joined by the one-link flow and linked to each other, working together (ADR-0098 steps 5 and 6): the
  * copies of {@code main} meet.
  *
- * <p>Both tests are the same product defect, found on 2026-10-19 by the scenarios of {@link OwnerDownMembersScenarioTest}
+ * <p>Both tests were the same product defect, fixed by ADR-0098 step 6 designer item 21 (the owner kept no session that predated its admission of a member, so it asked nobody for code), found on 2026-10-19 by the scenarios of {@link OwnerDownMembersScenarioTest}
  * and {@link MemberRemovalScenarioTest} when they went on to the copies of {@code main} (the removal scenario's first
  * version, then each shape below: 6 of 6 runs of each failed, and 4 earlier diagnostic runs): with the owner O and the members M1 and M2 all running and all
  * linked, the owner never takes the other computers' newer {@code main}, though its log holds every entry and is
@@ -33,7 +32,6 @@ import org.synesis.cli.command.coordination.TestComputers.Computer;
  * ({@link ApartWithoutOverlapScenarioTest}) the lower computer takes the re-merge, the known rare case of its Javadoc
  * apart.</p>
  */
-@Disabled("Defect: with three computers running and linked, the owner never takes the others' newer main until it restarts; see the Javadoc")
 @Timeout(240)
 final class ThreeComputersMainMeetingScenarioTest {
 

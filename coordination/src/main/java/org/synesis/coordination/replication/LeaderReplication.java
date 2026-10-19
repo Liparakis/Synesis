@@ -52,6 +52,7 @@ public final class LeaderReplication implements AutoCloseable {
      */
     public static final String MEMBERS_FILE = "replication.members";
 
+    private static final long RECORD_INTERVAL_SECONDS = 2;
     private static final System.Logger LOGGER = System.getLogger(LeaderReplication.class.getName());
 
     /**
@@ -92,6 +93,7 @@ public final class LeaderReplication implements AutoCloseable {
     private final Map<String, PeerSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, MemberConnection> connections = new ConcurrentHashMap<>();
     private final Instant started = Instant.now();
+    private List<String> written = List.of();
     private final ScheduledExecutorService notices = Executors.newSingleThreadScheduledExecutor(
             daemon("synesis-replication-notice"));
 
@@ -156,6 +158,8 @@ public final class LeaderReplication implements AutoCloseable {
         this.admitted = CoordinationNullException.requireNonNull(admitted, "admitted");
         this.exchange = new LogExchange(root, projectId, admitted, copied, this::afterMemberArrivals, this::afterPull);
         notices.execute(this::writeConnections);
+        // Admission changes who the file names without any session event, so the file follows it.
+        notices.scheduleWithFixedDelay(this::writeConnections, RECORD_INTERVAL_SECONDS, RECORD_INTERVAL_SECONDS, TimeUnit.SECONDS);
     }
 
     /**
@@ -322,17 +326,14 @@ public final class LeaderReplication implements AutoCloseable {
     /**
      * Attaches an authenticated session, so logs are exchanged over it.
      *
-     * <p>A session of a node the settings do not name yet is kept by the exchange, which serves it nothing and pulls
-     * nothing from it until the settings name it: a joiner the owner accepts later, over the session it already
-     * holds, needs no redial (ADR-0098 step 4). Only a member's session is recorded as a member's connection.</p>
+     * <p>Every session is kept and recorded, whether or not the node is admitted yet. The exchange serves it nothing
+     * and pulls nothing from it until the node is admitted, and {@link #liveSessions} and {@value #MEMBERS_FILE} name
+     * only admitted nodes, so a joiner the owner accepts later, over the session it already holds, is used from the
+     * accept on exactly as a session made after it (ADR-0098 step 6, designer item 21).</p>
      *
      * @param session an authenticated, control-ready session
      */
     public void attach(PeerSession session) {
-        if (!isMember(session.remoteNodeId())) {
-            exchange.attach(session);
-            return;
-        }
         String node = session.remoteNodeId();
         // One lock over the session map and the record, so the end of an old session cannot be recorded after the
         // attach of its successor.
@@ -371,9 +372,13 @@ public final class LeaderReplication implements AutoCloseable {
             MemberConnection connection = connections.getOrDefault(node, new MemberConnection(MemberConnection.State.DISCONNECTED, started));
             return node + " " + connection.state() + " " + connection.since();
         }).toList();
+        if (lines.equals(written)) {
+            return;
+        }
         try {
             if (lines.isEmpty()) {
                 Files.deleteIfExists(file);
+                written = lines;
                 return;
             }
             Path temporary = root.resolve(MEMBERS_FILE + ".tmp");
@@ -381,6 +386,7 @@ public final class LeaderReplication implements AutoCloseable {
             for (int attempt = 1; ; attempt++) {
                 try {
                     Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                    written = lines;
                     break;
                 } catch (java.nio.file.AccessDeniedException beingRead) {
                     // Windows refuses to replace a file another process has open for a moment; the next state must

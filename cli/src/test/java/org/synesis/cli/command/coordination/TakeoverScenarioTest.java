@@ -142,7 +142,7 @@ final class TakeoverScenarioTest {
     }
 
     /**
-     * DEFECT 6 (found 2026-10-19, in the first run of this scenario with the owner as the taker): the computer that created
+     * DEFECT 6, fixed (ADR-0098 step 6, designer item 21; found 2026-10-19, in the first run of this scenario with the owner as the taker): the computer that created
      * the project never records its joiner's session, so it never judges the joiner away and never offers its lane. A session
      * that is attached before the join is accepted is not a member's (the exchange keeps it so that the accept needs no
      * redial), and {@code LeaderReplication.attach} records and watches only the sessions of members. When the owner accepts,
@@ -153,7 +153,6 @@ final class TakeoverScenarioTest {
      * lane over as the joiner takes the owner's.
      */
     @Test
-    @Disabled("DEFECT 6: the owner never records the joiner's session, so it never judges the joiner away; see the Javadoc")
     void theComputerThatCreatedTheProjectTakesAJoinersLaneOverToo() throws Exception {
         Scene scene = takeOverAndHeal(lab.friend, lab.owner, Handed.NOTHING);
 
