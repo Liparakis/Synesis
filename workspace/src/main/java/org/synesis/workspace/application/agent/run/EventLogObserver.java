@@ -264,6 +264,12 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             }
 
             @Override
+            public boolean holdsReviewOfAnotherComputer(String provider, String connectionInstanceId) {
+                String participant = participantOf(provider, connectionInstanceId);
+                return participant != null && thisNode().map(node -> ProviderSessionTerminalizationService.holdsReviewOfAnotherComputer(store, participant, node)).orElse(false);
+            }
+
+            @Override
             public OptionalLong answerDeadline(String provider) {
                 Long deadline = answerDeadlines.get(provider);
                 return deadline == null ? OptionalLong.empty() : OptionalLong.of(deadline);
@@ -391,6 +397,15 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                     .stream().map(org.synesis.coordination.domain.task.CombinePayload::combineId).toList();
         } catch (Exception unreadable) {
             return List.of();
+        }
+    }
+
+    /** This computer's node ID, or empty when its identity cannot be read: then no review counts as another computer's. */
+    private java.util.Optional<String> thisNode() {
+        try {
+            return java.util.Optional.of(location.loadOrCreateIdentity().nodeId());
+        } catch (Exception unreadable) {
+            return java.util.Optional.empty();
         }
     }
 

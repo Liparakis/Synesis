@@ -564,6 +564,13 @@ before it. The ADR stays Proposed. Source-level evidence only: none of these has
     with the same neutral prompt, when another computer of the project reconnects. Source-level evidence only. No real
     run has shown it yet.
 
+12. **A reviewer of another computer's snapshot is asked again** (s5-run14, 2026-10-19; ADR-0098 step 5, designer item
+    29). Fix 11 resumes an agent once for each session that began after it last looked, and a session's first moments
+    are no proof that code can be had; in the run the journal recorded no reconnection at all. A stopped agent whose
+    session holds an unfinished review grant for a snapshot another computer published is now also resumed again
+    while that computer is connected: 30 seconds after it stopped, then 60, 120 and so on for each resume in a row
+    that recorded nothing, bounded by `--max-resumes`.
+
 ### Not done
 
 - Fix 9 counts only agents resumed for a review as looking at it. A running agent here with no lane may see the same

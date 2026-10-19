@@ -1101,6 +1101,31 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     rules of item 5 are unchanged (only a fast-forward of a head the log names, after the audit). A refusal that waits
     for the next pull (busy integration lock, detached checkout, head not fetched) is logged with its reason.
 
+29. **A reviewer of another computer's snapshot is asked again while that computer is connected** (s5-run14, PC and
+    VM, build remaster81 = `32d430a4`, 2026-10-19: both copies of `main` equal and the logs byte-identical, but the goal's
+    `gcd/` package never landed and neither run ended). *Proven from the evidence:* the PC's Claude agent consumed the
+    VM's grant `f3bdcc2f` for the VM's `gcd` snapshot, was refused `read_file` and `run_command` with
+    `CODE_PEER_UNREACHABLE` in four resumes between 01:01 and 01:11:36, and stopped without a verdict; its last resume,
+    at the heal, was refused again. After 01:12:25 no process of the PC's run started for 48 minutes, the log stayed at
+    50 entries, the grant stayed unresolved (it was revoked only when the run's end ended the connections), and the VM's
+    producer and its second Codex agent waited behind that grant, as the PC's second Claude agent waited behind it
+    ("another reviewer was admitted"). Both runs printed `AGENT_RUN_WAITING=FOREIGN_LANE_OPEN` until their time ran out.
+    The replication journals of both computers hold no line after the first `CONNECTED` of 00:59:51: no `DISCONNECT`
+    and no later `CONNECTED`, so the wake of item 23 (a session that began after the agent last looked) had nothing to
+    fire on, and the heal woke the reviewer only through log entries that arrived in two batches, the second while the
+    code was still unreachable. *Hypothesis, not proven:* the code became readable some seconds after the last
+    resume. *Rule:* a stopped agent whose session holds an unfinished review grant on a snapshot another computer's
+    agent published (`ProviderSessionTerminalizationService.holdsReviewOfAnotherComputer`, the same `grantUnresolved`
+    rule as the other grant checks) is resumed again while that computer is connected, 30 seconds after it stopped, and
+    after 60, 120 and so on for each resume in a row that recorded nothing (`AgentRunController.wakeFor`). The resumes
+    that record nothing count against `--max-resumes` as any others; once it is spent the connection is ended, the
+    reviewer is judged gone, and its review is released and offered to a live non-author by the rules of items 24 and
+    27. Nothing about the authority of the review changed: the reviewer still reads the snapshot over Link and gives
+    its own verdict. Scripted scenario S3 (`CrossComputerReviewScenarioTest`) fails without the rule (the controller
+    prints `FOREIGN_LANE_OPEN` and resumes nobody) and passes with it. *Not covered:* a run whose journal says the
+    other computer is away does not retry (it would spend the agent's resumes while nothing can be read), and the
+    wake keeps no memory of an earlier refusal, so a reviewer that stops for another reason is asked again too.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

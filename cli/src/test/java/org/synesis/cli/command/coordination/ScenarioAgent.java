@@ -32,8 +32,22 @@ final class ScenarioAgent {
         WAITING
     }
 
+    /** What the agent does when its next action asks for a review verdict. */
+    enum Review {
+        /** Records an accepted verdict at once, as a model that trusts the snapshot would. The default. */
+        ACCEPT_UNREAD,
+        /** Reads the snapshot's file first and gives a verdict only if the read succeeded, as a reviewer that will not judge unread code does. */
+        READ_THEN_ACCEPT,
+        /** Gives no verdict: the agent has stopped before it. */
+        WITHHOLD
+    }
+
     final String name;
     final Computer computer;
+    private Review review = Review.ACCEPT_UNREAD;
+    private String reviewedPath;
+    /** Whether the agent holds a reviewer lane, whose next action offers the snapshots to review as a contract and not as a protocol step. */
+    private boolean reviewerLane;
     private final McpProtocolHandler handler;
     /** The tools this agent called, with what each answered, oldest first; a failure message carries it. */
     final List<String> trace = new java.util.concurrent.CopyOnWriteArrayList<>();
@@ -84,6 +98,17 @@ final class ScenarioAgent {
         }
     }
 
+    /**
+     * Sets how the agent answers a request for a verdict from now on.
+     *
+     * @param mode       what it does
+     * @param pathToRead the file of the reviewed snapshot it reads first when {@code mode} is {@link Review#READ_THEN_ACCEPT}
+     */
+    void reviews(Review mode, String pathToRead) {
+        this.review = mode;
+        this.reviewedPath = pathToRead;
+    }
+
     Map<String, Object> next() {
         return call("get_next_action", Map.of());
     }
@@ -92,6 +117,18 @@ final class ScenarioAgent {
     void join() {
         Map<String, Object> ensured = call("ensure_session", Map.of());
         assertFalse(Boolean.TRUE.equals(ensured.get("isError")), name + " joins: " + ensured);
+    }
+
+    /**
+     * Opens a reviewer lane as a reviewing agent does: it claims the report it will publish and names what it reviews. The
+     * lane must be ready.
+     */
+    void joinAsReviewer(String report, String target) {
+        Map<String, Object> ensured = call("ensure_session", Map.of("task", Map.of("role", "reviewer", "goal", "Independently review " + target,
+                "acceptance", "Inspect the producer's immutable snapshot of " + target + " and accept it if it is right", "claims", List.of(Map.of("kind", "path_exact", "path", report)),
+                "reviewTargets", List.of(Map.of("kind", "path_exact", "path", target)))));
+        assertEquals("ready", ensured.get("status"), name + " joins as a reviewer of " + target + ": " + ensured);
+        reviewerLane = true;
     }
 
     /** Claims the paths with a goal, as an agent's first {@code ensure_session} does; the lane must be ready. */
@@ -166,12 +203,22 @@ final class ScenarioAgent {
             return Boolean.TRUE.equals(called.get("isError")) ? Step.WAITING : Step.ACTED;
         }
         if ("review_decision".equals(inner.get("nextProtocolAction"))) {
+            if (review == Review.WITHHOLD) {
+                return Step.WAITING;
+            }
+            if (review == Review.READ_THEN_ACCEPT) {
+                Map<String, Object> read = call("read_file", Map.of("path", reviewedPath));
+                if (Boolean.TRUE.equals(read.get("isError")) || !"completed".equals(read.get("status"))) {
+                    return Step.WAITING;
+                }
+            }
             Map<String, Object> payload = new LinkedHashMap<>((Map<String, Object>) inner.get("nextProtocolPayload"));
             payload.put("result", "accepted");
             Map<String, Object> called = call("respond_coordination", Map.of("kind", "review_validation", "payload", payload));
             return Boolean.TRUE.equals(called.get("isError")) ? Step.WAITING : Step.ACTED;
         }
-        if ("request_coordination".equals(inner.get("nextProtocolAction")) && inner.get("actionableReviewCandidates") instanceof List<?> listed && !listed.isEmpty()) {
+        boolean choosesAReview = "request_coordination".equals(inner.get("nextProtocolAction")) || reviewerLane && "REVIEW_CONTRACT".equals(workflow.get("type"));
+        if (choosesAReview && inner.get("actionableReviewCandidates") instanceof List<?> listed && !listed.isEmpty()) {
             Map<String, Object> chosen = (Map<String, Object>) listed.getFirst();
             Map<String, Object> called = call("request_coordination", (Map<String, Object>) chosen.get("requestCoordination"));
             return Boolean.TRUE.equals(called.get("isError")) ? Step.WAITING : Step.ACTED;

@@ -86,6 +86,16 @@ public final class AgentRunController {
      */
     private static final long RECONNECT_SETTLE_MILLIS = 30_000L;
 
+    /**
+     * How long a stopped reviewer of another computer's snapshot is left before it is asked again while that computer
+     * is connected, doubled for each ask in a row that recorded nothing. The reviewer stopped because the snapshot's
+     * code was refused as unreachable. The wake for a computer coming back (the journal's newest session) fires once
+     * per session, and the first moments of a session are no proof that code can be had: s5-run14 resumed its reviewer
+     * at the heal, was refused again, and never woke it again (its journals recorded no reconnection at all). Two pulls
+     * fit in the first interval, as for {@link #RECONNECT_SETTLE_MILLIS}.
+     */
+    private static final long FOREIGN_REVIEW_RETRY_MILLIS = 30_000L;
+
     private final AgentProcesses processes;
     private final ProjectObserver observer;
     private final Connections connections;
@@ -259,6 +269,12 @@ public final class AgentRunController {
      * of the project connected after the agent stopped. A reviewer whose author's computer was cut off read nothing,
      * recorded no verdict and stopped; when the cable came back nothing was written anywhere, and the review waited
      * for ever. Each such connection resumes it once.</p>
+     *
+     * <p>That connection is no proof that the code can be had yet, and the journal may record no reconnection at all
+     * (s5-run14: the PC's reviewer was resumed twice at the heal, refused again, and never woken again, so neither run
+     * ended). So a reviewer of a snapshot another computer published, while that computer is connected, is also
+     * resumed again some time after it stopped, the time doubling for each such resume that recorded nothing
+     * ({@link #FOREIGN_REVIEW_RETRY_MILLIS}).</p>
      */
     private static Wake wakeFor(Agent agent, Observation observation, long now, List<Agent> agents, List<String> unrecordedEnds) {
         boolean holdsLane = agent.holdsOpenLane(observation);
@@ -278,7 +294,13 @@ public final class AgentRunController {
         // No entry says that another computer came back, yet what it holds was refused as unreachable while it was
         // away: a reviewer could not read the snapshot it holds the grant for, and stopped (ADR-0098 step 4, item 23).
         boolean computerCameBack = agent.computerCameBackUnseen(observation) && (laneMayMove || observation.holdsRequestOrGrant(agent.spec.provider(), agent.connectionId));
-        if (forItself || forItsLane || computerCameBack) {
+        // That wake is spent by a session's first moments, and a journal that records no reconnection never fires it.
+        // A reviewer of another computer's snapshot is asked again, with growing pauses, for as long as that computer is
+        // connected and the review is not given; the asks that record nothing are bounded by --max-resumes, after which
+        // its session ends and the review is released like any gone reviewer's.
+        boolean foreignReviewRetry = observation.otherComputerConnected() && observation.holdsReviewOfAnotherComputer(agent.spec.provider(), agent.connectionId)
+                && now - agent.stoppedAtMillis >= FOREIGN_REVIEW_RETRY_MILLIS << Math.min(agent.idleResumes, 6);
+        if (forItself || forItsLane || computerCameBack || foreignReviewRetry) {
             return new Wake(Wake.Kind.RESUME, reviews, deadlinePassed ? deadline : OptionalLong.empty());
         }
         return new Wake(deadline.isPresent() && now < deadline.getAsLong() ? Wake.Kind.AWAIT_DEADLINE : Wake.Kind.STAY, List.of(), OptionalLong.empty());
@@ -866,6 +888,20 @@ public final class AgentRunController {
         }
 
         /**
+         * Reports whether the session behind one connection holds a review grant it has not finished for a snapshot
+         * that another computer's agent published. Reading that snapshot is refused ({@code CODE_REMOTE_UNAVAILABLE})
+         * while the Link is down, and nothing in the log says when it has come back, so a reviewer that stopped
+         * without a verdict has to be asked again (ADR-0098 step 5, item 29).
+         *
+         * @param provider             provider identifier
+         * @param connectionInstanceId connection of the agent's current process
+         * @return {@code true} while that session holds such a grant
+         */
+        default boolean holdsReviewOfAnotherComputer(String provider, String connectionInstanceId) {
+            return false;
+        }
+
+        /**
          * Returns the review disputes the sessions behind these connections are parties to, as reviewer or author:
          * one key per snapshot and set of verdicts, so a dispute whose verdicts change is a new one to see (ADR-0098
          * step 7).
@@ -966,6 +1002,8 @@ public final class AgentRunController {
         private long startedAtMillis;
         /** When it is taken to have last looked at the project: as for {@link #stoppedAtSequence}, in time. */
         private long lastLookMillis;
+        /** When the controller saw its last process end. */
+        private long stoppedAtMillis;
         /** The start of the other computer's session it was last resumed for. */
         private long resumedForConnection = Long.MIN_VALUE;
         private long resumedForDeadline = Long.MIN_VALUE;
@@ -1046,6 +1084,7 @@ public final class AgentRunController {
             long seen = seenBeforeExit.orElse(startedAtSequence);
             stoppedAtSequence = Math.max(startedAtSequence, lastActivity.isPresent() ? Math.min(lastActivity.getAsLong(), seen) : seen);
             lastLookMillis = Math.max(startedAtMillis, now - UNSEEN_BEFORE_EXIT_MILLIS);
+            stoppedAtMillis = now;
             process = null;
         }
 

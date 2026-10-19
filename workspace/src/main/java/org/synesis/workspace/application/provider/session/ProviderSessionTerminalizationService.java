@@ -133,6 +133,27 @@ public final class ProviderSessionTerminalizationService {
         return hasPendingRequest(store, participant, intentIds) || hasOpenGrant(store, participant, intentIds);
     }
 
+    /**
+     * Returns whether one participant holds a review grant it has not finished for a snapshot that another computer's
+     * agent published: the review that only that computer's code can complete, and the one a reader of the snapshot is
+     * refused with {@code CODE_REMOTE_UNAVAILABLE} while the Link is down. The grant is judged by the projection's one
+     * rule for what a grant still obliges ({@code grantUnresolved}), as {@link #holdsRequestOrGrant} judges it.
+     *
+     * @param store       current project projection
+     * @param participant exact participant handle of the session
+     * @param thisNode    this computer's node ID
+     * @return {@code true} while it holds such a grant
+     */
+    public static boolean holdsReviewOfAnotherComputer(PredictionEventStore store, String participant, String thisNode) {
+        for (LaneGrant grant : store.workGroupProjection().grants()) {
+            if (grant.targetParticipant().equals(participant) && store.workGroupProjection().grantUnresolved(grant.identity())
+                    && grant.snapshot().flatMap(store.taskCompletionProjection()::findSnapshotById).map(snapshot -> !snapshot.nodeId().equals(thisNode)).orElse(false)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static Set<String> terminalBlockers(PredictionEventStore store, ProviderSessionBindingService.Binding binding, String participant) {
         Set<String> blockers = new LinkedHashSet<>();
         List<WorkIntent> intents = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).toList();

@@ -322,6 +322,75 @@ final class AgentRunControllerTest {
         assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches, "only the agent that holds the review grant");
     }
 
+    /**
+     * s5-run14 (PC + VM, 2026-10-19): the PC's reviewer held the VM's gcd grant, was refused the code at the heal, and
+     * stopped. The journal recorded no reconnection, the log had nothing more to bring, and it was never resumed, so the
+     * review waited for ever while both runs printed {@code FOREIGN_LANE_OPEN}.
+     */
+    @Test
+    void aReviewerOfAnotherComputersSnapshotIsAskedAgainWithGrowingPausesWhileThatComputerIsConnected() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.providers = List.of("claude");
+        script.lifetimes(2, 1, 1, 1);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(41).announced().foreignLane().otherComputer().holdsRequest("claude#1").foreignReview("claude#1");
+
+        script.run(8, Duration.ofSeconds(400));
+
+        assertEquals(List.of(32, 93, 214), script.resumedAtTicks.subList(0, 3), "30 s, then 60 s, then 120 s after each stop");
+    }
+
+    @Test
+    void aReviewerIsNotAskedAgainOnceItsReviewIsGivenOrWhileTheOtherComputerIsAway() throws Exception {
+        Script given = new Script();
+        given.keepSessions = true;
+        given.providers = List.of("claude");
+        given.lifetimes(2, 1);
+        given.withoutOwnLane.add("claude#1");
+        given.at(0).head(41).announced().foreignLane().otherComputer().holdsRequest("claude#1").foreignReview("claude#1");
+        given.at(20).head(42).otherComputer().foreignLane().holdsRequest("claude#1");
+        given.run(8, Duration.ofSeconds(200));
+        assertEquals(List.of(), given.resumedAtTicks, "it gave its verdict, so it holds nothing to come back to");
+
+        Script away = new Script();
+        away.keepSessions = true;
+        away.providers = List.of("claude");
+        away.lifetimes(2, 1);
+        away.withoutOwnLane.add("claude#1");
+        away.at(0).head(41).announced().foreignLane().otherComputerAway().holdsRequest("claude#1").foreignReview("claude#1");
+        away.run(8, Duration.ofSeconds(200));
+        assertEquals(List.of(), away.resumedAtTicks, "no ask while the journal says the computer is away");
+    }
+
+    @Test
+    void aGrantOnASnapshotOfThisComputerIsNotRetriedOnATimer() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.providers = List.of("claude");
+        script.lifetimes(2, 1);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(41).announced().foreignLane().otherComputer().holdsRequest("claude#1");
+
+        script.run(8, Duration.ofSeconds(200));
+
+        assertEquals(List.of(), script.resumedAtTicks, "only a review that needs another computer's code is asked again");
+    }
+
+    @Test
+    void theAsksThatRecordNothingAreBoundedByTheResumeLimit() throws Exception {
+        Script script = new Script();
+        script.keepSessions = true;
+        script.providers = List.of("claude");
+        script.lifetimes(2, 1, 1, 1, 1, 1);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(41).announced().foreignLane().otherComputer().holdsRequest("claude#1").foreignReview("claude#1");
+
+        script.run(2, Duration.ofSeconds(4000));
+
+        assertEquals(2, script.resumedAtTicks.size(), "two idle resumes, then its session is left to end and its review released");
+    }
+
     @Test
     void aRunWaitingForAnotherComputerThatNeverActsIsTimedOutAtTheDeadline() throws Exception {
         Script script = new Script();
@@ -1459,6 +1528,11 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public boolean holdsReviewOfAnotherComputer(String provider, String connectionInstanceId) {
+                    return state.foreignReviews.contains(agentOf.get(connectionInstanceId));
+                }
+
+                @Override
                 public OptionalLong newestUnreadMessageFor(String provider, String connectionInstanceId) {
                     Long sequence = laneHeldUnder(connectionInstanceId) ? state.messages.get(agentOf.get(connectionInstanceId)) : null;
                     return sequence == null ? OptionalLong.empty() : OptionalLong.of(sequence);
@@ -1488,6 +1562,7 @@ final class AgentRunControllerTest {
         private final Map<String, List<String>> reviews = new java.util.LinkedHashMap<>();
         private final Map<String, Long> answers = new java.util.HashMap<>();
         private final List<String> requestsHeld = new ArrayList<>();
+        private final List<String> foreignReviews = new ArrayList<>();
         private final Map<String, List<String>> disputes = new java.util.HashMap<>();
 
         /** A request a session of this agent, by its label, made was answered at this log position. */
@@ -1505,6 +1580,12 @@ final class AgentRunControllerTest {
         /** The current session of this agent, by its label, holds a pending request or an unfinished review grant. */
         private State holdsRequest(String agent) {
             requestsHeld.add(agent);
+            return this;
+        }
+
+        /** The current session of this agent, by its label, holds a review grant it has not finished for a snapshot another computer published. */
+        private State foreignReview(String agent) {
+            foreignReviews.add(agent);
             return this;
         }
 
