@@ -280,7 +280,7 @@ public final class AgentRunController {
         boolean holdsLane = agent.holdsOpenLane(observation);
         boolean laneEnded = agent.heldLaneAtStop && !holdsLane;
         // Records which reviews it is offered now (reviewsToTry forgets the ones taken since).
-        List<String> reviews = laneEnded || holdsLane ? List.of() : agent.reviewsToTry(observation.reviewsOffered(agent.spec.provider(), agent.connectionIds), agents);
+        List<String> reviews = laneEnded || holdsLane && !agent.laneAwaitsOnlyReview(observation) ? List.of() : agent.reviewsToTry(observation.reviewsOffered(agent.spec.provider(), agent.connectionIds), agents);
         boolean forItself = laneEnded || !reviews.isEmpty() || agent.answerWaiting(observation) || agent.disputeUnseen(observation);
         // A lane whose published work waits for an operator is not resumed for its lane: resumed, it took
         // its lane back, published the same work again and was refused again, eleven times in one real
@@ -729,6 +729,20 @@ public final class AgentRunController {
         boolean holdsOpenLane(String provider, String connectionInstanceId);
 
         /**
+         * Reports whether the lane behind one connection has nothing left to write: it is a producer lane whose
+         * snapshot is published and waits for review. Such an agent is idle, and a review it may take is offered to it
+         * as to an agent with no lane (s6-run1: the only agent of each computer held such a lane, neither was woken for
+         * the other's snapshot, and both runs waited until their time ran out).
+         *
+         * @param provider             provider identifier
+         * @param connectionInstanceId connection of one of the agent's processes
+         * @return {@code true} while that session's lane only waits for its review
+         */
+        default boolean laneAwaitsOnlyReview(String provider, String connectionInstanceId) {
+            return false;
+        }
+
+        /**
          * Reports whether the session behind one connection is fenced for recovery: its participant is
          * suspended or held for recovery, so the MCP server refuses its calls with
          * {@code SESSION_EPOCH_FENCED} and its lane can only be continued by a new session. A kept
@@ -1096,6 +1110,12 @@ public final class AgentRunController {
          */
         private boolean holdsOpenLane(Observation observation) {
             return connectionIds.stream().anyMatch(identity -> observation.holdsOpenLane(spec.provider(), identity));
+        }
+
+        /** Whether every lane it holds only waits for its review: it has nothing to write, and may review. */
+        private boolean laneAwaitsOnlyReview(Observation observation) {
+            return holdsOpenLane(observation) && connectionIds.stream().filter(identity -> observation.holdsOpenLane(spec.provider(), identity))
+                    .allMatch(identity -> observation.laneAwaitsOnlyReview(spec.provider(), identity));
         }
 
         /** The newest unread message, or operator answer, addressed to a lane any of this agent's connections holds. */

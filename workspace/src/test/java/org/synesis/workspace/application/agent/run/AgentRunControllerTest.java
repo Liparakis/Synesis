@@ -961,6 +961,38 @@ final class AgentRunControllerTest {
         assertTrue(script.connections.containsAll(List.of("ended conn-1", "open conn-3")), "a resumed agent whose connection ended gets a new one: " + script.connections);
     }
 
+    /**
+     * Real run s6-run1 (ADR-0098 step 6, designer item 3): the only agent of each computer held a producer lane whose snapshot
+     * waited for review, and was told to wait. The other computer's snapshot is a review it may take, and no log entry
+     * need follow it, so the agent is resumed for the review as an agent with no lane is.
+     */
+    @Test
+    void aStoppedAgentWhoseOwnLaneOnlyWaitsForItsReviewIsResumedOnceForAReviewItMayTake() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "codex");
+        script.lifetimes(1, 40, 1, 1);
+        script.awaitingReview.add("claude#1");
+        script.at(0).head(5).announced();
+        script.at(3).head(9).review("snap-1");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of(3), script.resumedAtTicks, "once for the offer, not again while the same review is offered");
+    }
+
+    @Test
+    void aStoppedAgentWhoseOwnLaneStillHasWorkToDoIsNotResumedForAReview() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude", "codex");
+        script.lifetimes(1, 40, 1, 1);
+        script.at(0).head(5).announced();
+        script.at(3).head(9).review("snap-1");
+
+        script.run(8, Duration.ofSeconds(10));
+
+        assertEquals(List.of(), script.resumedAtTicks);
+    }
+
     @Test
     void aReviewTheAgentMayNotTakeResumesNobody() throws Exception {
         Script script = new Script();
@@ -1271,6 +1303,8 @@ final class AgentRunControllerTest {
         private final List<String> withoutSessionId = new ArrayList<>();
         private final List<String> closedLaneProviders = new ArrayList<>();
         private final List<String> withoutOwnLane = new ArrayList<>();
+        /** Agents, by label, whose lane is open but only waits for its snapshot's review. */
+        private final List<String> awaitingReview = new ArrayList<>();
         /** An agent, by label, whose lane is held only under its nth connection (1 is its first). */
         private final Map<String, Integer> laneHeldUnderConnection = new java.util.HashMap<>();
         private final List<String> heldByOperator = new ArrayList<>();
@@ -1450,6 +1484,11 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public boolean laneAwaitsOnlyReview(String provider, String connectionInstanceId) {
+                    return awaitingReview.contains(agentOf.get(connectionInstanceId));
+                }
+
+                @Override
                 public OptionalLong lastActivitySequence(String provider, String connectionInstanceId) {
                     Long sequence = lastActivity.get(connectionInstanceId);
                     return sequence == null ? OptionalLong.empty() : OptionalLong.of(sequence);
@@ -1504,7 +1543,7 @@ final class AgentRunControllerTest {
 
                 @Override
                 public List<String> reviewsOffered(String provider, List<String> connectionInstanceIds) {
-                    if (connectionInstanceIds.stream().anyMatch(connection -> holdsOpenLane(provider, connection))) {
+                    if (connectionInstanceIds.stream().anyMatch(connection -> holdsOpenLane(provider, connection) && !laneAwaitsOnlyReview(provider, connection))) {
                         return List.of();
                     }
                     String agent = agentOf.get(connectionInstanceIds.getFirst());

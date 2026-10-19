@@ -195,6 +195,16 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             }
 
             @Override
+            public boolean laneAwaitsOnlyReview(String provider, String connectionInstanceId) {
+                String participant = participantOf(provider, connectionInstanceId);
+                return participant != null && WorkspaceCollaborationService.laneOf(store, participant)
+                        .filter(lane -> lane.role() == org.synesis.coordination.domain.collaboration.WorkIntent.Role.PRODUCER)
+                        .flatMap(lane -> store.taskCompletionProjection().findSnapshotForTaskRevision(lane.taskId(), lane.intentId(), lane.version()))
+                        .flatMap(snapshot -> store.taskCompletionProjection().snapshotState(snapshot.snapshotId()))
+                        .filter(state -> state == org.synesis.coordination.domain.task.TaskCompletionState.REVIEW_PENDING).isPresent();
+            }
+
+            @Override
             public boolean sessionFenced(String provider, String connectionInstanceId) {
                 // The rule the MCP server's recovery fence applies to the same binding.
                 String participant = participantOf(provider, connectionInstanceId);

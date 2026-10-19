@@ -571,6 +571,13 @@ before it. The ADR stays Proposed. Source-level evidence only: none of these has
     while that computer is connected: 30 seconds after it stopped, then 60, 120 and so on for each resume in a row
     that recorded nothing, bounded by `--max-resumes`.
 
+13. **An agent whose lane only waits for its review is offered reviews like an agent with no lane** (s6-run1, 2026-10-19;
+    ADR-0098 step 6, designer item 20). Fix 9 woke only agents that held no lane, and the only agent of each computer held
+    a producer lane whose snapshot waited for review. `Observation.laneAwaitsOnlyReview` is true for a producer lane
+    whose snapshot is `REVIEW_PENDING`; `wakeFor` treats such an agent as idle for the review wake, once for each
+    review offered, as fix 9 does. A lane with anything left to write still gets no review wake. The wake changes
+    nothing about the lane's own wait.
+
 ### Not done
 
 - Fix 9 counts only agents resumed for a review as looking at it. A running agent here with no lane may see the same

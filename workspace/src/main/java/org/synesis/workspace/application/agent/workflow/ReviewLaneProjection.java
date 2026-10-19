@@ -305,8 +305,7 @@ final class ReviewLaneProjection {
             result.put(NextActionKeys.CURRENT_INTENT, CollaborationResponseMapper.intentMap(intent));
             result.put(NextActionKeys.WORK_GROUP_ID, intent.workGroupId().toString());
             result.put(NextActionKeys.CLAIM_EPOCH, intent.version());
-            List<Map<String, Object>> reviewable = AgentReviewActionProjection.reviewCandidatesFor(store, participantId).stream()
-                    .filter(candidate -> intent.workGroupId().toString().equals(candidate.get(NextActionKeys.WORK_GROUP_ID))).toList();
+            List<Map<String, Object>> reviewable = AgentReviewActionProjection.reviewCandidatesFor(store, participantId);
             if (!reviewable.isEmpty()) {
                 return reviewWhileWaitingAction(result, reviewable);
             }
@@ -326,24 +325,26 @@ final class ReviewLaneProjection {
      * every review candidate, one is never chosen for the caller among several.</p>
      *
      * @param waiting    the wait the producer would otherwise be shown
-     * @param reviewable open candidates of its work group it did not author, never empty
+     * @param reviewable open candidates of any work group of the project it did not author, never empty (ADR-0098 step 6, item 20)
      * @return a {@code REQUEST_COORDINATION} response carrying the candidates
      */
     private static AgentResponse reviewWhileWaitingAction(Map<String, Object> waiting, List<Map<String, Object>> reviewable) {
         Map<String, Object> result = new LinkedHashMap<>(waiting);
         result.put(NextActionKeys.ACTIONABLE_REVIEW_CANDIDATES, reviewable);
         result.put(NextActionKeys.NEXT_PROTOCOL_ACTION, NextActionProtocol.ACTION_REQUEST_COORDINATION);
-        String choice;
+        String offer;
         if (reviewable.size() == 1 && reviewable.getFirst().get("requestCoordination") instanceof Map<?, ?> request) {
             result.put(NextActionKeys.NEXT_PROTOCOL_KIND, request.get(NextActionKeys.KIND));
             result.put(NextActionKeys.NEXT_PROTOCOL_PAYLOAD, request.get(NextActionKeys.PAYLOAD));
-            choice = "ask for it with request_coordination and nextProtocolPayload";
+            Map<String, Object> only = reviewable.getFirst();
+            offer = "review " + only.get(NextActionKeys.SNAPSHOT_ID) + " for " + only.get("participant") + ": ask for it with request_coordination and nextProtocolPayload";
         } else {
             result.put(NextActionKeys.REVIEW_CANDIDATE_SELECTION_REQUIRED, true);
-            choice = "choose one of actionableReviewCandidates and ask for it with request_coordination and that candidate's requestCoordination";
+            offer = "review one of the snapshots of other lanes: choose one of actionableReviewCandidates and ask for it with request_coordination and that candidate's requestCoordination";
         }
-        result.put("instruction", "Your snapshot is waiting for review by another lane. Meanwhile review a snapshot of another lane: " + choice
-                + ". Its owner admits you; then follow get_next_action to inspect it and decide. Your own lane stays yours.");
+        result.put("instruction", "While your snapshot waits for review, " + offer
+                + ". Its owner admits you; then follow get_next_action to inspect it and decide. Your own lane stays yours, and its wait for review is unchanged: "
+                + "it is neither integrated nor given up by your reviewing.");
         return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
     }
 

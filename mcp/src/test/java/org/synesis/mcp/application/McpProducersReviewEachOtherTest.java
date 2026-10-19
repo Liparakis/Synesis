@@ -86,6 +86,42 @@ final class McpProducersReviewEachOtherTest {
         assertEquals(MODULES.size(), store.events().stream().filter(event -> event.type() == PredictionEventType.WORK_INTENT_ANNOUNCED).count());
     }
 
+    /**
+     * Real run s6-run1 (ADR-0098 step 6, designer item 3): two computers that announced at the same moment each opened a
+     * work group of their own, and the only agent of each held the only producer lane of its group. Each is offered the
+     * other's snapshot and reviews it without a reviewer lane, and neither reviews its own.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void twoProducersOfDifferentWorkGroupsReviewEachOtherWhileTheirOwnSnapshotsWait(@TempDir Path temp) throws Exception {
+        Path project = mandatoryReviewProject(temp.resolve("producers-of-two-groups"));
+        Producer first = producer(project, "group-a", MODULES.get(0));
+        Producer second = producer(project, "group-b", MODULES.get(1), java.util.UUID.randomUUID());
+        PredictionEventStore announced = store(project);
+        assertNotEquals(announced.collaborationProjection().intent(java.util.UUID.fromString(first.intentId())).orElseThrow().workGroupId(),
+                announced.collaborationProjection().intent(java.util.UUID.fromString(second.intentId())).orElseThrow().workGroupId(), "the lanes are in two work groups");
+        List<String> snapshots = List.of(publish(first), publish(second));
+
+        Map<String, Object> offered = result(first.handler().handleMessage(toolCall("get_next_action", Map.of())));
+        assertEquals("request_coordination", offered.get("nextProtocolAction"), offered.toString());
+        assertTrue(String.valueOf(offered.get("instruction")).startsWith("While your snapshot waits for review, review " + snapshots.get(1) + " for " + second.participant()), offered.toString());
+
+        boolean progressed = true;
+        for (int round = 0; round < 30 && progressed; round++) {
+            progressed = step(first, second.participant());
+            progressed |= step(second, first.participant());
+        }
+
+        PredictionEventStore store = store(project);
+        ReviewValidationPayload ofFirst = store.workGroupProjection().reviewValidationForSnapshot(snapshots.get(0)).orElseThrow(() -> new AssertionError("no review of " + snapshots.get(0)));
+        ReviewValidationPayload ofSecond = store.workGroupProjection().reviewValidationForSnapshot(snapshots.get(1)).orElseThrow(() -> new AssertionError("no review of " + snapshots.get(1)));
+        assertEquals(second.participant(), ofFirst.targetParticipant(), ofFirst.toString());
+        assertEquals(first.participant(), ofSecond.targetParticipant(), ofSecond.toString());
+        assertEquals("ACCEPTED", ofFirst.result());
+        assertEquals("ACCEPTED", ofSecond.result());
+        assertEquals(2, store.events().stream().filter(event -> event.type() == PredictionEventType.WORK_INTENT_ANNOUNCED).count(), "no reviewer lane was announced");
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void aProducerWaitingForItsOwnReviewRequestIsStillShownTheAdmissionAskedOfIt(@TempDir Path temp) throws Exception {
@@ -320,6 +356,10 @@ final class McpProducersReviewEachOtherTest {
     }
 
     private static Producer producer(Path project, String connection, String module) throws Exception {
+        return producer(project, connection, module, null);
+    }
+
+    private static Producer producer(Path project, String connection, String module, java.util.UUID workGroup) throws Exception {
         AgentSessionService sessions = new AgentSessionService();
         sessions.ensureSession(new SessionResolutionRequest(project, "codex", connection, null, false));
         ProjectLocation location = new ProjectApplicationService().locate(project);
@@ -327,7 +367,7 @@ final class McpProducersReviewEachOtherTest {
         var binding = bindings.find(location, "codex", connection).orElseThrow();
         Path worktree = Path.of(binding.worktreePath());
         bindings.verifyWorkspaceTrust(location, "codex", binding.sessionId(), worktree);
-        var claim = new WorkspaceCollaborationService().announce(project, "codex", connection, "Write " + module, "Reviewed by a non-author", List.of(ResourceSelector.pathExact(module)));
+        var claim = new WorkspaceCollaborationService().announce(project, "codex", connection, "Write " + module, "Reviewed by a non-author", List.of(ResourceSelector.pathExact(module)), workGroup);
         assertTrue(claim.acquired(), module);
         return new Producer(new McpProtocolHandler(sessions, project, "codex", connection), claim.intent().intentId().toString(), WorkspaceCollaborationService.participantHandle(binding.sessionId()), worktree, module);
     }

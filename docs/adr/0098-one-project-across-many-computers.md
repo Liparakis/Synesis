@@ -1220,6 +1220,27 @@ Decided while building step 6 (designer, 2026-10-18; each open to the owner):
     without a session, so a pair reachable in one direction only is still linked. A dial then redials on its own for
     as long as the member is one.
 
+Decided after the first real run of step 6 (designer, 2026-10-19; s6-run1, owner PC and two member computers, one Codex
+agent on each member, mandatory review; open to the owner):
+
+20. **A producer whose own lane only waits for review reviews the others', whatever work group they are in.** Both
+    members' agents announced a producer lane, published, and were told to wait. Neither could review: the only two
+    agents each held an open producer lane, and a session holds one lane, so neither could take a reviewer lane (the
+    runs printed `FOREIGN_LANE_OPEN` until their time ran out). Two computers that announce at the same moment each open
+    a work group of their own (`WorkIntentAnnouncement.defaultWorkGroupId`, step 5), so even the review a producer may
+    take without a reviewer lane (ADR-0089, amended 2026-10-17) did not reach across: both the offer
+    (`ReviewLaneProjection.reviewPendingAction`) and the admission (`ReviewAdmissionRules`, `REVIEW_WORK_GROUP_MISMATCH`)
+    were bound to the producer's own group. The rule now is: a participant that holds a producer lane and has published
+    a snapshot may be admitted to review a snapshot of any work group of the project. Independence is unchanged and is
+    not the group: never its own work, nor its authority lineage (`REVIEW_SELF_NOT_ALLOWED`), and a participant that
+    published nothing, or holds no producer lane, is still refused (`REVIEWER_INTENT_REQUIRED`). The review is a grant
+    for that one snapshot; the reviewer keeps its one lane, in its own group, and its own snapshot's wait is
+    untouched. A reviewer lane stays bound to its group. The answer says: "While your snapshot waits for review, review
+    snap_… for <participant>: …". The run controller wakes such an idle producer for a review it is offered
+    (ADR-0099 fix 13). Proved by `ProducersReviewEachOtherScenarioTest` (two computers, one agent each, both mains
+    equal), `McpProducersReviewEachOtherTest` (one computer, two groups) and `WorkIntentServiceTest`. Source semantics
+    only; no real run has shown it.
+
 ### Step 7: Disputes, takeovers and the trash
 
 1. **Disputes:** both reviewers are told in their next answer and woken (ADR-0099); a reviewer's new verdict replaces
