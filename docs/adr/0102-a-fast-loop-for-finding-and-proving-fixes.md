@@ -63,6 +63,18 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
    exists in `ControlPlaneReplicationTest`); three computers with the owner down need `ScenarioLab` for a list of
    computers (it names two) and the member links of `MemberLinksFlowTest`'s computer; removal of a member needs only
    the owner's membership entries and `ScenarioAgent` calls on the removed computer.
+
+   Round two, step 7 (2026-10-19): `TakeoverScenarioTest` is S4. The joiner's lane-less agent takes over the owner's lane
+   once the joiner's `replication.members` record says the owner is not connected (no timer, so no clock seam is
+   needed), finishes it, `main` ends equal, the taken lane's version is listed in the trash as `TAKEN_OVER` on both
+   computers, a snapshot handed in while apart arrives after the goal is met and is trashed, not merged, and a person
+   restores and empties the trash through `restore-trash` / `empty-trash`. `ScenarioAgent` gained `takeoversOffered`,
+   `takeOver` and `laneTakenOver`; `ScenarioLab` gained `trash`. Two defects are disabled tests with the evidence in
+   their Javadoc: DEFECT 5 (a returning agent with a stale workspace is never told `laneTakenOver`) and DEFECT 6 (the
+   project's creator never records the joiner's session, so it never judges it away). Not reachable from the harness,
+   source level only: a takeover from a snapshot (a snapshot reaches the other computer only when a reviewer there
+   fetches it), and S3's dispute (two lawful reviewers need a lane-less producer on the away computer holding a review
+   grant that the stalled computer releases, which depends on the review offers for waiting producers).
 2. **A decoded log dump and an evidence script.** `synesis log dump` prints every log this computer holds (its own and
    each copy) in local applied order, one entry per line with type, writer, sequence and the fields that matter, and
    with the state each projection derives (lanes, snapshots, grants, combines, membership). One evidence script copies

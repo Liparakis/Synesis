@@ -188,6 +188,26 @@ final class ScenarioAgent {
         return inner(next()).get("combineCandidates") instanceof List<?> listed ? (List<Map<String, Object>>) listed : List.of();
     }
 
+    /** The lanes of computers that are away which this agent's next action offers it to take over (ADR-0098 step 7, items 10 and 11). */
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> takeoversOffered() {
+        return inner(next()).get("continuationCandidates") instanceof List<?> listed ? (List<Map<String, Object>>) listed : List.of();
+    }
+
+    /** Asks for the first lane its next action offers to take over, with the request the offer carries, and returns the answer. */
+    @SuppressWarnings("unchecked")
+    Map<String, Object> takeOver() {
+        List<Map<String, Object>> offered = takeoversOffered();
+        assertFalse(offered.isEmpty(), name + " is offered a lane to take over: " + next());
+        return call("request_coordination", (Map<String, Object>) offered.getFirst().get("continuationRequest"));
+    }
+
+    /** What this agent's next action says about its lane having been taken over, or {@code null} when it says nothing. */
+    @SuppressWarnings("unchecked")
+    Map<String, Object> laneTakenOver() {
+        return inner(next()).get("laneTakenOver") instanceof Map<?, ?> notice ? (Map<String, Object>) notice : null;
+    }
+
     /**
      * Takes the one step {@code get_next_action} recommends, as an agent that only follows it does: answers an admission
      * asked of it, asks to review a snapshot, consumes a grant, records an accepted verdict, refreshes its session.

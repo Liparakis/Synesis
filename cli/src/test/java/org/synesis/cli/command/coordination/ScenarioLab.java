@@ -248,6 +248,7 @@ final class ScenarioLab implements AutoCloseable {
             } catch (Exception unreadable) {
                 out.append("\n  (grants unreadable)");
             }
+            out.append("\n  members record: ").append(org.synesis.coordination.replication.LeaderReplication.recordedMembers(computer.location.coordinationDirectory()).map(String::valueOf).orElse("none"));
             try {
                 out.append("\n  status: ").append(GitProcessRunner.run(computer.location.root(), "status", "--short", "--branch").replace("\n", " | "));
                 out.append("\n  refs: ").append(GitProcessRunner.run(computer.location.root(), "for-each-ref", "--format=%(refname) %(objectname:short)").replace("\n", " | "));
@@ -385,6 +386,16 @@ final class ScenarioLab implements AutoCloseable {
     @Override
     public void close() {
         computers.close();
+    }
+
+    /** The trash this computer lists in its snapshot, oldest first (ADR-0098 step 7, item 13). */
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> trash(Computer computer) {
+        try {
+            return (List<Map<String, Object>>) computer.read("snapshot").body().get("trash");
+        } catch (Exception unreadable) {
+            return List.of();
+        }
     }
 
     /** How many entries of a type {@code writer} wrote that {@code holder}'s log, own and copied, holds. */
