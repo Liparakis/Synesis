@@ -190,7 +190,10 @@ public final class CodeOverLink implements AutoCloseable {
     }
 
     /**
-     * What a computer does after a pull, on its own thread, returning at once: a member with no commit yet checks the
+     * What a computer does after each pull, on its own thread, returning at once. It is level-triggered: the pull
+     * that brought the entries naming a head is not always the one after which its commit can be had or this
+     * computer's own pass has finished, so every pull runs it again until this copy has met every head; a head
+     * already met costs only a comparison. A member with no commit yet checks the
      * owner's branch out ({@link #followMain}); otherwise every head another computer's pass advanced to that this copy
      * lacks is fetched and, when this copy is behind it and the audit passes, taken by fast-forward (ADR-0098 step 5,
      * {@link MainMeeting}). Requests made while one is waiting to run count once.
@@ -268,6 +271,7 @@ public final class CodeOverLink implements AutoCloseable {
         // Not while this computer's own pass moves its branch: the pass holds the integration lock.
         try (var onePass = org.synesis.coordination.persistence.ProjectIntegrationLock.tryAcquire(coordination)) {
             if (onePass == null) {
+                LOG.log(System.Logger.Level.INFO, "Another computer's main is not taken while this computer's own pass runs; the next pull tries again.");
                 return;
             }
             synchronized (transfers) {
@@ -333,6 +337,7 @@ public final class CodeOverLink implements AutoCloseable {
     private void followBranch(String leaderHead) throws IOException {
         if (GitProcessRunner.runOptional(repository, "symbolic-ref", "-q", "HEAD").isEmpty()) {
             // A detached checkout is a person's; only a branch follows.
+            LOG.log(System.Logger.Level.INFO, "The checkout is detached, so it does not follow another computer's main.");
             return;
         }
         try {

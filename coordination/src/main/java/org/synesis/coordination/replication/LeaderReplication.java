@@ -154,7 +154,7 @@ public final class LeaderReplication implements AutoCloseable {
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.members = CoordinationNullException.requireNonNull(members, "members");
         this.admitted = CoordinationNullException.requireNonNull(admitted, "admitted");
-        this.exchange = new LogExchange(root, projectId, admitted, copied, this::afterArrivals);
+        this.exchange = new LogExchange(root, projectId, admitted, copied, this::afterMemberArrivals, this::afterPull);
         notices.execute(this::writeConnections);
     }
 
@@ -436,9 +436,9 @@ public final class LeaderReplication implements AutoCloseable {
     }
 
     /**
-     * Tells {@code listener} after each pull that brought a member's entries, so this computer's code can take a
-     * newer copy of {@code main} that a member advanced (ADR-0098 step 5). It runs on the exchange thread and must
-     * return at once.
+     * Tells {@code listener} after each pull that reached a member, so this computer's code can take a newer copy
+     * of {@code main} that a member advanced (ADR-0098 step 5) however late its commit arrived. It runs on the
+     * exchange thread, at least every {@value LogExchange#PULL_INTERVAL_SECONDS} seconds, and must return at once.
      *
      * @param listener told after such a pull
      */
@@ -446,12 +446,12 @@ public final class LeaderReplication implements AutoCloseable {
         pulled = CoordinationNullException.requireNonNull(listener, "listener");
     }
 
-    private void afterArrivals() {
-        try {
-            afterMemberEntry.run();
-        } finally {
-            pulled.run();
-        }
+    private void afterMemberArrivals() {
+        afterMemberEntry.run();
+    }
+
+    private void afterPull() {
+        pulled.run();
     }
 
     /**

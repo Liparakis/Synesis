@@ -1066,6 +1066,18 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
       did before this rule); a combine lane continued or taken over by another session; and the re-merge's use of a
       combine snapshot whose base is the other copy's `main` is still untested in a real run.
 
+27. **The lower computer takes the re-merged `main` on every pull, not only the pull that brought entries** (ADR-0102
+    scripted scenarios S1 and S2, defect 4: about 3 runs in 90, the lower computer held the new commit and every
+    entry, its checkout clean and behind, for good). Taking another computer's head (step 5's fast-forward) was
+    started only by a pull that placed entries. The attempt can end without a move for a reason that passes by itself:
+    the commit is not fetchable yet, or the computer's own pass holds the integration lock. The next pull places
+    nothing, so nothing tried again. The hook that starts it (`LeaderReplication.whenPulled`,
+    `MemberReplication.whenPulled`) now runs after every pull that reached its peer (`LogExchange`'s `afterPull`),
+    so at least every `PULL_INTERVAL_SECONDS`, and `CodeOverLink.mainMayHaveMoved` is idempotent: a head already
+    met costs a comparison. The merge pass's hook (`afterMemberEntry`) stays on pulls that brought entries. The
+    rules of item 5 are unchanged (only a fast-forward of a head the log names, after the audit). A refusal that waits
+    for the next pull (busy integration lock, detached checkout, head not fetched) is logged with its reason.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

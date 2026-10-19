@@ -94,6 +94,7 @@ public final class LogExchange implements AutoCloseable {
     private final Predicate<String> admitted;
     private final Predicate<String> copied;
     private final Runnable afterArrivals;
+    private final Runnable afterPull;
     private final Map<String, PeerSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, State> states = new ConcurrentHashMap<>();
     private final Map<String, Long> noticed = new ConcurrentHashMap<>();
@@ -136,6 +137,28 @@ public final class LogExchange implements AutoCloseable {
      */
     public LogExchange(Path root, UUID projectId, Predicate<String> admitted, Predicate<String> copied,
             Runnable afterArrivals) {
+        this(root, projectId, admitted, copied, afterArrivals, () -> {
+        });
+    }
+
+    /**
+     * Opens the exchange with a second hook that runs after every pull that reached its peer, whether or not it
+     * brought entries. A thing that depends on the logs <em>and</em> on something that arrives by another path (the
+     * commit a log entry names) is level-triggered by it: the pull that brought the entries is not always the last
+     * piece to arrive, and a hook that ran only then would never run again.
+     *
+     * @param root          this computer's coordination folder
+     * @param projectId     the project
+     * @param admitted      see the other constructor
+     * @param copied        see the other constructor
+     * @param afterArrivals see the other constructor
+     * @param afterPull     called on the exchange thread after each pull that got the peer's heads, at least every
+     *                      {@value #PULL_INTERVAL_SECONDS} seconds while connected; it must not block, and must be
+     *                      safe to repeat
+     */
+    public LogExchange(Path root, UUID projectId, Predicate<String> admitted, Predicate<String> copied,
+            Runnable afterArrivals, Runnable afterPull) {
+        this.afterPull = CoordinationNullException.requireNonNull(afterPull, "afterPull");
         this.root = CoordinationNullException.requireNonNull(root, "root");
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.admitted = CoordinationNullException.requireNonNull(admitted, "admitted");
@@ -474,11 +497,13 @@ public final class LogExchange implements AutoCloseable {
             return;
         }
         int placed = 0;
+        boolean reached = false;
         try {
             if (!(ask(session, new ReplicationMessage.Heads(projectId)) instanceof ReplicationMessage.HeadList list)) {
                 setState(node, State.DISCONNECTED);
                 return;
             }
+            reached = true;
             Map<String, Long> mine = store().logHeads();
             for (Map.Entry<String, Long> head : list.heads().entrySet()) {
                 String log = head.getKey();
@@ -520,6 +545,13 @@ public final class LogExchange implements AutoCloseable {
                 afterArrivals.run();
             } catch (RuntimeException hookFailed) {
                 // The entries are placed; the hook's owner tries again on its own.
+            }
+        }
+        if (reached) {
+            try {
+                afterPull.run();
+            } catch (RuntimeException hookFailed) {
+                // The next pull runs it again.
             }
         }
     }

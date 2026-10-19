@@ -474,6 +474,22 @@ final class LinkReplicationTest {
     }
 
     @Test
+    void theOwnersCodeIsToldAfterEveryPullThatReachedTheMemberEvenWhenNothingNewCameSoALateCommitIsRetried() throws Exception {
+        AtomicInteger told = new AtomicInteger();
+        Computers computers = new Computers(Set.of(member.nodeId()));
+        computers.leaderSide.whenPulled(told::incrementAndGet);
+        computers.attach();
+        await(() -> computers.leaderSide.exchange().state(member.nodeId()) == LogExchange.State.CONNECTED, 8);
+        await(() -> told.get() >= 1, 10);
+        int first = told.get();
+
+        // No entry arrives, so only the periodic pull can tell the code again (the commit may be what is late).
+        await(() -> told.get() > first, LogExchange.PULL_INTERVAL_SECONDS + 10);
+
+        assertEquals(0, PredictionEventStore.recordedEvents(leaderRoot), "no entry was placed");
+    }
+
+    @Test
     void aHookThatFailsDoesNotUndoTheCopyOrStopTheExchange() throws Exception {
         Computers computers = new Computers(Set.of(member.nodeId()), () -> {
             throw new IllegalStateException("the merge driver is down");
