@@ -113,6 +113,10 @@ final class TestComputers implements AutoCloseable {
         final NodeIdentity node;
         final URI endpoint;
         final String commandToken;
+        /** The member links the launcher starts after its server; scenarios of several computers call {@link MemberLinks#tick()} instead of waiting 15 s. */
+        final MemberLinks links;
+        /** The registry of known projects this computer was started with, so that a restart can start it the same way. */
+        final KnownProjectRegistry registry;
         /** The owner of this computer's Link sessions; {@link #splitLink} closes it and {@link #healLink} replaces it. */
         volatile LinkRuntimeOwner owner;
         private final Path coordination;
@@ -120,9 +124,11 @@ final class TestComputers implements AutoCloseable {
         private final ControlPlaneEventHub hub;
         private final LinkRuntimeOwner.MemberAdmission admission;
         private final List<AutoCloseable> mine = new ArrayList<>();
+        private volatile boolean stopped;
 
         Computer(ProjectLocation location, KnownProjectRegistry registry) throws Exception {
             this.location = location;
+            this.registry = registry;
             this.node = location.loadOrCreateIdentity();
             this.coordination = location.coordinationDirectory();
             UUID projectId = location.projectId();
@@ -167,6 +173,7 @@ final class TestComputers implements AutoCloseable {
                 }
             };
             this.owner = newOwner();
+            this.links = new MemberLinks(owner, leader.membership().orElseThrow(), membership, node.nodeId());
             CoordinationService coordinationService = new CoordinationService(store, node);
             ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, coordinationService, new ProviderApplicationService(), new DoctorService(), new LinkNetworkProjection(owner),
                     registry);
@@ -199,7 +206,7 @@ final class TestComputers implements AutoCloseable {
             side.serveCode(server);
             this.endpoint = URI.create("http://127.0.0.1:" + server.address().getPort());
             this.commandToken = control.runtimeCommandToken();
-            mine.addAll(List.of(control, server, side));
+            mine.addAll(List.of(control, server, side, links));
             started.add(this);
             runtimes.put(location.root(), this);
         }
@@ -228,7 +235,13 @@ final class TestComputers implements AutoCloseable {
             owner = newOwner();
         }
 
+        /** Whether {@link #stop} was called: the computer is down, as one whose Synesis was stopped. */
+        boolean isStopped() {
+            return stopped;
+        }
+
         void stop() {
+            stopped = true;
             runtimes.remove(location.root(), this);
             for (int index = mine.size() - 1; index >= 0; index--) {
                 try {

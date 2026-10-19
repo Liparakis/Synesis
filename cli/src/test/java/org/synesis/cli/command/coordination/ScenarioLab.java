@@ -51,12 +51,19 @@ final class ScenarioLab implements AutoCloseable {
     final String branch;
     /** Every agent made here, so that a failure message can name the participants a log mentions. */
     private final List<ScenarioAgent> agents = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** Every computer of the project, in the order it joined: the owner, the friend, then those {@link #addMember} added. */
+    private final List<Computer> everyone = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** Set by {@link #addMember}: the waits then look at the members' links as the launcher's 15 s timer would. */
+    private volatile boolean lookingAtMemberLinks;
+    private long nextMemberLinkLook;
 
     private ScenarioLab(TestComputers computers, Computer owner, Computer friend, String branch) {
         this.computers = computers;
         this.owner = owner;
         this.friend = friend;
         this.branch = branch;
+        everyone.add(owner);
+        everyone.add(friend);
     }
 
     /**
@@ -106,21 +113,126 @@ final class ScenarioLab implements AutoCloseable {
 
     /** The friend opens the owner's project link, the owner accepts it, and the computers are members and linked. */
     private void join() throws Exception {
+        join(friend);
+        await("the two computers are linked", this::linked);
+    }
+
+    /** {@code joiner} opens a project link of the owner, the owner accepts it, and both name both as members. */
+    private void join(Computer joiner) throws Exception {
         Response invited = owner.post("invite", Map.of("project", true));
         assertEquals(201, invited.status(), invited.toString());
-        Response opened = friend.post("open-project-link", Map.of("link", invited.body().get("inviteUri")));
+        Response opened = joiner.post("open-project-link", Map.of("link", invited.body().get("inviteUri")));
         assertEquals(200, opened.status(), opened.toString());
-        await("the owner holds the friend's join request", () -> {
+        await("the owner holds the join request of " + joiner.node.nodeId().substring(0, 8), () -> {
             try {
                 return owner.joinRequests().size() == 1;
             } catch (Exception unavailable) {
                 return false;
             }
         });
-        Response accepted = owner.post("accept-join", Map.of("nodeId", friend.node.nodeId()));
+        Response accepted = owner.post("accept-join", Map.of("nodeId", joiner.node.nodeId()));
         assertEquals(200, accepted.status(), accepted.toString());
-        await("both computers name both as members", () -> owner.namesMember(friend.node.nodeId()) && friend.namesMember(friend.node.nodeId()) && friend.namesMember(owner.node.nodeId()));
-        await("the two computers are linked", this::linked);
+        await("both computers name both as members", () -> owner.namesMember(joiner.node.nodeId()) && joiner.namesMember(joiner.node.nodeId()) && joiner.namesMember(owner.node.nodeId()));
+    }
+
+    // ---- more than two computers (ADR-0102 item 1, round two) ----
+
+    /**
+     * A third (or later) computer joins the owner's project by a project link, as the friend did: it holds a clone of the
+     * owner's folder, the owner accepts it, and the call returns once both name each other members and are linked. From
+     * then on the waits look at every computer's member links, so members dial each other's cards without waiting 15 s.
+     */
+    Computer addMember(Path temp, String folder) throws Exception {
+        Path root = temp.resolve(folder);
+        GitProcessRunner.run(temp, "clone", owner.location.root().toString(), root.toString());
+        configureGit(root);
+        GitProcessRunner.run(root, "remote", "remove", "origin");
+        ProjectLocation location = computers.service().initReplica(root, owner.location.identity(), false).location();
+        KnownProjectRegistry registry = new KnownProjectRegistry(temp.resolve("registry-" + folder + "/known.json"));
+        registry.register(root);
+        Computer joined = computers.start(location, registry);
+        everyone.add(joined);
+        installProvider(location);
+        join(joined);
+        lookingAtMemberLinks = true;
+        await("the owner and the new member are linked", () -> linked(owner, joined));
+        return joined;
+    }
+
+    /** Every computer of the project, running or not, in the order it joined. */
+    List<Computer> everyone() {
+        return everyone;
+    }
+
+    /** Whether the two running computers each hold a usable session with the other. */
+    boolean linked(Computer one, Computer other) {
+        return !one.isStopped() && !other.isStopped() && sessionWith(one, other) && sessionWith(other, one);
+    }
+
+    /** Starts a stopped computer again on its own folders (same node, same card), and takes it in the place of the stopped one. */
+    Computer restart(Computer stopped) throws Exception {
+        Computer started = computers.start(stopped.location, stopped.registry);
+        everyone.set(everyone.indexOf(stopped), started);
+        return started;
+    }
+
+    /** Looks at the member links of every running computer, at most once a second, as the launcher's timer would every 15 s. */
+    private void lookAtMemberLinks() {
+        if (!lookingAtMemberLinks || System.nanoTime() < nextMemberLinkLook) {
+            return;
+        }
+        nextMemberLinkLook = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
+        for (Computer computer : everyone) {
+            if (!computer.isStopped()) {
+                computer.links.tick();
+            }
+        }
+    }
+
+    /** The given computers' copies of the branch are all the same commit. */
+    boolean mainsEqual(Computer... among) {
+        String first = head(among[0]);
+        if ("unreadable".equals(first)) {
+            return false;
+        }
+        for (Computer computer : among) {
+            if (!first.equals(head(computer))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Between every two of the given computers, each holds a byte-identical copy of the other's log (see {@link #assertLogsIdentical()}). */
+    void assertLogsIdentical(Computer... among) throws IOException {
+        for (Computer holder : among) {
+            for (Computer writer : among) {
+                if (holder != writer) {
+                    assertCopy(writer, holder);
+                }
+            }
+        }
+    }
+
+    /** {@link #assertLogsIdentical(Computer...)} as a wait condition. */
+    boolean logsIdentical(Computer... among) {
+        try {
+            assertLogsIdentical(among);
+            return true;
+        } catch (AssertionError | IOException notYet) {
+            return false;
+        }
+    }
+
+    /** The control checkout of each given computer is clean. */
+    void assertCheckoutsClean(Computer... among) throws Exception {
+        for (Computer computer : among) {
+            assertEquals("", GitProcessRunner.run(computer.location.root(), "status", "--porcelain", "--untracked-files=no").strip(), "the control checkout is clean");
+        }
+    }
+
+    private String label(Computer computer) {
+        return computer == owner ? "owner" : computer == friend ? "friend" : "member" + everyone.indexOf(computer);
     }
 
     /** The computer with the higher node ID, which is the one that re-merges when the two copies of the branch have diverged. */
@@ -174,6 +286,7 @@ final class ScenarioLab implements AutoCloseable {
     void drive(String what, BooleanSupplier done, ScenarioAgent... agents) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STEP_TIMEOUT_SECONDS);
         while (!done.getAsBoolean()) {
+            lookAtMemberLinks();
             boolean progressed = false;
             for (ScenarioAgent agent : agents) {
                 progressed |= agent.step() == ScenarioAgent.Step.ACTED;
@@ -193,6 +306,7 @@ final class ScenarioLab implements AutoCloseable {
     void await(String what, BooleanSupplier condition) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STEP_TIMEOUT_SECONDS);
         while (!condition.getAsBoolean()) {
+            lookAtMemberLinks();
             if (System.nanoTime() > deadline) {
                 throw new AssertionError("not reached within " + STEP_TIMEOUT_SECONDS + " s: " + what + dump());
             }
@@ -228,8 +342,8 @@ final class ScenarioLab implements AutoCloseable {
     private String dump() {
         StringBuilder out = new StringBuilder("\n");
         out.append("higher is ").append(higher() == owner ? "owner" : "friend").append(", linked ").append(linked()).append('\n');
-        for (Computer computer : List.of(owner, friend)) {
-            out.append(computer == owner ? "owner " : "friend ").append(computer.node.nodeId(), 0, 8).append(" head ").append(head(computer));
+        for (Computer computer : everyone) {
+            out.append(label(computer)).append(computer.isStopped() ? " (stopped) " : " ").append(computer.node.nodeId(), 0, 8).append(" head ").append(head(computer));
             try {
                 java.util.Map<String, Long> types = new java.util.TreeMap<>();
                 computer.store().events().forEach(event -> types.merge(event.type().name(), 1L, Long::sum));
@@ -249,6 +363,18 @@ final class ScenarioLab implements AutoCloseable {
                 out.append("\n  (grants unreadable)");
             }
             out.append("\n  members record: ").append(org.synesis.coordination.replication.LeaderReplication.recordedMembers(computer.location.coordinationDirectory()).map(String::valueOf).orElse("none"));
+
+            for (Computer other : everyone) {
+                if (other != computer) {
+                    String otherHead = head(other);
+                    try {
+                        boolean holds = !"unreadable".equals(otherHead) && GitProcessRunner.runResult(computer.location.root(), "cat-file", "-e", otherHead + "^{commit}").exitCode() == 0;
+                        out.append("\n  holds the head of ").append(label(other)).append(": ").append(holds);
+                    } catch (Exception unreadable) {
+                        out.append("\n  (cannot tell whether it holds the head of ").append(label(other)).append(')');
+                    }
+                }
+            }
             try {
                 out.append("\n  status: ").append(GitProcessRunner.run(computer.location.root(), "status", "--short", "--branch").replace("\n", " | "));
                 out.append("\n  refs: ").append(GitProcessRunner.run(computer.location.root(), "for-each-ref", "--format=%(refname) %(objectname:short)").replace("\n", " | "));

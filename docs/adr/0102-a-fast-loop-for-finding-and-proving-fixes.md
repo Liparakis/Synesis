@@ -75,6 +75,22 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
    source level only: a takeover from a snapshot (a snapshot reaches the other computer only when a reviewer there
    fetches it), and S3's dispute (two lawful reviewers need a lane-less producer on the away computer holding a review
    grant that the stalled computer releases, which depends on the review offers for waiting producers).
+
+   Round two, step 6 (built 2026-10-19): `ScenarioLab` now holds every computer of the project (`everyone()`,
+   `addMember` joins a third by the one-link flow, `restart` starts a stopped computer again on its folders,
+   `linked(a, b)`, `mainsEqual(...)`, `assertLogsIdentical(...)` over any set) and looks at the member links of every
+   running computer once a second inside its waits, as the launcher's 15 s timer does (`TestComputers.Computer` now
+   holds a `MemberLinks`, `isStopped()` and its registry; `ScenarioAgent.tryClaim` and `publishWhileLinked`, which
+   retries the `SNAPSHOT_COMPLETION_EVIDENCE_STALE` answer that entries arriving from another computer cause).
+   `OwnerDownMembersScenarioTest` is three computers with the owner down (members claim, an overlapping claim is
+   refused, both produce and review, their mains meet; the owner comes back and all three mains and logs are equal),
+   `MemberRemovalScenarioTest` has the removal (the member's lanes end on the others, its agents are refused for
+   `MEMBER_REMOVED`, the others go on) and the late entry (written after the head the owner saw: counted for nothing
+   on the owner and reported in `coordination status`, applied but ended on the member that copied it first), and
+   `RebootReconnectScenarioTest` stops and starts a member on the same node and folders (same card, no new
+   `MEMBER_CARD`, no new invitation, it takes the main it missed, its claim holds). Each is 25 to 45 s of test time.
+   Found one defect, kept as the disabled `ThreeComputersMainMeetingScenarioTest`: with the owner and two members
+   running and linked, the owner never takes the other computers' newer `main` until it restarts.
 2. **A decoded log dump and an evidence script.** `synesis log dump` prints every log this computer holds (its own and
    each copy) in local applied order, one entry per line with type, writer, sequence and the fields that matter, and
    with the state each projection derives (lanes, snapshots, grants, combines, membership). One evidence script copies

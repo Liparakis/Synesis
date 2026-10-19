@@ -133,10 +133,15 @@ final class ScenarioAgent {
 
     /** Claims the paths with a goal, as an agent's first {@code ensure_session} does; the lane must be ready. */
     Map<String, Object> claim(String goal, String... paths) {
-        List<Map<String, Object>> claims = java.util.Arrays.stream(paths).map(path -> Map.<String, Object>of("path", path)).toList();
-        Map<String, Object> ensured = call("ensure_session", Map.of("task", Map.of("goal", goal, "acceptance", goal + " is done", "claims", claims)));
+        Map<String, Object> ensured = tryClaim(goal, paths);
         assertEquals("ready", ensured.get("status"), name + " claims " + List.of(paths) + ": " + ensured);
         return ensured;
+    }
+
+    /** Asks to claim the paths with a goal and returns the answer, whether the lane is ready or the claim was refused. */
+    Map<String, Object> tryClaim(String goal, String... paths) {
+        List<Map<String, Object>> claims = java.util.Arrays.stream(paths).map(path -> Map.<String, Object>of("path", path)).toList();
+        return call("ensure_session", Map.of("task", Map.of("goal", goal, "acceptance", goal + " is done", "claims", claims)));
     }
 
     /** Creates a file in the agent's lane worktree through {@code apply_patch}. */
@@ -178,6 +183,24 @@ final class ScenarioAgent {
     /** Publishes the lane as a snapshot ({@code finish_lane}) and returns its ID; the snapshot then waits for review. */
     String publish() {
         Map<String, Object> published = finish();
+        assertEquals("REVIEW_PENDING", inner(published).get("snapshotState"), name + " publishes: " + published);
+        return String.valueOf(inner(published).get("snapshotId"));
+    }
+
+    /**
+     * {@link #publish} for an agent whose computer is linked to others: an entry that arrives from another computer between
+     * the agent's next action and its {@code finish_lane} makes the finish evidence stale and the answer is
+     * {@code retry_required / SNAPSHOT_COMPLETION_EVIDENCE_STALE}, which sends the agent back to its next action, so this
+     * does the same, a bounded number of times.
+     */
+    String publishWhileLinked() {
+        Map<String, Object> published = Map.of();
+        for (int attempt = 0; attempt < 30; attempt++) {
+            published = finish();
+            if (!"retry_required".equals(published.get("status")) || !"SNAPSHOT_COMPLETION_EVIDENCE_STALE".equals(inner(published).get("reason"))) {
+                break;
+            }
+        }
         assertEquals("REVIEW_PENDING", inner(published).get("snapshotState"), name + " publishes: " + published);
         return String.valueOf(inner(published).get("snapshotId"));
     }
