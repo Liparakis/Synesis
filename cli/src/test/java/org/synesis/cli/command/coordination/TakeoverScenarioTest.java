@@ -120,7 +120,8 @@ final class TakeoverScenarioTest {
     }
 
     /**
-     * DEFECT 5 (found 2026-10-19, in the first run of this scenario; ADR-0098 step 7 item 12 says the returning agent finds
+     * DEFECT 5, FIXED 2026-10-19 (the notices now ride on the stale-workspace answer and follow the session lineage; what
+     * follows is the failure as first found). Found in the first run of this scenario; ADR-0098 step 7 item 12 says the returning agent finds
      * {@code laneTakenOver} in every answer). Failing step: after the heal, the away agent's {@code get_next_action} answers
      * {@code retry_required / workspace_stale / ensure_session} with no {@code laneTakenOver}, because {@code main} moved under
      * its workspace. Following that answer (the agent calls {@code ensure_session}) gives it a new session whose participant
@@ -130,7 +131,6 @@ final class TakeoverScenarioTest {
      * the same connection is told of the lane its predecessor held.
      */
     @Test
-    @Disabled("DEFECT 5: a returning agent whose workspace is stale is never told its lane was taken over; see the Javadoc")
     @SuppressWarnings("unchecked")
     void theReturningAgentWhoseWorkspaceIsStaleIsStillToldItsLaneWasTakenOver() throws Exception {
         Scene scene = takeOverAndHeal(lab.owner, lab.friend, Handed.NOTHING);

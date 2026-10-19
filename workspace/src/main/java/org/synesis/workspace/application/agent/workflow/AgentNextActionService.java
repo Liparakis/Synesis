@@ -270,7 +270,9 @@ public final class AgentNextActionService {
 
         ReadinessResult readiness = inspection.readiness();
         if (!readiness.ready()) {
-            return notReadyResponse(request, inspection);
+            AgentResponse notReady = notReadyResponse(request, inspection);
+            // A stale workspace is the first answer a returning agent gets: it carries the notices too.
+            return inspection.exactBinding() == null ? notReady : notingDisputesAndTrash(notReady, inspection.location(), inspection.exactBinding());
         }
 
         AgentResponse durable = resolveDurableCoordination(request, root, inspection.location(), readiness.binding(), readiness.worktree());
@@ -363,7 +365,7 @@ public final class AgentNextActionService {
         try {
             Optional<PredictionEventStore> store = openEventStore(location);
             Map<String, Object> notices = store.isEmpty() ? Map.of()
-                    : AnswerNotices.forParticipant(store.get(), WorkspaceCollaborationService.participantHandle(binding.sessionId()));
+                    : AnswerNotices.forParticipant(store.get(), location.root(), WorkspaceCollaborationService.participantHandle(binding.sessionId()));
             if (notices.isEmpty()) {
                 return response;
             }

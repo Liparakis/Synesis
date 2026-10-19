@@ -16,6 +16,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.workspace.agent.AgentResponse;
 import org.synesis.workspace.application.collaboration.WorkTrash;
+import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.lifecycle.lease.SessionSuccessions;
 import org.synesis.workspace.test.TakenOverFixture;
 
 /**
@@ -85,6 +87,21 @@ final class TrashNextActionTest {
 
         assertFalse(answer.containsKey("laneTakenOver"), answer.toString());
         assertFalse(answer.containsKey("trashedWork"), answer.toString());
+    }
+
+    @Test
+    void aSessionThatReplacedTheOwnersIsToldToo() throws Exception {
+        fixture.dirtyOwnersWorktree();
+        fixture.otherComputerTakesTheLaneOver();
+        WorkTrash.sweep(fixture.location, fixture.store(), fixture.identity);
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        SessionSuccessions.record(fixture.root, bindings.find(fixture.location, TakenOverFixture.PROVIDER, TakenOverFixture.OWNER).orElseThrow().sessionId(),
+                bindings.find(fixture.location, TakenOverFixture.PROVIDER, TakenOverFixture.RESTORER).orElseThrow().sessionId());
+
+        Map<String, Object> answer = answer(TakenOverFixture.RESTORER);
+
+        assertEquals(fixture.lane.intentId().toString(), ((Map<?, ?>) answer.get("laneTakenOver")).get("laneId"), answer.toString());
+        assertInstanceOf(List.class, answer.get("trashedWork"), answer.toString());
     }
 
     @Test

@@ -1307,7 +1307,11 @@ Decided while building step 7 (designer, 2026-10-18; each open to the owner):
     the ref first and then the entry, so a crash between them leaves a ref the next pass names. With no worktree left,
     the lane's newest snapshot is kept. A lane it had already integrated on its own `main` meets the taker's at the
     re-merge, as the ADR says. The takeover is found whether or not the taker's lane is still open: a taker that
-    finished before this computer came back still leaves the lane taken over.
+    finished before this computer came back still leaves the lane taken over. (Corrected, scripted scenario S4, DEFECT 5,
+    2026-10-19: "every answer" includes the stale-workspace answer a returning agent gets first, because `main` moved under
+    its worktree, and the first answers of the session that replaced the one that held the lane (`ensure_session`
+    gives the agent a new session): both notices, `laneTakenOver` with `trashRef` and `trashedWork`, are added in one
+    place, `AnswerNotices`, over the agent's whole session lineage (`SessionSuccessions`).)
 13. **The trash entries** (codes 90 to 92): `WORK_TRASHED` {lane, epoch, task, group, commit, reason},
     `TRASH_RESTORED` {lane, epoch, the new work group}, `TRASH_EMPTIED` {lane, epoch}. Each is written by the computer
     whose person or agent acted; `WORK_TRASHED` only by the computer that put the lane's owner on the log. Work is
