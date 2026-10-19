@@ -2,8 +2,9 @@
 
 ## Status
 
-Proposed on 2026-10-19, at the owner's request ("make an adr ... and note down" the fixes discussed that night). Nothing
-here is built yet. ADR-0101 stays reserved for the simplification the owner planned after ADR-0098, ADR-0099 and
+Proposed on 2026-10-19, at the owner's request ("make an adr ... and note down" the fixes discussed that night), and
+built the same day at the owner's request ("Could we do 102"): items 1 to 10, each with its "Built" note below.
+ADR-0101 stays reserved for the simplification the owner planned after ADR-0098, ADR-0099 and
 ADR-0100 (2026-10-17).
 
 Claims are marked MEASURED (timed on 2026-10-18/19, on this PC and the VM), DERIVED or ASSUMED.

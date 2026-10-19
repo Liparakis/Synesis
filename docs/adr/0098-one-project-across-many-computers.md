@@ -1381,7 +1381,7 @@ losing their lanes.
      the repository over Link.
    - **Done when:** run 7 again with no Git remote: the WorkGroup completes on both computers and `main` is equal on
      both. A 450 MB history joins over Link in three or more pieces through an interruption. Compatibility 7.
-4. **Each computer writes its own log, and claims lock between connected computers.**
+4. **Each computer writes its own log, and claims lock between connected computers.** DONE 2026-10-19: logs byte-identical on both computers after 5- and 10-minute Link splits (s5-run14, s5-run15, s7-run1, remaster81–83); claim lock and overlap refusal also proven by the scripted scenarios S1–S4.
    - **Built:** own `events/` plus `peers/<node>/events/`; the local applied order; notice and pull per log; the
      proposal path removed; a claim's answer waiting for connected computers (designer item 1). Every projection throw
      an arriving entry can reach becomes "both stand" or "counts for nothing, reported" (ADR-0100's table; the sites
@@ -1394,7 +1394,7 @@ losing their lanes.
      claiming, publishing and reviewing, and no agent sees `LEADER_UNREACHABLE`. Within one pull after reconnecting,
      both computers hold byte-identical copies of both logs and show the overlap and the dispute the same way. The
      disputed snapshot stays off `main`. Compatibility 8.
-5. **Each computer merges its own lanes, and the copies of `main` meet peer to peer.**
+5. **Each computer merges its own lanes, and the copies of `main` meet peer to peer.** DONE 2026-10-19: s7-run1 (remaster83, `3666a4f8`) RESULT=PASS after a 10-minute split: the four packages and NOTES landed, `main` equal, logs byte-identical, tests pass on both, both runs COMPLETED. Scripted scenarios S1, S2, S3 cover re-merge, combine and cross-computer review.
    - **Built:** the merge pass on every computer; sharing `main` over Link; the diverged-copy rule (designer item 5);
      one merge commit per integration; re-review of each re-merge by the original reviewer; the combine lane through the
      repair path; "on `main`" read from each copy; attribution with no exemption, and integration entries written only
@@ -1404,7 +1404,7 @@ losing their lanes.
      change) ends with a combine lane, reviewed and merged. S5 (the VM's server killed during a re-merge) ends the same
      as S1. Then S1 once more with a bare repository as a mirror, made unreachable halfway: the result is the same, and
      the mirror catches up when it is back. Compatibility 9.
-6. **Membership in the owner's log, and a third computer.**
+6. **Membership in the owner's log, and a third computer.** DONE 2026-10-19: s6-run2 (remaster83) with the owner's Synesis stopped 10 minutes: the two members worked and reviewed each other through member cards, all three mains and log sets equal after the owner came back; the owner removed the third computer and `MEMBER_REMOVED` reached both members. Overlap refusal while the owner is down, a removed member's late entry and a reboot reconnect are proven by scripted scenarios only.
    - **Built:** the membership entries above, durable join requests, the owner and recovery keys, `MEMBER_CARD` and
      dialing every member, `role=shared`.
    - **Done when:** a third computer (a Podman container on this PC if the VM reaches it, otherwise a clone of the VM)
@@ -1413,7 +1413,7 @@ losing their lanes.
      claims, an overlapping claim is refused, and their copies of `main` meet. With Synesis on the PC started again,
      all three copies of `main` become equal. The owner removes the third computer: its open work ends, and an entry it
      writes afterwards is copied and counts for nothing. Compatibility 10.
-7. **Disputes, taking over stalled work, and the trash.**
+7. **Disputes, taking over stalled work, and the trash.** SOURCE-PROVEN 2026-10-19, real run NOT REACHED: the scripted scenario S4 (`TakeoverScenarioTest`) proves the takeover, `LANE_TAKEN_OVER` to the returning agent, the trash (`TAKEN_OVER`), late work trashed, restore and empty. s7-run1 had no away lane to take over (the VM finished its own). A dispute stays source-level (two lawful reviewers are not reachable).
    - **Built:** agents of a dispute told to settle it by messages, and a new verdict replacing a reviewer's own;
      the dispute and its end shown in the UI; the stall test (designer item 4) and takeover through lane continuation;
      the reconnecting agent told to stop, release and close; the trash (designer item 6) for late work and for a
