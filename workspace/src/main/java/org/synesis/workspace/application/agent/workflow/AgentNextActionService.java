@@ -84,6 +84,13 @@ public final class AgentNextActionService {
     private static final String PROJECT_DESCRIPTOR = ".synesis/project.json";
 
     /**
+     * What the integration pump answers when it has nothing to say to a caller. The pump's wait for review is about snapshots
+     * of this computer's lanes and is shown to every caller; a producer that has not published has a step of its own instead
+     * (s5-run15: a lane with finished work was told to wait for another lane's review, stopped, and its work never landed).
+     */
+    private static final AgentResponse NO_PUMP_WAIT = new AgentResponse(AgentStatus.READY, null, AgentNextAction.RETRY, Map.of());
+
+    /**
      * Binding status of a session that has been terminalized.
      */
     private static final String STATUS_TERMINAL = "TERMINAL";
@@ -796,7 +803,7 @@ public final class AgentNextActionService {
             // it waits. In s5-run6 the agent resumed for a combine was told to wait for another lane's review, and stopped.
             return claimRequiredResponse(store, lane.participantId(), collaboration, location);
         }
-        AgentResponse integrationOrContinuation = integrationOrContinuationAction(store, collaboration, integrationPump, continuation);
+        AgentResponse integrationOrContinuation = integrationOrContinuationAction(store, collaboration, producerStillToPublish(store, callerIntent) && integrationPump.reason() == AgentReason.VALIDATION_REQUIRED ? NO_PUMP_WAIT : integrationPump, continuation);
         if (integrationOrContinuation != null) {
             return integrationOrContinuation;
         }
@@ -837,6 +844,12 @@ public final class AgentNextActionService {
     private AgentResponse exactBindingLifecycleResponse(NextActionRequest request, ProjectLocation location) throws Exception {
         Optional<ProviderSessionBindingService.Binding> exactBinding = bindingService.find(location, request.provider(), request.connectionInstanceId());
         return exactBinding.map(binding -> terminalOrCompletedBindingResponse(location, binding)).orElse(null);
+    }
+
+    /** Whether the caller holds a producer lane that has published nothing yet: its own publication is its next step. */
+    private static boolean producerStillToPublish(PredictionEventStore store, Optional<WorkIntent> callerIntent) {
+        return callerIntent.filter(intent -> intent.role() == WorkIntent.Role.PRODUCER)
+                .filter(intent -> store.taskCompletionProjection().findSnapshotForTaskRevision(intent.taskId(), intent.intentId(), intent.version()).isEmpty()).isPresent();
     }
 
     /**

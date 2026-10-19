@@ -577,6 +577,19 @@ before it. The ADR stays Proposed. Source-level evidence only: none of these has
     whose snapshot is `REVIEW_PENDING`; `wakeFor` treats such an agent as idle for the review wake, once for each
     review offered, as fix 9 does. A lane with anything left to write still gets no review wake. The wake changes
     nothing about the lane's own wait.
+14. **A producer with unpublished work is not shown another lane's review wait** (s5-run15, PC and VM, 2026-10-19).
+    The integration pass answers `WAITING / VALIDATION_REQUIRED, snapshotIds` while a snapshot of its computer's lanes
+    awaits review, and `get_next_action` returned it to every caller no review candidate could be offered to. A Codex
+    agent resumed after its `finish_lane` was refused as stale was shown that wait for the VM's `primes` snapshot (whose
+    author was held, so no candidate was offered), stopped, and its `NOTES.md` lane never published. A producer lane
+    with no snapshot of its own now gets its own step (`IMPLEMENT`, then publication) in place of the pump's review
+    wait (`AgentNextActionService.producerStillToPublish`); after it publishes, fix 13 offers it other lanes' snapshots.
+    The cause is proven from the agent transcript; the held-author condition is not reproduced in the scripted
+    scenario (`LaneWithWorkWaitsForNoOtherLaneScenarioTest` passes with and without the change). Same run, not fixed
+    here: the PC reviewer's reads of the VM's snapshot answered `CODE_PEER_UNREACHABLE` until its resumes ran out, its
+    session ended and its grant was revoked (code over Link); and `finish_lane` was refused as stale four times in a
+    row while the other computer's review entries (`COORDINATION_*`, `LANE_GRANT_*`, `REVIEW_VALIDATION_RECORDED`) arrived,
+    which `NOT_STALING_A_FINISH` does not list.
 
 ### Not done
 
