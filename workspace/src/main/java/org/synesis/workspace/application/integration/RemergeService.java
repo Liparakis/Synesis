@@ -8,6 +8,7 @@ import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +18,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
@@ -473,11 +473,16 @@ final class RemergeService {
         }
         TaskSnapshotRecord original = store.taskCompletionProjection().findSnapshotById(remerge.originalSnapshotId()).orElseThrow();
         String producer = original.provenance().participant();
+        Optional<String> accepted = store.taskCompletionProjection().verdicts(original.snapshotIdentity()).entrySet().stream()
+                .filter(verdict -> "ACCEPTED".equals(verdict.getValue()) && !verdict.getKey().equals(producer)).map(Map.Entry::getKey).sorted().findFirst();
+        // Only the reviewer's own computer can tell that its agent is gone, and it may have no run left to say so (a
+        // connected computer whose agents all ended): a review owed to another computer's agent goes to a live agent
+        // here when there is one, so it is never held for ever by an agent nobody can wake.
+        boolean acceptedElsewhere = accepted.flatMap(handle -> store.collaborationProjection().introducingNode(new ParticipantId(handle)))
+                .map(node -> !node.equals(identity.nodeId())).orElse(false);
         Optional<String> reviewer = offered.isEmpty()
-                ? store.taskCompletionProjection().verdicts(original.snapshotIdentity()).entrySet().stream()
-                        .filter(verdict -> "ACCEPTED".equals(verdict.getValue()) && !verdict.getKey().equals(producer)).map(Map.Entry::getKey)
-                        .sorted().findFirst()
-                : anotherReviewer(controlRoot, store, identity, original, offered);
+                ? (acceptedElsewhere ? anotherReviewer(controlRoot, store, original, offered, remerge.remergeId()).or(() -> accepted) : accepted)
+                : anotherReviewer(controlRoot, store, original, offered, remerge.remergeId());
         if (reviewer.isEmpty()) {
             LOG.log(System.Logger.Level.WARNING, offered.isEmpty()
                     ? "Re-merge snapshot {0} has no reviewer to offer it to: no one other than its author accepted {1}."
@@ -493,21 +498,35 @@ final class RemergeService {
     }
 
     /**
-     * Another reviewer for a re-merge whose reviewers could not be reached (designer item 2): an active participant this
-     * computer put on the log and whose session it judges live ({@link AwayLanes#goneHere}), neither the author nor in
-     * its lineage, and not released from this snapshot before. Only this computer's agents are chosen, since only their
-     * sessions can be judged here; the lowest handle, so a repeated pass chooses the same one.
+     * Another reviewer for a re-merge whose reviewers could not be reached (designer item 2): a live session of this
+     * computer ({@link AwayLanes.Agents}), whether or not it has a lane on the log. The session a released reviewer's
+     * connection went on to is chosen first, since it is the same agent and may review what that agent was owed; then the
+     * lowest handle, so a repeated pass chooses the same one. Not chosen: a session released from this snapshot before; the
+     * author, and every session of the author's agent, since a fresh session must not review its predecessor's work; one
+     * that authored in the lineage; and the holder of an open lane of a combine of this re-merge, whose lane waits for the
+     * re-merge to land and is shown no review before then. With the leases or the recorded replacements unreadable, no
+     * one is chosen.
      */
-    private static Optional<String> anotherReviewer(Path controlRoot, PredictionEventStore store, NodeIdentity identity, TaskSnapshotRecord original,
-            List<LaneGrant> released) {
-        Predicate<String> gone = AwayLanes.goneHere(controlRoot);
+    private static Optional<String> anotherReviewer(Path controlRoot, PredictionEventStore store, TaskSnapshotRecord original,
+            List<LaneGrant> released, String remergeId) {
+        Optional<AwayLanes.Agents> known = AwayLanes.Agents.of(controlRoot);
+        if (known.isEmpty()) {
+            return Optional.empty();
+        }
+        AwayLanes.Agents agents = known.get();
         Set<String> releasedFrom = released.stream().map(LaneGrant::targetParticipant).collect(Collectors.toSet());
+        String author = original.provenance().participant();
         var collaboration = store.collaborationProjection();
-        return collaboration.participants().stream().filter(participant -> participant.state() == Participant.State.ACTIVE).map(Participant::id)
-                .filter(handle -> !releasedFrom.contains(handle) && !handle.equals(original.provenance().participant()) && !gone.test(handle))
-                .filter(handle -> collaboration.introducingNode(new ParticipantId(handle)).map(identity.nodeId()::equals).orElse(false))
-                .filter(handle -> !ReviewAdmissionRules.authoredInLineage(store, new ParticipantId(handle), original.provenance().lineageIdentity()))
-                .sorted().findFirst();
+        Set<String> waiting = store.taskCompletionProjection().combines().stream().filter(combine -> combine.remergeId().equals(remergeId))
+                .flatMap(combine -> collaboration.activeIntents().stream().filter(intent -> intent.workGroupId().equals(combine.workGroupId())))
+                .map(intent -> intent.participant()).collect(Collectors.toSet());
+        return agents.live().stream()
+                .filter(handle -> !releasedFrom.contains(handle) && !agents.sameAgent(handle, author))
+                .filter(handle -> collaboration.participantState(handle).map(state -> state == Participant.State.ACTIVE).orElse(true))
+                .filter(handle -> waiting.stream().noneMatch(holder -> agents.sameAgent(handle, holder)))
+                .filter(handle -> agents.sessionsUpTo(handle).stream()
+                        .noneMatch(session -> ReviewAdmissionRules.authoredInLineage(store, new ParticipantId(session), original.provenance().lineageIdentity())))
+                .min(Comparator.comparing((String handle) -> releasedFrom.stream().noneMatch(from -> agents.sameAgent(handle, from))).thenComparing(Comparator.naturalOrder()));
     }
 
     /**

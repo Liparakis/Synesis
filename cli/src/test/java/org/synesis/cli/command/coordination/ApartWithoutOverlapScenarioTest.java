@@ -10,7 +10,6 @@ import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
@@ -60,13 +59,13 @@ final class ApartWithoutOverlapScenarioTest {
     /**
      * DEFECT 2 (found 2026-10-19, in one of the first two runs of this scenario with agents that follow every recommended
      * refresh, and by the forced refresh below in its one run): the re-merge of the higher computer is never reviewed, and
-     * the copies of {@code main} stay apart for ever. The agent that reviewed a snapshot refreshes its stale workspace with
+     * the copies of {@code main} stayed apart for ever. The agent that reviewed a snapshot refreshes its stale workspace with
      * {@code ensure_session}, as its next action recommends, which gives it a new session. The merge pass judges the old
      * session gone and releases the re-merge review it was granted (ADR-0098 step 5, item 24), and offers it to no one: the
      * only other agent wrote the snapshot, and the refreshed agent, the same connection, is not offered its own review
-     * again. Its next action says only that it has no open work.
+     * again. Its next action said only that it had no open work. Now the review passes to the session that replaced the
+     * reviewer's, which {@code SessionSuccessions} proves is the same agent's, and never to the author's own next session.
      */
-    @Disabled("DEFECT 2: a re-merge review is released from the agent that refreshed its session and offered to no one; see the Javadoc")
     @Test
     void anOriginalReviewerThatRefreshedItsWorkspaceStillGetsTheReMergeToReviewAndMainEndsEqual() throws Exception {
         workApartAndMeet(true);
@@ -79,13 +78,6 @@ final class ApartWithoutOverlapScenarioTest {
         ScenarioAgent high2 = lab.agent(high, "high-2");
         ScenarioAgent low1 = lab.agent(low, "low-1");
         ScenarioAgent low2 = lab.agent(low, "low-2");
-        if (!originalReviewerRefreshes) {
-            // A lane that is published and under review needs no fresh workspace; a model that stays put keeps its session.
-            high1.keepsItsSession();
-            high2.keepsItsSession();
-            low1.keepsItsSession();
-            low2.keepsItsSession();
-        }
         String start = lab.head(high);
         assertEquals(start, lab.head(low), "joined: both computers start from the same main");
 
@@ -106,6 +98,8 @@ final class ApartWithoutOverlapScenarioTest {
         low1.publish();
         low2.publish();
 
+        String sessionOfReviewer = high1.participant();
+
         // Step 3. Each computer's agents review each other's snapshots, and each computer integrates its own two files.
         lab.drive("the higher computer's agents get both files onto its main", () -> lab.hasOnBranch(high, "high1.txt") && lab.hasOnBranch(high, "high2.txt"), high1, high2);
         lab.drive("the lower computer's agents get both files onto its main", () -> lab.hasOnBranch(low, "low1.txt") && lab.hasOnBranch(low, "low2.txt"), low1, low2);
@@ -115,9 +109,8 @@ final class ApartWithoutOverlapScenarioTest {
         assertFalse(lab.linked());
         if (originalReviewerRefreshes) {
             // The main of the higher computer moved under the agent's workspace, so its next action recommends the refresh.
-            String session = high1.participant();
             high1.call("ensure_session", Map.of());
-            assertNotEquals(session, high1.participant(), "the refresh gave the agent a new session");
+            assertNotEquals(sessionOfReviewer, high1.participant(), "the refresh gave the agent a new session");
         }
 
         // Step 4. The Link comes back. The computer with the higher node ID re-merges, the original reviewers review the

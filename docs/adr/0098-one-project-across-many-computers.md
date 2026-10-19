@@ -1065,6 +1065,29 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
       moved, dirty worktree with no lane, which `ensure_session` cannot refresh (as a crash before the announcement
       did before this rule); a combine lane continued or taken over by another session; and the re-merge's use of a
       combine snapshot whose base is the other copy's `main` is still untested in a real run.
+27. **A re-merge review owed to no one who can take it** (scripted scenarios S1 and S2, ADR-0102 item 1, 2026-10-19,
+    about a third of the runs; and s5-run13, where the original reviewer was a Claude agent on the PC whose run had
+    ended before the heal). Three ways the same invariant failed: *a re-merge review owed on this computer is
+    offered to an agent that is live, may review it, and can see it in its next action.* (a) A reviewer that
+    refreshed its stale workspace with `ensure_session` got a new session; the merge pass released the old session's
+    grant (item 24) and offered it to no one, since the only other agent wrote the snapshot and the refreshed agent
+    held no lane, so it was no participant on the log. (b) The released review went to the agent that had taken the
+    combine, whose lane waits for this very re-merge, so its next action said "wait" and the grant stayed available for
+    ever. (c) A reviewer on a connected computer whose agents had all ended is never judged gone by the computer that
+    re-merges, and its own computer ran no pass to release it. **Rule:** `RemergeService.anotherReviewer` chooses among
+    the live sessions of this computer (`AwayLanes.Agents`), whether or not they hold a lane; first the session that
+    replaced a released reviewer's on the same connection, then the lowest handle. It never chooses the author or any
+    session of the author's agent, a session that authored in the lane's lineage or in an earlier session of its own
+    agent, a participant that is not active, or the holder of an open lane of a combine of this re-merge. What makes two
+    sessions one agent's is `SessionSuccessions`: the binding service records, before it puts a fresh session at a
+    connection's path in place of another (`ensure_session` after a lane ended, or a stale refresh), which session
+    it replaced. It is local to this computer, and unreadable leases or successions choose no one (fail closed). A
+    review whose original reviewer another computer's log introduced is offered first to such a live session here and
+    to that reviewer only when there is none. The run controller already wakes the chosen session
+    (`EventLogObserver.reviewsOffered` takes the re-merge grants of the participant behind each connection).
+    - *Not covered:* an `ensure_session` refresh still replaces the session of a lane-less agent that holds an open
+      review grant (the grant is then released and offered again, to the same agent first); and an agent that is live
+      by its lease but never calls `get_next_action` holds the grant until its lease ends.
 
 27. **The lower computer takes the re-merged `main` on every pull, not only the pull that brought entries** (ADR-0102
     scripted scenarios S1 and S2, defect 4: about 3 runs in 90, the lower computer held the new commit and every

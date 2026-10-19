@@ -10,7 +10,6 @@ import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
@@ -74,13 +73,6 @@ final class OverlapAndCombineScenarioTest {
         ScenarioAgent high2 = lab.agent(high, "high-2");
         ScenarioAgent low1 = lab.agent(low, "low-1");
         ScenarioAgent low2 = lab.agent(low, "low-2");
-        if (!originalReviewerRefreshes) {
-            // A lane that is published and under review needs no fresh workspace; a model that stays put keeps its session.
-            high1.keepsItsSession();
-            high2.keepsItsSession();
-            low1.keepsItsSession();
-            low2.keepsItsSession();
-        }
 
         // Step 1. The Link fails; both computers stay up.
         lab.split();
@@ -99,6 +91,8 @@ final class OverlapAndCombineScenarioTest {
         low1.publish();
         low2.publish();
 
+        String sessionOfReviewer = high1.participant();
+
         // Step 3. Each computer's agents review each other, and each computer integrates its own two changes.
         lab.drive("the higher computer's two changes are on its main", () -> lab.hasOnBranch(high, "high.txt") && lab.onBranch(high, "shared.txt").contains("by the higher computer"), high1, high2);
         lab.drive("the lower computer's two changes are on its main", () -> lab.hasOnBranch(low, "low.txt") && lab.onBranch(low, "shared.txt").contains("by the lower computer"), low1, low2);
@@ -106,9 +100,8 @@ final class OverlapAndCombineScenarioTest {
 
         if (originalReviewerRefreshes) {
             // The main of this computer moved under the first agent's workspace, so its next action recommends the refresh.
-            String session = high1.participant();
             high1.call("ensure_session", Map.of());
-            assertNotEquals(session, high1.participant(), "the refresh gave the first agent a new session");
+            assertNotEquals(sessionOfReviewer, high1.participant(), "the refresh gave the first agent a new session");
         }
 
         // Step 4. Two fresh agents of the higher computer hold no lane; the combine will be offered to them.
@@ -170,12 +163,11 @@ final class OverlapAndCombineScenarioTest {
     }
 
     /**
-     * DEFECT 1 (found 2026-10-19, every run): the agent that lost the race for the combine is told
+     * DEFECT 1 (found 2026-10-19 in every run, fixed by the retry answer of 23312223): the agent that lost the race for the combine is told
      * {@code blocked / policy_denied / request_human_help}. A lost race is the normal outcome of two agents asking at once,
      * the refusal changed nothing, and ADR-0098 item 22 offers the combine to every lane-less agent of the computer; a
      * person should not be asked. The answer should send the agent to {@code get_next_action} (or say wait).
      */
-    @Disabled("DEFECT 1: the loser of a combine is sent to request_human_help; see the Javadoc")
     @Test
     void theLoserOfTheRaceForTheCombineIsNotSentToAPerson() {
         Scene scene = toTheCombine(false);
@@ -187,7 +179,7 @@ final class OverlapAndCombineScenarioTest {
     }
 
     /**
-     * DEFECT 3 (found 2026-10-19, in 6 of 18 runs of the scenario with agents that follow every recommended refresh; the forced
+     * DEFECT 3 (found and fixed 2026-10-19, in 6 of 18 runs of the scenario with agents that follow every recommended refresh; the forced
      * refresh below reproduced it in its one run): the re-merge never lands and the copies of {@code main} stay apart for ever.
      * It starts as DEFECT 2 of {@link ApartWithoutOverlapScenarioTest}: the higher computer's first agent reviewed its second
      * agent's snapshot, refreshed its stale workspace with {@code ensure_session} and so got a new session, and the merge
@@ -195,7 +187,6 @@ final class OverlapAndCombineScenarioTest {
      * combine, and the review is offered to it. Its lane then waits for this very re-merge to land, so its next action says
      * "wait" and never shows the grant; the grant stays available and nobody consumes it.
      */
-    @Disabled("DEFECT 3: a released re-merge review is offered to the agent whose combine waits for it and is never shown to it; see the Javadoc")
     @Test
     void aReMergeReviewReleasedToTheAgentThatTookTheCombineIsStillReviewedAndMainEndsEqual() throws Exception {
         Scene scene = toTheCombine(true);

@@ -75,17 +75,6 @@ final class ScenarioAgent {
         return workflow instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
     }
 
-    private boolean refreshes = true;
-
-    /**
-     * From now on this agent does not answer a recommended {@code ensure_session} that carries no task, which refreshes a
-     * stale workspace and gives the agent a new session. A scenario uses it for an agent whose lane is already published.
-     */
-    ScenarioAgent keepsItsSession() {
-        this.refreshes = false;
-        return this;
-    }
-
     /** The participant handle the log knows this agent by, or {@code null} before its session exists. */
     String participant() {
         try {
@@ -172,9 +161,6 @@ final class ScenarioAgent {
         Map<String, Object> workflow = workflow(next);
         Object tool = workflow.get("recommendedTool");
         Map<String, Object> inner = inner(next);
-        if ("ensure_session".equals(tool) && !refreshes && workflow.get("arguments") instanceof Map<?, ?> refresh && refresh.isEmpty()) {
-            return Step.WAITING;
-        }
         if (tool != null && List.of("request_coordination", "respond_coordination", "ensure_session").contains(tool) && workflow.get("arguments") instanceof Map<?, ?> arguments) {
             Map<String, Object> called = call((String) tool, (Map<String, Object>) arguments);
             return Boolean.TRUE.equals(called.get("isError")) ? Step.WAITING : Step.ACTED;

@@ -14,6 +14,7 @@ import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.session.ProviderSessionTerminalizationService;
+import org.synesis.workspace.lifecycle.lease.SessionSuccessions;
 import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
 
 import static org.synesis.workspace.application.provider.ProviderBindingFile.fallbackEvidence;
@@ -140,7 +141,7 @@ public final class ProviderSessionBindingService {
                     if (!open.isEmpty()) {
                         throw new BindingException("SESSION_AUTHORITY_OPEN", String.join(",", open));
                     }
-                    return new BindingResult(persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch()), fallback);
+                    return new BindingResult(replaceSession(location, bindingPath, binding, withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch()), fallback);
                 }
                 if (binding.state().resumesOnEnsure()) {
                     return new BindingResult(resumeBound(location, identity, provider, fingerprint, bindingPath, binding), fallback);
@@ -166,6 +167,15 @@ public final class ProviderSessionBindingService {
     private static Binding persist(Path bindingPath, Binding binding) throws IOException {
         write(bindingPath, binding);
         return binding;
+    }
+
+    /**
+     * Puts a fresh session at the connection's path in place of {@code replaced}, recording first that the two are one
+     * agent's ({@link SessionSuccessions}): what the old session was owed, or barred from, passes to the new one.
+     */
+    private static Binding replaceSession(ProjectLocation location, Path bindingPath, Binding replaced, Binding fresh) throws IOException {
+        SessionSuccessions.record(location.root(), replaced.sessionId(), fresh.sessionId());
+        return persist(bindingPath, fresh);
     }
 
     private Binding resumeBound(ProjectLocation location, NodeIdentity identity, String provider, String fingerprint, Path bindingPath, Binding binding) throws Exception {
@@ -206,7 +216,7 @@ public final class ProviderSessionBindingService {
         // would leave the lane with a participant nobody speaks for, and a kept controller session is
         // resumed on this connection to continue exactly that lane (ADR-0099, amendment).
         if (!activeManagedAttachment && !authorizedContinuation && !activeNoChangeIntent && !hasActiveIntent(location, binding)) {
-            return persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch());
+            return replaceSession(location, bindingPath, binding, withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch());
         }
         return persist(bindingPath, binding.touch());
     }

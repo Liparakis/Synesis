@@ -26,6 +26,7 @@ import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
+import org.synesis.workspace.lifecycle.lease.SessionSuccessions;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
@@ -151,20 +152,85 @@ public final class AwayLanes {
      * @return a test of whether a participant's session is gone
      */
     public static Predicate<String> goneHere(Path controlRoot) {
-        Optional<List<SessionLeaseRecord>> recorded = new SessionLeaseStore().listAllComplete(controlRoot);
-        if (recorded.isEmpty()) {
+        Optional<Set<String>> live = liveHere(controlRoot);
+        if (live.isEmpty()) {
             LOG.log(System.Logger.Level.WARNING, "session leases not all readable; no reviewer of this computer is judged gone");
             return participant -> false;
         }
+        return participant -> !live.get().contains(participant);
+    }
+
+    private static Optional<Set<String>> liveHere(Path controlRoot) {
+        Optional<List<SessionLeaseRecord>> recorded = new SessionLeaseStore().listAllComplete(controlRoot);
+        if (recorded.isEmpty()) {
+            return Optional.empty();
+        }
         SessionLeaseService leases = new SessionLeaseService();
         SessionLeasePolicy policy = new SessionLeasePolicy();
-        Set<String> live = recorded.get().stream()
+        return Optional.of(recorded.get().stream()
                 .filter(lease -> switch (leases.evaluateLiveness(lease, policy)) {
                     case ACTIVE, SUSPECTED_STALE, AMBIGUOUS -> true;
                     default -> false;
                 })
-                .map(lease -> WorkspaceCollaborationService.participantHandle(lease.sessionId())).collect(Collectors.toSet());
-        return participant -> !live.contains(participant);
+                .map(lease -> WorkspaceCollaborationService.participantHandle(lease.sessionId())).collect(Collectors.toSet()));
+    }
+
+    /**
+     * The agents of this computer as the review of a re-merge needs them: the participants whose sessions it judges live
+     * ({@link #goneHere}), and which sessions are one agent's, from the replacements the binding service recorded
+     * ({@link SessionSuccessions}). A session a connection was given in place of another is that agent's next session: it
+     * is owed what the old one was owed, and barred from what the old one was barred from.
+     *
+     * @param live         handles of the live sessions
+     * @param predecessors each handle with the handle of the session it replaced
+     */
+    public record Agents(Set<String> live, Map<String, String> predecessors) {
+
+        /**
+         * The agents of this computer, or empty when the leases or the recorded replacements cannot all be read: the
+         * missing one may be the proof that two sessions are one agent's.
+         *
+         * @param controlRoot this computer's checkout
+         * @return the agents, or empty
+         */
+        public static Optional<Agents> of(Path controlRoot) {
+            Optional<Set<String>> live = liveHere(controlRoot);
+            Optional<Map<String, String>> replaced = SessionSuccessions.predecessors(controlRoot);
+            if (live.isEmpty() || replaced.isEmpty()) {
+                return Optional.empty();
+            }
+            Map<String, String> predecessors = new java.util.HashMap<>();
+            replaced.get().forEach((successor, predecessor) -> predecessors.put(WorkspaceCollaborationService.participantHandle(successor),
+                    WorkspaceCollaborationService.participantHandle(predecessor)));
+            return Optional.of(new Agents(live.get(), Map.copyOf(predecessors)));
+        }
+
+        /**
+         * The session and every session it replaced, newest first.
+         *
+         * @param handle a session's participant handle
+         * @return the sessions of the one agent up to and including this one
+         */
+        public List<String> sessionsUpTo(String handle) {
+            List<String> sessions = new java.util.ArrayList<>();
+            for (String session = handle; session != null && !sessions.contains(session); session = predecessors.get(session)) {
+                sessions.add(session);
+            }
+            return sessions;
+        }
+
+        /**
+         * Whether two sessions are one agent's: one replaced the other, directly or through others, or they share the
+         * session both replaced.
+         *
+         * @param first  a session's participant handle
+         * @param second a session's participant handle
+         * @return whether one agent had both
+         */
+        public boolean sameAgent(String first, String second) {
+            List<String> earlier = sessionsUpTo(first);
+            return sessionsUpTo(second).stream().anyMatch(earlier::contains);
+        }
     }
 
     private static boolean activeGroup(PredictionEventStore store, WorkIntent intent) {
