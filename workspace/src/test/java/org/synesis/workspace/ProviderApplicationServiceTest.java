@@ -102,6 +102,10 @@ final class ProviderApplicationServiceTest {
     void codexLifecycleUsesProjectHookShapeAndPreservesUnrelatedConfiguration() throws Exception {
         Path root = Files.createTempDirectory("codex-provider-lifecycle-");
         Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
+        // An MCP launcher that cannot start keeps the result independent of a synesis-mcp installed on the machine.
+        Path mcpLauncher = Files.createTempFile("synesis-mcp-", ".exe");
+        String previousMcp = System.getProperty("synesis.mcp.launcher");
+        System.setProperty("synesis.mcp.launcher", mcpLauncher.toString());
         String previous = System.getProperty("synesis.launcher");
         System.setProperty("synesis.launcher", launcher.toString());
         try {
@@ -134,6 +138,7 @@ final class ProviderApplicationServiceTest {
             assertEquals(Boolean.TRUE, ((Map<?, ?>) after.get("unrelated")).get("value"));
             assertTrue(((Map<?, ?>) after.get("hooks")).containsKey("Stop"));
         } finally {
+            restoreProperty("synesis.mcp.launcher", previousMcp);
             if (previous == null) {
                 System.clearProperty("synesis.launcher");
             } else {

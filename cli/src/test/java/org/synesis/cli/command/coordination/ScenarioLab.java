@@ -41,7 +41,8 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
  */
 final class ScenarioLab implements AutoCloseable {
 
-    private static final long STEP_TIMEOUT_SECONDS = 60;
+    // Every step runs git processes, which cost about 30 times more on Windows, so the bound is scaled there.
+    private static final long STEP_TIMEOUT_SECONDS = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win") ? 180 : 60;
     private static final String BASELINE_SHARED = "one\ntwo\nthree\n";
 
     final TestComputers computers;

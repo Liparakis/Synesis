@@ -20,6 +20,7 @@ class CodexHookOwnershipTest {
 
   private String previousHome;
   private String previousLauncher;
+  private String previousMcpLauncher;
 
   private static void git(Path root, String... args) throws Exception {
     org.synesis.workspace.test.TestGit.run(root, args);
@@ -48,6 +49,11 @@ class CodexHookOwnershipTest {
   void isolateHome() throws Exception {
     previousHome = System.getProperty("user.home");
     previousLauncher = System.getProperty("synesis.launcher");
+    previousMcpLauncher = System.getProperty("synesis.mcp.launcher");
+    // An MCP launcher that cannot start keeps the install result independent of a synesis-mcp installed on the machine.
+    System.setProperty("synesis.mcp.launcher",
+        Files.createTempFile("synesis-mcp-", ".exe")
+            .toString());
     System.setProperty("user.home",
         Files.createTempDirectory("synesis-hook-home-")
             .toString());
@@ -64,6 +70,11 @@ class CodexHookOwnershipTest {
       System.clearProperty("synesis.launcher");
     } else {
       System.setProperty("synesis.launcher", previousLauncher);
+    }
+    if (previousMcpLauncher == null) {
+      System.clearProperty("synesis.mcp.launcher");
+    } else {
+      System.setProperty("synesis.mcp.launcher", previousMcpLauncher);
     }
   }
 

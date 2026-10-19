@@ -31,7 +31,8 @@ from, or judge away, a computer that joined); a returning agent never told its l
 
 **Open:** both claims refused once under heavy load (ADR-0098 Unresolved); `link answer` prints `LINK_STATE=FAILED`
 when the join already went direct; the Linux gate's shared Gradle cache causes journal-lock timeouts with parallel
-agents; a dispute stays source-level.
+agents; a dispute stays source-level; on Windows two scenario tests are skipped (a three-way main check not met in
+180 s, and a @TempDir held open), so they run on the Linux gate only.
 
 # 2026-10-18 — ADR-0098 step 3: code moves over Link, and the PC + VM goal completes with no Git remote
 
