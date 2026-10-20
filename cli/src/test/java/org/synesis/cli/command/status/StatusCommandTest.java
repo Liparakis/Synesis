@@ -347,7 +347,8 @@ final class StatusCommandTest {
         Run refused = porcelain();
 
         assertEquals(ExitCodes.LOCAL_CONFIGURATION, refused.exit(), refused.toString());
-        assertEquals(List.of("ERROR=PROJECT_NOT_CONFIGURED"), refused.stderr(), refused.toString());
+        assertEquals(List.of("ERROR=PROJECT_NOT_CONFIGURED", "MESSAGE=This folder is not a Synesis project.",
+                "FIX=run 'synesis init' in the project's folder, or pass --project <folder>"), refused.stderr(), refused.toString());
         assertEquals(List.of(), refused.stdout());
     }
 }
