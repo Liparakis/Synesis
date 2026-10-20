@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.synesis.coordination.application.CoordinationService;
@@ -32,6 +33,7 @@ import org.synesis.coordination.transport.http.CoordinationHttpServer;
 
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.onboarding.Onboarding;
+import org.synesis.link.session.PeerSession;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.project.ProjectLocation;
@@ -125,6 +127,7 @@ final class TestComputers implements AutoCloseable {
         private final LinkRuntimeOwner.MemberAdmission admission;
         private final List<AutoCloseable> mine = new ArrayList<>();
         private volatile boolean stopped;
+        private volatile boolean silent;
 
         Computer(ProjectLocation location, KnownProjectRegistry registry) throws Exception {
             this.location = location;
@@ -212,8 +215,9 @@ final class TestComputers implements AutoCloseable {
         }
 
         private LinkRuntimeOwner newOwner() {
+            PeerSession.ApplicationStreamHandler answering = side.handler();
             LinkRuntimeOwner created = CoordinationServerLauncher.linkOwner(new Onboarding(location.linkDirectory(), hub::publish), node, hub, location.identity(), side,
-                    new ReplicationJournal(coordination), coordination, admission);
+                    (remote, payload) -> silent ? new CompletableFuture<>() : answering.handle(remote, payload), new ReplicationJournal(coordination), coordination, admission);
             mine.add(created);
             return created;
         }
@@ -233,6 +237,20 @@ final class TestComputers implements AutoCloseable {
          */
         void healLink() {
             owner = newOwner();
+        }
+
+        /**
+         * Makes the path to the other computers silent until {@link #speak}: every frame that reaches this computer is heard and
+         * none is answered, and its Link sessions stay open, as when a firewall drops every packet and Link has not yet given the
+         * session up (2026-10-20, s7-run3). Nothing tells this computer's replication side that anything ended.
+         */
+        void goSilent() {
+            silent = true;
+        }
+
+        /** Ends {@link #goSilent}. */
+        void speak() {
+            silent = false;
         }
 
         /** Whether {@link #stop} was called: the computer is down, as one whose Synesis was stopped. */

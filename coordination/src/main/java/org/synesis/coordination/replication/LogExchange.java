@@ -180,6 +180,9 @@ public final class LogExchange implements AutoCloseable {
         ownNode = session.localNodeId();
         sessions.put(node, session);
         noticed.remove(node);
+        // What the last session's exchanges said says nothing about this one: its first pull is always reported, even
+        // when it fails as the last one did. A log that diverged stays diverged until a person looks at it.
+        states.computeIfPresent(node, (peer, last) -> last == State.DIVERGED ? last : null);
         session.terminalCompletion().whenComplete((ignored, failure) -> {
             if (sessions.remove(node, session)) {
                 setState(node, State.DISCONNECTED);
@@ -492,7 +495,12 @@ public final class LogExchange implements AutoCloseable {
     private void pull(String node) {
         pullQueued.remove(node);
         PeerSession session = sessions.get(node);
-        if (!Sessions.live(session) || !admitted.test(node)) {
+        if (!admitted.test(node)) {
+            // Not asked, so nothing is known: a node accepted later is reported by its first pull, not as lost before it.
+            states.remove(node);
+            return;
+        }
+        if (!Sessions.live(session)) {
             setState(node, State.DISCONNECTED);
             return;
         }

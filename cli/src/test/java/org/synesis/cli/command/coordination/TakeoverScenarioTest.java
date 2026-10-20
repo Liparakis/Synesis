@@ -33,9 +33,10 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
  * it is not on {@code main}. The trash is then restored and emptied the way a person does.
  *
  * <p>No timer decides that a computer is away (item 9): the other computer's record of its member sessions does, and it
- * says so as soon as the Link sessions end. The scenario therefore moves no clock; it waits for the record.</p>
+ * says so as soon as the Link sessions end, or, when they stay open and the path is silent, within one pull interval of
+ * the traffic stopping (step 6 item 22). The scenario therefore moves no clock; it waits for the record.</p>
  *
- * <p>The taker is the friend, the computer that joined the project. The two disabled tests are product defects this scenario
+ * <p>The taker is the friend, the computer that joined the project, unless a test says the owner is. The two disabled tests are product defects this scenario
  * found (2026-10-19), each as the scenario with the step that exposes it.</p>
  */
 @Timeout(300)
@@ -52,6 +53,14 @@ final class TakeoverScenarioTest {
         NOTHING,
         /** A snapshot, while apart, so that it arrives after the goal is met. */
         WHILE_APART
+    }
+
+    /** How the Link between the computers fails. */
+    private enum Split {
+        /** Link ends the sessions (a cut cable that is noticed at once). */
+        SESSIONS_END,
+        /** Every packet is dropped and the sessions stay open: only what each computer's exchanges get back says the other is gone. */
+        SILENT
     }
 
     /** The agents and computers of one takeover after the heal. */
@@ -163,6 +172,37 @@ final class TakeoverScenarioTest {
         assertEverythingMeets(scene);
     }
 
+    /**
+     * S7 run 3 (2026-10-20): the member's Link was cut by a firewall and the sessions stayed open. The owner's record of its
+     * members' sessions kept naming the member connected, so the owner never judged it away and its idle agent was never
+     * offered the member's stalled lane. The owner is the taker; every computer judges a silent peer by what its exchanges get
+     * back, whichever side dialled.
+     */
+    @Test
+    void theOwnerTakesAMembersLaneOverWhenTheLinkGoesSilentAndTheSessionsStayOpen() throws Exception {
+        Scene scene = takeOverAndHeal(lab.friend, lab.owner, Handed.NOTHING, Split.SILENT);
+
+        assertTrashHoldsTheAwayVersion(scene, "half of it, by away-1");
+        assertEverythingMeets(scene);
+    }
+
+    /**
+     * OPEN 2026-10-20 (found by the silent split, twice on the Linux gate): the record is right (the member judges the owner
+     * away and offers the lane), but after the takeover the taker's {@code ensure_session} fails with
+     * {@code SESSION_BINDING_FAILED} and every later answer is {@code SESSION_RECOVERY_STATE_UNAVAILABLE}, so the member's
+     * agents stop and the goal is never met. The same scenario passes when the sessions end and when the owner is the taker.
+     * Not diagnosed: something a member's agent needs treats the session to the owner, which Link still holds open and which
+     * answers nothing, as a working one.
+     */
+    @Test
+    @Disabled("OPEN 2026-10-20: a member's agents cannot bind a session while its Link session to the owner is silent but open")
+    void aMemberTakesTheOwnersLaneOverWhenTheLinkGoesSilentAndTheSessionsStayOpen() throws Exception {
+        Scene scene = takeOverAndHeal(lab.owner, lab.friend, Handed.NOTHING, Split.SILENT);
+
+        assertTrashHoldsTheAwayVersion(scene, "half of it, by away-1");
+        assertEverythingMeets(scene);
+    }
+
     private static boolean refExists(Computer computer, String ref) {
         try {
             return !GitProcessRunner.runOptional(computer.location.root(), "rev-parse", "--verify", "-q", ref).isBlank();
@@ -176,6 +216,10 @@ final class TakeoverScenarioTest {
      * lane over, finishes it and has it integrated on its own main, and the Link comes back.
      */
     private Scene takeOverAndHeal(Computer away, Computer here, Handed handed) throws Exception {
+        return takeOverAndHeal(away, here, handed, Split.SESSIONS_END);
+    }
+
+    private Scene takeOverAndHeal(Computer away, Computer here, Handed handed, Split split) throws Exception {
         ScenarioAgent awayAgent = lab.agent(away, "away-1");
         ScenarioAgent taker = lab.agent(here, "here-1");
         ScenarioAgent second = lab.agent(here, "here-2");
@@ -194,7 +238,11 @@ final class TakeoverScenarioTest {
         });
 
         // Step 2. The Link fails. The other computer's record of member sessions says the away computer is away, and its lane-less agent is offered the lane.
-        lab.split();
+        if (split == Split.SESSIONS_END) {
+            lab.split();
+        } else {
+            lab.splitSilently();
+        }
         lab.await("the other computer records the away computer as not connected", () -> AwayLanes.away(here.location.coordinationDirectory(), here.node.nodeId()).test(away.node.nodeId()));
         lab.await("the taker is offered the away lane", () -> !taker.takeoversOffered().isEmpty());
         assertEquals("AWAY", taker.takeoversOffered().getFirst().get("formerOwnerState"));
@@ -216,7 +264,11 @@ final class TakeoverScenarioTest {
         assertFalse(lab.hasOnBranch(away, "result.txt"), "apart, the away computer does not hold it");
 
         // Step 4. The Link comes back.
-        lab.heal();
+        if (split == Split.SESSIONS_END) {
+            lab.heal();
+        } else {
+            lab.healSilence();
+        }
         lab.await("both computers hold the same main", lab::mainsEqual);
         return new Scene(away, here, awayAgent, taker, second);
     }

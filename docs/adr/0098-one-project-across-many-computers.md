@@ -1253,6 +1253,38 @@ agent on each member, mandatory review; open to the owner):
     re-evaluated every 2 seconds, written only when its lines change). A session of a computer that is not admitted
     still carries nothing: it is served and pulled nothing, and is not offered to Code over Link. Source semantics
     proven by the two scenario tests above (previously disabled); no real run has shown it.
+22. **A peer is recorded as not connected when its exchange goes unanswered, not only when its session ends**
+    (s7-run3, 2026-10-20, remaster84: PC owner, VM member; the VM cut the Link with a firewall that dropped every packet
+    in both directions at 10:08:37). Ten minutes later the PC's `replication.members` still read the VM `CONNECTED`
+    from before the cut, so the PC never judged the VM away and its idle agent was never offered the VM's stalled lane
+    (step 7 item 9). s5-run14 showed the same blind spot: no `DISCONNECT` in either computer's `replication.log` during
+    a five-minute split. `LeaderReplication` recorded a member only from the attach of its session until the end of that
+    session; the exchange's own verdict (a pull that gets no answer sets its peer `DISCONNECTED`) was kept in
+    `LogExchange` and never reached the record, and a session that Link still holds open is never judged by its end.
+    Whether Link ever ends such a session on the dialling side or the hosting side was not proven by this change (the
+    real runs show `LIVENESS_EXPIRED` after about 60 s in one run and no end in another); the record no longer depends on
+    it. The rule, the same on the owner and on every member, whichever side dialled: **a computer records a peer as not
+    connected within the liveness bound after traffic to it stops, and as connected again when a session to it works
+    again.** The bound is one pull interval plus the wait for its answer (`LogExchange.PULL_INTERVAL_SECONDS`, 15 s, then
+    Link's 5 s limit on an exchange, 8 s at the outside): at most about 25 s, with the file's own 2 s recheck, and it is
+    the same traffic that already keeps a path through a home router open. `replication.members` is therefore a function
+    of two things: a live attached session, and what the last pull over it said. A session's first pull is always
+    reported (the exchange forgets what the last session's pulls said when a new one is attached, except a diverged log,
+    which stays diverged until a person looks), so a session that is attached and silent from the start is recorded
+    `DISCONNECTED` after its first pull fails and a replaced zombie does not hide the new session. A node that is not
+    admitted is not pulled, so nothing is known of it and nothing is recorded as lost: a joiner accepted later keeps the
+    optimistic `CONNECTED` of its attach until its first pull says otherwise (item 21), instead of looking away for up
+    to a pull interval after the accept. The record reads the exchange's state afresh instead of trusting the order of
+    its notices. Nothing else changes: admission, serving and the claim lock still use the live-session test, so a
+    claim still waits at most five seconds for a peer that does not answer (item 4 of step 4). Proved by
+    `LinkReplicationTest` (a silent path on a session Link keeps open, both sides, and a new session while the silent
+    one is held open) and by `TakeoverScenarioTest` with the owner as the taker of a member's lane over a silent split
+    (`ScenarioLab.splitSilently`). The same scenario with the joiner as the taker of the owner's lane judges the owner
+    away and offers the lane, but then the joiner's agents fail to bind a session (`SESSION_BINDING_FAILED`, then
+    `SESSION_RECOVERY_STATE_UNAVAILABLE`) while its session to the owner is silent and open; that test is disabled,
+    OPEN, undiagnosed. Source semantics proven for the record; no real run has shown it. Not changed: `replication.log`, which the agents' wait reads (`ReplicationJournal.connectedSince`),
+    still records session starts and ends only, so a run's decision to keep waiting for a computer behind a silent path
+    still follows the session, not the exchange.
 
 ### Step 7: Disputes, takeovers and the trash
 
@@ -1292,7 +1324,7 @@ Decided while building step 7 (designer, 2026-10-18; each open to the owner):
    while such a group still has an open lane whose computer is not connected to this one now. "Connected" is this
    computer's record of its member sessions (`replication.members`, written whole by its replication side; not the
    rotating journal, which keeps 100 lines and can lose one): another computer is away when that record says its
-   session ended or names no session of it. With no readable record nobody is away, so a takeover of a computer that
+   session ended, its exchange gets no answer (step 6 item 22), or it names no session of it. With no readable record nobody is away, so a takeover of a computer that
    is in fact connected cannot follow from a missing file. A redial within Link's retained time changes nothing. No
    timer. The offer, the takeover and the release of reviews use the one test (`AwayLanes.stalled`). The taker's
    computer judges it again when the takeover is asked for, outside the append lock; a computer that connects in that

@@ -58,9 +58,9 @@ public final class LeaderReplication implements AutoCloseable {
     /**
      * Whether a member has a live session to the leader.
      *
-     * @param state whether its session is attached now
-     * @param since when that session was attached or ended; for a member with no session yet, when the leader
-     *              started serving
+     * @param state whether its session is attached now and answers
+     * @param since when that session was attached, ended, stopped answering or answered again; for a member with no
+     *              session yet, when the leader started serving
      */
     public record MemberConnection(State state, Instant since) {
 
@@ -70,11 +70,12 @@ public final class LeaderReplication implements AutoCloseable {
          */
         public enum State {
             /**
-             * From the attach of its session until that session ends.
+             * From the attach of its session until that session ends or the pulls over it get no answer, and again
+             * from the first pull that is answered.
              */
             CONNECTED,
             /**
-             * No attached session.
+             * No attached session, or one whose pulls are not answered.
              */
             DISCONNECTED
         }
@@ -157,6 +158,7 @@ public final class LeaderReplication implements AutoCloseable {
         this.members = CoordinationNullException.requireNonNull(members, "members");
         this.admitted = CoordinationNullException.requireNonNull(admitted, "admitted");
         this.exchange = new LogExchange(root, projectId, admitted, copied, this::afterMemberArrivals, this::afterPull);
+        exchange.watch((node, ignored) -> followExchange(node));
         notices.execute(this::writeConnections);
         // Admission changes who the file names without any session event, so the file follows it.
         notices.scheduleWithFixedDelay(this::writeConnections, RECORD_INTERVAL_SECONDS, RECORD_INTERVAL_SECONDS, TimeUnit.SECONDS);
@@ -350,6 +352,25 @@ public final class LeaderReplication implements AutoCloseable {
                 }
             }
         });
+    }
+
+    /**
+     * Records a peer as not connected when the exchange over its session gets no answer, and as connected again when it
+     * does (ADR-0098 step 6, designer item 22). A session Link still holds open is not a connection that works: a path
+     * that went silent leaves it attached until Link's own expiry, if that ever ends it, and the end of the session is
+     * then the only thing that would have said so. The record follows what the pulls say, which every computer's side
+     * has, whichever side dialled. The state is read afresh, not taken from the notice, so notices that reach here out
+     * of order settle on the latest one.
+     */
+    private void followExchange(String node) {
+        MemberConnection.State seen = Sessions.live(sessions.get(node)) && exchange.state(node) != LogExchange.State.DISCONNECTED
+                ? MemberConnection.State.CONNECTED : MemberConnection.State.DISCONNECTED;
+        synchronized (connections) {
+            MemberConnection recorded = connections.get(node);
+            if (recorded == null || recorded.state() != seen) {
+                recordConnection(node, seen);
+            }
+        }
     }
 
     private void recordConnection(String node, MemberConnection.State state) {

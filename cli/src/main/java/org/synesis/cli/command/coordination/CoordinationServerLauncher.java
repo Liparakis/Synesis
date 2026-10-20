@@ -264,8 +264,17 @@ final class CoordinationServerLauncher {
      */
     static LinkRuntimeOwner linkOwner(Onboarding onboarding, NodeIdentity node, ControlPlaneEventHub eventHub, ProjectIdentity identity, ReplicationSide side,
             ReplicationJournal journal, Path coordination, LinkRuntimeOwner.MemberAdmission admission) {
+        return linkOwner(onboarding, node, eventHub, identity, side, side.handler(), journal, coordination, admission);
+    }
+
+    /**
+     * As above, with the sessions' frames answered by {@code handler} instead of the side's own: a seam for the scripted
+     * scenarios, which make a path silent while Link keeps the session open.
+     */
+    static LinkRuntimeOwner linkOwner(Onboarding onboarding, NodeIdentity node, ControlPlaneEventHub eventHub, ProjectIdentity identity, ReplicationSide side,
+            org.synesis.link.session.PeerSession.ApplicationStreamHandler handler, ReplicationJournal journal, Path coordination, LinkRuntimeOwner.MemberAdmission admission) {
         LinkRuntimeOwner.PeerMemory memory = peerMemory(coordination, journal);
-        LinkRuntimeOwner owner = new LinkRuntimeOwner(onboarding, node, eventHub::publish, identity, side.handler(), side::attach, side::returning, journal::record, memory, admission);
+        LinkRuntimeOwner owner = new LinkRuntimeOwner(onboarding, node, eventHub::publish, identity, handler, side::attach, side::returning, journal::record, memory, admission);
         ReplicationPeers peers = ReplicationPeers.none();
         try {
             peers = ReplicationPeers.read(coordination);

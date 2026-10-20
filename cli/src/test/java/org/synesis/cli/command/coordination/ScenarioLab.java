@@ -271,6 +271,23 @@ final class ScenarioLab implements AutoCloseable {
                 && !friend.owner.get().sessions().stream().anyMatch(PeerSession::isUsable));
     }
 
+    /**
+     * Makes the path between the computers silent, both ways, until {@link #healSilence}: no request is answered and no Link
+     * session ends, as when a firewall drops every packet and Link has not given the session up. Each computer must notice from
+     * what its own exchanges get back; nothing says a session ended.
+     */
+    void splitSilently() {
+        owner.goSilent();
+        friend.goSilent();
+    }
+
+    /** Ends {@link #splitSilently}; the sessions never ended, so the computers are linked as soon as they are answered again. */
+    void healSilence() {
+        owner.speak();
+        friend.speak();
+        await("the computers are linked again", this::linked);
+    }
+
     /** Lets both computers dial and host again, as a restart of each Link owner does, and returns once they are linked. */
     void heal() {
         friend.healLink();
