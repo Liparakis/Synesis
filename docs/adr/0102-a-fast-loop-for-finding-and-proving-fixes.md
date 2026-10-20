@@ -143,6 +143,9 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
 8. **One test-state folder and one Gradle home per session.** Parallel sessions on one PC do not share
    `-PsynesisTestState`, build caches or Gradle daemons, so they stop colliding (two shared-state flakes and one deleted
    cache folder on 2026-10-18).
+   Built for the Linux gate on 2026-10-20: each run has its own Gradle home in its container (`GRADLE_USER_HOME=/gh`),
+   with the shared volume mounted read-only as `GRADLE_RO_DEP_CACHE` and the wrapper copied from it, so parallel runs
+   no longer wait on one journal lock (two runs at once checked). A run no longer reuses another's build cache.
 9. **A background gate.** A script keeps re-running the whole Linux gate on the newest commit of the working branch and
    writes red or green, with the failures, to a file. Fixes are committed as they pass their own tests; the gate checks
    them in batches while the next defect is worked on, and a red gate is the next defect.
