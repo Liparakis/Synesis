@@ -61,7 +61,7 @@ final class InitCommandTest {
         ConsoleTerminal terminal = new ConsoleTerminal(stream(output), stream(new ByteArrayOutputStream()));
         CliRuntime runtime = new CliRuntime(new Onboarding(root.resolve("profile"), new StatusRenderer(terminal)), terminal);
 
-        int exitCode = SynesisCli.execute(new String[]{"init", "--project", root.toString()}, runtime);
+        int exitCode = SynesisCli.execute(new String[]{"init", "--no-agents", "--project", root.toString()}, runtime);
 
         String text = output.toString(StandardCharsets.UTF_8);
         assertEquals(ExitCodes.OK, exitCode, text);
@@ -85,7 +85,7 @@ final class InitCommandTest {
         ConsoleTerminal terminal = new ConsoleTerminal(stream(output), stream(new ByteArrayOutputStream()));
         CliRuntime runtime = new CliRuntime(new Onboarding(root.resolve("profile"), new StatusRenderer(terminal)), terminal);
 
-        assertEquals(ExitCodes.OK, SynesisCli.execute(new String[]{"init", "--project", root.toString()}, runtime));
+        assertEquals(ExitCodes.OK, SynesisCli.execute(new String[]{"init", "--no-agents", "--project", root.toString()}, runtime));
 
         String text = output.toString(StandardCharsets.UTF_8);
         assertTrue(text.contains("INSTRUCTIONS_REMOVED=AGENTS.md"), text);

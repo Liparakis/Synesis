@@ -21,17 +21,28 @@ From the project root (a Git repository), run:
 <!-- WALKTHROUGH: GettingStartedWalkthroughTest runs this block in a disposable Git repository; a command that stops working fails the build -->
 ```powershell
 synesis init
-synesis provider install claude   # or: synesis provider install codex
-synesis provider status claude
+synesis provider status claude   # or codex: whichever init connected
 synesis doctor
 ```
 
+`init` finds the agents installed on this computer (Claude Code, Codex): it
+looks for them on `PATH`, asks each for its version and, where the agent offers
+a status command, whether someone is signed in. It never reads an agent's
+credential files. One agent found is connected; with several it asks once which
+to connect. In a script, say it yourself: `synesis init --agent claude`,
+`--agent codex`, or `--no-agents`, and `--git-init` to create the Git
+repository first. At the end it lists every file it wrote, in the project and
+outside it, and prints the next steps: start the agent in the project folder
+(`claude` or `codex`) and tell it what to do, and look at what is happening
+(`synesis ui`, or `synesis coordination status`; what needs you:
+`synesis operator list`). Synesis starts no work of its own. To connect an
+agent installed later, run `synesis init` again or
+`synesis provider install claude` (or `codex`).
+
 Initialization creates shareable metadata in `.synesis/project.json` and keeps
 identity, provider, and runtime state under `.synesis/local/`. Add that local
-directory to `.gitignore`. `init` prints the next steps: connect an agent
-(`synesis provider install`), start it in the project folder (`claude` or
-`codex`) and tell it what to do, and look at what is happening (`synesis ui`,
-or `synesis coordination status`; what needs you: `synesis operator list`).
+directory to `.gitignore`. Codex's user-wide configuration
+(`~/.codex/config.toml`) is written only when Codex is connected.
 
 ## See what is going on
 
@@ -45,7 +56,7 @@ synesis agents log        # what the agents of the newest run said, called and w
 is stopped. `synesis agents log` reads what `synesis agents run` kept of its
 agents, one line per entry with secret-looking values replaced. Both print
 stable `STATUS_*` and `AGENT_LOG_*` lines with `--porcelain`. See the
-[CLI reference](../cli/command-reference.md#status).
+[CLI reference](../cli/command-reference.md).
 
 Synesis writes no instruction file into the project. The agent's instructions
 are the installed `synesis-provider-manual` skill, which `provider install`

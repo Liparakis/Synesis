@@ -148,28 +148,50 @@ final class ProviderApplicationServiceTest {
     }
 
     @Test
-    void initializationRegistersCodexWithTheServerLauncherNotTheCommandLauncher() throws Exception {
+    void initializationWritesCodexsGlobalEntryOnlyOnceCodexIsConnectedAndThenKeepsItOnTheServerLauncher() throws Exception {
         Path root = Files.createTempDirectory("init-mcp-launcher-test-");
         Path mcpLauncher = Files.createTempFile("synesis-mcp-", ".exe");
+        Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
         String previousMcp = System.getProperty("synesis.mcp.launcher");
+        String previousLauncher = System.getProperty("synesis.launcher");
         System.setProperty("synesis.mcp.launcher", mcpLauncher.toString());
+        System.setProperty("synesis.launcher", launcher.toString());
         try {
             var location = new ProjectApplicationService().init(root).location();
             Path userMcp = ProviderRegistry.find("codex").mcpConfigurationPath(root);
             String expected = "command = '" + mcpLauncher.toAbsolutePath().normalize() + "'";
 
+            // ADR-0103 decision 2: initialization changes Codex's configuration only for a project in which Codex is connected.
+            assertFalse(Files.exists(userMcp), "no Codex configuration is written before Codex is connected");
+            new ProjectApplicationService().init(root);
+            assertFalse(Files.exists(userMcp));
+
+            new ProviderApplicationService().install(location, "codex");
             String afterInit = Files.readString(userMcp);
             assertTrue(afterInit.contains(expected), afterInit);
 
-            // Initializing again and installing the provider must leave the same entry in place:
-            // whichever of them ran last used to decide how every Codex session started its server.
+            // Initializing again must leave the same entry in place: whichever of init and
+            // provider install ran last used to decide how every Codex session started its server.
             new ProjectApplicationService().init(root);
             assertEquals(afterInit, Files.readString(userMcp));
-            new ProviderApplicationService().install(location, "codex");
-            assertTrue(Files.readString(userMcp).contains(expected));
         } finally {
             restoreProperty("synesis.mcp.launcher", previousMcp);
+            restoreProperty("synesis.launcher", previousLauncher);
         }
+    }
+
+    @Test
+    void anExistingCodexEntryIsLeftAloneByInitializationWhenCodexIsNotConnected() throws Exception {
+        Path root = Files.createTempDirectory("init-existing-codex-entry-");
+        Path userMcp = ProviderRegistry.find("codex").mcpConfigurationPath(root);
+        Files.createDirectories(userMcp.getParent());
+        String mine = "model = \"mine\"\n\n[mcp_servers.synesis]\ncommand = \"/somewhere/else\"\n";
+        Files.writeString(userMcp, mine);
+
+        new ProjectApplicationService().init(root);
+        new ProjectApplicationService().init(root);
+
+        assertEquals(mine, Files.readString(userMcp));
     }
 
     @Test

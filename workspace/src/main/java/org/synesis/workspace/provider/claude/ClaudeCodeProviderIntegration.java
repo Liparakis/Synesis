@@ -16,6 +16,7 @@ import org.synesis.workspace.provider.ProviderSupportLevel;
  */
 public final class ClaudeCodeProviderIntegration implements ProviderIntegration {
 
+    private static final java.util.regex.Pattern LOGGED_IN = java.util.regex.Pattern.compile("\"loggedIn\"\\s*:\\s*(true|false)");
     private static final String STOP_HOOK_ID = "synesis-claude-code-stop";
     // A long, as ProviderJson reads a written number back, so a written entry compares equal to this one.
     private static final long STOP_HOOK_TIMEOUT_SECONDS = 660L;
@@ -37,6 +38,24 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
     @Override
     public String id() {
         return "claude";
+    }
+
+    /**
+     * {@code claude auth status} answers with JSON that holds {@code "loggedIn": true|false} (checked
+     * against Claude Code 2.1, 2026-10-20); only that field is read, never the account it names.
+     */
+    @Override
+    public java.util.Optional<List<String>> signInStatusArguments() {
+        return java.util.Optional.of(List.of("auth", "status", "--json"));
+    }
+
+    @Override
+    public SignIn signInState(int exitCode, String output) {
+        java.util.regex.Matcher answer = LOGGED_IN.matcher(output == null ? "" : output);
+        if (!answer.find()) {
+            return SignIn.UNKNOWN;
+        }
+        return Boolean.parseBoolean(answer.group(1)) ? SignIn.SIGNED_IN : SignIn.SIGNED_OUT;
     }
 
     @Override

@@ -403,6 +403,36 @@ and maintainability decide when a stage is done, by its completion criteria belo
 
 ### Stage 2 — discovery and visibility (additive contract changes; preliminary: two to three days)
 
+- **Built 2026-10-20 (agent discovery and `init`; not the rest of stage 2).** `ProviderIntegration` gained
+  `executableName`, `versionArguments`, `signInStatusArguments` and `signInState` (defaults: the id, `--version`, no
+  status command, `UNKNOWN`); Claude Code asks `claude auth status --json` (reads only `"loggedIn"`) and Codex
+  `codex login status` (VERIFIED 2026-10-20 against Claude Code 2.1.302 and Codex 0.163.0). `ProviderDiscovery` finds the
+  executable on `PATH` (`ProviderExecutables`, shared with `agents run`, which now runs the same lookup), runs the
+  version and status commands with a 15 s limit, and keeps only the version line and the sign-in state; it opens no file
+  and a command that fails leaves the answer `UNKNOWN`, never "not found". `init` prints `AGENT_<ID>=`, `_VERSION`,
+  `_SIGN_IN`, connects one found agent, asks once on a terminal when several are found (a script gets a `NEXT_STEP=`
+  instead), takes `--agent <id>` (repeatable or comma separated), `--no-agents` (no discovery) and `--git-init`
+  (`GIT_INIT_PROMPT=` on a terminal), prints `AGENT_<ID>_CONNECT=` and `AGENT_<ID>_WORKTREE=`, and lists every file it
+  created or changed as `FILE_CREATED=`/`FILE_CHANGED=` (`TouchedFiles` watches the places setup can write by content
+  hash, so the cost does not depend on the project's size). Per decision 2, initialization (new, existing and replica)
+  refreshes Codex's user-wide `config.toml` entry only when Codex is already connected in that project, and leaves an
+  existing entry alone otherwise; `init --agent codex` is what connects it (this is the stage 3 item "`init` stops
+  writing Codex's global config", pulled forward on the owner's decision). Every `init` refusal also prints `ERROR=`,
+  `MESSAGE=` and `FIX=` on standard error beside `ERROR_CODE=`/`REASON=`; exit codes are unchanged, except that a failed
+  connection exits with the `provider install` code (10) and an option mistake with 2. `Terminal.interactive()` is true
+  only at a terminal without `--porcelain`/`SYNESIS_OUTPUT=porcelain`, so a script is never asked a question. Tests:
+  `ProviderDiscoveryTest` 10 (0, 1, 2 agents, a harness without a status command, a failing command, Windows shims, the
+  planted-token test with the real process runner, and a guard that discovery reads no file), `InitAgentSetupTest` 12
+  (the file-system snapshot of what `init` writes and lists, choice and prompt paths, `--no-agents` running nothing,
+  Codex's configuration left alone, the refusal triples), `ProviderApplicationServiceTest` +1 (the old test that init
+  registers Codex is replaced by two for decision 2). Source semantics proven on the Linux gate (touched classes green;
+  whole gate result in the commit report) and on Windows for the touched classes, `ProviderDiscoveryTest` running the
+  real process runner on `.cmd` shims there. A whole Windows `check` ended with three `cli` scenario tests failing on
+  temp-folder cleanup or a Link join timeout; they pass on the Linux gate and initialize their projects with provider configuration off. No real Claude or
+  Codex was connected, and a real fresh-user run is still to do. Still open in
+  stage 2: `doctor` groups, `status`, `agents log`, the `agents run` question and `ERROR=TASK_REQUIRED`, the executed
+  walkthroughs, and the same error shape in `provider`, `link` and `agents run`.
+
 - **Tasks.** Agent discovery per provider (`ProviderIntegration` finds its executable on `PATH`, asks its version, asks
   its own sign-in status command where one exists, else "could not tell"). `init` uses it: connects one found agent,
   asks once when several are found, offers `--agent`, `--no-agents`, `--git-init` for scripts, and lists every file it

@@ -44,6 +44,63 @@ public interface ProviderIntegration {
     }
 
     /**
+     * Returns the name of the provider's executable as it is looked up on {@code PATH}.
+     *
+     * @return executable name without extension
+     */
+    default String executableName() {
+        return id();
+    }
+
+    /**
+     * Returns the arguments that make the provider print its own version.
+     *
+     * @return arguments after the executable name
+     */
+    default List<String> versionArguments() {
+        return List.of("--version");
+    }
+
+    /**
+     * Returns the provider's own non-secret command that reports whether someone is signed in.
+     *
+     * <p>Sign-in is judged only from what this command answers. Synesis never opens the provider's
+     * credential files, so a provider without such a command is reported as {@link SignIn#UNKNOWN}.</p>
+     *
+     * @return arguments after the executable name, or empty when the provider has no such command
+     */
+    default java.util.Optional<List<String>> signInStatusArguments() {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * Reads the answer of {@link #signInStatusArguments()}.
+     *
+     * <p>Anything this method does not recognise is {@link SignIn#UNKNOWN}: a harness that changes its
+     * wording degrades to "could not tell", never to a guess. The output may hold an account name, so the
+     * caller keeps only the returned state.</p>
+     *
+     * @param exitCode exit code of the status command
+     * @param output   everything the command printed
+     * @return the sign-in state the answer proves
+     */
+    default SignIn signInState(int exitCode, String output) {
+        return SignIn.UNKNOWN;
+    }
+
+    /**
+     * What the provider's own status command says about being signed in.
+     */
+    enum SignIn {
+        /** The provider says someone is signed in. */
+        SIGNED_IN,
+        /** The provider says nobody is signed in. */
+        SIGNED_OUT,
+        /** The provider has no status command, or its answer was not understood. */
+        UNKNOWN
+    }
+
+    /**
      * Resolves the provider configuration path.
      *
      * @param projectRoot project root

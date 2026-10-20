@@ -47,10 +47,32 @@ public final class ProviderApplicationService {
     private final ProviderManualService manualService = new ProviderManualService();
     private final ProviderMcpConfigurationService mcpConfiguration = new ProviderMcpConfigurationService();
 
+    private final ProviderDiscovery discovery;
+
     /**
      * Creates the default provider service.
      */
     public ProviderApplicationService() {
+        this(new ProviderDiscovery());
+    }
+
+    /**
+     * Creates a provider service that finds installed agents through the given discovery, so a test or a
+     * caller with its own search path never inspects this computer's.
+     *
+     * @param discovery agent discovery
+     */
+    public ProviderApplicationService(ProviderDiscovery discovery) {
+        this.discovery = Objects.requireNonNull(discovery, "discovery");
+    }
+
+    /**
+     * Finds the registered agents installed on this computer ({@link ProviderDiscovery}).
+     *
+     * @return one finding per registered provider
+     */
+    public List<ProviderDiscovery.Finding> discoverAgents() {
+        return discovery.discover();
     }
 
     /**

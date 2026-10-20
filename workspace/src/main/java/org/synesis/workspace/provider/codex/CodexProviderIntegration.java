@@ -54,6 +54,25 @@ public final class CodexProviderIntegration implements ProviderIntegration {
         return "codex";
     }
 
+    /**
+     * {@code codex login status} prints "Logged in using ..." with exit 0, or "Not logged in" (checked
+     * against Codex 0.163, 2026-10-20). A version without the command answers with a usage error and is
+     * reported as unknown.
+     */
+    @Override
+    public java.util.Optional<List<String>> signInStatusArguments() {
+        return java.util.Optional.of(List.of("login", "status"));
+    }
+
+    @Override
+    public SignIn signInState(int exitCode, String output) {
+        String answer = output == null ? "" : output.strip().toLowerCase(java.util.Locale.ROOT);
+        if (answer.startsWith("not logged in")) {
+            return SignIn.SIGNED_OUT;
+        }
+        return exitCode == 0 && answer.startsWith("logged in") ? SignIn.SIGNED_IN : SignIn.UNKNOWN;
+    }
+
     @Override
     public ProviderSupportLevel supportLevel() {
         return ProviderSupportLevel.EXPERIMENTAL;

@@ -29,7 +29,7 @@ workspace mutate               Applies an evaluated workspace mutation through S
 mcp                            Launches the stdio Model Context Protocol (MCP) server
 help                           Show Synesis command help.
 version                        Show build and protocol metadata.
-init                           Initialize a Synesis project.
+init                           Initialize a Synesis project and connect the agents installed on this computer.
 project                        Manage the current Synesis project.
 project create                 Create a project for one authenticated peer.
 project share                  Share the project with this computer as its owner, and show the recovery words once.
@@ -144,6 +144,53 @@ error: `ERROR=PROJECT_NOT_CONFIGURED` for a directory that is not an initialized
 project, otherwise the cause (`ERROR=PROJECT_INVALID`, `ERROR=MALFORMED`,
 `ERROR=PROJECT_ACCESS_FAILED`) with a `REASON=` line. Exit code 10 as before. Each
 refusal also prints `MESSAGE=` and `FIX=` (see "Errors and exit codes").
+
+`synesis init` initializes the project (a Git repository; the one commit it makes
+is the managed baseline) and then connects the agents installed on this computer
+(ADR-0103 stage 2).
+
+- **Discovery.** For each supported agent it looks for the executable on `PATH`,
+  runs the agent's own `--version`, and runs the agent's own sign-in status
+  command where one exists (`claude auth status --json`, `codex login status`).
+  It prints `AGENT_<ID>=FOUND|NOT_FOUND`, `AGENT_<ID>_VERSION=` and
+  `AGENT_<ID>_SIGN_IN=SIGNED_IN|SIGNED_OUT|UNKNOWN`; `UNKNOWN` means the agent
+  has no such command or its answer was not understood. It never opens an
+  agent's configuration or credential files, and keeps nothing of a status
+  command's output but that state.
+- **Choice.** One agent found: it is connected (the same as
+  `synesis provider install <id>`). Several found: on a terminal it asks once
+  (`AGENT_CHOICE_PROMPT=`; numbers or names, `all`, `none`; Enter means all; the
+  end of input means none), and in a script or with `--porcelain` it connects
+  none and says so in a `NEXT_STEP=` line. None found: it says how to install
+  one and continues. Each connection prints `AGENT_<ID>_CONNECT=` (the
+  `provider install` result, or `FAILED`) and `AGENT_<ID>_WORKTREE=`, the
+  isolated Git worktree Synesis gives that agent under its own workspace folder.
+- **Flags.** `--agent <id>` (repeat it or separate ids with commas) connects the
+  named agents and asks nothing; `--no-agents` connects none and runs no
+  discovery; `--git-init` runs `git init` first in a folder that is not a Git
+  repository (on a terminal without it, `init` asks `GIT_INIT_PROMPT=`; it
+  never commits user files). No prompt appears on a pipe, in a script, or with
+  `--porcelain`/`SYNESIS_OUTPUT=porcelain`.
+- **Files written.** Every file it created or changed, inside the project and
+  outside it, is listed as `FILE_CREATED=<path>` or `FILE_CHANGED=<path>`
+  (project paths relative to the project, `.synesis/` for the whole state
+  directory, outside paths absolute): `.git/info/exclude`, an agent's project
+  configuration (`.claude/settings.json`, `.mcp.json`, `.codex/hooks.json`), its
+  installed manual under `~/.claude/skills` or `~/.codex/skills`, Codex's
+  user-wide `~/.codex/config.toml` entry **only when Codex is connected** (an
+  existing entry is left alone), and Synesis's registry of known projects in its
+  per-computer state folder. Files removed from an earlier version are listed as
+  `INSTRUCTIONS_REMOVED=`. The agents' worktrees are the `AGENT_<ID>_WORKTREE=`
+  lines. `init` writes no `AGENTS.md` or rule file.
+- **Refusals.** A refusal prints, on standard error, the shape of
+  [Errors and exit codes](#errors-and-exit-codes), beside the keys earlier
+  versions printed (`ERROR_CODE=`, `REASON=`, `INIT_RESULT=CONFLICT` on standard
+  output). Codes: `GIT_REQUIRED`, `GIT_INIT_FAILED`, `GIT_HEAD_UNAVAILABLE`,
+  `PROJECT_INVALID`, `CONFLICT`, `MALFORMED`, the baseline failure codes,
+  `UNKNOWN_PROVIDER` and `OPTIONS_CONFLICT` (exit 2), `AGENT_SETUP_FAILED`, and,
+  for an agent that could not be connected, the `provider install` code
+  (`LAUNCHER_MISSING`, `INVALID_CONFIG`, ...) with exit 10. Exit codes are
+  unchanged.
 
 `synesis mcp` also asks the installation daemon for the runtime of a project
 shared with another computer, in the background and only when it is not
@@ -465,8 +512,8 @@ prints that conversation's messages. It only reads: the operator cannot post.
 
 ## Errors and exit codes
 
-A setup refusal of `synesis provider`, `synesis link` and `synesis agents run`
-prints three keys, in this order, in human and `--porcelain` output alike:
+A setup refusal of `synesis init`, `synesis provider`, `synesis link` and
+`synesis agents run` prints three keys, in this order, in human and `--porcelain` output alike:
 
 ```text
 ERROR=<CODE>     stable; listed below
@@ -511,6 +558,10 @@ needs the owner's approval (ADR-0103, decision 6).
 | `MALFORMED` | The project's metadata file is damaged. |
 | `PROJECT_ACCESS_FAILED` | Anything else went wrong reading the project; `REASON=` says what. |
 | `METADATA_ROOT_UNAVAILABLE` | Synesis's private storage for the project is unavailable or unsafe. |
+| `GIT_REQUIRED` | `synesis init` was run in a folder that is not a Git repository (`--git-init` makes one). |
+| `GIT_INIT_FAILED` | `git init` could not create a repository. |
+| `OPTIONS_CONFLICT` | Two options ask for opposite things, such as `--agent` with `--no-agents`. |
+| `AGENT_SETUP_FAILED` | `synesis init` could not find or connect the agents; the project itself was initialized. |
 | `GIT_HEAD_UNAVAILABLE` | The repository has no commit to build on. |
 | `CONFLICT` | The project is partly set up or contradicts itself. |
 | `PROJECT_RUNTIME_UNAVAILABLE` | The project's runtime is not running and could not be started. |

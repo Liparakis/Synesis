@@ -52,7 +52,7 @@ final class UnifiedCliSyncProcessTest {
     private static Path initProject(Path project) throws Exception {
         Files.createDirectories(project);
         git(project, "init");
-        CommandResult result = run(project, "init", "--project", project.toString());
+        CommandResult result = run(project, "init", "--no-agents", "--project", project.toString());
         assertEquals(0, result.exit(), result.output());
         return project;
     }

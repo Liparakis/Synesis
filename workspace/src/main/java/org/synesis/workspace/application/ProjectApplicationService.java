@@ -204,15 +204,55 @@ public final class ProjectApplicationService {
     }
 
     /**
-     * Registers the Synesis server in Codex's configuration with the launcher built for it.
+     * Brings the Synesis entry of Codex's user-wide configuration up to date, for a project in which
+     * Codex is connected, with the launcher built for it.
      *
      * <p>Initialization and {@code provider install} both write this entry. They must name the
      * same launcher, or whichever ran last silently decides how every Codex session starts its
      * server: the command launcher is the one people type, not the stdio server entry point.</p>
+     *
+     * <p>Initialization used to write the entry whether or not Codex was installed, which changed
+     * configuration nobody asked to touch (ADR-0103 decision 2). Now a project without the Codex
+     * provider installed gets nothing, and an entry that exists is left alone; connecting Codex is
+     * {@code provider install codex}, which {@code synesis init} runs for an agent the person chose.</p>
      */
-    private static void registerCodexMcpServer(ProjectLocation location) {
+    private static void refreshConnectedCodexMcpServer(ProjectLocation location) {
         ProviderApplicationService providerService = new ProviderApplicationService();
-        providerService.ensureMcpConfig(location, org.synesis.workspace.application.provider.ProviderRegistry.find("codex"), providerService.mcpLauncherPath());
+        boolean connected = providerService.list(location).stream().anyMatch(row -> "codex".equals(row.id()) && "INSTALLED".equals(row.status()));
+        if (connected) {
+            providerService.ensureMcpConfig(location, org.synesis.workspace.application.provider.ProviderRegistry.find("codex"), providerService.mcpLauncherPath());
+        }
+    }
+
+    /**
+     * Tells whether a directory already has Git metadata, so a caller can offer {@code git init}
+     * before {@link #requireGitRepository(Path)} refuses.
+     *
+     * @param projectRoot explicit project directory
+     * @return true when the directory is a Git repository or worktree root
+     * @throws ProjectApplicationException with code {@code PROJECT_INVALID} when the directory is not usable
+     */
+    public boolean hasGitRepository(Path projectRoot) throws ProjectApplicationException {
+        return GitRepositoryFacts.hasGitMetadata(directory(projectRoot, "project directory"));
+    }
+
+    /**
+     * Runs {@code git init} in a directory that has no Git metadata; leaves a repository as it is.
+     * It never stages or commits: the managed baseline commit of {@link #init(Path)} stays the only
+     * commit Synesis makes.
+     *
+     * @param projectRoot target directory
+     * @throws ProjectApplicationException with code {@code GIT_INIT_FAILED} when Git cannot initialize the folder
+     */
+    public void initGit(Path projectRoot) throws ProjectApplicationException {
+        Path root = directory(projectRoot, "project directory");
+        if (!GitRepositoryFacts.hasGitMetadata(root)) {
+            try {
+                GitProcessRunner.run(root, "init");
+            } catch (Exception failure) {
+                throw new ProjectApplicationException("GIT_INIT_FAILED", "Could not initialize Git in the selected folder", failure);
+            }
+        }
     }
 
     /**
@@ -279,13 +319,7 @@ public final class ProjectApplicationService {
      */
     public ProjectInitResult initForRegistration(Path projectRoot, boolean configureProviderMcp) throws ProjectApplicationException {
         Path root = directory(projectRoot, "project directory");
-        if (!GitRepositoryFacts.hasGitMetadata(root)) {
-            try {
-                GitProcessRunner.run(root, "init");
-            } catch (Exception failure) {
-                throw new ProjectApplicationException("GIT_INIT_FAILED", "Could not initialize Git in the selected folder", failure);
-            }
-        }
+        initGit(root);
         return init(root, configureProviderMcp);
     }
 
@@ -312,7 +346,7 @@ public final class ProjectApplicationService {
                     RepositoryPrivateStateService.ensure(root);
                     List<String> retired = retireLegacyInstructions(root);
                     if (configureProviderMcp) {
-                        registerCodexMcpServer(existing);
+                        refreshConnectedCodexMcpServer(existing);
                     }
                     return new ProjectInitResult(ProjectInitStatus.ALREADY_INITIALIZED, existing, identity(existing.profile()), false, ensureGitHead(root), retired);
                 } catch (Exception failure) {
@@ -351,7 +385,7 @@ public final class ProjectApplicationService {
             List<String> retired = retireLegacyInstructions(root);
             try {
                 if (configureProviderMcp) {
-                    registerCodexMcpServer(location);
+                    refreshConnectedCodexMcpServer(location);
                 }
             } catch (Exception ignored) {
             }
@@ -402,7 +436,7 @@ public final class ProjectApplicationService {
             ProjectLocation location = readLocation(root, synesis, metadata);
             if (configureProviderMcp) {
                 try {
-                    registerCodexMcpServer(location);
+                    refreshConnectedCodexMcpServer(location);
                 } catch (Exception ignored) {
                     // Provider installation is optional; canonical identity and local state are not.
                 }
