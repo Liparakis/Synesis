@@ -3,6 +3,7 @@ package org.synesis.cli.command.provider;
 import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ErrorShape;
 import org.synesis.cli.command.ProjectOptions;
 import org.synesis.cli.exit.ExitCodes;
 import picocli.CommandLine.Command;
@@ -40,18 +41,14 @@ public final class ProviderUninstallCommand implements Callable<Integer> {
     public Integer call() {
         if (global) {
             if (project != null) {
-                runtime.terminal().stderr("ERROR=CONFLICTING_UNINSTALL_SCOPE");
+                ErrorShape.print(runtime.terminal()::stderr, "CONFLICTING_UNINSTALL_SCOPE");
                 return ExitCodes.USAGE;
             }
-            var result = runtime.providerService().uninstallGlobalMcpConfiguration(provider);
-            result.values().forEach((key, value) -> runtime.terminal().stdout(key + "=" + value));
-            return result.exitCode();
+            return ProviderCommand.report(runtime, runtime.providerService().uninstallGlobalMcpConfiguration(provider));
         }
         try {
             var location = ProjectOptions.locate(runtime, project);
-            var result = runtime.providerService().uninstall(location, provider);
-            result.values().forEach((key, value) -> runtime.terminal().stdout(key + "=" + value));
-            return result.exitCode();
+            return ProviderCommand.report(runtime, runtime.providerService().uninstall(location, provider));
         } catch (Exception failure) {
             return ProjectOptions.refuse(runtime, failure);
         }

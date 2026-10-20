@@ -97,6 +97,25 @@ public final class DaemonClient {
     }
 
     /**
+     * Asks whether a daemon that is already running holds a runtime for the project. A daemon is never started for this.
+     *
+     * @param project project directory
+     * @return {@code false} when no daemon runs, it holds none for the project, or it cannot be asked
+     */
+    public static boolean holdsProjectRuntime(Path project) {
+        DaemonEndpoint.Record endpoint = connectExisting();
+        if (endpoint == null) {
+            return false;
+        }
+        try {
+            Map<String, Object> status = exchange(endpoint, Map.of("token", endpoint.token(), "operation", "STATUS"));
+            return status.get("projects") instanceof List<?> projects && projects.contains(Objects.requireNonNull(project, "project").toAbsolutePath().normalize().toString());
+        } catch (IOException failure) {
+            return false;
+        }
+    }
+
+    /**
      * Reads one pending selection through an already running daemon.
      *
      * @param selectionId pending selection identifier

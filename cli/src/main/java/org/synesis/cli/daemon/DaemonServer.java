@@ -211,7 +211,8 @@ final class DaemonServer implements AutoCloseable {
     private synchronized Map<String, Object> status() {
         closeUnreachableRuntimes();
         selections.expireStale();
-        return response("RUNNING", Map.of("runtimeCount", runtimes.size()));
+        // The folders are local paths on a loopback socket that needs the daemon's token; `synesis doctor` reads them.
+        return response("RUNNING", Map.of("runtimeCount", runtimes.size(), "projects", runtimes.keySet().stream().map(Path::toString).toList()));
     }
 
     private void closeUnreachableRuntimes() {

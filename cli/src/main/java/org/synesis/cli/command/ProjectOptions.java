@@ -71,12 +71,12 @@ public final class ProjectOptions {
      */
     public static int refuse(CliRuntime runtime, Exception failure) {
         if (failure instanceof ProjectApplicationException application && "NOT_FOUND".equals(application.code())) {
-            runtime.terminal().stderr("ERROR=PROJECT_NOT_CONFIGURED");
+            ErrorShape.print(runtime.terminal()::stderr, "PROJECT_NOT_CONFIGURED");
         } else if (failure instanceof ProjectApplicationException application) {
-            runtime.terminal().stderr("ERROR=" + application.code());
+            ErrorShape.print(runtime.terminal()::stderr, application.code());
             runtime.terminal().stderr("REASON=" + application.getMessage());
         } else {
-            runtime.terminal().stderr("ERROR=PROJECT_ACCESS_FAILED");
+            ErrorShape.print(runtime.terminal()::stderr, "PROJECT_ACCESS_FAILED");
             runtime.terminal().stderr("REASON=" + (failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage()));
         }
         return ExitCodes.LOCAL_CONFIGURATION;

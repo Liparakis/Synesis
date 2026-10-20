@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ErrorShapeAssert;
 import org.synesis.cli.daemon.ProjectRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.terminal.ConsoleTerminal;
@@ -147,7 +148,7 @@ final class AgentsRunCommandTest {
 
             assertEquals(ExitCodes.USAGE, exit, output());
         }
-        assertEquals(List.of("ERROR=agents run needs a task; pass --prompt \"<task>\" or --prompt-file <file>"), stderr().stream().distinct().toList(), output());
+        assertEquals(List.of("ERROR=TASK_REQUIRED", "MESSAGE=agents run needs a task", "FIX=pass --prompt \"<task>\" or --prompt-file <file>"), stderr().stream().distinct().toList(), output());
         assertEquals(List.of(), ensured, "no runtime was asked for, so no agent could start");
         assertEquals(List.of(), stdout(), "no agent log directory or run result was printed");
     }
@@ -159,7 +160,103 @@ final class AgentsRunCommandTest {
         int exit = new CommandLine(new AgentsRunCommand(cli, unavailable())).execute("--project", root.toString(), "--agent", "codex", "--prompt", "work", "--prompt-file", tmp.resolve("p.txt").toString());
 
         assertEquals(ExitCodes.USAGE, exit, output());
-        assertEquals(List.of("ERROR=give only one of --prompt and --prompt-file"), stderr(), output());
+        ErrorShapeAssert.assertShaped(stderr(), "PROMPT_CONFLICT");
+    }
+
+    @Test
+    void everyOtherUsageRefusalNamesWhatWasTypedAndHowToFixIt() throws Exception {
+        CliRuntime cli = new CliRuntime(new Onboarding(tmp.resolve("profile"), new StatusRenderer(terminal)), terminal);
+
+        assertEquals(ExitCodes.USAGE, new CommandLine(new AgentsRunCommand(cli, unavailable())).execute("--project", root.toString(), "--agent", "gemini", "--prompt", "work"), output());
+        ErrorShapeAssert.assertShaped(stderr(), "UNKNOWN_PROVIDER");
+        assertEquals("MESSAGE=unknown provider: gemini", stderr().get(1));
+        err.reset();
+
+        assertEquals(ExitCodes.USAGE, new CommandLine(new AgentsRunCommand(cli, unavailable())).execute("--project", root.toString(), "--agent", "claude:a:b:c", "--prompt", "work"), output());
+        ErrorShapeAssert.assertShaped(stderr(), "AGENT_INVALID");
+        err.reset();
+
+        assertEquals(ExitCodes.USAGE, new CommandLine(new AgentsRunCommand(cli, unavailable())).execute("--project", root.toString(), "--agent", "codex", "--prompt", "work"), output());
+        ErrorShapeAssert.assertShaped(stderr(), "PROVIDER_NOT_INSTALLED");
+        assertEquals("FIX=run 'synesis provider install codex'", stderr().get(2));
+        assertEquals(List.of(), ensured, "no agent could start");
+    }
+
+    @Test
+    void aPersonAtATerminalIsAskedOnceForTheTaskAndSeesItBack() throws Exception {
+        share();
+        installedCodex();
+
+        int exit = new CommandLine(new AgentsRunCommand(cliWithInput(true, "  fix the build  \n"), unavailable())).execute("--project", root.toString(), "--agent", "codex");
+
+        assertEquals(ExitCodes.LOCAL_CONFIGURATION, exit, output());
+        assertTrue(out.toString(StandardCharsets.UTF_8).startsWith("What should the agents work on? AGENT_TASK=fix the build"), output());
+        assertEquals(List.of(root.toRealPath()), realPaths(), "the task was accepted, so the run went on to the runtime before any agent");
+    }
+
+    @Test
+    void anEmptyAnswerOrNoAnswerIsTheSameRefusalAsNoTaskAndStartsNothing() throws Exception {
+        installedCodex();
+        for (String typed : List.of("\n", "   \n", "")) {
+            err.reset();
+
+            int exit = new CommandLine(new AgentsRunCommand(cliWithInput(true, typed), unavailable())).execute("--project", root.toString(), "--agent", "codex");
+
+            assertEquals(ExitCodes.USAGE, exit, output());
+            assertEquals("ERROR=TASK_REQUIRED", stderr().getFirst(), output());
+        }
+        assertEquals(List.of(), ensured, "no runtime was asked for, so no agent could start");
+    }
+
+    @Test
+    void theQuestionIsNotAskedBeforeTheRestIsChecked() throws Exception {
+        java.io.ByteArrayInputStream typed = new java.io.ByteArrayInputStream("a task\n".getBytes(StandardCharsets.UTF_8));
+        CliRuntime cli = new CliRuntime(new Onboarding(tmp.resolve("profile"), new StatusRenderer(terminal)), new ConsoleTerminal(new PrintStream(out, true, StandardCharsets.UTF_8), new PrintStream(err, true, StandardCharsets.UTF_8), typed, true));
+
+        int exit = new CommandLine(new AgentsRunCommand(cli, unavailable())).execute("--project", root.toString(), "--agent", "codex");
+
+        assertEquals(ExitCodes.USAGE, exit, output());
+        assertEquals("ERROR=PROVIDER_NOT_INSTALLED", stderr().getFirst(), output());
+        assertFalse(out.toString(StandardCharsets.UTF_8).contains("What should"), "a person is not asked a question that cannot be answered yet: " + output());
+        assertEquals("a task\n".length(), typed.available(), "nothing was read");
+    }
+
+    @Test
+    void aScriptIsNeverAskedAndRefusesEvenWhenSomethingCouldBeRead() throws Exception {
+        installedCodex();
+        java.io.ByteArrayInputStream typed = new java.io.ByteArrayInputStream("a task\n".getBytes(StandardCharsets.UTF_8));
+        CliRuntime cli = new CliRuntime(new Onboarding(tmp.resolve("profile"), new StatusRenderer(terminal)), new ConsoleTerminal(new PrintStream(out, true, StandardCharsets.UTF_8), new PrintStream(err, true, StandardCharsets.UTF_8), typed, false));
+
+        int exit = new CommandLine(new AgentsRunCommand(cli, unavailable())).execute("--project", root.toString(), "--agent", "codex");
+
+        assertEquals(ExitCodes.USAGE, exit, output());
+        assertEquals("ERROR=TASK_REQUIRED", stderr().getFirst(), output());
+        assertEquals(List.of(), stdout(), "no question was printed");
+        assertEquals("a task\n".length(), typed.available(), "standard input was not read");
+    }
+
+    @Test
+    void aBlankTaskThatWasGivenIsRefusedEvenAtATerminal() throws Exception {
+        installedCodex();
+
+        int exit = new CommandLine(new AgentsRunCommand(cliWithInput(true, "a task\n"), unavailable())).execute("--project", root.toString(), "--agent", "codex", "--prompt", " ");
+
+        assertEquals(ExitCodes.USAGE, exit, output());
+        assertEquals("ERROR=TASK_REQUIRED", stderr().getFirst(), output());
+        assertFalse(out.toString(StandardCharsets.UTF_8).contains("What should"), output());
+    }
+
+    private CliRuntime cliWithInput(boolean interactive, String typed) {
+        ConsoleTerminal person = new ConsoleTerminal(new PrintStream(out, true, StandardCharsets.UTF_8), new PrintStream(err, true, StandardCharsets.UTF_8),
+                new java.io.ByteArrayInputStream(typed.getBytes(StandardCharsets.UTF_8)), interactive);
+        return new CliRuntime(new Onboarding(tmp.resolve("profile"), new StatusRenderer(person)), person);
+    }
+
+    /** Marks the provider installed, as {@code synesis provider install codex} records it, without its hooks. */
+    private void installedCodex() throws IOException {
+        Path metadata = root.resolve(".synesis/local/providers/codex.json");
+        Files.createDirectories(metadata.getParent());
+        Files.writeString(metadata, "{}");
     }
 
     private void share() throws IOException {

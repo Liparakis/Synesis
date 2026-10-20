@@ -1,6 +1,7 @@
 package org.synesis.cli.command.link;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.synesis.cli.command.ErrorShapeAssert.assertShaped;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -131,6 +132,7 @@ class LinkCommandsTest {
         assertEquals(ExitCodes.COMMAND_FAILED, invited.exit(), invited.toString());
         assertTrue(invited.stdout().contains("LINK_STATE=WAITING"), invited.toString());
         assertTrue(invited.stdout().stream().noneMatch(line -> line.startsWith("PEER_NODE_ID")), invited.toString());
+        assertShaped(invited.stderr(), "LINK_WAIT_TIMEOUT");
     }
 
     @Test
@@ -143,6 +145,63 @@ class LinkCommandsTest {
         assertEquals(ExitCodes.COMMAND_FAILED, invited.exit(), invited.toString());
         assertEquals(List.of("LINK_STATE=FAILED", "LINK_FAILURE=EXPIRED", "LINK_FAILURE_DETAIL=the invitation expired before the other computer connected"),
                 invited.stdout().subList(invited.stdout().size() - 3, invited.stdout().size()));
+        assertShaped(invited.stderr(), "EXPIRED");
+    }
+
+    @Test
+    void aFailureReasonTheShapeDoesNotKnowIsStillExplainedAndNamedAsALinkFailure() throws Exception {
+        runtime.endsWithoutSession = true;
+        runtime.endedOperations = List.of(Map.of("operationId", "op-1", "kind", "HOST", "state", "FAILED", "reason", "SOME_NEW_REASON", "message", "something new went wrong"));
+
+        Run invited = invite();
+
+        assertEquals(ExitCodes.COMMAND_FAILED, invited.exit(), invited.toString());
+        assertShaped(invited.stderr(), "LINK_FAILED");
+        assertEquals("MESSAGE=something new went wrong", invited.stderr().get(1));
+    }
+
+    @Test
+    void everyLinkCommandRefusesAProjectThatIsNotInitializedWithTheShapeAndKeepsItsCode() throws Exception {
+        Path bare = Files.createDirectories(tmp.resolve("bare"));
+        String node = NodeIdentity.generate().nodeId();
+        List<Run> runs = List.of(
+                runIn(bare.toString(), cli -> new LinkInviteCommand(cli, project -> runtime, 5, List::of)),
+                runIn(bare.toString(), cli -> new LinkJoinCommand(cli, project -> runtime, 5), "synesis://join/SLB3-abc"),
+                runIn(bare.toString(), cli -> new LinkAnswerCommand(cli, project -> runtime, 5), "op-1", "synesis://answer/SLA3-x"),
+                runIn(bare.toString(), cli -> new LinkRequestsCommand(cli, project -> runtime)),
+                runIn(bare.toString(), cli -> new LinkAcceptCommand(cli, project -> runtime), node),
+                runIn(bare.toString(), cli -> new LinkDeclineCommand(cli, project -> runtime), node));
+        for (Run refused : runs) {
+            assertEquals(ExitCodes.LOCAL_CONFIGURATION, refused.exit(), refused.toString());
+            assertShaped(refused.stderr(), "NOT_FOUND");
+        }
+        assertEquals(List.of(), runtime.commands);
+    }
+
+    @Test
+    void everyLinkCommandWhoseRuntimeCannotBeReachedRefusesWithTheShape() throws Exception {
+        RuntimeControl.Source unreachable = project -> {
+            throw new IOException("project_runtime_unavailable");
+        };
+        String node = NodeIdentity.generate().nodeId();
+        List<Run> runs = List.of(
+                run(cli -> new LinkInviteCommand(cli, unreachable, 5, List::of)),
+                run(cli -> new LinkAnswerCommand(cli, unreachable, 5), "op-1", "synesis://answer/SLA3-x"),
+                run(cli -> new LinkRequestsCommand(cli, unreachable)),
+                run(cli -> new LinkAcceptCommand(cli, unreachable), node),
+                run(cli -> new LinkDeclineCommand(cli, unreachable), node));
+        for (Run refused : runs) {
+            assertEquals(ExitCodes.LOCAL_CONFIGURATION, refused.exit(), refused.toString());
+            assertShaped(refused.stderr(), "PROJECT_RUNTIME_UNAVAILABLE");
+        }
+    }
+
+    @Test
+    void anInvitationThatIsNotValidKeepsItsWordingAndGetsItsFix() throws Exception {
+        Run joined = runIn(root.toString(), cli -> new LinkJoinCommand(cli, project -> runtime, 5), "synesis://project/SLP1-AAAA");
+
+        assertShaped(joined.stderr(), "INCOMPATIBLE_VERSION");
+        assertFalse(joined.stderr().get(1).contains("could not complete"), joined.toString());
     }
 
     @Test
@@ -154,9 +213,11 @@ class LinkCommandsTest {
 
         assertEquals(ExitCodes.COMMAND_FAILED, vanished.exit(), vanished.toString());
         assertTrue(vanished.stdout().contains("LINK_FAILURE=SESSION_ENDED"), vanished.toString());
+        assertShaped(vanished.stderr(), "SESSION_ENDED");
         runtime.endedOperations = List.of();
         Run forgotten = invite();
         assertTrue(forgotten.stdout().contains("LINK_FAILURE=OPERATION_UNKNOWN"), forgotten.toString());
+        assertShaped(forgotten.stderr(), "OPERATION_UNKNOWN");
     }
 
     @Test
@@ -170,7 +231,8 @@ class LinkCommandsTest {
         assertEquals(ExitCodes.COMMAND_FAILED, answered.exit(), answered.toString());
         assertEquals(List.of("OPERATION_ID=op-1", "LINK_STATE=FAILED", "LINK_FAILURE=EXPIRED", "LINK_FAILURE_DETAIL=the invitation expired before the other computer connected"),
                 answered.stdout());
-        assertEquals(List.of(), answered.stderr());
+        assertShaped(answered.stderr(), "EXPIRED");
+        assertEquals("MESSAGE=the invitation expired before the other computer connected", answered.stderr().get(1));
     }
 
     @Test
@@ -180,7 +242,7 @@ class LinkCommandsTest {
         Run answered = run(cli -> new LinkAnswerCommand(cli, project -> runtime, 5), "op-9", "synesis://answer/SLA3-x");
 
         assertEquals(ExitCodes.LOCAL_CONFIGURATION, answered.exit(), answered.toString());
-        assertEquals(List.of("ERROR=OPERATION_NOT_FOUND"), answered.stderr());
+        assertShaped(answered.stderr(), "OPERATION_NOT_FOUND");
     }
 
     private static Map<String, Object> expired(String operation) {
@@ -200,7 +262,7 @@ class LinkCommandsTest {
         Run invited = invite("--expect", "somebody");
 
         assertEquals(ExitCodes.LOCAL_CONFIGURATION, invited.exit());
-        assertEquals(List.of("ERROR=INVALID_NODE_ID"), invited.stderr());
+        assertShaped(invited.stderr(), "INVALID_NODE_ID");
         assertEquals(List.of(), runtime.commands);
     }
 
@@ -237,7 +299,7 @@ class LinkCommandsTest {
         Run joined = run(cli -> new LinkJoinCommand(cli, project -> runtime, 5), "synesis://join/SLB3-abc");
 
         assertEquals(ExitCodes.INVITE_INVALID, joined.exit());
-        assertEquals(List.of("ERROR=INVITE_INVALID"), joined.stderr());
+        assertShaped(joined.stderr(), "INVITE_INVALID");
     }
 
     @Test
@@ -247,7 +309,7 @@ class LinkCommandsTest {
         }, 5), "synesis://join/SLB3-abc");
 
         assertEquals(ExitCodes.LOCAL_CONFIGURATION, joined.exit());
-        assertEquals(List.of("ERROR=PROJECT_RUNTIME_UNAVAILABLE"), joined.stderr());
+        assertShaped(joined.stderr(), "PROJECT_RUNTIME_UNAVAILABLE");
     }
 
     private Run runIn(String folder, Function<CliRuntime, Callable<Integer>> command, String... arguments) {
@@ -314,7 +376,7 @@ class LinkCommandsTest {
         Run joined = runIn(null, cli -> new LinkJoinCommand(cli, project -> runtime, 5, registry), projectLink("https://example.test/p.git"));
 
         assertEquals(ExitCodes.LOCAL_CONFIGURATION, joined.exit(), joined.toString());
-        assertEquals(List.of("ERROR=PROJECT_NOT_ON_THIS_COMPUTER"), joined.stderr());
+        assertShaped(joined.stderr(), "PROJECT_NOT_ON_THIS_COMPUTER");
         assertTrue(joined.stdout().contains("CODE_REMOTE_URL=https://example.test/p.git"), joined.toString());
         assertTrue(joined.stdout().stream().anyMatch(line -> line.startsWith("NEXT=") && line.contains("--into")), joined.toString());
         assertEquals(List.of(), runtime.commands);
@@ -348,7 +410,7 @@ class LinkCommandsTest {
         Run joined = runIn(null, cli -> new LinkJoinCommand(cli, project -> runtime, 5, registry), projectLink(null), "--into", into.toString());
 
         assertEquals(ExitCodes.LOCAL_CONFIGURATION, joined.exit(), joined.toString());
-        assertEquals(List.of("ERROR=PROJECT_FOLDER_NOT_EMPTY"), joined.stderr());
+        assertShaped(joined.stderr(), "PROJECT_FOLDER_NOT_EMPTY");
         assertEquals(List.of(), runtime.commands);
         assertFalse(Files.exists(into.resolve(".synesis")), "nothing was written into it");
     }
@@ -364,7 +426,7 @@ class LinkCommandsTest {
         Run right = runIn(root.toString(), cli -> new LinkJoinCommand(cli, project -> runtime, 5, registry), link, "--wait-seconds", "0");
 
         assertEquals(ExitCodes.LOCAL_CONFIGURATION, wrong.exit(), wrong.toString());
-        assertEquals(List.of("ERROR=PROJECT_IDENTITY_MISMATCH"), wrong.stderr());
+        assertShaped(wrong.stderr(), "PROJECT_IDENTITY_MISMATCH");
         assertEquals(ExitCodes.OK, right.exit(), right.toString());
         assertEquals(List.of("join-project-link " + Map.of("link", link)), runtime.commands);
         assertEquals(List.of(root), registry.projects().stream().map(KnownProjectRegistry.ProjectView::path).toList(), "the chosen folder is registered, the wrong one is not");
@@ -408,8 +470,8 @@ class LinkCommandsTest {
         Run notANode = run(cli -> new LinkDeclineCommand(cli, project -> runtime), "somebody");
 
         assertEquals(ExitCodes.LOCAL_CONFIGURATION, accepted.exit());
-        assertEquals(List.of("ERROR=JOIN_REQUEST_UNKNOWN"), accepted.stderr());
-        assertEquals(List.of("ERROR=INVALID_NODE_ID"), notANode.stderr());
+        assertShaped(accepted.stderr(), "JOIN_REQUEST_UNKNOWN");
+        assertShaped(notANode.stderr(), "INVALID_NODE_ID");
     }
 
     /** A runtime whose network view gains a peer after a number of reads. */

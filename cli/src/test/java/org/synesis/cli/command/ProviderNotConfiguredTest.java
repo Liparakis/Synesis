@@ -13,7 +13,7 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class ProviderNotConfiguredTest {
 
-    private static final List<String> NOT_CONFIGURED = List.of("ERROR=PROJECT_NOT_CONFIGURED");
+    private static final List<String> NOT_CONFIGURED = CliHarness.shaped("PROJECT_NOT_CONFIGURED");
 
     @TempDir
     Path tmp;
@@ -31,6 +31,6 @@ class ProviderNotConfiguredTest {
     @Test
     void globalUninstallConflictsWithAProjectOption() throws Exception {
         Path empty = Files.createDirectories(tmp.resolve("empty"));
-        CliHarness.run(tmp.resolve("profile"), "provider", "uninstall", "codex", "--global", "--project", empty.toString()).assertIs(2, List.of(), List.of("ERROR=CONFLICTING_UNINSTALL_SCOPE"));
+        CliHarness.run(tmp.resolve("profile"), "provider", "uninstall", "codex", "--global", "--project", empty.toString()).assertIs(2, List.of(), CliHarness.shaped("CONFLICTING_UNINSTALL_SCOPE"));
     }
 }

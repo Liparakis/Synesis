@@ -427,6 +427,43 @@ and maintainability decide when a stage is done, by its completion criteria belo
 - **Completion criteria.** Readiness measured on both computers with Synesis's own overhead reported separately from
   external latency; every setup failure in the tests prints a fix; the planted-token test green; the old error keys still
   printed.
+- **Built 2026-10-20 (error shape, `agents run` question, doctor groups; source semantics proven on the Linux gate by the
+  focused tests listed below; not yet the whole gate, the Windows gate or a real run).** Decision 1 of the owner's
+  approval ("yes", `ERROR`/`MESSAGE`/`FIX` beside the old keys) is built for `provider`, `link` and `agents run`;
+  `init`, `status`, `agents log`, discovery and the web UI belong to other changes.
+  1. **One error shape** (`ErrorShape`, `cli/command`): `ERROR=<CODE>`, `MESSAGE=`, `FIX=`, from one catalog of codes with
+     a message and fix each; a command with input-dependent wording gives its own. Every provider refusal
+     (`ProjectOptions.refuse`, `ProviderCommand.report` for install/status/uninstall results including a broken or
+     degraded status that had no `ERROR` of its own, `provider migrate`), every link refusal (`LinkCommand.refuse`: a
+     runtime rejection, a project that is not initialized, an unreachable runtime, an interrupted wait, an invitation that
+     ended without a connection, a wait that ran out) and every `agents run` refusal prints it. Old keys and exit codes
+     are unchanged (`REASON=`, `*_RESULT=`, `LINK_STATE=`, `LINK_FAILURE=`). Two values did change: the sentence that
+     `agents run` printed after `ERROR=` is now the `MESSAGE=` and `ERROR=` is the code (`TASK_REQUIRED`,
+     `PROMPT_CONFLICT`, `AGENT_INVALID`, `UNKNOWN_PROVIDER`, `PROVIDER_NOT_INSTALLED`, `AGENT_RUN_INVALID`), and
+     `link join` printed `MESSAGE=` before `ERROR=INCOMPATIBLE_VERSION` and now prints it after. The code table and an
+     exit-code table are in `docs/cli/command-reference.md`; a test fails when a code is not documented.
+  2. **`agents run`'s question.** `Terminal.interactive()` is true only with standard input and output on a terminal and no
+     `--porcelain` / `SYNESIS_OUTPUT=porcelain`. At a terminal with neither `--prompt` nor `--prompt-file` it asks "What
+     should the agents work on?" once, after the project, providers and options were checked, prints the answer back as
+     `AGENT_TASK=` and starts only on a non-empty one; a blank task, an empty answer, and any script refuse with
+     `ERROR=TASK_REQUIRED` (exit 2, no agent, standard input unread).
+  3. **Doctor groups.** `DoctorGroup` (environment, network, work groups; the earlier findings stay in `project` except
+     the launcher and provider-configuration ones, now environment, and leases and cleanup, now work groups),
+     `DoctorConfidence.ADVICE` and `mark()` (confirmed / suspected / advice), a `FIX` on every finding (a
+     recommendation's own when a finding has none). New finding codes: `git_missing`, `agent_not_on_path` (suspected, for
+     a connected agent only), `provider_files_stale`, `project_runtime_not_running` (suspected: the installation daemon
+     holds none), `link_firewall_missing`, `link_firewall_stale`, `operator_requests_open` (advice, changes no status).
+     The output keeps every earlier line and adds `<GROUP>_STATUS`, `<GROUP>_FINDINGS` and per-finding `_MARK`, `_MESSAGE`,
+     `_FIX` keys; `--json` gains `groups` and `group`/`mark`/`fix`. The daemon's `STATUS` answer gained a `projects` list
+     (additive) so the doctor can ask whether a project's runtime runs without starting anything.
+  4. **`doctor --fix`** makes exactly three repairs, each an existing command, and reports again with
+     `MUTATIONS_PERFORMED=<n>`: Synesis's own stale lock files and corrupt plan files through the existing repair plan;
+     `provider install` for a connected agent whose managed files are stale; starting a shared project's runtime. It
+     never touches a person's files, the firewall or an operator request.
+  5. **Left for the rest of stage 2 / stage 3:** sign-in discovery and the agent version (the doctor checks that a
+     connected agent is on the `PATH`, with the provider id as the executable name, until `ProviderIntegration` discovery
+     lands); that the MCP server and the hooks use the same build; each member's last successful pull (needs ADR-0102's
+     per-log record); lanes waiting on an away computer; the planted-token test; `--strict` exit code 3.
 
 ### Stage 3 — behaviour changes (owner approval first; preliminary: about two days)
 

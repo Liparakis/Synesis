@@ -10,7 +10,7 @@ host                           Create an invitation and wait for one session; pa
 join                           Verify an invitation and connect; show an answer link for the inviter if the computers are on different networks.
 identity                       Inspect the local Synesis identity.
 identity show                  Load or create and display the local node ID.
-doctor                         Executes read-only diagnostics for repository, runtime, durable state, and administrative health.
+doctor                         Executes diagnostics for repository, runtime, environment, network, durable state, and administrative health; --fix makes the safe repairs.
 daemon                         Run the local Synesis installation daemon.
 open                           Open one supported Synesis URI.
 migrate                        Inspect or execute the initialized project migration.
@@ -140,7 +140,8 @@ configuration. The global MCP registration is removed only with
 A `synesis provider` command that cannot find its project says why on standard
 error: `ERROR=PROJECT_NOT_CONFIGURED` for a directory that is not an initialized
 project, otherwise the cause (`ERROR=PROJECT_INVALID`, `ERROR=MALFORMED`,
-`ERROR=PROJECT_ACCESS_FAILED`) with a `REASON=` line. Exit code 10 as before.
+`ERROR=PROJECT_ACCESS_FAILED`) with a `REASON=` line. Exit code 10 as before. Each
+refusal also prints `MESSAGE=` and `FIX=` (see "Errors and exit codes").
 
 `synesis mcp` also asks the installation daemon for the runtime of a project
 shared with another computer, in the background and only when it is not
@@ -166,9 +167,17 @@ as progress, so two idle agents cannot wake each other. A resumed agent is a new
 connection and therefore a new session; it regains its lane through the ordinary
 recovery and continuation path.
 
-The command never invents a task. With neither `--prompt` nor `--prompt-file`, or
-with a blank one, it prints `ERROR=agents run needs a task; pass --prompt "<task>"
-or --prompt-file <file>` and exits 2 without starting an agent.
+The command never invents a task. At a terminal (standard input and output are
+a terminal, and neither `--porcelain` nor `SYNESIS_OUTPUT=porcelain` was given),
+with neither `--prompt` nor `--prompt-file`, it asks once, "What should the agents
+work on?", after it has checked the project, the providers and the options, prints
+the answer back as `AGENT_TASK=`, and starts only on a non-empty answer. In a
+script, with a blank task, or with an empty answer it prints
+`ERROR=TASK_REQUIRED`, `MESSAGE=agents run needs a task` and `FIX=pass --prompt
+"<task>" or --prompt-file <file>`, exits 2 and starts no agent. (Until
+2026-10-20 the `ERROR=` line carried that sentence instead of the code; the
+sentence is now the `MESSAGE=`. The other usage refusals of `agents run` follow
+the same rule: `ERROR=` is the code, `MESSAGE=` the sentence.)
 
 Before it starts any agent, the command asks the installation daemon for the
 project's runtime, starting both when they are not running, and prints
@@ -381,3 +390,169 @@ makes, and it cannot be undone.
 `synesis conversations` lists what agents said to each other, one line per
 conversation with its members and message count; `synesis conversations <id>`
 prints that conversation's messages. It only reads: the operator cannot post.
+
+## Errors and exit codes
+
+A setup refusal of `synesis provider`, `synesis link` and `synesis agents run`
+prints three keys, in this order, in human and `--porcelain` output alike:
+
+```text
+ERROR=<CODE>     stable; listed below
+MESSAGE=<what happened, one sentence>
+FIX=<one command or step that resolves it>
+```
+
+They are added beside what each command printed before: `REASON=`, `HINT=`, the
+`PROVIDER_*_RESULT=` line, `LINK_STATE=` and `LINK_FAILURE=` stay as they were
+and are removed only in a separately authorized change. The shape goes where the
+command already printed its `ERROR=` (standard error for `link` and `agents run`
+and for a project that cannot be found; standard output for a provider result,
+which carries its own `ERROR=`). A code that is not listed still gets a
+`MESSAGE=` and a `FIX=`. `synesis doctor` failing to run prints the same
+three after its prose line.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | The command did what was asked. |
+| `1` | A valid command could not finish its operation: an invitation that ended without a connection or ran out of `--wait-seconds`, an agent run that did not complete, a degraded provider status. |
+| `2` | Invalid usage: a syntax error, conflicting options, an unknown provider, a missing task. |
+| `3` | Today only `synesis provider status` returns it, for a broken integration. It is reserved for `synesis doctor --strict`, as its name says. |
+| `10` | Local identity, project or configuration failure: the project cannot be found or read, the runtime cannot be reached, a provider file cannot be written. |
+| `11` | The invitation is not valid (`INVITE_INVALID`). |
+| `12` | The host's identity did not match the invitation. |
+| `13` | The network session failed. |
+| `14` | The answer link is not valid, was used, or expired (`ANSWER_INVALID`). |
+| `15` | The other computer runs a Synesis with another link compatibility number (`INCOMPATIBLE_VERSION`). |
+| `70` | An unexpected failure, reported without its details. |
+
+`synesis doctor --strict` still returns `10` when the project is not healthy.
+Moving it to `3`, and provider results off `2` and `3`, is a separate change that
+needs the owner's approval (ADR-0103, decision 6).
+
+### Codes of the project lookup
+
+| Code | When |
+| --- | --- |
+| `PROJECT_NOT_CONFIGURED` | The folder is not an initialized project. |
+| `NOT_FOUND` | The same, as `synesis link` has always reported it. |
+| `PROJECT_INVALID` | `--project` names a folder that cannot be used. |
+| `MALFORMED` | The project's metadata file is damaged. |
+| `PROJECT_ACCESS_FAILED` | Anything else went wrong reading the project; `REASON=` says what. |
+| `METADATA_ROOT_UNAVAILABLE` | Synesis's private storage for the project is unavailable or unsafe. |
+| `GIT_HEAD_UNAVAILABLE` | The repository has no commit to build on. |
+| `CONFLICT` | The project is partly set up or contradicts itself. |
+| `PROJECT_RUNTIME_UNAVAILABLE` | The project's runtime is not running and could not be started. |
+| `INTERRUPTED` | The command was interrupted. |
+| `DOCTOR_FAILED` | `synesis doctor` could not run. |
+
+### Codes of `synesis provider`
+
+| Code | When |
+| --- | --- |
+| `UNKNOWN_PROVIDER` | No provider has that name. |
+| `PROFILE_MISSING` | The project's profile folder is missing. |
+| `LAUNCHER_MISSING` | The Synesis launcher the provider's hooks run was not found. |
+| `MANUAL_INSTALL_FAILED` | The Synesis skill could not be written into the provider's user folder (`MANUAL_REASON=`). |
+| `OBSOLETE_PROVIDER_STATE` | The provider's saved state comes from a Synesis that cannot be read. |
+| `INVALID_CONFIG` | The provider's configuration file cannot be read. |
+| `PROVIDER_CONFIGURATION_CONFLICT` | The configuration holds a Synesis entry Synesis did not write. |
+| `INSTALL_FAILED` | The integration could not be installed. |
+| `UNINSTALL_FAILED` | The integration could not be removed. |
+| `GLOBAL_MCP_UNSUPPORTED` | The provider has no shared user-level MCP entry. |
+| `GLOBAL_MCP_UNINSTALL_FAILED` | The shared user-level entry could not be removed. |
+| `CONFLICTING_UNINSTALL_SCOPE` | `--global` and `--project` together. |
+| `BROKEN` | The status check found the integration broken. |
+| `PROVIDER_BROKEN` | A broken status without a cause of its own. |
+| `PROVIDER_DEGRADED` | A degraded status without a cause of its own. |
+| `MCP_CATALOG_MISMATCH` | The provider was installed by a Synesis whose tools differ. |
+| `MANAGED_GUIDANCE_STALE` | The skill the provider reads is older than this Synesis. |
+| `CONFLICTING_MODES` | More than one of `--dry-run`, `--prepare`, `--show-plan` and `--execute`. |
+| `PROVIDER_MIGRATION_REVIEW_REQUIRED` | The provider configuration could not be migrated safely. |
+| `PROVIDER_MIGRATION_STALE` | The prepared plan no longer matches the files. |
+
+### Codes of `synesis link`
+
+| Code | When |
+| --- | --- |
+| `INVITE_INVALID` | The invitation is not valid, was changed, or expired. |
+| `ANSWER_INVALID` | The answer link is not valid, was used, or expired. |
+| `INCOMPATIBLE_VERSION` | The other computer's Synesis cannot talk to this one. |
+| `INVALID_NODE_ID` | The text is not a node ID. |
+| `PROJECT_FOLDER_NOT_EMPTY` | `--into` names a folder that holds files. |
+| `PROJECT_NOT_ON_THIS_COMPUTER` | This computer does not have the invited project; join again with `--into`. |
+| `PROJECT_FOLDER_INVALID` | The folder cannot be used for this invitation. |
+| `PROJECT_FOLDER_NOT_THE_PROJECT` | The folder holds another project. |
+| `PROJECT_IDENTITY_MISMATCH` | The folder is not the project the invitation names. |
+| `INVITER_IS_THIS_COMPUTER` | This computer made the invitation. |
+| `FOLLOWING_ANOTHER_LEADER` | The project already follows another computer. |
+| `ALREADY_A_LEADER` | The project already is the leader. |
+| `LOG_NOT_EMPTY` | The project has its own history, so it cannot follow another's. |
+| `OPERATION_NOT_FOUND` | The runtime no longer knows the invitation. |
+| `JOIN_REQUEST_UNKNOWN` | No computer with that node ID is waiting. |
+| `OPERATION_LIMIT` | Too many invitations are waiting. |
+| `NO_USABLE_CANDIDATE` | No network route to the other computer was found. |
+| `HOST_TIMEOUT` | The other computer did not answer in time. |
+| `CONNECTION_FAILED` | The connection failed. |
+| `EXPIRED` | The invitation expired unopened. |
+| `DECLINED` | The other computer declined. |
+| `CANCELLED` | The invitation was cancelled. |
+| `SESSION_ENDED` | The other computer connected and the session ended at once. |
+| `OPERATION_UNKNOWN` | The runtime forgot the invitation, for example after a restart. |
+| `LINK_FAILED` | The invitation ended without a connection for a reason not listed; `LINK_FAILURE=` and `LINK_FAILURE_DETAIL=` say why. |
+| `LINK_WAIT_TIMEOUT` | Nobody opened the invitation before `--wait-seconds` ran out. |
+| `RUNTIME_REQUEST_REJECTED` | The runtime refused for a reason it did not name. |
+
+### Codes of `synesis agents run`
+
+| Code | When |
+| --- | --- |
+| `TASK_REQUIRED` | No task, a blank one, or an empty answer to the question. |
+| `PROMPT_CONFLICT` | `--prompt` and `--prompt-file` together. |
+| `AGENT_INVALID` | An `--agent` that is not `provider[:model[:effort]]`. |
+| `PROVIDER_NOT_INSTALLED` | The provider is not installed in this project. |
+| `AGENT_RUN_INVALID` | Another option is not valid. |
+| `AGENT_RUN_INTERRUPTED` | The run was interrupted. |
+| `AGENT_RUN_FAILED` | The run failed before it finished; `REASON=` says why. |
+| `PROJECT_RUNTIME_UNAVAILABLE` | A shared project's runtime cannot be started, so no agent was started. |
+
+## Doctor
+
+`synesis doctor` keeps its summary lines and adds one section for each of three
+groups. Each finding is marked `confirmed` (exact evidence), `suspected`
+(strong but not exact, or contradictory evidence) or `advice` (worth knowing,
+changes no health status) and carries a `FIX=`. Keys are `<GROUP>_STATUS`
+(`OK`, `ATTENTION`, or `NOT_APPLICABLE` for the network group of a project that is
+not shared), `<GROUP>_FINDINGS=<n>` and, for each finding,
+`<GROUP>_FINDING_<n>=<code>` with `_MARK`, `_MESSAGE`, `_FIX` and the finding's
+details. The groups are `ENVIRONMENT`, `NETWORK` and `WORK_GROUPS`; the summary
+lines above them are unchanged and `--json` gains `groups` and, on every
+finding, `group`, `mark` and `fix`.
+
+| Group | Finding | Mark | Meaning |
+| --- | --- | --- | --- |
+| environment | `git_missing` | confirmed | `git --version` does not run. |
+| environment | `agent_not_on_path` | suspected | A connected agent's executable is not on this terminal's `PATH`. |
+| environment | `provider_files_stale` | confirmed | A connected agent's hook, launcher, profile or skill is missing or does not match this Synesis. |
+| environment | `installed_launcher_missing`, `provider_migration_required`, `provider_config_malformed`, `provider_config_synesis_entry_duplicated` | as before | Findings that existed before the groups. |
+| network | `project_runtime_not_running` | suspected | A shared project whose runtime the installation daemon does not hold. |
+| network | `link_firewall_missing`, `link_firewall_stale` | confirmed | Windows only: no rule, or a rule naming another version's `java.exe`. |
+| work groups | `operator_requests_open` | advice | One or more operator requests wait for a person. |
+| work groups | `stale_session_lease`, `ambiguous_session_liveness`, `cleanup_recommended` | as before | Findings that existed before the groups. |
+
+`synesis doctor --fix` makes exactly three repairs and then reports again, with
+`FIXES_APPLIED=`, one `FIX_APPLIED=` for each, `FIXES_SKIPPED=` and one
+`FIX_SKIPPED=<code> REASON=...` for each repair that was due and could not be
+made, and `MUTATIONS_PERFORMED=<number of repairs that changed something>`:
+
+1. Synesis's own administrative state: stale lock files whose owning process is
+   gone and corrupt plan files, which are archived, through the existing repair
+   plan (`synesis repair`). `FIX_APPLIED=administrative_state COMPLETED=<n>`.
+2. A connected agent whose managed files are out of date, written again like
+   `synesis provider install <provider>`. `FIX_APPLIED=provider_files_stale PROVIDER=<id>`.
+3. The runtime of a shared project, started like `synesis agents run` and the link
+   commands start it. `FIX_APPLIED=project_runtime_not_running`.
+
+It never changes anything a person wrote, the firewall rule, or an operator
+request; those findings keep their `FIX=` for a person to run. With `--json` the
+`FIX*` lines go to standard error, so standard output stays one JSON document.
+`--strict` using exit code `3` is a later change.

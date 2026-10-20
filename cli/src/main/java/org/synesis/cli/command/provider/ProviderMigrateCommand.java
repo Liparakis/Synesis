@@ -3,6 +3,7 @@ package org.synesis.cli.command.provider;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.CommandModePolicy;
+import org.synesis.cli.command.ErrorShape;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.migration.ProviderConfigMigrationService;
 import picocli.CommandLine.Command;
@@ -40,6 +41,7 @@ public final class ProviderMigrateCommand implements Callable<Integer> {
     public Integer call() {
         if (CommandModePolicy.hasConflictingModes(dryRun, prepare, showPlan != null, execute != null)) {
             runtime.terminal().stderr("USAGE_ERROR=CONFLICTING_MODES");
+            ErrorShape.print(runtime.terminal()::stderr, "CONFLICTING_MODES");
             return ExitCodes.USAGE;
         }
         try {
@@ -61,7 +63,11 @@ public final class ProviderMigrateCommand implements Callable<Integer> {
                 var result = service.execute(service.load(execute));
                 runtime.terminal().stdout("PROVIDER_MIGRATION_RESULT=" + result.outcome());
                 runtime.terminal().stdout("BACKUPS_CREATED=" + result.backupsCreated());
-                return result.outcome() == ProviderConfigMigrationService.Outcome.STALE ? ExitCodes.LOCAL_CONFIGURATION : ExitCodes.OK;
+                if (result.outcome() == ProviderConfigMigrationService.Outcome.STALE) {
+                    ErrorShape.print(runtime.terminal()::stderr, "PROVIDER_MIGRATION_STALE");
+                    return ExitCodes.LOCAL_CONFIGURATION;
+                }
+                return ExitCodes.OK;
             }
             var entries = service.inspect();
             runtime.terminal().stdout("PROVIDER_MIGRATION_RESULT=DRY_RUN");
@@ -70,6 +76,7 @@ public final class ProviderMigrateCommand implements Callable<Integer> {
             return ExitCodes.OK;
         } catch (Exception failure) {
             runtime.terminal().stderr("PROVIDER_MIGRATION_RESULT=REQUIRES_HUMAN_REVIEW");
+            ErrorShape.print(runtime.terminal()::stderr, "PROVIDER_MIGRATION_REVIEW_REQUIRED");
             return ExitCodes.LOCAL_CONFIGURATION;
         }
     }

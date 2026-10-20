@@ -38,8 +38,7 @@ public final class ProviderStatusCommand implements Callable<Integer> {
         try {
             var location = ProjectOptions.locate(runtime, project);
             var result = runtime.providerService().status(location, provider);
-            result.values().forEach((key, value) -> runtime.terminal().stdout(key + "=" + value));
-            return result.exitCode();
+            return ProviderCommand.report(runtime, result);
         } catch (Exception failure) {
             return ProjectOptions.refuse(runtime, failure);
         }

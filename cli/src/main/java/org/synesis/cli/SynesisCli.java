@@ -341,9 +341,12 @@ public final class SynesisCli {
      */
     public static void main(String[] arguments) {
         configureWindowsLoopbackSocketDirectory();
-        Terminal terminal = new ConsoleTerminal();
         java.io.Console console = System.console();
-        if (HumanTerminal.selected(List.of(arguments), console != null && console.isTerminal(), System.getenv(HumanTerminal.OUTPUT_VARIABLE))) {
+        boolean attached = console != null && console.isTerminal();
+        boolean human = HumanTerminal.selected(List.of(arguments), attached, System.getenv(HumanTerminal.OUTPUT_VARIABLE));
+        // A prompt is only for a person at a terminal who did not ask for the machine form.
+        Terminal terminal = new ConsoleTerminal(System.out, System.err, System.in, attached && human);
+        if (human) {
             terminal = new HumanTerminal(terminal, HumanTerminal.colorSupported(System.getenv()));
         }
         System.exit(execute(arguments, CliRuntime.defaults(terminal)));

@@ -42,6 +42,17 @@ final class CommandReferenceTest {
     }
 
     @Test
+    void theReferenceExplainsEveryErrorCodeTheCommandsPrint() throws IOException {
+        String document = Files.readString(referenceFile(), StandardCharsets.UTF_8);
+        for (String code : org.synesis.cli.command.ErrorShape.codes()) {
+            assertTrue(document.contains("`" + code + "`"), "docs/cli/command-reference.md does not explain the error code " + code);
+        }
+        for (int exit : List.of(0, 1, 2, 3, 10, 11, 12, 13, 14, 15, 70)) {
+            assertTrue(document.contains("| `" + exit + "` |"), "docs/cli/command-reference.md does not list exit code " + exit);
+        }
+    }
+
+    @Test
     void theListIsTheOneTheTreeGenerates() throws IOException {
         Path file = referenceFile();
         String document = Files.readString(file, StandardCharsets.UTF_8);

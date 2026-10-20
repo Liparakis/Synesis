@@ -19,10 +19,11 @@ import java.util.Objects;
  * @param reconciliationRecommended {@code true} if reconciliation workflow is recommended
  * @param repairAvailable           {@code true} if automated administrative repair is available
  * @param findings                  diagnostic findings; the supplied list is not defensively copied
+ * @param shared                    {@code true} if the project is shared with another computer, so the network group applies
  * @since 1.0
  */
 public record DoctorReport(int schemaVersion, String reportId, String projectId, long timestampEpochMillis, DoctorStatus overallStatus, int criticalCount, int errorCount, int warningCount, int infoCount,
-                           boolean cleanupRecommended, boolean reconciliationRecommended, boolean repairAvailable, List<DoctorFinding> findings) {
+                           boolean cleanupRecommended, boolean reconciliationRecommended, boolean repairAvailable, List<DoctorFinding> findings, boolean shared) {
 
     /**
      * Validates required report values.

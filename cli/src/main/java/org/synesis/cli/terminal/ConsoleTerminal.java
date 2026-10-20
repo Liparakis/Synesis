@@ -19,6 +19,7 @@ public final class ConsoleTerminal implements Terminal {
     private final PrintWriter err;
     private final BufferedReader input;
     private final Charset outputCharset;
+    private final boolean interactive;
 
     /**
      * Creates a terminal connected to the current process streams.
@@ -45,6 +46,19 @@ public final class ConsoleTerminal implements Terminal {
      * @param input stdin stream
      */
     public ConsoleTerminal(PrintStream out, PrintStream err, InputStream input) {
+        this(out, err, input, false);
+    }
+
+    /**
+     * Creates a console terminal that says whether a person is at it.
+     *
+     * @param out         stdout stream
+     * @param err         stderr stream
+     * @param input       stdin stream
+     * @param interactive whether input and output are a terminal and the machine form was not requested
+     */
+    public ConsoleTerminal(PrintStream out, PrintStream err, InputStream input, boolean interactive) {
+        this.interactive = interactive;
         this.outputCharset = out.charset();
         this.out = new PrintWriter(out, true);
         this.err = new PrintWriter(err, true);
@@ -59,6 +73,11 @@ public final class ConsoleTerminal implements Terminal {
     @Override
     public PrintWriter err() {
         return err;
+    }
+
+    @Override
+    public boolean interactive() {
+        return interactive;
     }
 
     @Override

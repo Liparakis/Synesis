@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ErrorShape;
 import org.synesis.cli.command.ProjectOptions;
 import org.synesis.cli.exit.ExitCodes;
 
@@ -88,20 +89,18 @@ abstract class LinkOperationCommand implements Callable<Integer> {
             }
             return await(control, operation, before);
         } catch (RuntimeControl.Rejected rejected) {
-            runtime.terminal().stderr("ERROR=" + rejected.code());
+            LinkCommand.refuse(runtime, rejected);
             return switch (rejected.code()) {
                 case "INVITE_INVALID" -> ExitCodes.INVITE_INVALID;
                 case "ANSWER_INVALID" -> ExitCodes.ANSWER_INVALID;
                 case "INCOMPATIBLE_VERSION" -> ExitCodes.INCOMPATIBLE_VERSION;
                 default -> ExitCodes.LOCAL_CONFIGURATION;
             };
-        } catch (ProjectApplicationException failure) {
-            runtime.terminal().stderr("ERROR=" + failure.code());
-        } catch (IOException failure) {
-            runtime.terminal().stderr("ERROR=PROJECT_RUNTIME_UNAVAILABLE");
+        } catch (ProjectApplicationException | IOException failure) {
+            LinkCommand.refuse(runtime, failure);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            runtime.terminal().stderr("ERROR=INTERRUPTED");
+            LinkCommand.refuse(runtime, interrupted);
         }
         return ExitCodes.LOCAL_CONFIGURATION;
     }
@@ -122,6 +121,7 @@ abstract class LinkOperationCommand implements Callable<Integer> {
             }
             if (System.nanoTime() >= deadline) {
                 runtime.terminal().stdout("LINK_STATE=WAITING");
+                ErrorShape.print(runtime.terminal()::stderr, "LINK_WAIT_TIMEOUT");
                 return ExitCodes.COMMAND_FAILED;
             }
             Thread.sleep(pollMillis);
@@ -160,6 +160,7 @@ abstract class LinkOperationCommand implements Callable<Integer> {
         runtime.terminal().stdout("LINK_STATE=FAILED");
         runtime.terminal().stdout("LINK_FAILURE=" + reason);
         runtime.terminal().stdout("LINK_FAILURE_DETAIL=" + detail);
+        ErrorShape.print(runtime.terminal()::stderr, ErrorShape.explains(reason) ? reason : "LINK_FAILED", detail);
     }
 
     /**

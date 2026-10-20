@@ -291,7 +291,43 @@ public enum DoctorFindingCode {
     /**
      * Durable command admission observed a lease-gap or deferred mutation.
      */
-    COMMAND_ADMISSION_DEFERRED("command_admission_deferred");
+    COMMAND_ADMISSION_DEFERRED("command_admission_deferred"),
+
+    /**
+     * Git is not installed or does not start, so nothing Synesis does to a repository can work.
+     */
+    GIT_MISSING("git_missing"),
+
+    /**
+     * A provider connected to the project has no executable on the {@code PATH} of the process that ran the doctor.
+     */
+    AGENT_NOT_ON_PATH("agent_not_on_path"),
+
+    /**
+     * A connected provider's managed hook, launcher, profile or skill is missing or does not match this Synesis.
+     */
+    PROVIDER_FILES_STALE("provider_files_stale"),
+
+    /**
+     * A project shared with another computer has no running runtime, so its log is not replicated and no code comes
+     * over Link.
+     */
+    PROJECT_RUNTIME_NOT_RUNNING("project_runtime_not_running"),
+
+    /**
+     * The Windows Firewall rule that lets another computer dial this one does not exist.
+     */
+    LINK_FIREWALL_MISSING("link_firewall_missing"),
+
+    /**
+     * The Windows Firewall rule names another version's Java executable.
+     */
+    LINK_FIREWALL_STALE("link_firewall_stale"),
+
+    /**
+     * The project is waiting for a person to answer one or more operator requests.
+     */
+    OPERATOR_REQUESTS_OPEN("operator_requests_open");
 
     private final String value;
 

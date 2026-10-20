@@ -51,12 +51,8 @@ public final class LinkRequestsCommand implements Callable<Integer> {
                 }
             }
             return ExitCodes.OK;
-        } catch (RuntimeControl.Rejected rejected) {
-            runtime.terminal().stderr("ERROR=" + rejected.code());
-        } catch (ProjectApplicationException failure) {
-            runtime.terminal().stderr("ERROR=" + failure.code());
-        } catch (java.io.IOException failure) {
-            runtime.terminal().stderr("ERROR=PROJECT_RUNTIME_UNAVAILABLE");
+        } catch (RuntimeControl.Rejected | ProjectApplicationException | java.io.IOException failure) {
+            LinkCommand.refuse(runtime, failure);
         }
         return ExitCodes.LOCAL_CONFIGURATION;
     }

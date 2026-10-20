@@ -18,7 +18,7 @@ import org.synesis.cli.daemon.CliChildJvm;
  * silently stops this computer from hosting. Reading the rule needs no administrator rights; changing it does, so the
  * check only says what to run.
  */
-final class LinkFirewallRule {
+public final class LinkFirewallRule {
 
     static final String NAME = "Synesis Link";
     // netsh translates its labels, so a program is found by the shape of a path.
@@ -39,6 +39,15 @@ final class LinkFirewallRule {
     }
 
     private LinkFirewallRule() {
+    }
+
+    /**
+     * What {@code synesis doctor} reports about the rule.
+     *
+     * @return {@code MISSING} or {@code STALE}, or empty when the rule is right or cannot be read
+     */
+    public static Optional<String> problem() {
+        return notes().stream().filter(line -> line.startsWith("LINK_FIREWALL=")).map(line -> line.substring("LINK_FIREWALL=".length())).findFirst();
     }
 
     /**

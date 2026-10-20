@@ -9,8 +9,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.function.Consumer;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ErrorShape;
 import org.synesis.cli.command.ProjectOptions;
 import org.synesis.cli.daemon.ProjectRuntime;
 import org.synesis.cli.exit.ExitCodes;
@@ -94,7 +96,7 @@ public final class AgentsRunCommand implements Callable<Integer> {
             return true;
         } catch (IOException unavailable) {
             if (Files.exists(location.coordinationDirectory().resolve(ReplicationSettings.FILE))) {
-                terminal.stderr("ERROR=PROJECT_RUNTIME_UNAVAILABLE");
+                ErrorShape.print(terminal::stderr, "PROJECT_RUNTIME_UNAVAILABLE");
                 terminal.stderr("REASON=" + unavailable.getMessage());
                 terminal.stderr("HINT=this project is shared with another computer, which its agents reach only through the runtime; no agent was started");
                 return false;
@@ -116,11 +118,11 @@ public final class AgentsRunCommand implements Callable<Integer> {
     static AgentRunController.AgentSpec parseAgent(String specification) {
         String[] parts = specification == null ? new String[0] : specification.split(":", -1);
         if (parts.length < 1 || parts.length > 3 || parts[0].isBlank()) {
-            throw new IllegalArgumentException("agent must be provider[:model[:effort]]: " + specification);
+            throw new Refusal("AGENT_INVALID", "agent must be provider[:model[:effort]]: " + specification, null);
         }
         ProviderIntegration integration = ProviderRegistry.find(parts[0]);
         if (integration == null) {
-            throw new IllegalArgumentException("unknown provider: " + parts[0]);
+            throw new Refusal("UNKNOWN_PROVIDER", "unknown provider: " + parts[0], null);
         }
         String model = parts.length > 1 && !parts[1].isBlank() ? parts[1] : null;
         String effort = parts.length > 2 && !parts[2].isBlank() ? parts[2] : null;
@@ -137,27 +139,32 @@ public final class AgentsRunCommand implements Callable<Integer> {
         String startPrompt;
         try {
             if (prompt != null && promptFile != null) {
-                throw new IllegalArgumentException("give only one of --prompt and --prompt-file");
+                throw new Refusal("PROMPT_CONFLICT", null, null);
             }
             location = ProjectOptions.locate(runtime, project);
-            startPrompt = prompt != null ? prompt : promptFile == null ? "" : Files.readString(promptFile, StandardCharsets.UTF_8);
-            if (startPrompt.isBlank()) {
-                // Synesis never invents the task: an empty one would start agents with nothing they may do.
-                throw new IllegalArgumentException("agents run needs a task; pass --prompt \"<task>\" or --prompt-file <file>");
+            startPrompt = prompt != null ? prompt : promptFile == null ? null : Files.readString(promptFile, StandardCharsets.UTF_8);
+            // A person at a terminal who gave no task is asked once, after the rest is checked so the question is not wasted.
+            // A task that was given but is blank, and any script, is refused: Synesis never invents the task.
+            boolean ask = startPrompt == null && runtime.terminal().interactive();
+            if (!ask && (startPrompt == null || startPrompt.isBlank())) {
+                throw new Refusal("TASK_REQUIRED", null, null);
             }
             for (String specification : agents) {
                 AgentRunController.AgentSpec agent = parseAgent(specification);
                 boolean installed = runtime.providerService().list(location).stream().anyMatch(row -> row.id().equals(agent.provider()) && "INSTALLED".equals(row.status()));
                 if (!installed) {
-                    throw new IllegalArgumentException("provider is not installed in this project; run: synesis provider install " + agent.provider());
+                    throw new Refusal("PROVIDER_NOT_INSTALLED", "provider is not installed in this project: " + agent.provider(), "run 'synesis provider install " + agent.provider() + "'");
                 }
                 // A provider whose hooks are given per session (Codex) runs the launcher its installed hooks run.
                 Path hookLauncher = runtime.providerService().launcherPath();
                 specifications.add(Files.isRegularFile(hookLauncher)
                         ? new AgentRunController.AgentSpec(agent.provider(), agent.session(), agent.options().withHookLauncher(hookLauncher)) : agent);
             }
-        } catch (IllegalArgumentException invalid) {
-            runtime.terminal().stderr("ERROR=" + invalid.getMessage());
+            if (ask) {
+                startPrompt = askForTask();
+            }
+        } catch (Refusal refused) {
+            refused.print(runtime.terminal()::stderr);
             return ExitCodes.USAGE;
         } catch (Exception failure) {
             return ProjectOptions.refuse(runtime, failure);
@@ -181,16 +188,58 @@ public final class AgentsRunCommand implements Callable<Integer> {
             runtime.terminal().stdout("ELAPSED_SECONDS=" + (System.currentTimeMillis() - started) / 1000L);
             return result.outcome() == AgentRunController.Outcome.COMPLETED ? ExitCodes.OK : ExitCodes.COMMAND_FAILED;
         } catch (IllegalArgumentException invalid) {
-            runtime.terminal().stderr("ERROR=" + invalid.getMessage());
+            ErrorShape.print(runtime.terminal()::stderr, "AGENT_RUN_INVALID", invalid.getMessage(), "check the options with 'synesis agents run --help'");
             return ExitCodes.USAGE;
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            runtime.terminal().stderr("ERROR=AGENT_RUN_INTERRUPTED");
+            ErrorShape.print(runtime.terminal()::stderr, "AGENT_RUN_INTERRUPTED");
             return ExitCodes.COMMAND_FAILED;
         } catch (Exception failure) {
-            runtime.terminal().stderr("ERROR=AGENT_RUN_FAILED");
+            ErrorShape.print(runtime.terminal()::stderr, "AGENT_RUN_FAILED");
             runtime.terminal().stderr("REASON=" + failure.getMessage());
             return ExitCodes.COMMAND_FAILED;
+        }
+    }
+
+    /**
+     * Asks a person at a terminal, once, what the agents should work on, and shows the answer back. Nothing is filled in
+     * for them: an empty answer, or none, is the same refusal as a missing {@code --prompt}.
+     */
+    private String askForTask() throws IOException {
+        runtime.terminal().stdoutRaw("What should the agents work on? ");
+        String answer = runtime.terminal().readLine();
+        if (answer == null || answer.isBlank()) {
+            throw new Refusal("TASK_REQUIRED", null, null);
+        }
+        runtime.terminal().stdout("AGENT_TASK=" + answer.strip());
+        return answer.strip();
+    }
+
+    /**
+     * A usage refusal of {@code agents run}: its code, and a message and fix when the catalog's standard ones would not
+     * name what the person typed.
+     */
+    private static final class Refusal extends IllegalArgumentException {
+
+        private static final long serialVersionUID = 1L;
+
+        private final String code;
+        private final String fix;
+
+        Refusal(String code, String message, String fix) {
+            super(message);
+            this.code = code;
+            this.fix = fix;
+        }
+
+        void print(Consumer<String> line) {
+            if (getMessage() == null) {
+                ErrorShape.print(line, code);
+            } else if (fix == null) {
+                ErrorShape.print(line, code, getMessage());
+            } else {
+                ErrorShape.print(line, code, getMessage(), fix);
+            }
         }
     }
 }

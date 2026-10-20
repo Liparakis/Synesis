@@ -36,7 +36,7 @@ class ProviderRefusalCausesTest {
     void aProjectDirectoryThatDoesNotExistIsInvalidNotUnconfigured() {
         Path missing = tmp.resolve("missing");
         for (String[] command : PROJECT_COMMANDS) {
-            CliHarness.run(tmp.resolve("profile"), withProject(command, missing)).assertIs(10, List.of(), List.of("ERROR=PROJECT_INVALID", "REASON=Invalid project directory"));
+            CliHarness.run(tmp.resolve("profile"), withProject(command, missing)).assertIs(10, List.of(), CliHarness.shaped("PROJECT_INVALID", "REASON=Invalid project directory"));
         }
     }
 
@@ -45,7 +45,7 @@ class ProviderRefusalCausesTest {
         Path project = initialized("damaged");
         Files.writeString(project.resolve(".synesis/project.json"), "{ not json");
         for (String[] command : PROJECT_COMMANDS) {
-            CliHarness.run(tmp.resolve("profile"), withProject(command, project)).assertIs(10, List.of(), List.of("ERROR=MALFORMED", "REASON=Project metadata is malformed"));
+            CliHarness.run(tmp.resolve("profile"), withProject(command, project)).assertIs(10, List.of(), CliHarness.shaped("MALFORMED", "REASON=Project metadata is malformed"));
         }
     }
 
@@ -53,9 +53,9 @@ class ProviderRefusalCausesTest {
     void anUnknownProviderIsNamedUnknown() throws Exception {
         Path project = initialized("unknown-provider");
         CliHarness.run(tmp.resolve("profile"), withProject(new String[]{"provider", "install", "nope"}, project)).assertIs(2,
-                List.of("PROVIDER_INSTALL_RESULT=UNKNOWN_PROVIDER", "ERROR=UNKNOWN_PROVIDER", "PROVIDER=nope"), List.of());
+                List.of("PROVIDER_INSTALL_RESULT=UNKNOWN_PROVIDER", "ERROR=UNKNOWN_PROVIDER", "PROVIDER=nope", "~MESSAGE=.{6,}", "~FIX=.{6,}"), List.of());
         CliHarness.run(tmp.resolve("profile"), withProject(new String[]{"provider", "status", "nope"}, project)).assertIs(2,
-                List.of("PROVIDER_STATUS=UNKNOWN_PROVIDER", "ERROR=UNKNOWN_PROVIDER", "PROVIDER=nope", "SESSION_BINDING=UNBOUND", "CONTINUITY_MODE=SESSION_BOUND"), List.of());
+                List.of("PROVIDER_STATUS=UNKNOWN_PROVIDER", "ERROR=UNKNOWN_PROVIDER", "PROVIDER=nope", "SESSION_BINDING=UNBOUND", "CONTINUITY_MODE=SESSION_BOUND", "~MESSAGE=.{6,}", "~FIX=.{6,}"), List.of());
     }
 
     @Test
@@ -63,7 +63,7 @@ class ProviderRefusalCausesTest {
         Assumptions.assumeFalse(Files.isRegularFile(new ProviderApplicationService().launcherPath()), "a Synesis launcher is installed or on the PATH");
         Path project = initialized("no-launcher");
         CliHarness.run(tmp.resolve("profile"), withProject(new String[]{"provider", "install", "codex"}, project)).assertIs(10,
-                List.of("PROVIDER_INSTALL_RESULT=LAUNCHER_MISSING", "ERROR=LAUNCHER_MISSING", "PROVIDER=codex"), List.of());
+                List.of("PROVIDER_INSTALL_RESULT=LAUNCHER_MISSING", "ERROR=LAUNCHER_MISSING", "PROVIDER=codex", "~MESSAGE=.{6,}", "~FIX=.{6,}"), List.of());
     }
 
     @Test
@@ -74,7 +74,7 @@ class ProviderRefusalCausesTest {
 
         assertEquals(10, ProjectOptions.refuse(runtime, new IOException("disk gone")));
 
-        assertEquals(List.of("ERROR=PROJECT_ACCESS_FAILED", "REASON=disk gone"), err.toString(StandardCharsets.UTF_8).lines().toList());
+        ErrorShapeAssert.assertShaped(err.toString(StandardCharsets.UTF_8).lines().toList(), "PROJECT_ACCESS_FAILED", "REASON=disk gone");
     }
 
     private Path initialized(String name) throws Exception {

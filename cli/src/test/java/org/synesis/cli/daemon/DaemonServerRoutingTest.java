@@ -194,10 +194,14 @@ final class DaemonServerRoutingTest {
             assertEquals("READY", opened.get("state"));
 
             FakeRuntime runtime = starter.runtime(project);
+            Map<String, Object> running = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "STATUS")));
+            // `synesis doctor` asks whether a project's runtime runs from this list.
+            assertEquals(List.of(project.toAbsolutePath().normalize().toString()), running.get("projects"));
             runtime.reachable = false;
             Map<String, Object> status = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "STATUS")));
 
             assertEquals(0L, ((Number) status.get("runtimeCount")).longValue());
+            assertEquals(List.of(), status.get("projects"));
             assertEquals(1, runtime.closeCount);
         } finally {
             server.close();
