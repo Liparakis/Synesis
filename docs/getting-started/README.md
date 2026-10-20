@@ -31,6 +31,20 @@ directory to `.gitignore`. `init` prints the next steps: connect an agent
 `codex`) and tell it what to do, and look at what is happening (`synesis ui`,
 or `synesis coordination status`; what needs you: `synesis operator list`).
 
+## See what is going on
+
+```powershell
+synesis status            # the project, each agent and its lane, what needs you, other computers
+synesis status --watch    # draw again after each new entry (needs the project's runtime)
+synesis agents log        # what the agents of the newest run said, called and were answered
+```
+
+`synesis status` reads files only, so it also works while the project's runtime
+is stopped. `synesis agents log` reads what `synesis agents run` kept of its
+agents, one line per entry with secret-looking values replaced. Both print
+stable `STATUS_*` and `AGENT_LOG_*` lines with `--porcelain`. See the
+[CLI reference](../cli/command-reference.md#status).
+
 Synesis writes no instruction file into the project. The agent's instructions
 are the installed `synesis-provider-manual` skill, which `provider install`
 puts in `~/.claude/skills` or `~/.codex/skills`, and the Synesis MCP server

@@ -5,7 +5,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.provider.AgentLogEntry;
 import org.synesis.workspace.provider.ProviderIntegration;
+import org.synesis.workspace.provider.StreamEvents;
 import org.synesis.workspace.provider.ProviderMcpEvidenceTier;
 import org.synesis.workspace.provider.ProviderSupportLevel;
 
@@ -123,7 +125,64 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
                 // Claude Code starts a stdio MCP server with its own environment.
                 return options.connectionInstanceId() == null ? Map.of() : Map.of(CONNECTION_INSTANCE_VARIABLE, options.connectionInstanceId());
             }
+
+            @Override
+            public List<AgentLogEntry> logEntries(String outputLine) {
+                return claudeEntries(StreamEvents.parse(outputLine));
+            }
         });
+    }
+
+    /**
+     * Reads one {@code stream-json} event: the assistant's text and tool calls, the tool results the user turn carries
+     * back, and a failed run. The closing {@code result} event repeats the last message, so only its failure is read.
+     */
+    private static List<AgentLogEntry> claudeEntries(Map<?, ?> event) {
+        if (event == null) {
+            return List.of();
+        }
+        String type = StreamEvents.text(event, "type");
+        if ("result".equals(type)) {
+            return Boolean.TRUE.equals(event.get("is_error")) ? List.of(new AgentLogEntry(AgentLogEntry.Kind.FAILED, "", StreamEvents.text(event, "result"))) : List.of();
+        }
+        if (!(event.get("message") instanceof Map<?, ?> message) || !(message.get("content") instanceof List<?> blocks)) {
+            return List.of();
+        }
+        List<AgentLogEntry> entries = new java.util.ArrayList<>();
+        for (Object block : blocks) {
+            if (!(block instanceof Map<?, ?> part)) {
+                continue;
+            }
+            switch (StreamEvents.text(part, "type")) {
+                case "text" -> {
+                    if (type.equals("assistant")) {
+                        entries.add(new AgentLogEntry(AgentLogEntry.Kind.SAID, "", StreamEvents.text(part, "text")));
+                    }
+                }
+                case "tool_use" -> entries.add(new AgentLogEntry(AgentLogEntry.Kind.CALLED, StreamEvents.text(part, "name"), ProviderJson.write(part.get("input"))));
+                case "tool_result" -> entries.add(new AgentLogEntry(Boolean.TRUE.equals(part.get("is_error")) ? AgentLogEntry.Kind.FAILED : AgentLogEntry.Kind.RESULT, "", toolResultText(part.get("content"))));
+                default -> {
+                }
+            }
+        }
+        return entries;
+    }
+
+    /** A tool result is text, or a list of blocks of which the text ones and the names of loaded tools are read. */
+    private static String toolResultText(Object content) {
+        if (content instanceof String text) {
+            return text;
+        }
+        StringBuilder text = new StringBuilder();
+        if (content instanceof List<?> blocks) {
+            for (Object block : blocks) {
+                if (block instanceof Map<?, ?> part) {
+                    String piece = part.get("text") instanceof String words ? words : StreamEvents.text(part, "tool_name");
+                    text.append(text.isEmpty() || piece.isEmpty() ? "" : " ").append(piece);
+                }
+            }
+        }
+        return text.toString();
     }
 
     /** Reads an identifier from a JSON event line of the given type; any other line yields nothing. */

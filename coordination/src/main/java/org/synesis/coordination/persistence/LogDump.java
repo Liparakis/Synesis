@@ -106,6 +106,36 @@ public final class LogDump {
     }
 
     /**
+     * When entries of another computer's log last arrived on this one: the newest write into this computer's copy of
+     * that log. A pull that brought nothing new writes nothing, so this is the last time something came, not the last
+     * time the computers talked.
+     *
+     * @param root the project's coordination folder
+     * @param node the other computer's node
+     * @return the time, or empty when this computer holds no entry of that log
+     */
+    public static java.util.Optional<java.time.Instant> lastArrival(Path root, String node) {
+        if (!node.chars().allMatch(c -> Character.isLetterOrDigit(c) || c == '-' || c == '_')) {
+            return java.util.Optional.empty();
+        }
+        Path folder = root.resolve("peers").resolve(node).resolve("events");
+        if (!Files.isDirectory(folder)) {
+            return java.util.Optional.empty();
+        }
+        try (var listing = Files.list(folder)) {
+            return listing.filter(path -> path.getFileName().toString().endsWith(".sce")).map(path -> {
+                try {
+                    return Files.getLastModifiedTime(path).toInstant();
+                } catch (IOException unreadable) {
+                    return java.time.Instant.EPOCH;
+                }
+            }).max(java.util.Comparator.naturalOrder()).filter(time -> !time.equals(java.time.Instant.EPOCH));
+        } catch (IOException unreadable) {
+            return java.util.Optional.empty();
+        }
+    }
+
+    /**
      * Reads the logs of a coordination folder.
      *
      * @param root      the project's coordination folder

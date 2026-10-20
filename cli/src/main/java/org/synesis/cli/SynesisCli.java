@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.agents.AgentsCommand;
+import org.synesis.cli.command.agents.AgentsLogCommand;
 import org.synesis.cli.command.agents.AgentsRunCommand;
 import org.synesis.cli.command.ConstraintCommand;
 import org.synesis.cli.command.ConstraintCreateCommand;
@@ -87,6 +88,7 @@ import org.synesis.cli.command.speculation.SpeculationInvalidateCommand;
 import org.synesis.cli.command.speculation.SpeculationPrepareCommand;
 import org.synesis.cli.command.speculation.SpeculationRetireCommand;
 import org.synesis.cli.command.speculation.SpeculationValidateCommand;
+import org.synesis.cli.command.status.StatusCommand;
 import org.synesis.cli.command.sync.HostCommand;
 import org.synesis.cli.command.sync.JoinCommand;
 import org.synesis.cli.command.sync.SyncCommand;
@@ -126,7 +128,7 @@ public final class SynesisCli {
         Map<String, List<String>> groups = new LinkedHashMap<>();
         groups.put("Set up", List.of("init", "provider", "doctor", "ui", "version", "help"));
         groups.put("Work with another person", List.of("link", "host", "join", "sync", "identity"));
-        groups.put("Coordinate work", List.of("agents", "collaboration", "task", "ownership", "constraint", "events", "coordination", "log", "conversations"));
+        groups.put("Coordinate work", List.of("status", "agents", "collaboration", "task", "ownership", "constraint", "events", "coordination", "log", "conversations"));
         groups.put("Maintain a project", List.of("operator", "trash", "cleanup", "reconcile", "repair", "migrate", "project"));
         return groups;
     }
@@ -244,6 +246,8 @@ public final class SynesisCli {
         command.getSubcommands().get("integration").addSubcommand("gate", new IntegrationGateCommand(runtime));
         command.addSubcommand("agents", new AgentsCommand());
         command.getSubcommands().get("agents").addSubcommand("run", new AgentsRunCommand(runtime));
+        command.getSubcommands().get("agents").addSubcommand("log", new AgentsLogCommand(runtime));
+        command.addSubcommand("status", new StatusCommand(runtime));
         command.addSubcommand("operator", new org.synesis.cli.command.operator.OperatorCommand());
         command.getSubcommands().get("operator").addSubcommand("list", new org.synesis.cli.command.operator.OperatorListCommand(runtime));
         command.getSubcommands().get("operator").addSubcommand("recheck", new org.synesis.cli.command.operator.OperatorRecheckCommand(runtime));

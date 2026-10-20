@@ -464,6 +464,39 @@ and maintainability decide when a stage is done, by its completion criteria belo
      connected agent is on the `PATH`, with the provider id as the executable name, until `ProviderIntegration` discovery
      lands); that the MCP server and the hooks use the same build; each member's last successful pull (needs ADR-0102's
      per-log record); lanes waiting on an away computer; the planted-token test; `--strict` exit code 3.
+- **Built 2026-10-20 (`synesis status` and `synesis agents log` only; source semantics proven on the Linux gate for the
+  classes named below, not yet a real PC + VM run or the Windows gate).** Discovery, `init`'s new flags, the `doctor`
+  groups, the `ERROR`/`MESSAGE`/`FIX` shape on the setup refusals and the executed walkthroughs are not part of this entry.
+  1. `status [--project] [--watch]` renders `ProjectStatus` (workspace, `transport.control`), a view over
+     `ControlPlaneReadModel` (agents with their lane, role and claimed files, open operator requests) and the replication
+     facts `coordination status` prints (membership or role file, `replication.members`, the loopback endpoint), so the CLI
+     and the UI read one model. A terminal gets one screen (project, runtime, agents, needs you, computers); `--porcelain`
+     gets `STATUS_*` keys. Computers asking to join count under "needs you". It works with the runtime stopped, as `log
+     dump` does: `CoordinationService.readOnly` and the now public `PredictionEventStore.openReadOnly` replay the logs
+     without the creating, moving and removing an ordinary open does (archiving a superseded log, removing interrupted
+     writes), no identity is created and no private key read. The runtime counts as running only when something listens
+     at the recorded address (`LoopbackExchange.runningServer`); while it does not, a computer's connection is
+     `RUNTIME_STOPPED`, never a claimed `CONNECTED`. `--watch` follows the running server's event stream from the log's
+     head and draws again per entry; without the runtime it draws once and refuses with `ERROR=WATCH_NEEDS_RUNTIME`
+     (`MESSAGE`, `FIX=synesis ui --no-browser`), exit 10.
+  2. **Missing, reported:** the last *successful pull* of a computer is not recorded anywhere (ADR-0102's per-log pull
+     record is not built). `LAST_ENTRY_RECEIVED` is the newest write into this computer's copy of that log
+     (`LogDump.lastArrival`): when something last came, not when the computers last talked. The read model carries no
+     coordination requests between agents and no task completion, so "Done: 4 of 5 tasks" of the sketch is not shown;
+     computers have no names, only nodes.
+  3. `agents log [<agent>] [--run <run-name>]` reads the newest run's log files (`agent-runs/<project>/run-<uuid>/
+     <provider>-<n>-<launch>.log`), one provider decoder each (`HeadlessSession.logEntries`, new default method; Claude
+     `stream-json`, Codex `exec --json`), as `AGENT_LOG_SAID|CALLED|RESULT|FAILED` lines, newest run by default, `--porcelain`
+     the same lines. Entries are one line, cut short, with secret-looking values, bearer tokens, token shapes, private keys
+     and recovery words replaced; the files are never changed and links in a run are not followed. The redaction is a
+     pattern match, which the docs say.
+  New tests: `StatusCommandTest` 9, `AgentsLogCommandTest` 4, `AgentRunLogsTest` 10, `ReadOnlyCoordinationServiceTest` 2,
+  `LoopbackRunningServerTest` 3, `LogDumpTest` +1. Linux gate: workspace `check` 1101 tests, 0 failures; cli 280 tests with
+  two Link scenario tests of `ThreeComputersMainMeetingScenarioTest` timing out at 60 s while the host was overloaded
+  (the run took 19 minutes instead of 3) and passing alone; coordination, javadoc, `formatCheck`, `staticAnalysis` and the
+  architecture checks of the three modules green on the Windows Gradle run.
+  4. Registered under "Coordinate work"; `docs/cli/command-reference.md` (generated list and two new sections) and
+     `docs/getting-started/README.md` updated. All output keys are additive; nothing existing changed meaning.
 
 ### Stage 3 — behaviour changes (owner approval first; preliminary: about two days)
 

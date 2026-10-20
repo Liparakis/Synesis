@@ -98,8 +98,10 @@ speculation retire             Retire a validated prediction worktree.
 speculation invalidate         Invalidate a prediction.
 integration                    Gate prediction integration into a project.
 integration gate               Evaluate the prediction integration gate.
-agents                         Run headless agents on this project and keep them moving.
+agents                         Run headless agents on this project, keep them moving, and read what they did.
 agents run                     Start headless agents on this project and resume any that stopped when another lane has made progress.
+agents log                     Show what the agents of a run did: what they said, the tools they called and the answers.
+status                         Show what is going on: the agents and their work, what needs you, and the other computers.
 operator                       See and re-check what a project is waiting on you for.
 operator list                  List what the project is waiting on an operator for.
 operator recheck               Check again whether the open operator requests still hold, and integrate what was waiting.
@@ -227,7 +229,7 @@ tools approved (`sandbox_mode=read-only`,
 user's Codex configuration says: a headless Codex session does not run the
 project's hooks, so without this nothing kept its own file tool or a shell
 command out of the project checkout (ADR-0091). Neither provider's policy is
-ever loosened outside the Synesis tools. Agent output is kept as log files under the Synesis state directory,
+ever loosened outside the Synesis tools. Agent output is kept as log files (`synesis agents log` reads them) under the Synesis state directory,
 outside the project.
 
 `synesis coordination status` reads durable coordination state and changes
@@ -243,6 +245,76 @@ yet), and `STATE=NO_COORDINATION_SERVER` with no `since` when that server is not
 running. Both roles print `REPLICATION_LAST_DISCONNECT=<reason> <time> <details>`
 for the last session that ended, when there is one. Further `KEY=VALUE` fields may
 be added to these lines.
+
+## Status
+
+`synesis status [--project <dir>] [--watch]` answers "what is going on in this
+project" in one screen (ADR-0103 stage 2): the project and whether it is shared,
+whether its runtime runs, each agent with the lane it holds and the files that lane
+claims, what waits for a person (open operator requests, and computers asking to
+join), and the project's other computers with whether each is connected. It is the
+same view the browser UI is served from (`ControlPlaneReadModel`) plus the replication
+facts `synesis coordination status` prints, so the two agree. It only reads files, as
+`log dump` does, so it works while the project's runtime is stopped and changes
+nothing: no identity is created, and the logs are opened without creating, moving or
+removing anything. While the runtime is stopped no computer's connection is claimed:
+each other computer shows `STATE=RUNTIME_STOPPED`.
+
+On a terminal it prints the screen; with `--porcelain`, `SYNESIS_OUTPUT=porcelain` or
+output that is not a terminal it prints the stable `STATUS_*` lines. Text an agent
+wrote (a lane's goal, an operator request) is printed on one line without control
+characters.
+
+- `STATUS_PROJECT_ID`, `STATUS_PROJECT_NAME`, `STATUS_PROJECT_SHARING=SHARED|SINGLE_COMPUTER`,
+  `STATUS_OWNER=<node>|NONE`, `STATUS_THIS_COMPUTER=<node>|UNKNOWN`,
+  `STATUS_RUNTIME=RUNNING|STOPPED`. The runtime counts as running only when something
+  listens at the address it recorded. A project on one computer does not need it.
+- `STATUS_AGENTS=<n>` and one `STATUS_AGENT=<id> PROVIDER=<p> STATE=<state> ROLE=<role|NONE>
+  FILES=<a,b> WAITING_ON=<...> LANE=<goal>` per agent (`LANE` is last because it is free
+  text). `STATE` is the participant's state: `ACTIVE`, `SUSPENDED`, `RECOVERY_HELD`,
+  `COMPLETED`, `CANCELLED`, `REVOKED`, or `UNKNOWN` for a lane whose agent never
+  registered.
+- `STATUS_NEEDS=<n>` and one `STATUS_NEED=OPERATOR|JOIN ID=<id> SUMMARY=<text>` per
+  request. Answer them with `synesis operator list` and `synesis link requests`.
+- `STATUS_COMPUTERS=<n>` and, for each computer other than this one,
+  `STATUS_COMPUTER=<node> STATE=CONNECTED|DISCONNECTED|RUNTIME_STOPPED SINCE=<time|NONE>
+  LAST_ENTRY_RECEIVED=<time|NONE>`. `SINCE` is when the runtime recorded the state;
+  `LAST_ENTRY_RECEIVED` is when entries of that computer's log last arrived here (the
+  newest write into this computer's copy of it). A pull that brought nothing writes
+  nothing, so it is the last time something came, not the last successful pull: the
+  per-log pull record (ADR-0102) is what would say that.
+
+`--watch` draws the status again after each entry of the project's event log, from the
+runtime's event stream (no polling), until interrupted. It needs the runtime; without
+it the status is drawn once and the command refuses with `ERROR=WATCH_NEEDS_RUNTIME`,
+`MESSAGE=...`, `FIX=synesis ui --no-browser` (exit 10). Changes of a computer's
+connection are not entries of the log, so they show at the next entry. The `ERROR`,
+`MESSAGE` and `FIX` lines are the error shape ADR-0103 introduces beside the older keys.
+
+## Agent log
+
+`synesis agents log [<agent>] [--run <run-name>] [--project <dir>]` shows what the
+agents of a run did, read from the log files `agents run` keeps under the Synesis state
+directory (`AGENT_LOG_DIRECTORY` names the run). The newest run of the project is shown
+unless `--run run-<uuid>` names another. `<agent>` is one agent as `agents run` names it
+(`claude#1`, or `claude-1`), or a provider (`claude`) for all its agents; without it every
+agent of the run is shown, one log file after the other in the order the processes
+started (a resumed agent has a file of its own). The files are only read.
+
+- `AGENT_LOG_RUN=run-<uuid>`, `AGENT_LOG_FILES=<n>`.
+- One `AGENT_LOG_FILE=<agent> launch=<n> file=<name> entries=<n>` per file, then its
+  entries: `AGENT_LOG_SAID=<message>`, `AGENT_LOG_CALLED=<tool> <arguments>`,
+  `AGENT_LOG_RESULT=<answer>` and `AGENT_LOG_FAILED=[<tool>: ]<reason>`. Claude Code's
+  `stream-json` and Codex's `exec --json` output are decoded, each by its provider's
+  integration; bookkeeping events (hooks, rate limits, reasoning, usage) are left out.
+- Every entry is one line without control characters and is cut at 240 to 600
+  characters with the number left out. Values of fields named like a token, secret,
+  password, key or credential, bearer tokens, well-known token shapes, private keys and
+  recovery words are replaced by `[redacted]`. That is a pattern match, not a guarantee:
+  the log files themselves are not changed and hold everything the provider printed.
+- Without a run to show: `ERROR=NO_AGENT_RUNS` (exit 1); for an agent the run has no log
+  of: `ERROR=NO_SUCH_AGENT` naming the run's agents (exit 1); for a run name that is not
+  `run-<uuid>`: `ERROR=RUN_INVALID` (exit 2); each with `MESSAGE=` and `FIX=`.
 
 ## Log dump
 

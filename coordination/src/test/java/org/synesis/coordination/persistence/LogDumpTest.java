@@ -269,6 +269,18 @@ final class LogDumpTest {
         assertFalse(dump.summary().isEmpty());
     }
 
+    @Test
+    void lastArrivalIsWhenEntriesOfAnotherComputerLastCameIn() throws Exception {
+        interleaved();
+        java.time.Instant earlier = java.time.Instant.parse("2026-10-20T10:00:00Z");
+        Files.setLastModifiedTime(peerFile(1), java.nio.file.attribute.FileTime.from(earlier));
+        Files.setLastModifiedTime(peerFile(2), java.nio.file.attribute.FileTime.from(earlier.plusSeconds(30)));
+
+        assertEquals(java.util.Optional.of(earlier.plusSeconds(30)), LogDump.lastArrival(rootA, nodeB.nodeId()));
+        assertEquals(java.util.Optional.empty(), LogDump.lastArrival(rootA, nodeA.nodeId()), "no copy of this computer's own log");
+        assertEquals(java.util.Optional.empty(), LogDump.lastArrival(rootA, "../events"), "a node is a name, never a path");
+    }
+
     private static List<String> listing(Path root) throws IOException {
         if (!Files.exists(root)) {
             return List.of();

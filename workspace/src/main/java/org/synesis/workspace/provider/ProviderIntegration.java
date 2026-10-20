@@ -141,6 +141,18 @@ public interface ProviderIntegration {
         default Map<String, String> environment(HeadlessOptions options) {
             return Map.of();
         }
+
+        /**
+         * Reads what one line of the provider's output stream says the agent did, for {@code synesis agents log}.
+         * Lines that are not events, and events that are bookkeeping, yield nothing; a provider whose output this
+         * does not know shows no entries rather than its raw lines.
+         *
+         * @param outputLine one line the provider printed
+         * @return the entries of that line in the order they happened; empty by default
+         */
+        default List<AgentLogEntry> logEntries(String outputLine) {
+            return List.of();
+        }
     }
 
     /**

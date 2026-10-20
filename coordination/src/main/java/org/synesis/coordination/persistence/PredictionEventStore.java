@@ -159,7 +159,7 @@ public final class PredictionEventStore implements ProjectionView {
      * @throws IOException              when a log or the applied order cannot be read
      * @throws GeneralSecurityException when an existing event signature is invalid
      */
-    static PredictionEventStore openReadOnly(Path root, UUID projectId) throws IOException, GeneralSecurityException {
+    public static PredictionEventStore openReadOnly(Path root, UUID projectId) throws IOException, GeneralSecurityException {
         return new PredictionEventStore(root, projectId, Clock.systemUTC(), false);
     }
 

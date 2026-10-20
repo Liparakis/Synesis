@@ -86,6 +86,24 @@ public final class LoopbackExchange implements ReplicationExchange {
                 StandardCharsets.UTF_8);
     }
 
+    /**
+     * Tells whether the coordination server of this folder answers on the address it recorded. A file left by a server
+     * that stopped without removing it names an address nobody listens on, so the file alone does not say.
+     *
+     * @return the server's loopback address as a URI when a connection to it is accepted, otherwise empty
+     */
+    public java.util.Optional<URI> runningServer() {
+        try {
+            URI endpoint = endpoint();
+            try (java.net.Socket socket = new java.net.Socket()) {
+                socket.connect(new InetSocketAddress(InetAddress.getByName(endpoint.getHost().replace("[", "").replace("]", "")), endpoint.getPort()), (int) CONNECT_TIMEOUT.toMillis());
+                return java.util.Optional.of(endpoint);
+            }
+        } catch (IOException | RuntimeException notRunning) {
+            return java.util.Optional.empty();
+        }
+    }
+
     @Override
     public byte[] exchange(byte[] request) throws IOException {
         URI endpoint = endpoint();
