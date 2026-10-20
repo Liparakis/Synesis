@@ -16,13 +16,15 @@ import org.synesis.cli.daemon.CliChildJvm;
  * Checks the Windows Firewall rule the installer adds so that another computer can dial this one (ADR-0096). The rule
  * names one version's {@code java.exe}, and an update that does not add it again leaves it naming the old one, which
  * silently stops this computer from hosting. Reading the rule needs no administrator rights; changing it does, so the
- * check only says what to run.
+ * check only says what to run, as {@code FIX=}: Synesis never elevates by itself (ADR-0103, "Trust").
  */
 public final class LinkFirewallRule {
 
     static final String NAME = "Synesis Link";
     // netsh translates its labels, so a program is found by the shape of a path.
     private static final Pattern PROGRAM = Pattern.compile("[A-Za-z]:\\\\.*\\S");
+    // Changing a firewall rule needs the person's administrator rights, so Synesis prints the command and never runs it.
+    private static final String FIX = "FIX=in an administrator terminal, run: ";
     private static final String ANSWER = "the other computer can still connect if you paste the answer link it prints into 'synesis link answer' here";
 
     /**
@@ -75,8 +77,8 @@ public final class LinkFirewallRule {
         }
         if (rules.isEmpty()) {
             return List.of("LINK_FIREWALL=MISSING", "NOTE=Windows Firewall has no \"" + NAME + "\" rule, so the other computer cannot dial this one; "
-                + ANSWER + ". To let it dial, run the Synesis installer with \"Let other computers connect to this one\" ticked, or in an administrator terminal: "
-                + "netsh advfirewall firewall add rule name=\"" + NAME + "\" dir=in action=allow protocol=UDP profile=any program=\"" + program + "\"");
+                + ANSWER + ". To let it dial, run the Synesis installer with \"Let other computers connect to this one\" ticked, or run the FIX command",
+                FIX + "netsh advfirewall firewall add rule name=\"" + NAME + "\" dir=in action=allow protocol=UDP profile=any program=\"" + program + "\"");
         }
         List<String> programs = PROGRAM.matcher(rules.get()).results().map(MatchResult::group).toList();
         // Compared from the version folder on: netsh prints the folders above in the console's code page, or as short
@@ -88,8 +90,8 @@ public final class LinkFirewallRule {
         }
         return List.of("LINK_FIREWALL=STALE", "LINK_FIREWALL_RULE_PROGRAM=" + programs.getFirst(),
             "NOTE=the Windows Firewall rule \"" + NAME + "\" names another version's java.exe, so the other computer cannot dial this one; "
-                + ANSWER + ". To fix it, run the Synesis installer again with \"Let other computers connect to this one\" ticked, or in an administrator terminal: "
-                + "netsh advfirewall firewall set rule name=\"" + NAME + "\" new program=\"" + program + "\"");
+                + ANSWER + ". To fix it, run the Synesis installer again with \"Let other computers connect to this one\" ticked, or run the FIX command",
+            FIX + "netsh advfirewall firewall set rule name=\"" + NAME + "\" new program=\"" + program + "\"");
     }
 
     private static Optional<String> netsh() throws IOException {

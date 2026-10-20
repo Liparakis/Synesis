@@ -29,15 +29,17 @@ later repair/uninstall discovery.
 
 Another computer can open a Link session to a Windows machine only if Windows
 Firewall has a rule for the installed runtime. The wizard's "Let other
-computers connect to this one" checkbox, or `--allow-link` on `install` and
-`repair`, adds it; Windows asks for administrator approval, which is the only
-elevation the installer ever requests. The rule names the installed version, so
-it is added again by the next install or repair that has the option, and it is
-removed on uninstall. Declining the prompt leaves the installation complete
-(ADR-0096). A command-line install, repair, update or rollback without the
-option prints `LINK_FIREWALL=STALE` and the command that fixes the rule when it
-names another version, and `synesis link invite` says the same, or that the
-rule is missing.
+computers connect to this one" checkbox, which is ticked by default (ADR-0103),
+or `--allow-link` on `install` and `repair`, adds it; Windows asks for
+administrator approval, which is the only elevation the installer ever
+requests. The rule names the installed version, so every wizard install, repair
+or update that keeps the box ticked adds it again, and it is removed on
+uninstall. Declining the prompt leaves the installation complete (ADR-0096). A
+command-line install, repair, update or rollback without the option prints
+`LINK_FIREWALL=STALE` and the command that fixes the rule when it names another
+version, and `synesis link invite` says the same, or that the rule is missing,
+and prints the exact `netsh` command as `FIX=` for an administrator terminal;
+Synesis never runs it.
 
 Repair reinstalls the verified application payload and preserves project
 workspaces, project `.synesis` directories, and provider metadata. Uninstall

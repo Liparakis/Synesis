@@ -117,10 +117,103 @@ class LinkCommandsTest {
 
     @Test
     void inviteSaysAfterTheLinksWhenTheFirewallKeepsTheOtherComputerFromDialing() throws Exception {
-        Run invited = run(cli -> new LinkInviteCommand(cli, project -> runtime, 5, () -> List.of("LINK_FIREWALL=MISSING", "NOTE=fix it")), "--wait-seconds", "0");
+        Run invited = run(cli -> new LinkInviteCommand(cli, project -> runtime, 5, () -> List.of("LINK_FIREWALL=MISSING", "NOTE=fix it", "FIX=run it")), "--wait-seconds", "0");
 
         assertEquals(ExitCodes.OK, invited.exit(), invited.toString());
-        assertEquals(List.of("OPERATION_ID=op-1", "INVITE_LINK=synesis://project/SLP1-test", "EXPIRES_AT=2026-10-16T12:00:00Z", "CODE_REMOTE=origin", "CODE_REMOTE_URL=https://example.test/p.git", "LINK_FIREWALL=MISSING", "NOTE=fix it", "LINK_STATE=PENDING"), invited.stdout());
+        assertEquals(List.of("OPERATION_ID=op-1", "INVITE_LINK=synesis://project/SLP1-test", "EXPIRES_AT=2026-10-16T12:00:00Z", "CODE_REMOTE=origin", "CODE_REMOTE_URL=https://example.test/p.git", "LINK_FIREWALL=MISSING", "NOTE=fix it", "FIX=run it",
+                "LINK_STATE=PENDING"), invited.stdout());
+    }
+
+    private Run invitedAt(boolean terminal, String typed, String... arguments) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ConsoleTerminal person = new ConsoleTerminal(new PrintStream(out, true, StandardCharsets.UTF_8), new PrintStream(new ByteArrayOutputStream(), true, StandardCharsets.UTF_8),
+                new java.io.ByteArrayInputStream(typed.getBytes(StandardCharsets.UTF_8)), terminal);
+        CliRuntime cli = new CliRuntime(new Onboarding(tmp.resolve("profile"), new StatusRenderer(person)), person);
+        List<String> all = new ArrayList<>(List.of("--project", root.toString()));
+        all.addAll(List.of(arguments));
+        int exit = new CommandLine(new LinkInviteCommand(cli, project -> runtime, 5, List::of)).execute(all.toArray(String[]::new));
+        return new Run(exit, out.toString(StandardCharsets.UTF_8).lines().toList(), List.of());
+    }
+
+    private String joiner() throws java.security.GeneralSecurityException {
+        String peer = NodeIdentity.generate().nodeId();
+        runtime.connectsAfterReads = 3;
+        runtime.peerNode = peer;
+        runtime.joinRequests = List.of(Map.of("nodeId", peer, "requestedAt", "2026-10-16T12:00:00Z", "expiresAt", "2026-10-16T12:10:00Z"));
+        return peer;
+    }
+
+    @Test
+    void atATerminalTheInviteAsksWhoWantsToJoinAndAcceptsOnlyOnAnExplicitYes() throws Exception {
+        for (String yes : List.of("y\n", "YES\n", " yes \n")) {
+            runtime = new FakeRuntime();
+            String peer = joiner();
+
+            Run invited = invitedAt(true, yes);
+
+            assertEquals(ExitCodes.OK, invited.exit(), invited.toString());
+            assertEquals(List.of("accept-join " + Map.of("nodeId", peer)), runtime.commands.subList(1, runtime.commands.size()), invited.toString());
+            assertTrue(invited.stdout().contains("JOIN_REQUEST=" + peer + " REQUESTED_AT=2026-10-16T12:00:00Z EXPIRES_AT=2026-10-16T12:10:00Z"), invited.toString());
+            assertTrue(invited.stdout().getLast().contains("JOIN_REQUEST=" + peer + " STATE=ACCEPTED"), invited.toString());
+            assertTrue(invited.stdout().stream().anyMatch(line -> line.contains(peer + " wants to join project. Accept? [y/N] ")), invited.toString());
+        }
+    }
+
+    @Test
+    void atATerminalTheInviteDeclinesOnNoOnABlankLineOnAnythingElseAndOnTheEndOfInput() throws Exception {
+        for (String answer : List.of("n\n", "no\n", "\n", "maybe\n", "yes please\n", "")) {
+            runtime = new FakeRuntime();
+            String peer = joiner();
+
+            Run invited = invitedAt(true, answer);
+
+            assertEquals(ExitCodes.OK, invited.exit(), invited.toString());
+            assertEquals(List.of("decline-join " + Map.of("nodeId", peer)), runtime.commands.subList(1, runtime.commands.size()), "answer " + answer.strip() + ": " + invited);
+            assertTrue(invited.stdout().getLast().contains("JOIN_REQUEST=" + peer + " STATE=DECLINED"), invited.toString());
+        }
+    }
+
+    @Test
+    void inAScriptTheInviteAsksNothingAndDecidesNothingSoLinkAcceptStillDoes() throws Exception {
+        String peer = joiner();
+
+        Run invited = invitedAt(false, "y\n");
+
+        assertEquals(ExitCodes.OK, invited.exit(), invited.toString());
+        assertEquals(1, runtime.commands.size(), "only the invite itself: " + runtime.commands);
+        assertEquals(List.of("OPERATION_ID=op-1", "INVITE_LINK=synesis://project/SLP1-test", "EXPIRES_AT=2026-10-16T12:00:00Z", "CODE_REMOTE=origin", "CODE_REMOTE_URL=https://example.test/p.git", "LINK_STATE=CONNECTED", "PEER_NODE_ID=" + peer),
+                invited.stdout());
+    }
+
+    @Test
+    void atATerminalNothingIsAskedWhenTheConnectedComputerHasNoJoinRequestOrTheInvitationIsNotAProjectOne() throws Exception {
+        joiner();
+        runtime.joinRequests = List.of();
+
+        Run none = invitedAt(true, "y\n");
+
+        assertEquals(ExitCodes.OK, none.exit(), none.toString());
+        assertEquals(1, runtime.commands.size(), runtime.commands.toString());
+        assertTrue(none.stdout().stream().noneMatch(line -> line.contains("Accept?")), none.toString());
+
+        runtime = new FakeRuntime();
+        joiner();
+        runtime.inviteKind = "PLAIN";
+
+        Run plain = invitedAt(true, "y\n");
+
+        assertEquals(1, runtime.commands.size(), runtime.commands.toString());
+        assertTrue(plain.stdout().stream().noneMatch(line -> line.contains("Accept?")), plain.toString());
+    }
+
+    @Test
+    void aDecisionTheRuntimeRefusesIsReportedNotHidden() throws Exception {
+        joiner();
+        runtime.decisionRejection = "JOIN_REQUEST_UNKNOWN";
+
+        Run invited = invitedAt(true, "y\n");
+
+        assertEquals(ExitCodes.LOCAL_CONFIGURATION, invited.exit(), invited.toString());
     }
 
     @Test
@@ -483,6 +576,7 @@ class LinkCommandsTest {
         String existingSession;
         boolean endsWithoutSession;
         String rejection;
+        String decisionRejection;
         String answerRejection;
         List<Map<String, Object>> joinRequests = List.of();
         List<Map<String, Object>> endedOperations = List.of();
@@ -495,6 +589,9 @@ class LinkCommandsTest {
         public Map<String, Object> command(String name, Map<String, Object> body) throws Rejected {
             if (rejection != null) {
                 throw new Rejected(rejection);
+            }
+            if (decisionRejection != null && name.endsWith("-join")) {
+                throw new Rejected(decisionRejection);
             }
             if (answerRejection != null && name.equals("answer")) {
                 throw new Rejected(answerRejection);

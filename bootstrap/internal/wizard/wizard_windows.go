@@ -18,7 +18,6 @@ import (
 	"synesis/bootstrap/internal/install/embedded"
 	"synesis/bootstrap/internal/install/installfs"
 	"synesis/bootstrap/internal/install/layout"
-	"synesis/bootstrap/internal/install/linkfirewall"
 	"synesis/bootstrap/internal/install/uishortcut"
 	"synesis/bootstrap/internal/payload"
 	"synesis/bootstrap/internal/protocolreg"
@@ -187,10 +186,11 @@ func newInstallerWizard(bundle, bundleVersion string) (*installerWizard, error) 
 		// Offered by default on a first install; afterwards the choice follows
 		// what is on the desktop.
 		shortcut: !installfs.FileExists(paths.Root) || desktopShortcutExists(),
-		// Never offered by default on a first install, because it ends in an
-		// administrator prompt. Once the rule exists it is kept current: it names
-		// the runtime of one version and every install replaces that runtime.
-		allowLink: linkRuleExists(),
+		// Ticked by default (ADR-0103, decision 3): without the rule another
+		// computer cannot dial this one. It still ends in an administrator prompt
+		// the person approves, and it runs after every install because the rule
+		// names the runtime of one version and every install replaces that runtime.
+		allowLink: true,
 		action:   installerActionInstall,
 		page:     installerPageAction,
 		controls: make(map[int]uintptr),
@@ -315,12 +315,9 @@ func (w *installerWizard) readInstallRoot() (string, error) {
 	return paths.Root, nil
 }
 
-// linkRuleExists and allowLinkSessions are injectable so wizard tests never
-// read or change the real firewall or ask for elevation.
-var (
-	linkRuleExists    = linkfirewall.Exists
-	allowLinkSessions = install.AllowLink
-)
+// allowLinkSessions is injectable so wizard tests never change the real
+// firewall or ask for elevation.
+var allowLinkSessions = install.AllowLink
 
 func desktopShortcutExists() bool {
 	desktop, err := uishortcut.Desktop()

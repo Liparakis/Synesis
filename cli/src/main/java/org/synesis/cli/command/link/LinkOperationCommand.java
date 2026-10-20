@@ -87,7 +87,7 @@ abstract class LinkOperationCommand implements Callable<Integer> {
                 runtime.terminal().stdout("LINK_STATE=PENDING");
                 return ExitCodes.OK;
             }
-            return await(control, operation, before);
+            return await(control, root, operation, before);
         } catch (RuntimeControl.Rejected rejected) {
             LinkCommand.refuse(runtime, rejected);
             return switch (rejected.code()) {
@@ -105,15 +105,33 @@ abstract class LinkOperationCommand implements Callable<Integer> {
         return ExitCodes.LOCAL_CONFIGURATION;
     }
 
-    private int await(RuntimeControl control, String operation, Set<String> before) throws IOException, RuntimeControl.Rejected, InterruptedException {
+    /**
+     * Runs after a new session was reported connected, for a command that has more to do with the computer that
+     * connected. Nothing by default.
+     *
+     * @param control the runtime's control plane
+     * @param root    the project directory
+     * @param node    node ID of the computer that connected
+     * @throws IOException               when the runtime cannot be reached
+     * @throws RuntimeControl.Rejected when the runtime refuses
+     * @throws InterruptedException      when the wait is interrupted
+     */
+    void afterConnected(RuntimeControl control, Path root, String node) throws IOException, RuntimeControl.Rejected, InterruptedException {
+    }
+
+    long pollMillis() {
+        return pollMillis;
+    }
+
+    private int await(RuntimeControl control, Path root, String operation, Set<String> before) throws IOException, RuntimeControl.Rejected, InterruptedException {
         long deadline = System.nanoTime() + waitSeconds * 1_000_000_000L;
         while (true) {
-            if (reportNewPeer(control, before)) {
+            if (reportNewPeer(control, root, before)) {
                 return ExitCodes.OK;
             }
             if (!pendingOperations(control).contains(operation)) {
                 // It ended; a session that arrived between the two reads still counts.
-                if (reportNewPeer(control, before)) {
+                if (reportNewPeer(control, root, before)) {
                     return ExitCodes.OK;
                 }
                 reportFailure(control, operation);
@@ -128,11 +146,12 @@ abstract class LinkOperationCommand implements Callable<Integer> {
         }
     }
 
-    private boolean reportNewPeer(RuntimeControl control, Set<String> before) throws IOException, RuntimeControl.Rejected {
+    private boolean reportNewPeer(RuntimeControl control, Path root, Set<String> before) throws IOException, RuntimeControl.Rejected, InterruptedException {
         for (Map<String, Object> peer : peers(control)) {
             if (Boolean.TRUE.equals(peer.get("usable")) && peer.get("sessionId") instanceof String id && !before.contains(id)) {
                 runtime.terminal().stdout("LINK_STATE=CONNECTED");
                 runtime.terminal().stdout("PEER_NODE_ID=" + peer.get("nodeId"));
+                afterConnected(control, root, String.valueOf(peer.get("nodeId")));
                 return true;
             }
         }

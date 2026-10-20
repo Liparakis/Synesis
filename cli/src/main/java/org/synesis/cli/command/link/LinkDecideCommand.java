@@ -43,12 +43,25 @@ abstract class LinkDecideCommand implements Callable<Integer> {
         }
         try {
             RuntimeControl control = source.open(ProjectOptions.locate(runtime, project).root());
-            Map<String, Object> decided = control.command(commandName, Map.of("nodeId", node));
-            runtime.terminal().stdout("JOIN_REQUEST=" + node + " STATE=" + decided.get("state"));
+            decide(runtime, control, commandName, node);
             return ExitCodes.OK;
         } catch (RuntimeControl.Rejected | ProjectApplicationException | java.io.IOException failure) {
             LinkCommand.refuse(runtime, failure);
         }
         return ExitCodes.LOCAL_CONFIGURATION;
+    }
+
+    /**
+     * Tells the runtime the owner's decision and prints its outcome. The one path both {@code link accept|decline} and
+     * the question {@code link invite} asks at a terminal take, so that a decision has one authority.
+     *
+     * @param commandName {@code accept-join} or {@code decline-join}
+     * @param node        the waiting computer's node ID
+     * @throws java.io.IOException     when the runtime cannot be reached
+     * @throws RuntimeControl.Rejected when the runtime refuses, for example because the request is gone
+     */
+    static void decide(CliRuntime runtime, RuntimeControl control, String commandName, String node) throws java.io.IOException, RuntimeControl.Rejected {
+        Map<String, Object> decided = control.command(commandName, Map.of("nodeId", node));
+        runtime.terminal().stdout("JOIN_REQUEST=" + node + " STATE=" + decided.get("state"));
     }
 }

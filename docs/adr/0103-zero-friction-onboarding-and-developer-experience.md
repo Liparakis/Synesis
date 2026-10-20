@@ -596,6 +596,36 @@ and maintainability decide when a stage is done, by its completion criteria belo
   an upgrade keeps Link reachable without a manual firewall step.
 - **Completion criteria.** The owner's approval recorded for each contract change; the join count met on PC + VM;
   nothing accepted without a person's yes.
+- **Built 2026-10-20 (the joining parts only: interactive approval, the firewall `FIX=`, the installer default; source
+  semantics proven on the Linux gate and `go test ./...`, not yet a real PC + VM run, and the UAC prompt never run).**
+  1. *Interactive approval.* After `link invite` reports `LINK_STATE=CONNECTED` for a project invitation, at a terminal
+     (`Terminal.interactive()`) it looks for the join request of that node for a few polls (the session is usable a moment
+     before the runtime lists the request), prints `JOIN_REQUEST=<node> REQUESTED_AT= EXPIRES_AT=` and asks
+     "`<node> wants to join <project folder>. Accept? [y/N]`". Only `y` or `yes` accepts; no, a blank line, anything else
+     and the end of input decline. The answer goes through `LinkDecideCommand.decide`, the one call `link accept` and
+     `link decline` make, so there is no second authority path; a runtime refusal (for example an expired request) is
+     reported as for those commands. In a script (no terminal, `--porcelain`), for a plain invitation and with
+     `--wait-seconds 0` nothing is asked and the output is as before. The request carries no computer name, only the
+     node ID and times, so those are what the question shows; a name needs the join request to carry one, which it does
+     not.
+  2. *The firewall fix.* `link invite` prints `FIX=in an administrator terminal, run: netsh advfirewall firewall add|set
+     rule ...` after `LINK_FIREWALL=MISSING|STALE` and its `NOTE=` (the command moved from the end of the `NOTE=` to its
+     own `FIX=` line). Synesis does not run it or ask for elevation.
+  3. *The installer.* The wizard's "Let other computers connect to this one (asks for administrator approval)" checkbox
+     starts ticked (it was ticked only when the rule already existed), so every wizard install or update that keeps it
+     ticked adds the rule again for the new version's `java.exe`; Windows still shows its prompt and declining leaves the
+     install complete with a warning. A command-line install, repair or update still needs `--allow-link` and otherwise
+     prints `LINK_FIREWALL=STALE` and its fix, because an unattended update cannot answer a prompt.
+  4. *Tests.* `LinkCommandsTest` (yes variants accept; no, blank, other text and end of input decline; script mode, no
+     join request and a plain invitation ask nothing; a refused decision is reported), `LinkFirewallRuleTest` (the
+     `FIX=` line), `bootstrap/internal/wizard` (`TestTheFirewallRuleIsTickedByDefault`). Linux gate: cli 311 tests, 0
+     failures, 2 skipped; link 201, coordination 562, project-record 60, relay 12, mcp-contract 20, workspace 1114
+     (3 skipped), mcp 214; `formatCheck`, `staticAnalysis` and `javadoc` pass. `repositoryHygieneCheck` fails on a
+     predating link, `docs/getting-started/README.md` to `../cli/command-reference.md#status` (the check does not strip
+     the `#fragment`); not part of this entry. `go test ./...` in `bootstrap` passes.
+  5. *Needs a real machine with elevation.* The UAC prompt after a ticked install, that the rule then names the new
+     version's `java.exe` and an upgrade keeps Link reachable, the printed `netsh` command run in an administrator
+     terminal, and the one-action-per-side join count on PC + VM with the question answered by a person.
 
 ### Stage 4 — needs foundations first
 
