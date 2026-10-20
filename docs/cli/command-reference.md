@@ -302,8 +302,8 @@ file alone, and print `PROJECT_FILE_COMMITTED=<short commit>`: nothing is
 integrated into a checkout that holds an uncommitted change. They are refused
 with `ERROR=CONTROL_CHECKOUT_FOREIGN_CHANGES` when the checkout already holds
 changes Synesis did not make, by the rule integration itself uses, so the
-untracked files a provider installs (`.claude/`, `.codex/`, `.mcp.json`,
-`AGENTS.md`) do not count. When the commit fails, the file is put back as it
+untracked files a provider installs (`.claude/`, `.codex/`, `.mcp.json`) do
+not count; an untracked `AGENTS.md` is the user's and does count (ADR-0103 decision 9). When the commit fails, the file is put back as it
 was and the command reports `ERROR=PROJECT_COMMIT_FAILED`. Outside a Git
 repository, or where Git does not track the file, the file is rewritten and
 nothing is committed. Both commands wait for an integration attempt that is
