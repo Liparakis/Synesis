@@ -13,7 +13,12 @@ is built. It changes published CLI output and deprecates commands, so the items 
 2 yes, 3 yes, 4 **remove** `host`, `join`, `sync host` and `sync join` now rather than deprecate them (an explicitly
 approved breaking change to the published CLI: every caller, test and document is migrated in the same change, and
 `link invite`/`link join` are the one way to join), 5 yes, 6 yes, 7 deferred to stage 4, 8 at the first invite.
-Implementation is authorized stage by stage.
+Implementation is authorized stage by stage. A ninth decision the same day (USER-STATED: "No readme ... choose one"): **one place holds the
+agent instructions for a user's project, the installed skill** (`synesis-provider-manual`, in `~/.claude/skills` and
+`~/.codex/skills`). `init` stops writing the managed `AGENTS.md` section and the Claude rule file that imports it; on an
+existing project Synesis removes only its own marked section (`<!-- SYNESIS-BEGIN -->` … `<!-- SYNESIS-END -->`) and
+keeps the user's text; the Synesis MCP server's instructions, shown to every connected agent, point to the skill. Stage
+1 no longer restores the README.
 
 Claims are marked VERIFIED (file:line on branch `adr-0098-step3-code-over-link`), MEASURED (real runs of 2026-10-18/19),
 DERIVED, ASSUMED or REQUIRES-MEASUREMENT.
