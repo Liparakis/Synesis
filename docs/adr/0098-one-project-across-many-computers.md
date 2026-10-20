@@ -1126,6 +1126,51 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     other computer is away does not retry (it would spend the agent's resumes while nothing can be read), and the
     wake keeps no memory of an earlier refusal, so a reviewer that stops for another reason is asked again too.
 
+30. **A re-merge review owed to agents the run controller had already closed** (s5-run16, PC owner with 2 Claude agents,
+    VM member with 2 Codex agents, build remaster86 = `3dbbbf92`, 2026-10-20; a real 5-minute cut, both journals
+    `LIVENESS_EXPIRED` after 60 s; FAIL: `main` PC `e523d3d5`, VM `ffd76e6e`; **the fix is NOT BUILT**, this is the record).
+    *Proven from the evidence* (`D:\SynesisAcceptance\evidence\s5-run16`; the VM's own log has timestamps):
+    - The PC's run ended `COMPLETED` after 128 s, while cut. Its log named no head of the VM's, so
+      `MainMeeting.holdsEveryHead` held for the one head it knew, and no agent had a lane or a grant to come back to, so
+      `progressElsewhere` had nothing to wait for (`OTHER_COMPUTER_AWAY` needs an agent that `mayComeBack`). That is the
+      rule working as written: a run cannot wait for a head it cannot learn of. The PC's agents were gone from then on,
+      which is lawful, since only the re-merging computer's agents review a re-merge (item 13).
+    - The VM, the higher node ID, re-merged after the heal (09:54:53): `COMBINE_REQUIRED` for primes and `NOTES.md`. The
+      run controller resumed codex#2 for it 25 s later and it took and finished the combine lane (09:56:13) as a new
+      session, `agt_20677c3f`, on a new connection (the old one had been closed, so `ensure_session` gave a fresh binding
+      and `SessionSuccessions` recorded nothing; it records only a replacement at one connection's path).
+    - The pass wrote the two re-merge snapshots and their grants (09:56:14.25 and .28) to the two original reviewers
+      `agt_723913f6` (codex#2's first session) and `agt_e4f2adeb` (codex#1), and **released both within 190 ms**
+      (`LANE_REVOKED`, .35 and .43). Both reviewers' leases were `CLOSED_CLEANLY` since 09:52:49 and 09:53:03, before the
+      heal: the controller ends the connection of an agent with no lane, request or grant to come back to
+      (`AgentRunController.keepOrEnd`), so `AwayLanes.goneHere` judged them gone at once, as item 24 says it should.
+    - `RemergeService.anotherReviewer` then chose among the live sessions of the VM, and the only one was `agt_20677c3f`,
+      the holder of the combine lane, which it never chooses (item 27). So no grant was written again ("waits for another
+      reviewer"), the combine lane stayed open for ever, and nothing was offered to either agent, so the controller had
+      nothing to resume them for: `wakeFor` resumes on grants, open reviews and combines that exist for a session,
+      and codex#1 had no session. The run printed `FOREIGN_LANE_OPEN`, `COPIES_MEETING`, `OTHER_COMPUTER_CONNECTED` and
+      timed out at 3000 s; the grants and the participants were closed by the run's end, not by any rule.
+    - With two agents a computer has no independent reviewer for both re-merge snapshots at all: the snapshot of the
+      combined lane (author codex#1) can only be reviewed by codex#2, who holds the combine lane, and the other (author
+      codex#2) only by codex#1, who has no session. Item 27's exclusion of the combine's holder and item 24's release of
+      closed sessions together leave no one, which scenarios with four or six agents per computer never meet.
+    *Hypothesis, not proven:* that the PC's stopped agents would have been resumed if the PC's run had still been running;
+    its run ended 4 minutes before the heal, so nothing tested it.
+    *What a fix has to hold* (decided with the invariant of item 27, *a re-merge review owed on this computer is offered to
+    an agent that is live, may review it, and can see it in its next action*): (a) a stopped agent whose session was
+    closed, with a re-merge snapshot waiting for a reviewer that none of its sessions authored, is resumed for it (the
+    pass can only choose a session that exists; `reviewsOffered` names today only what exists for a session); (b) the
+    controller records, when it opens a new connection for an agent that had an earlier one, that the new session is the
+    old one's successor (`SessionSuccessions`), or the pass would offer a fresh session the review of its own earlier
+    work; (c) the holder of a combine lane whose snapshot is published is shown a re-merge grant addressed to it
+    (`AgentReviewActionProjection.reviewActions` shows it today only to a lane-less caller or an admitted reviewer) and the
+    pass may choose it, because the original reviewer can be the combiner and the combine snapshot is, by item 22, not
+    reviewed on its own. Scripted scenario `CombineUnderRunControllerScenarioTest` (two agents per computer started by
+    a real `AgentRunController`) is written and disabled: on the Linux gate it stalls with `COMBINE_REQUIRED` written and no
+    re-merge snapshot, but it does not yet reproduce the leases the real run had (the scenario's merge pass logs
+    "session leases not all readable; no reviewer of this computer is judged gone", so item 24's release never runs
+    there), so it is not yet proof of the mechanism above.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory
