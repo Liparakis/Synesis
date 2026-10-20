@@ -586,6 +586,35 @@ and maintainability decide when a stage is done, by its completion criteria belo
 - **Dependencies and blockers.** ADR-0098 step 6 (membership, built) for member views and removal; stage 2's discovery
   and doctor groups for the readiness panel; the firewall offer needs the person's elevation and cannot be tested
   unattended on a real machine.
+- **Built 2026-10-20 (the UI parts only: first run, readiness panel, operator recheck and close, member removal,
+  membership in the read model; source semantics proven on the Linux gate for the classes named below, not yet a real
+  browser run, the whole gate or the Windows gate).** The other stage 3 tasks are not part of this entry.
+  1. **Read model** (all additive): `membership` `{shared, owner, self, selfIsOwner, members[{nodeId, self, owner, state,
+     since, lastReceived}]}`, built by `ProjectMembers`, the one rule `synesis status` now also follows (`ProjectStatus`
+     calls it, so the CLI and the page cannot disagree); `workGroupId` on tasks, ownerships and disputes (the WorkGroup of
+     the task's active or trashed lanes when exactly one, else `null`), which the page's coordination tables use when
+     present and otherwise keep inferring as in stage 1; `group`, `mark` and `fix` on each diagnostic finding.
+     `CoordinationService.membershipProjection()` is new (a read).
+  2. **Commands** (`ControlPlaneHttpHandler`): `recheck-operator-requests` and `close-operator-request`
+     (`OperatorEndpoints`; the services `operator recheck` and `operator close` use, so a request Synesis raised is still
+     refused), and `remove-member` (`ProjectLinkEndpoints` over `ProjectSharing.removeMember`, the steps of `project
+     remove-member`: role file, migration, `MembershipService.remove`, `replication.peers`; it needs `confirmed: true`,
+     and the owner rule stays the log's). No new authority path; the CLI commands are unchanged and do not yet call
+     `ProjectSharing.removeMember`, so the removal steps exist twice until a later change makes the command use it.
+  3. **UI.** `ProjectReadiness` (first-run view when no agent and no WorkGroup exist: one line on what Synesis is, the
+     checks, the next command; the Readiness rail entry with its attention count; the checks on the overview),
+     `OperatorRequests` (recheck, close for a request a lane asked, "closes by itself" for the rest; on the overview as
+     "Needs you" and in the Operator tab), `MembersPanel` (connected or away, the owner's Remove with a confirmation) in the
+     Network tab, `readiness.ts` (the checks, read from the snapshot alone). Shared presentation moved out of
+     `App.tsx` into `ui.tsx` and `format.ts`. "Signed in" is not a check: no read-model field says it.
+  4. **Tests.** web-ui: `ProjectOnboarding.test.tsx` (21), `coordinationScope.test.ts` (2), two more in
+     `controlPlane.test.ts`; `:web-ui:check` green on the Linux gate (80 tests, typecheck, lint, build).
+     `ControlPlaneReadModelTest` (3 new: membership, WorkGroup ids, finding fields) and `ControlPlaneHttpHandlerTest` (5
+     new: operator close and recheck, member removal and its refusals, a follower refused). Linux gate: `:workspace:test`
+     for `transport.control.*` (91 tests) and `:cli:test` for `command.coordination.*`, `command.status.*`,
+     `command.project.*` (78 tests, 2 skipped as before), `:workspace:javadoc`, `formatCheck`, `staticAnalysis`
+     and `:coordination:javadoc`, all green. Not run: the whole gate, the Windows gate, a real browser against a running
+     runtime (the page was looked at once in the mock preview).
 - **Contract changes needing approval.** The installer's firewall default; `init` no longer writing Codex's global
   config without Codex; deprecation of four commands; the default help showing fewer commands; `doctor --strict` using
   exit code 3 and provider results no longer reusing 2 and 3.

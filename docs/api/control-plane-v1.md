@@ -239,6 +239,26 @@ connection, so it cannot come back with it. `404 JOIN_REQUEST_UNKNOWN` when no s
 the runtime restarted: requests are kept in memory and a restart drops them), `503 MEMBER_NOT_SAVED` when the member
 list could not be written, in which case the request stays.
 
+### Membership and operator commands (ADR-0103 stage 3)
+
+The snapshot gains `membership` (additive): `{shared, owner, self, selfIsOwner, members}`, where `owner` and `self` are node
+IDs or `null` and each member is `{nodeId, self, owner, state, since, lastReceived}`. `state` is `SELF` for this computer;
+for another computer `CONNECTED` or `DISCONNECTED` (away) as the project's runtime recorded in `replication.members`, or
+`RUNTIME_STOPPED`; `since` and `lastReceived` are ISO instants or `null`. `members` is empty for a project on one
+computer. It is built by the rule `synesis status` follows (`ProjectMembers`), so the page and the command agree. Tasks,
+ownerships and disputes gain `workGroupId`, the WorkGroup of the task's lanes (active or trashed) when exactly one is
+known, else `null`; each doctor finding in `diagnostics` gains `group`, `mark` and `fix`.
+
+| Command | Body | Does | Refuses |
+|---------|------|------|---------|
+| `recheck-operator-requests` | `{}` | The pass `synesis operator recheck` runs; answers `{state, reason, failed, openRequests}` | `500 OPERATOR_RECHECK_FAILED` |
+| `close-operator-request` | `{"requestId", "because"?}` | What `synesis operator close` does; answers `{requestId, state: "CLOSED"}` | `400` without `requestId`; `409 OPERATOR_REQUEST_NOT_CLOSED` (no such open request, or Synesis raised it and closes it itself); `500 OPERATOR_CLOSE_FAILED` |
+| `remove-member` | `{"nodeId", "confirmed": true}` | What `synesis project remove-member` does; answers `{nodeId, state: "REMOVED"}` | `400 CONFIRMATION_REQUIRED`, `400 INVALID_NODE_ID`; `409` with `NOT_A_LEADER`, `ALREADY_A_MEMBER` (this computer follows another), `MEMBER_IS_THIS_COMPUTER`, `NOT_A_MEMBER`, or the log's own code when this computer is not the owner; `500 PROJECT_STORAGE_FAILED` |
+
+The page adds no authority: each command calls the service its command-line twin calls, with this computer's identity,
+behind the session and CSRF checks. A recheck runs the project's validation command again, so it can take as long as that
+command does.
+
 ### `POST /api/v1/commands/cancel`
 
 ```json

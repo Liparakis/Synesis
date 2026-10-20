@@ -5,8 +5,9 @@ import {
   ArrowLeft,
   Check,
   ChevronLeft,
+  CircleAlert,
+  ClipboardCheck,
   ChevronRight,
-  Copy,
   FolderOpen,
   GitBranch,
   LayoutDashboard,
@@ -29,6 +30,7 @@ import {
   ControlPlaneError,
   type DiagnosticFinding,
   type KnownProjectSnapshot,
+  type MembershipSnapshot,
   type NetworkPeerSnapshot,
   type NetworkSnapshot,
   type ProjectFolderChoice,
@@ -41,9 +43,14 @@ import {
 } from "../api/controlPlane";
 import {capabilityKey, chosenRecord, claimKey, ownershipKey, recordsOfWorkGroup, taskKey, type WorkGroupRecords} from "./coordinationScope";
 import {parseRoute, projectTabs, routePath, type ProjectView, type Route} from "./routes";
+import {MembersPanel} from "./MembersPanel";
+import {OperatorRequests, type OperatorClient} from "./OperatorRequests";
+import {FirstRunView, ReadinessChecks, ReadinessEntry} from "./ProjectReadiness";
+import {isFirstRun, readinessChecks} from "./readiness";
+import {cx, formatDate, formatStatus, shortNode, statusTone, type StatusTone} from "./format";
+import {CopyField, DetailModal, EmptyState, OverviewSection, StatusBadge, TableEmpty, TextAction} from "./ui";
 
 export type View = ProjectView | "projects";
-type StatusTone = "good" | "warn" | "bad" | "neutral";
 type CoordinationTab = "claims" | "tasks" | "reviews" | "capabilities" | "ownership" | "conversations" | "operator";
 type ProjectRegistryClient = Pick<ControlPlaneClient, "chooseProject" | "registerProject" | "removeProjects">;
 type JoinClient = Pick<ControlPlaneClient, "join" | "openProjectLink" | "chooseProject"> & Partial<Pick<ControlPlaneClient, "describeProjectLink">>;
@@ -283,6 +290,7 @@ export function App() {
         {route.kind === "project" && liveProjectAvailable && <>
           <p className="sidebar-heading" title={snapshot.project?.path}>{snapshot.project?.name ?? "Project"}</p>
           <ProjectTabs snapshot={snapshot} view={route.view} onNavigate={openProjectView}/>
+          <nav className="sidebar-nav" aria-label="Project status"><ReadinessEntry snapshot={snapshot}/></nav>
         </>}
         <div className="sidebar-footer">
           <span className={cx("connection-status", connection === "LIVE" ? "is-connected" : "is-unreachable")} role="status"><span className="status-dot"/>{message}</span>
@@ -316,11 +324,11 @@ export function App() {
         ) : (
           <div className={cx("page-frame", (route.view === "coordination" || route.view === "network") && "is-wide")}>
             <ProjectHeader snapshot={snapshot} title={snapshot.project?.name ?? "Project"} onBack={() => navigate({kind: "projects"})}/>
-            {route.view === "overview" && <ProjectOverviewView snapshot={snapshot} onNavigate={openProjectView}/>}
+            {route.view === "overview" && <ProjectOverviewView snapshot={snapshot} client={clientRef.current} onNavigate={openProjectView}/>}
             {route.view === "agents" && <AgentsView agents={snapshot.agents}/>}
-            {route.view === "coordination" && <CoordinationView snapshot={snapshot}/>}
+            {route.view === "coordination" && <CoordinationView snapshot={snapshot} client={clientRef.current}/>}
             {route.view === "trash" && <TrashView trash={snapshot.trash} client={clientRef.current}/>}
-            {route.view === "network" && <NetworkView network={snapshot.network} onboarding={snapshot.onboarding} projectName={snapshot.project?.name} client={clientRef.current}/>}
+            {route.view === "network" && <NetworkView network={snapshot.network} onboarding={snapshot.onboarding} membership={snapshot.membership} projectName={snapshot.project?.name} client={clientRef.current}/>}
             {route.view === "diagnostics" && <DiagnosticsView diagnostics={snapshot.diagnostics}/>}
           </div>
         )}
@@ -712,8 +720,9 @@ function Stat({label, value, tone}: {label: string; value: ReactNode; tone?: Sta
   return <div className="stat"><span>{label}</span><strong className={cx(tone && "tone-" + tone)}>{value}</strong></div>;
 }
 
-function ProjectOverviewView({snapshot, onNavigate}: {snapshot: Snapshot; onNavigate(view: Exclude<View, "projects">): void}) {
+function ProjectOverviewView({snapshot, client, onNavigate}: {snapshot: Snapshot; client: OperatorClient | null; onNavigate(view: Exclude<View, "projects">): void}) {
   const authenticatedPeers = snapshot.network.peers.filter((peer) => peer.authenticated).length;
+  if (isFirstRun(snapshot)) return <div className="view-stack"><FirstRunView snapshot={snapshot}/></div>;
   return (
     <div className="view-stack">
       <section className="metric-grid" aria-label="Project status">
@@ -725,6 +734,9 @@ function ProjectOverviewView({snapshot, onNavigate}: {snapshot: Snapshot; onNavi
         <OverviewMetric icon={Network} label="Authenticated Peers" value={authenticatedPeers} detail="Peers with authenticated access"/>
         <OverviewMetric icon={ShieldCheck} label="Doctor" value={<StatusBadge value={snapshot.diagnostics.overallStatus || "UNKNOWN"}/>} detail="Current diagnostic projection"/>
       </section>
+
+      {snapshot.operatorRequests.length > 0 && <OverviewSection title="Needs you" icon={CircleAlert}><OperatorRequests requests={snapshot.operatorRequests} client={client}/></OverviewSection>}
+      <OverviewSection title="Readiness" icon={ClipboardCheck}><ReadinessChecks checks={readinessChecks(snapshot)}/></OverviewSection>
 
       <div className="overview-grid">
         <OverviewSection title="Coordination" icon={GitBranch} action={<TextAction onClick={() => onNavigate("coordination")}>Open coordination</TextAction>}>
@@ -835,7 +847,7 @@ function AgentInspector({agent, onClose}: {agent: AgentSnapshot; onClose(): void
 const NO_WORKGROUP_ACTION = "A WorkGroup appears when an agent announces work. Start an agent on this project, for example synesis agents run --agent claude --prompt \"Implement X\", or open claude or codex in the project folder and give it a task.";
 const PROJECT_WIDE_TABS: CoordinationTab[] = ["capabilities", "conversations", "operator"];
 
-function CoordinationView({snapshot}: {snapshot: Snapshot}) {
+function CoordinationView({snapshot, client}: {snapshot: Snapshot; client: OperatorClient | null}) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(snapshot.workgroups[0]?.id ?? null);
   const [tab, setTab] = useState<CoordinationTab>("claims");
   const [chosenKey, setChosenKey] = useState<string | null>(null);
@@ -868,7 +880,7 @@ function CoordinationView({snapshot}: {snapshot: Snapshot}) {
             <>
               <nav className="sub-tabs" aria-label="Coordination records">{(["claims", "tasks", "reviews", "capabilities", "ownership", "conversations", "operator"] as CoordinationTab[]).map((item) => <button key={item} className={cx(tab === item && "is-active")} type="button" onClick={() => setTab(item)}>{capitalize(item)}</button>)}</nav>
               {PROJECT_WIDE_TABS.includes(tab) && <p className="muted">These records belong to the whole project, not to one WorkGroup.</p>}
-              <CoordinationTable snapshot={snapshot} records={records} tab={tab} chosenKey={chosenKey} onChoose={setChosenKey}/>
+              <CoordinationTable snapshot={snapshot} client={client} records={records} tab={tab} chosenKey={chosenKey} onChoose={setChosenKey}/>
             </>
           )}
         </section>
@@ -959,7 +971,7 @@ function pickableRow(key: string, picked: boolean, onChoose: (key: string) => vo
   };
 }
 
-function CoordinationTable({snapshot, records, tab, chosenKey, onChoose}: {snapshot: Snapshot; records: WorkGroupRecords; tab: CoordinationTab; chosenKey: string | null; onChoose(key: string): void}) {
+function CoordinationTable({snapshot, client, records, tab, chosenKey, onChoose}: {snapshot: Snapshot; client: OperatorClient | null; records: WorkGroupRecords; tab: CoordinationTab; chosenKey: string | null; onChoose(key: string): void}) {
   const chosen = chosenRecords(records, chosenKey);
   if (tab === "claims") return (
     <section className="data-table-wrap panel">
@@ -989,13 +1001,7 @@ function CoordinationTable({snapshot, records, tab, chosenKey, onChoose}: {snaps
       </table>
     </section>
   );
-  if (tab === "operator") return (
-    <section className="data-table-wrap panel">
-      <table className="data-table"><thead><tr><th>Request</th><th>Condition</th><th>Raised By</th><th>Summary</th><th>Evidence</th></tr></thead>
-        <tbody>{snapshot.operatorRequests.length === 0 ? <TableEmpty colSpan={5} text="Nothing is waiting on an operator."/> : snapshot.operatorRequests.map((request) => <tr key={request.id}><td className="mono">{request.id}</td><td>{request.condition}</td><td>{request.raisedBy ? "A lane" : "Synesis"}</td><td className="table-cell-wrap">{request.summary}</td><td className="table-cell-wrap">{request.evidence}</td></tr>)}</tbody>
-      </table>
-    </section>
-  );
+  if (tab === "operator") return <OperatorRequests requests={snapshot.operatorRequests} client={client}/>;
   if (tab === "capabilities") return (
     <section className="data-table-wrap panel">
       <table className="data-table"><thead><tr><th>Capability</th><th>Requester</th><th>Owner</th><th>State</th><th>Reason</th></tr></thead>
@@ -1042,10 +1048,6 @@ function CoordinationInspector({records, tab, chosenKey, onClose}: {records: Wor
       {(tab === "conversations" || tab === "operator" || tab === "reviews") && <p className="muted inspector-copy">The table shows every record of this kind in full.</p>}
     </DetailModal>
   );
-}
-
-function shortNode(nodeId: string): string {
-  return nodeId.length > 16 ? nodeId.slice(0, 12) + "…" : nodeId;
 }
 
 /**
@@ -1156,7 +1158,7 @@ function JoinPanel({client, initialLink = "", onRegistered}: {client: JoinClient
   );
 }
 
-export function NetworkView({network, onboarding, projectName, client}: {network: NetworkSnapshot; onboarding?: NonNullable<Snapshot["onboarding"]>; projectName?: string; client: ControlPlaneClient | null}) {
+export function NetworkView({network, onboarding, membership, projectName, client}: {network: NetworkSnapshot; onboarding?: NonNullable<Snapshot["onboarding"]>; membership?: MembershipSnapshot; projectName?: string; client: ControlPlaneClient | null}) {
   const [invite, setInvite] = useState("");
   const [inviteOperation, setInviteOperation] = useState("");
   const [answerUri, setAnswerUri] = useState("");
@@ -1244,6 +1246,7 @@ export function NetworkView({network, onboarding, projectName, client}: {network
         </div>}
         {actionMessage && <p className={cx("action-message", versionMismatch && "selection-error")} role={versionMismatch ? "alert" : "status"}>{actionMessage}</p>}
       </section>
+      {membership && <MembersPanel membership={membership} projectName={projectName} client={client}/>}
                 <section className="data-table-wrap panel">
             <table className="data-table"><thead><tr><th>Peer ID</th><th>Route</th><th>Membership State</th><th>Connection Status</th><th><span className="sr-only">Actions</span></th></tr></thead>
               <tbody>{network.peers.length === 0 ? <TableEmpty colSpan={5} text="No physical peers are projected."/> : network.peers.map((peer) => {
@@ -1391,20 +1394,8 @@ function ConnectionScreen({state, message}: {state: string; message: string}) {
   return <main className="connection-screen"><section className="connection-card"><img className="brand-logo brand-logo-large" src="/synesis-logo.png" alt="" aria-hidden="true"/><p className="eyebrow">Synesis local control plane</p><h1>Connecting to project state</h1><StatusBadge value={state}/><p>{message}</p><div className="loading-line" aria-hidden="true"/></section></main>;
 }
 
-function StatusBadge({value, large, label}: {value: string; large?: boolean; label?: string}) {
-  return <span className={cx("status-badge", "status-" + statusTone(value), large && "status-large")}><span className="status-dot"/>{label ?? formatStatus(value)}</span>;
-}
-
-function OverviewSection({title, icon: Icon, action, children}: {title: string; icon: LucideIcon; action?: ReactNode; children: ReactNode}) {
-  return <section className="panel overview-section"><div className="toolbar"><h2><Icon size={16} aria-hidden="true"/>{title}</h2>{action}</div>{children}</section>;
-}
-
 function OverviewStat({label, value}: {label: string; value: number}) {
   return <div className="overview-list-row"><span>{label}</span><strong>{value}</strong></div>;
-}
-
-function TextAction({children, onClick}: {children: ReactNode; onClick(): void}) {
-  return <button className="text-action" type="button" onClick={onClick}>{children}<ChevronRight size={14}/></button>;
 }
 
 function DetailList({children}: {children: ReactNode}) {
@@ -1419,63 +1410,8 @@ function InspectorSection({title, children}: {title: string; children: ReactNode
   return <section className="inspector-section"><h3>{title}</h3>{children}</section>;
 }
 
-function DetailModal({title, onClose, children}: {title: string; onClose(): void; children: ReactNode}) {
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    closeButtonRef.current?.focus();
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
-  return (
-    <div className="detail-modal" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="panel detail-modal-card" role="dialog" aria-modal="true" aria-labelledby="detail-modal-title" onClick={(event) => event.stopPropagation()}>
-        <div className="inspector-heading"><span id="detail-modal-title">{title}</span><button ref={closeButtonRef} className="icon-button" type="button" aria-label={`Close ${title.toLowerCase()}`} onClick={onClose}><X size={16}/></button></div>
-        {children}
-      </section>
-    </div>
-  );
-}
-
 function ValueList({values}: {values: string[]}) {
   return <ul className="value-list">{values.map((value, index) => <li key={value + index}>{value}</li>)}</ul>;
-}
-
-function CopyField({label, value}: {label: string; value: string}) {
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(value); } catch { /* Clipboard access is optional in local browser sessions. */ }
-  };
-  return <div className="copy-field"><span className="form-label">{label}</span><div><code>{value}</code><button className="icon-button" type="button" aria-label={"Copy " + label} onClick={() => void copy()}><Copy size={15}/></button></div></div>;
-}
-
-function EmptyState({icon: Icon, title, detail}: {icon: LucideIcon; title: string; detail: string}) {
-  return <div className="empty-state panel"><Icon size={22} aria-hidden="true"/><h2>{title}</h2><p>{detail}</p></div>;
-}
-
-function TableEmpty({colSpan, text}: {colSpan: number; text: string}) {
-  return <tr><td className="table-empty" colSpan={colSpan}>{text}</td></tr>;
-}
-
-function cx(...parts: Array<string | false | null | undefined>) {
-  return parts.filter(Boolean).join(" ");
-}
-
-function formatStatus(value: string) {
-  return (value || "UNKNOWN").replaceAll("_", " ");
-}
-
-function formatDate(value: string | number | null | undefined) {
-  if (value === null || value === undefined || value === "") return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return String(value);
-  return date.toLocaleString([], {dateStyle: "medium", timeStyle: "short"});
 }
 
 function formatDiagnosticDate(value: number) {
@@ -1511,14 +1447,6 @@ function selectorText(selector: {kind?: string; type?: string; value?: string; [
   const kind = selector.kind ?? selector.type ?? "selector";
   const value = selector.value ?? Object.entries(selector).filter(([key]) => key !== "kind" && key !== "type").map(([key, item]) => key + "=" + String(item)).join(", ");
   return kind + (value ? ": " + value : "");
-}
-
-function statusTone(value: string): StatusTone {
-  const normalized = (value || "").toUpperCase();
-  if (["LIVE", "RUNNING", "READY", "ACTIVE", "CONNECTED", "CONFIGURED", "HEALTHY", "OK", "PROJECT_MEMBER", "ESTABLISHED", "SUPPORTED", "SUCCESS"].includes(normalized)) return "good";
-  if (["WARNING", "WARN", "DEGRADED", "WAITING", "WAITING_DEP", "CLAIM_HELD", "BLOCKED", "PENDING", "UNCONFIGURED"].includes(normalized)) return "warn";
-  if (["ERROR", "CRITICAL", "FAILED", "UNAVAILABLE", "UNREACHABLE", "IDENTITY_MISMATCH", "OFFLINE", "CONFLICT"].includes(normalized)) return "bad";
-  return "neutral";
 }
 
 function networkDetail(network: NetworkSnapshot) {

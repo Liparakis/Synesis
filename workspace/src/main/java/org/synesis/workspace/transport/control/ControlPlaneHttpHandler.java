@@ -99,6 +99,11 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     private final ProjectLinkEndpoints projectLinks;
 
     /**
+     * Operator requests: look again, or close one.
+     */
+    private final OperatorEndpoints operator;
+
+    /**
      * Server-sent-events stream.
      */
     private final ControlPlaneEventStream eventStream;
@@ -150,6 +155,7 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
         this.onboarding = new ControlPlaneOnboardingEndpoints(Objects.requireNonNull(linkOperations, "link operations"));
         this.eventStream = new ControlPlaneEventStream(this.coordination, Objects.requireNonNull(eventHub, "event hub"));
         this.projects = new ControlPlaneProjectEndpoints(this.readModel, projectRegistry, Objects.requireNonNull(selectionGateway, "selection gateway"));
+        this.operator = new OperatorEndpoints(this.readModel);
         this.projectLinks = new ProjectLinkEndpoints(this.readModel, projectRegistry, linkOperations, onboarding, Objects.requireNonNull(projectLinkGateway, "project link gateway"));
     }
 
@@ -512,6 +518,9 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
             case "describe-project-link" -> projectLinks.describe(exchange, body);
             case "accept-join" -> projectLinks.decide(exchange, body, true);
             case "decline-join" -> projectLinks.decide(exchange, body, false);
+            case "remove-member" -> projectLinks.removeMember(exchange, body);
+            case "recheck-operator-requests" -> operator.recheck(exchange);
+            case "close-operator-request" -> operator.close(exchange, body);
             case "answer" -> onboarding.answer(exchange, body);
             case "cancel" -> onboarding.cancel(exchange, body);
             case "select-project" -> projects.selectProject(exchange, body);

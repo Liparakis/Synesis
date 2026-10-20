@@ -9,15 +9,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.TreeSet;
 
 import org.synesis.coordination.application.CoordinationService;
 import org.synesis.coordination.domain.membership.MembershipProjection;
-import org.synesis.coordination.persistence.LogDump;
 import org.synesis.coordination.persistence.LoopbackExchange;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationSettings;
-import org.synesis.coordination.replication.LeaderReplication;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
@@ -111,10 +108,9 @@ public record ProjectStatus(String projectId, String name, boolean shared, Strin
             needs.add(new Need("operator", String.valueOf(request.get("id")), String.valueOf(request.get("summary"))));
         }
         membership.openRequests().forEach(request -> needs.add(new Need("join", request.joinerNodeId(), "asks to join")));
-        // An earlier role file names its leader as the one all others follow; the leader's own computer is the owner.
-        String owner = membership.owner().orElse(settings.map(role -> role.isMember() ? role.leaderNodeId() : self).orElse(""));
+        ProjectMembers members = ProjectMembers.read(data, membership, settings, self, running);
         return new ProjectStatus(location.projectId().toString(), name,
-                shared, owner, self, running, agents(model), List.copyOf(needs), computers(data, membership, settings, self, running));
+                shared, members.owner(), self, running, agents(model), List.copyOf(needs), computers(members));
     }
 
     private static List<Agent> agents(ControlPlaneReadModel model) {
@@ -133,25 +129,10 @@ public record ProjectStatus(String projectId, String name, boolean shared, Strin
     }
 
     /**
-     * Lists the other computers by the rule {@code synesis coordination status} follows: a shared project's members
-     * come from its logs, an older leader's from its role file, and an older member's computer is its leader.
+     * Lists the other computers by the rule {@link ProjectMembers} follows, which `synesis coordination status` shares.
      */
-    private static List<Computer> computers(Path data, MembershipProjection membership, Optional<ReplicationSettings> settings, String self, boolean running) {
-        TreeSet<String> nodes = new TreeSet<>();
-        if (membership.shared()) {
-            nodes.addAll(membership.members());
-        } else if (settings.isPresent()) {
-            ReplicationSettings role = settings.get();
-            nodes.addAll(role.isMember() ? java.util.Set.of(role.leaderNodeId()) : role.members());
-        }
-        nodes.remove(self);
-        var recorded = LeaderReplication.recordedMembers(data);
-        List<Computer> computers = new ArrayList<>();
-        for (String node : nodes) {
-            var connection = recorded.map(members -> members.get(node));
-            String state = !running ? "RUNTIME_STOPPED" : connection.isPresent() ? connection.get().state().name() : "DISCONNECTED";
-            computers.add(new Computer(node, state, running ? connection.map(LeaderReplication.MemberConnection::since) : Optional.empty(), LogDump.lastArrival(data, node)));
-        }
-        return List.copyOf(computers);
+    private static List<Computer> computers(ProjectMembers members) {
+        return members.members().stream().filter(member -> !member.self())
+                .map(member -> new Computer(member.node(), member.state(), member.since(), member.lastReceived())).toList();
     }
 }

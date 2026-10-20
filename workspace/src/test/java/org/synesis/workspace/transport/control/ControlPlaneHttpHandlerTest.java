@@ -31,6 +31,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import org.synesis.coordination.application.CoordinationService;
+import org.synesis.coordination.application.MembershipService;
+import org.synesis.coordination.domain.operator.OperatorRequest;
+import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
@@ -221,6 +224,101 @@ class ControlPlaneHttpHandlerTest {
 
             HttpResponse<String> confirmedUnknown = trashCommand(fixture, credentials, "empty-trash", Map.of("laneId", lane, "epoch", 1, "confirmed", true));
             assertEquals(409, confirmedUnknown.statusCode(), confirmedUnknown.body());
+        }
+    }
+
+    private Map<String, Object> snapshotOf(Fixture fixture, Map<String, Object> credentials) throws Exception {
+        return object(fixture.client.send(request(fixture, "/api/v1/snapshot").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) credentials.get("sessionToken")).GET().build(),
+                HttpResponse.BodyHandlers.ofString()).body());
+    }
+
+    /** ADR-0103 stage 3: the page closes what an agent asked, runs the commands' own rule for what Synesis raised, and checks again. */
+    @Test
+    void anOperatorRequestALaneRaisedIsClosedFromThePageAndOneSynesisRaisedIsNot() throws Exception {
+        try (Fixture fixture = new Fixture("operator-commands", true)) {
+            Map<String, Object> credentials = login(fixture);
+            NodeIdentity writer = NodeIdentity.generate();
+            PredictionEventStore store = new PredictionEventStore(fixture.coordinationDirectory, fixture.projectId);
+            OperatorRequest asked = OperatorRequest.askedByLane("opr_lane000000000001", UUID.randomUUID().toString(), "Which license?", "participant agt_x");
+            OperatorRequest raised = OperatorRequest.raised("opr_synesis000000001", OperatorRequest.BOUND_CONSUMER_ABSENT, "a consumer is absent", "");
+            store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, writer.nodeId(), asked.encodeRaised(), writer);
+            store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, writer.nodeId(), raised.encodeRaised(), writer);
+            assertEquals(2, ((List<?>) snapshotOf(fixture, credentials).get("operatorRequests")).size());
+
+            assertEquals(400, trashCommand(fixture, credentials, "close-operator-request", Map.of()).statusCode());
+            HttpResponse<String> refused = trashCommand(fixture, credentials, "close-operator-request", Map.of("requestId", raised.id()));
+            assertEquals(409, refused.statusCode(), refused.body());
+            assertTrue(refused.body().contains("OPERATOR_REQUEST_NOT_CLOSED"), refused.body());
+            assertEquals(409, trashCommand(fixture, credentials, "close-operator-request", Map.of("requestId", "opr_unknown")).statusCode());
+
+            HttpResponse<String> closed = trashCommand(fixture, credentials, "close-operator-request", Map.of("requestId", asked.id(), "because", "answered by phone"));
+            assertEquals(200, closed.statusCode(), closed.body());
+            assertEquals("CLOSED", object(closed.body()).get("state"));
+            List<?> open = (List<?>) snapshotOf(fixture, credentials).get("operatorRequests");
+            assertEquals(1, open.size());
+            assertEquals(raised.id(), ((Map<?, ?>) open.getFirst()).get("id"));
+            assertEquals(409, trashCommand(fixture, credentials, "close-operator-request", Map.of("requestId", asked.id())).statusCode(), "a request closes once");
+        }
+    }
+
+    @Test
+    void recheckingTheOperatorRequestsRunsTheOperatorsPassAndSaysWhatIsStillOpen() throws Exception {
+        try (Fixture fixture = new Fixture("operator-recheck", true)) {
+            Map<String, Object> credentials = login(fixture);
+            HttpResponse<String> rechecked = trashCommand(fixture, credentials, "recheck-operator-requests", Map.of());
+            assertEquals(200, rechecked.statusCode(), rechecked.body());
+            Map<String, Object> answer = object(rechecked.body());
+            assertTrue(answer.get("state") instanceof String, rechecked.body());
+            assertEquals(0L, ((Number) answer.get("openRequests")).longValue());
+            assertEquals(403, fixture.client.send(jsonRequest(fixture, "/api/v1/commands/recheck-operator-requests").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) credentials.get("sessionToken"))
+                    .POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString()).statusCode(), "a command needs the page's CSRF token");
+        }
+    }
+
+    /** ADR-0103 stage 3: the owner removes a member from the page by the path of project remove-member, after confirming. */
+    @Test
+    void theOwnerRemovesAMemberFromThePageOnlyAfterConfirmingAndTheMembersListFollows() throws Exception {
+        try (Fixture fixture = new Fixture("member-removal")) {
+            Map<String, Object> credentials = login(fixture);
+            NodeIdentity owner = fixture.location.loadOrCreateIdentity();
+            String member = NodeIdentity.generate().nodeId();
+            ProjectSharing.admit(fixture.location.root(), fixture.coordinationDirectory, new MembershipService(fixture.location.openCoordinationStore(), owner), member, null);
+            @SuppressWarnings("unchecked") Map<String, Object> before = (Map<String, Object>) snapshotOf(fixture, credentials).get("membership");
+            assertEquals(true, before.get("selfIsOwner"));
+            assertEquals(2, ((List<?>) before.get("members")).size());
+
+            HttpResponse<String> unconfirmed = trashCommand(fixture, credentials, "remove-member", Map.of("nodeId", member));
+            assertEquals(400, unconfirmed.statusCode());
+            assertTrue(unconfirmed.body().contains("CONFIRMATION_REQUIRED"), unconfirmed.body());
+            assertEquals(400, trashCommand(fixture, credentials, "remove-member", Map.of("nodeId", "not-a-node", "confirmed", true)).statusCode());
+            HttpResponse<String> itself = trashCommand(fixture, credentials, "remove-member", Map.of("nodeId", owner.nodeId(), "confirmed", true));
+            assertEquals(409, itself.statusCode(), itself.body());
+            assertTrue(itself.body().contains("MEMBER_IS_THIS_COMPUTER"), itself.body());
+            HttpResponse<String> stranger = trashCommand(fixture, credentials, "remove-member", Map.of("nodeId", NodeIdentity.generate().nodeId(), "confirmed", true));
+            assertEquals(409, stranger.statusCode(), stranger.body());
+            assertTrue(stranger.body().contains("NOT_A_MEMBER"), stranger.body());
+            assertEquals(2, ((List<?>) ((Map<?, ?>) snapshotOf(fixture, credentials).get("membership")).get("members")).size(), "a refusal removes nobody");
+
+            HttpResponse<String> removed = trashCommand(fixture, credentials, "remove-member", Map.of("nodeId", member, "confirmed", true));
+            assertEquals(200, removed.statusCode(), removed.body());
+            assertEquals("REMOVED", object(removed.body()).get("state"));
+            List<?> after = (List<?>) ((Map<?, ?>) snapshotOf(fixture, credentials).get("membership")).get("members");
+            assertEquals(1, after.size());
+            assertEquals(owner.nodeId(), ((Map<?, ?>) after.getFirst()).get("nodeId"));
+        }
+    }
+
+    @Test
+    void aComputerThatFollowsAnotherLeaderCannotRemoveAMember() throws Exception {
+        try (Fixture fixture = new Fixture("member-follower")) {
+            Map<String, Object> credentials = login(fixture);
+            String leader = NodeIdentity.generate().nodeId();
+            new ReplicationSettings(leader, Set.of()).write(fixture.coordinationDirectory);
+
+            HttpResponse<String> refused = trashCommand(fixture, credentials, "remove-member", Map.of("nodeId", NodeIdentity.generate().nodeId(), "confirmed", true));
+
+            assertEquals(409, refused.statusCode(), refused.body());
+            assertTrue(refused.body().contains("ALREADY_A_MEMBER"), refused.body());
         }
     }
 
@@ -577,6 +675,7 @@ class ControlPlaneHttpHandlerTest {
         private final UUID projectId;
         private final Path coordinationDirectory;
         private final URI baseUri;
+        private final ProjectLocation location;
         private UUID seededGroupId;
         private UUID seededIntentId;
         private boolean closed;
@@ -603,7 +702,7 @@ class ControlPlaneHttpHandlerTest {
             Path profile = synesis.resolve("local/profile");
             Files.createDirectories(profile);
             projectId = sharedProjectId;
-            ProjectLocation location = new ProjectLocation(root, synesis, root.resolve("project.json"), profile, projectId, sharedCreatedAt);
+            location = new ProjectLocation(root, synesis, root.resolve("project.json"), profile, projectId, sharedCreatedAt);
             Path coordinationRoot = location.coordinationDirectory();
             coordinationDirectory = coordinationRoot;
             NodeIdentity signer = NodeIdentity.generate();

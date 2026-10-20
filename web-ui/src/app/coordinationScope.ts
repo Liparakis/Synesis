@@ -10,9 +10,10 @@ export interface WorkGroupRecords {
 }
 
 /**
- * Narrows the snapshot to one WorkGroup. Only claims name their WorkGroup; a task, ownership or dispute reaches one
- * through its task id, which an agent's current work or a trash entry pairs with a WorkGroup. A task the snapshot
- * pairs with no WorkGroup is shown under every group rather than hidden.
+ * Narrows the snapshot to one WorkGroup. A claim names its WorkGroup, and so does a task, ownership or dispute whose
+ * WorkGroup the snapshot knows exactly. An older snapshot, or a record with none known, reaches one through its task id,
+ * which an agent's current work or a trash entry pairs with a WorkGroup; a task paired with none is shown under every
+ * group rather than hidden.
  */
 export function recordsOfWorkGroup(snapshot: Snapshot, workGroupId: string): WorkGroupRecords {
   const groupsOfTask = new Map<string, Set<string>>();
@@ -23,16 +24,18 @@ export function recordsOfWorkGroup(snapshot: Snapshot, workGroupId: string): Wor
   };
   for (const agent of snapshot.agents ?? []) link(agent.currentWork?.taskId, agent.currentWork?.workGroupId);
   for (const item of snapshot.trash ?? []) link(item.taskId, item.workGroupId);
-  const shown = (taskId: string | undefined) => {
+  // The snapshot names a record's WorkGroup when it knows exactly one; only a record without it is placed by its task.
+  const shown = (taskId: string | undefined, ownGroup: string | null | undefined) => {
+    if (ownGroup) return ownGroup === workGroupId;
     const groups = taskId === undefined ? undefined : groupsOfTask.get(taskId);
     return !groups || groups.has(workGroupId);
   };
   return {
     claims: snapshot.claims.filter((claim) => claim.workGroupId === workGroupId),
-    tasks: snapshot.tasks.filter((task) => shown(task.id)),
+    tasks: snapshot.tasks.filter((task) => shown(task.id, task.workGroupId)),
     capabilities: snapshot.capabilities,
-    ownerships: snapshot.ownerships.filter((ownership) => shown(ownership.taskId)),
-    disputes: snapshot.disputes.filter((dispute) => shown(dispute.taskId)),
+    ownerships: snapshot.ownerships.filter((ownership) => shown(ownership.taskId, ownership.workGroupId)),
+    disputes: snapshot.disputes.filter((dispute) => shown(dispute.taskId, dispute.workGroupId)),
   };
 }
 

@@ -4,17 +4,21 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.synesis.coordination.application.MembershipService;
+import org.synesis.coordination.application.SharedSettingsMigration;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.coordination.persistence.ReplicationPeers;
 import org.synesis.coordination.persistence.ReplicationSettings;
+import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.protocol.ProjectInvitation;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.project.ProjectIdentity;
@@ -163,6 +167,44 @@ public final class ProjectSharing {
             if (found.isEmpty() || !found.get().equals(wanted)) {
                 wanted.write(coordination);
             }
+        }
+    }
+
+    /**
+     * Removes a member by an entry of this computer's log, the work {@code project remove-member} does: the member can no
+     * longer propose or pull, its entries stay on the log, and it is dropped from {@code replication.peers}, which a
+     * restarted server would otherwise dial or admit it from. Only the owner's computer may write the entry; the log
+     * refuses it on any other, so this check is never the only one.
+     *
+     * @param location     the project
+     * @param coordination the project's coordination folder
+     * @param nodeId       the member to remove
+     * @throws Refusal {@code INVALID_NODE_ID}, {@code NOT_A_LEADER}, {@code ALREADY_A_MEMBER} on a computer that follows
+     *                 another, {@code MEMBER_IS_THIS_COMPUTER} or {@code NOT_A_MEMBER}
+     * @throws IOException              when the log refuses the entry (a {@link CoordinationException} with its code) or cannot be written
+     * @throws GeneralSecurityException when the entry cannot be signed
+     */
+    public static void removeMember(ProjectLocation location, Path coordination, String nodeId) throws Refusal, IOException, GeneralSecurityException {
+        if (!NodeIdentity.isNodeId(nodeId)) {
+            throw new Refusal("INVALID_NODE_ID");
+        }
+        ReplicationSettings role = read(coordination).orElseThrow(() -> new Refusal("NOT_A_LEADER"));
+        if (role.isMember()) {
+            throw new Refusal("ALREADY_A_MEMBER");
+        }
+        NodeIdentity identity = location.loadOrCreateIdentity();
+        if (nodeId.equals(identity.nodeId())) {
+            throw new Refusal("MEMBER_IS_THIS_COMPUTER");
+        }
+        PredictionEventStore store = location.openCoordinationStore();
+        SharedSettingsMigration.migrate(coordination, store, identity);
+        MembershipService membership = new MembershipService(store, identity);
+        if (!membership.isMember(nodeId)) {
+            throw new Refusal("NOT_A_MEMBER");
+        }
+        membership.remove(nodeId);
+        if (!location.openCoordinationStore().membershipProjection().members().contains(nodeId)) {
+            ReplicationPeers.forget(coordination, nodeId);
         }
     }
 

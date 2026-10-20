@@ -365,6 +365,15 @@ public final class CoordinationService {
     }
 
     /**
+     * Returns who belongs to the project, as the membership entries say (ADR-0098 step 6).
+     *
+     * @return membership projection
+     */
+    public org.synesis.coordination.domain.membership.MembershipProjection membershipProjection() {
+        return fresh().membershipProjection();
+    }
+
+    /**
      * Returns the current durable projection of task snapshots and their reviews.
      *
      * @return task completion projection
