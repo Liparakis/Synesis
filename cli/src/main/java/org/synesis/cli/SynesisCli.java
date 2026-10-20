@@ -125,8 +125,8 @@ public final class SynesisCli {
     private static Map<String, List<String>> commandGroups() {
         Map<String, List<String>> groups = new LinkedHashMap<>();
         groups.put("Set up", List.of("init", "provider", "doctor", "ui", "version", "help"));
-        groups.put("Work with another person", List.of("host", "join", "sync", "identity"));
-        groups.put("Coordinate work", List.of("agents", "collaboration", "task", "ownership", "constraint", "events", "coordination", "log"));
+        groups.put("Work with another person", List.of("link", "host", "join", "sync", "identity"));
+        groups.put("Coordinate work", List.of("agents", "collaboration", "task", "ownership", "constraint", "events", "coordination", "log", "conversations"));
         groups.put("Maintain a project", List.of("operator", "trash", "cleanup", "reconcile", "repair", "migrate", "project"));
         return groups;
     }
@@ -139,6 +139,22 @@ public final class SynesisCli {
      * @return stable process exit code
      */
     public static int execute(String[] arguments, CliRuntime runtime) {
+        CommandLine command = commandTree(runtime);
+        try {
+            return command.execute(arguments);
+        } catch (RuntimeException failure) {
+            return FailureMapper.internal(runtime.terminal());
+        }
+    }
+
+    /**
+     * Builds every command of the CLI. It is the one list of commands, so the help and the generated command reference
+     * cannot disagree with what runs.
+     *
+     * @param runtime manually composed runtime
+     * @return the root command with its subcommands and handlers
+     */
+    static CommandLine commandTree(CliRuntime runtime) {
         CommandLine command = new CommandLine(new RootCommand());
         command.addSubcommand("host", new HostCommand(runtime));
         command.addSubcommand("join", new JoinCommand(runtime));
@@ -242,11 +258,7 @@ public final class SynesisCli {
         command.getSubcommands().get("hook").addSubcommand("codex", new HookCodexCommand(runtime));
         groupRootCommands(command);
         configureHandlers(command, runtime);
-        try {
-            return command.execute(arguments);
-        } catch (RuntimeException failure) {
-            return FailureMapper.internal(runtime.terminal());
-        }
+        return command;
     }
 
     /**

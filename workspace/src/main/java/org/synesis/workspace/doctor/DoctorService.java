@@ -10,11 +10,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import org.synesis.coordination.persistence.PredictionEventStore;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.infrastructure.process.ProcessInspector;
@@ -60,7 +62,7 @@ public final class DoctorService {
             facts(DoctorFindingCode.HEALTHY, DoctorSeverity.INFO, DoctorConfidence.CONFIRMED, "System and repository healthy", "All checked components operate within expected parameters.", "project", false,
                     DoctorRecommendation.NO_ACTION),
             facts(DoctorFindingCode.MISSING_INSTALLED_LAUNCHER, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED, "Missing installed launcher",
-                    "Installed Synesis bin directory does not contain expected launcher script.", "installation", false, DoctorRecommendation.REINSTALL_SYNESIS),
+                    "The installer's Synesis bin directory exists but holds no launcher.", "installation", false, DoctorRecommendation.REINSTALL_SYNESIS),
             facts(DoctorFindingCode.PROJECT_NOT_INITIALIZED, DoctorSeverity.ERROR, DoctorConfidence.CONFIRMED, "Project not initialized", "Directory is missing .synesis/project.json configuration.", "project", false,
                     DoctorRecommendation.HUMAN_REVIEW_REQUIRED),
             facts(DoctorFindingCode.PROJECT_SCHEMA_UNSUPPORTED, DoctorSeverity.ERROR, DoctorConfidence.CONFIRMED, "Project schema unsupported", "Project metadata uses a schema this Synesis build cannot migrate.",
@@ -126,6 +128,7 @@ public final class DoctorService {
     private final SessionLeaseService leaseService;
     private final SessionLeaseStore leaseStore;
     private final ProcessInspector processInspector;
+    private final Supplier<Path> launcherLocation;
 
     /**
      * Creates a doctor service with default dependencies.
@@ -150,6 +153,17 @@ public final class DoctorService {
             SessionLeaseService leaseService,
             SessionLeaseStore leaseStore,
             ProcessInspector processInspector) {
+        this(projectService, inventoryService, eligibilityService, leaseService, leaseStore, processInspector, new ProviderApplicationService()::launcherPath);
+    }
+
+    DoctorService(ProjectApplicationService projectService,
+            LifecycleInventoryService inventoryService,
+            CleanupEligibilityService eligibilityService,
+            SessionLeaseService leaseService,
+            SessionLeaseStore leaseStore,
+            ProcessInspector processInspector,
+            Supplier<Path> launcherLocation) {
+        this.launcherLocation = Objects.requireNonNull(launcherLocation, "launcherLocation");
         this.projectService = Objects.requireNonNull(projectService, "projectService");
         this.inventoryService = Objects.requireNonNull(inventoryService, "inventoryService");
         this.eligibilityService = Objects.requireNonNull(eligibilityService, "eligibilityService");
@@ -237,19 +251,16 @@ public final class DoctorService {
         return new DoctorReport(1, reportId, projectIdStr != null ? projectIdStr : "unbound", now, status, critical, errors, warnings, info, cleanupRec, reconcRec, repairAvail, Collections.unmodifiableList(findings));
     }
 
+    /**
+     * Reports an installation whose launcher is gone. The launcher is looked for where provider hooks run it from
+     * (the {@code PATH}, a configured one, then the installer's own {@code Synesis/bin}); when none exists the answer is
+     * a path inside the installer's directory, and only an existing directory there means an installation that lost
+     * its launcher, so a machine with no installation is not reported.
+     */
     private void checkInstallationAndRuntime(List<DoctorFinding> findings) {
-        String userHome = System.getProperty("user.home");
-        if (userHome != null) {
-            Path synesisBin = Path.of(userHome, ".synesis", "bin");
-            if (Files.isDirectory(synesisBin)) {
-                Path launcherFile = synesisBin.resolve("synesis.bat");
-                if (!Files.exists(launcherFile)) {
-                    launcherFile = synesisBin.resolve("synesis");
-                }
-                if (!Files.exists(launcherFile)) {
-                    findings.add(finding(DoctorFindingCode.MISSING_INSTALLED_LAUNCHER, "missing_launcher"));
-                }
-            }
+        Path launcher = launcherLocation.get();
+        if (!Files.isRegularFile(launcher) && launcher.getParent() != null && Files.isDirectory(launcher.getParent())) {
+            findings.add(finding(DoctorFindingCode.MISSING_INSTALLED_LAUNCHER, "missing_launcher"));
         }
     }
 

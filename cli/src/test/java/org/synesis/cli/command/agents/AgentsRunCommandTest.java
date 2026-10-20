@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.daemon.ProjectRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
@@ -134,11 +135,38 @@ final class AgentsRunCommandTest {
         assertFalse(AgentsRunCommand.ensureRuntime(location(), unavailable(), terminal), output());
     }
 
+    @Test
+    void aRunWithoutATaskIsRefusedNamingTheFixAndStartsNoAgent() throws Exception {
+        Path emptyFile = Files.writeString(tmp.resolve("empty.txt"), "  \n");
+        CliRuntime cli = new CliRuntime(new Onboarding(tmp.resolve("profile"), new StatusRenderer(terminal)), terminal);
+        for (List<String> task : List.of(List.<String>of(), List.of("--prompt", " "), List.of("--prompt-file", emptyFile.toString()))) {
+            List<String> arguments = new ArrayList<>(List.of("--project", root.toString(), "--agent", "codex"));
+            arguments.addAll(task);
+
+            int exit = new CommandLine(new AgentsRunCommand(cli, unavailable())).execute(arguments.toArray(String[]::new));
+
+            assertEquals(ExitCodes.USAGE, exit, output());
+        }
+        assertEquals(List.of("ERROR=agents run needs a task; pass --prompt \"<task>\" or --prompt-file <file>"), stderr().stream().distinct().toList(), output());
+        assertEquals(List.of(), ensured, "no runtime was asked for, so no agent could start");
+        assertEquals(List.of(), stdout(), "no agent log directory or run result was printed");
+    }
+
+    @Test
+    void aPromptAndAPromptFileTogetherAreRefused() throws Exception {
+        CliRuntime cli = new CliRuntime(new Onboarding(tmp.resolve("profile"), new StatusRenderer(terminal)), terminal);
+
+        int exit = new CommandLine(new AgentsRunCommand(cli, unavailable())).execute("--project", root.toString(), "--agent", "codex", "--prompt", "work", "--prompt-file", tmp.resolve("p.txt").toString());
+
+        assertEquals(ExitCodes.USAGE, exit, output());
+        assertEquals(List.of("ERROR=give only one of --prompt and --prompt-file"), stderr(), output());
+    }
+
     private void share() throws IOException {
         ReplicationSettings.leader(Set.of("member-node")).write(Files.createDirectories(root.resolve(".synesis/coordination")));
     }
 
-    private AgentsRunCommand.ProjectRuntime unavailable() {
+    private ProjectRuntime unavailable() {
         return project -> {
             ensured.add(project);
             throw new IOException("daemon_not_ready");

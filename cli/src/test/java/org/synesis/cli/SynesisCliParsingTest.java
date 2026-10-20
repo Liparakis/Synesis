@@ -9,6 +9,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.Callable;
 import org.junit.jupiter.api.Test;
 import org.synesis.cli.bootstrap.CliRuntime;
@@ -61,6 +62,25 @@ final class SynesisCliParsingTest {
         }
         assertFalse(help.contains("coordination-demo"));
         assertEquals(2, SynesisCli.execute(new String[]{"coordination-demo"}, invocation().runtime()));
+    }
+
+    @Test
+    void linkAndConversationsAreListedUnderTheirHelpGroups() throws Exception {
+        Invocation invocation = invocation();
+        assertEquals(0, SynesisCli.execute(new String[0], invocation.runtime()));
+        assertTrue(commandsUnder(invocation.stdout(), "Work with another person").contains("link"), invocation.stdout());
+        assertTrue(commandsUnder(invocation.stdout(), "Coordinate work").contains("conversations"), invocation.stdout());
+        assertFalse(commandsUnder(invocation.stdout(), "Other commands").contains("link"), invocation.stdout());
+        assertFalse(commandsUnder(invocation.stdout(), "Other commands").contains("conversations"), invocation.stdout());
+    }
+
+    private static List<String> commandsUnder(String help, String heading) {
+        List<String> lines = help.lines().toList();
+        int start = lines.indexOf(heading + ":");
+        if (start < 0) {
+            return List.of();
+        }
+        return lines.stream().skip(start + 1).takeWhile(line -> !line.isBlank()).map(line -> line.strip().split("\\s+")[0]).toList();
     }
 
     @Test

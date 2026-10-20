@@ -4,7 +4,6 @@ import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.ProjectOptions;
-import org.synesis.cli.exit.ExitCodes;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -42,8 +41,7 @@ public final class ProviderStatusCommand implements Callable<Integer> {
             result.values().forEach((key, value) -> runtime.terminal().stdout(key + "=" + value));
             return result.exitCode();
         } catch (Exception failure) {
-            runtime.terminal().stderr("ERROR=PROJECT_NOT_CONFIGURED");
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return ProjectOptions.refuse(runtime, failure);
         }
     }
 }

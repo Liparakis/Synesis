@@ -357,6 +357,30 @@ and maintainability decide when a stage is done, by its completion criteria belo
   coordination view's empty state says a WorkGroup appears when an agent announces work, gives `synesis agents run
   --agent claude --prompt "..."`, and offers "Open agents". Tests: `web-ui/src/app/App.test.tsx`, "the coordination
   view" (4 tests); `:web-ui:check` green on the Linux gate. Other stage 1 items are not part of this entry.
+- **Built 2026-10-20 (CLI and workspace items; source semantics proven on the whole Linux gate, `check`: cli 265 tests
+  and workspace 1080, 0 failures, plus `repositoryHygieneCheck`; not yet the Windows gate or a real run).** New tests:
+  `ProviderRefusalCausesTest` 5, `McpCommandTest` 4, `CommandReferenceTest` 2, `AgentsRunCommandTest` +2,
+  `SynesisCliParsingTest` +1, `DoctorServiceTest` +3.
+  1. `provider install|status|list|uninstall` no longer print `PROJECT_NOT_CONFIGURED` for every failure
+     (`ProjectOptions.refuse`): a directory that is not an initialized project keeps it; a nonexistent directory prints
+     `ERROR=PROJECT_INVALID`, unreadable metadata `ERROR=MALFORMED`, any other failure `ERROR=PROJECT_ACCESS_FAILED`,
+     each with a `REASON=` line, exit 10 as before. The causes the provider service already named (`UNKNOWN_PROVIDER`,
+     `LAUNCHER_MISSING`) are pinned by a test. `agents run` uses the same report for its own project lookup, so an
+     unreadable `--prompt-file` is no longer reported as a missing project either.
+  2. `doctor` finds the launcher where provider hooks run it from (PATH, configured, the installer's `Synesis/bin`) and
+     reports `installed_launcher_missing` only when that directory exists without one; it used to look in
+     `~/.synesis/bin`, which the installer never writes.
+  3. `link` is listed under "Work with another person" and `conversations` under "Coordinate work".
+  4. The command list of `docs/cli/command-reference.md` is generated from the picocli tree
+     (`CommandReferenceTest`, which fails on drift and rewrites the block with
+     `SYNESIS_REGENERATE_COMMAND_REFERENCE=1`); the prose around it stays hand-written.
+  5. `synesis mcp` asks the daemon (`ProjectRuntime.DAEMON`, now shared with `agents run`) for the project's runtime on a
+     background thread, only for a project shared with another computer, so a single-computer session starts nothing
+     and no session waits for the daemon. Nothing is written to standard output. The start-time measurement before and
+     after is still to be made.
+  6. `agents run` without a task, or with a blank one, prints
+     `ERROR=agents run needs a task; pass --prompt "<task>" or --prompt-file <file>`, exit 2, and starts no agent; a
+     blank `--prompt` used to start agents.
 
 ### Stage 2 — discovery and visibility (additive contract changes; preliminary: two to three days)
 

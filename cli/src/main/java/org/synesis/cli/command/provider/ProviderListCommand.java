@@ -44,8 +44,7 @@ public final class ProviderListCommand implements Callable<Integer> {
             }
             return ExitCodes.OK;
         } catch (Exception failure) {
-            runtime.terminal().stderr("ERROR=PROJECT_NOT_CONFIGURED");
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return ProjectOptions.refuse(runtime, failure);
         }
     }
 }

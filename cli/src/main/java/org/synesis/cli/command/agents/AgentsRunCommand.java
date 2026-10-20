@@ -12,7 +12,7 @@ import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.ProjectOptions;
-import org.synesis.cli.daemon.DaemonClient;
+import org.synesis.cli.daemon.ProjectRuntime;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.terminal.Terminal;
 
@@ -67,27 +67,12 @@ public final class AgentsRunCommand implements Callable<Integer> {
      * @param runtime composed CLI runtime
      */
     public AgentsRunCommand(CliRuntime runtime) {
-        this(runtime, project -> DaemonClient.request("PROJECT_RUNTIME", project, null, false));
+        this(runtime, ProjectRuntime.DAEMON);
     }
 
     AgentsRunCommand(CliRuntime runtime, ProjectRuntime projectRuntime) {
         this.runtime = runtime;
         this.projectRuntime = projectRuntime;
-    }
-
-    /**
-     * The project's runtime, the coordination server that holds its Link sessions, as the installation daemon owns it.
-     */
-    @FunctionalInterface
-    interface ProjectRuntime {
-
-        /**
-         * Returns once the runtime runs, starting the daemon and the runtime when they do not.
-         *
-         * @param project project directory
-         * @throws IOException when the daemon or the runtime cannot be started
-         */
-        void ensure(Path project) throws IOException;
     }
 
     /**
@@ -151,11 +136,15 @@ public final class AgentsRunCommand implements Callable<Integer> {
         List<AgentRunController.AgentSpec> specifications = new ArrayList<>();
         String startPrompt;
         try {
-            location = ProjectOptions.locate(runtime, project);
-            if ((prompt == null) == (promptFile == null)) {
-                throw new IllegalArgumentException("give exactly one of --prompt and --prompt-file");
+            if (prompt != null && promptFile != null) {
+                throw new IllegalArgumentException("give only one of --prompt and --prompt-file");
             }
-            startPrompt = prompt != null ? prompt : Files.readString(promptFile, StandardCharsets.UTF_8);
+            location = ProjectOptions.locate(runtime, project);
+            startPrompt = prompt != null ? prompt : promptFile == null ? "" : Files.readString(promptFile, StandardCharsets.UTF_8);
+            if (startPrompt.isBlank()) {
+                // Synesis never invents the task: an empty one would start agents with nothing they may do.
+                throw new IllegalArgumentException("agents run needs a task; pass --prompt \"<task>\" or --prompt-file <file>");
+            }
             for (String specification : agents) {
                 AgentRunController.AgentSpec agent = parseAgent(specification);
                 boolean installed = runtime.providerService().list(location).stream().anyMatch(row -> row.id().equals(agent.provider()) && "INSTALLED".equals(row.status()));
@@ -171,8 +160,7 @@ public final class AgentsRunCommand implements Callable<Integer> {
             runtime.terminal().stderr("ERROR=" + invalid.getMessage());
             return ExitCodes.USAGE;
         } catch (Exception failure) {
-            runtime.terminal().stderr("ERROR=PROJECT_NOT_CONFIGURED");
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return ProjectOptions.refuse(runtime, failure);
         }
         if (!ensureRuntime(location, projectRuntime, runtime.terminal())) {
             return ExitCodes.LOCAL_CONFIGURATION;

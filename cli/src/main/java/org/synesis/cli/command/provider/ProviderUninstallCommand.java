@@ -53,8 +53,7 @@ public final class ProviderUninstallCommand implements Callable<Integer> {
             result.values().forEach((key, value) -> runtime.terminal().stdout(key + "=" + value));
             return result.exitCode();
         } catch (Exception failure) {
-            runtime.terminal().stderr("ERROR=PROJECT_NOT_CONFIGURED");
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return ProjectOptions.refuse(runtime, failure);
         }
     }
 }

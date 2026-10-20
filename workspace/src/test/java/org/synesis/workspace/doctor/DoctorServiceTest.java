@@ -3,6 +3,7 @@ package org.synesis.workspace.doctor;
 import org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -14,6 +15,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.infrastructure.process.ProcessInspector;
+import org.synesis.workspace.lifecycle.cleanup.inventory.LifecycleInventoryService;
+import org.synesis.workspace.lifecycle.cleanup.plan.CleanupEligibilityService;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
 
 /**
  * Exercises workspace doctor diagnostics and failure classification.
@@ -96,6 +102,42 @@ public class DoctorServiceTest {
     assertTrue(report.findings()
         .stream()
         .anyMatch(f -> f.code() == DoctorFindingCode.STALE_CLEANUP_EXECUTION_LOCK));
+  }
+
+  @Test
+  public void testDoctorReportsAnInstallerDirectoryThatLostItsLauncher(@TempDir Path tempDir)
+      throws Exception {
+    Path bin = Files.createDirectories(tempDir.resolve("installer/Synesis/bin"));
+
+    assertTrue(launcherFindings(tempDir, bin.resolve("synesis")),
+        "the installer's directory exists and holds no launcher");
+  }
+
+  @Test
+  public void testDoctorAcceptsTheLauncherWhereTheInstallerPutsIt(@TempDir Path tempDir)
+      throws Exception {
+    Path bin = Files.createDirectories(tempDir.resolve("installer/Synesis/bin"));
+    Path launcher = Files.writeString(bin.resolve("synesis"), "#!/bin/sh\n");
+
+    assertFalse(launcherFindings(tempDir, launcher));
+  }
+
+  @Test
+  public void testDoctorDoesNotReportAMachineWithoutAnInstallation(@TempDir Path tempDir)
+      throws Exception {
+    assertFalse(launcherFindings(tempDir, tempDir.resolve("installer/Synesis/bin/synesis")));
+  }
+
+  private static boolean launcherFindings(Path project, Path launcher) throws Exception {
+    new ProjectApplicationService().init(project);
+    DoctorService doctor = new DoctorService(new ProjectApplicationService(),
+        new LifecycleInventoryService(),
+        new CleanupEligibilityService(),
+        new SessionLeaseService(),
+        new SessionLeaseStore(),
+        ProcessInspector.system(), () -> launcher);
+    return doctor.diagnose(project).findings().stream()
+        .anyMatch(f -> f.code() == DoctorFindingCode.MISSING_INSTALLED_LAUNCHER);
   }
 
   private long countFiles(Path dir) throws IOException {
