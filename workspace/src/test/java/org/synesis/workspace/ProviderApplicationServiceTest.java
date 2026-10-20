@@ -368,8 +368,13 @@ final class ProviderApplicationServiceTest {
         }
     }
 
+    /**
+     * ADR-0103 decision 9: Synesis writes no rule file for Claude Code. An earlier version's file is
+     * removed only when it carries Synesis's marker; a file the user wrote there is theirs.
+     * (Behaviour change: the previous test required the install to write {@code .claude/rules/synesis.md}.)
+     */
     @Test
-    void claudeInstallPointsClaudeCodeAtTheSynesisRulesAndUninstallRemovesOnlyItsOwnFile() throws Exception {
+    void claudeInstallWritesNoRuleFileAndRemovesOnlyAnEarlierVersionsOwnFile() throws Exception {
         Path root = Files.createTempDirectory("claude-instructions-test-");
         Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
         String previous = System.getProperty("synesis.launcher");
@@ -379,27 +384,18 @@ final class ProviderApplicationServiceTest {
             ProviderApplicationService service = new ProviderApplicationService();
             Path rule = root.resolve(".claude/rules/synesis.md");
 
-            var installed = service.install(location, "claude");
-            assertEquals("INSTALLED", installed.values().get("PROJECT_INSTRUCTIONS"));
-            String content = Files.readString(rule);
-            assertTrue(content.startsWith(ProviderIntegration.ProjectInstructions.OWNERSHIP_MARKER), content);
-            // Claude Code resolves the import relative to the rule file, two levels below the root.
-            assertTrue(content.lines().anyMatch("@../../AGENTS.md"::equals), content);
-            assertTrue(Files.isRegularFile(rule.getParent().resolve("../../AGENTS.md").normalize()), "the import must land on the managed rules");
-
-            assertEquals("UNCHANGED", service.install(location, "claude").values().get("PROJECT_INSTRUCTIONS"));
-            Files.writeString(rule, ProviderIntegration.ProjectInstructions.OWNERSHIP_MARKER + "\nstale wording\n");
-            assertEquals("INSTALLED", service.install(location, "claude").values().get("PROJECT_INSTRUCTIONS"));
-            assertEquals(content, Files.readString(rule));
-
-            assertEquals("SUCCESS", service.uninstall(location, "claude").values().get("PROVIDER_UNINSTALL_RESULT"));
+            assertEquals("ABSENT", service.install(location, "claude").values().get("PROJECT_INSTRUCTIONS"));
             assertFalse(Files.exists(rule));
 
-            // A file the user wrote at the same path is theirs: neither replaced nor removed.
+            Files.createDirectories(rule.getParent());
+            Files.writeString(rule, ProviderIntegration.RETIRED_INSTRUCTIONS_MARKER + "\n# Synesis\n\n@../../AGENTS.md\n");
+            assertEquals("REMOVED", service.install(location, "claude").values().get("PROJECT_INSTRUCTIONS"));
+            assertFalse(Files.exists(rule));
+
             Files.writeString(rule, "# My own rules\n");
             assertEquals("CONFLICT", service.install(location, "claude").values().get("PROJECT_INSTRUCTIONS"));
             assertEquals("# My own rules\n", Files.readString(rule));
-            service.uninstall(location, "claude");
+            assertEquals("SUCCESS", service.uninstall(location, "claude").values().get("PROVIDER_UNINSTALL_RESULT"));
             assertEquals("# My own rules\n", Files.readString(rule));
         } finally {
             restoreProperty("synesis.launcher", previous);
@@ -407,7 +403,7 @@ final class ProviderApplicationServiceTest {
     }
 
     @Test
-    void codexInstallWritesNoInstructionFileBecauseCodexReadsAgentsItself() throws Exception {
+    void codexHasNoRetiredInstructionFile() throws Exception {
         Path root = Files.createTempDirectory("codex-instructions-test-");
         Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
         String previous = System.getProperty("synesis.launcher");

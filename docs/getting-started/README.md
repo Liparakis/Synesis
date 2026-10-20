@@ -14,20 +14,31 @@ Use Java 25 and the Gradle Wrapper:
 
 For the full verification matrix, see [build and test](../development/build-and-test.md).
 
-## Initialize a project
+## Initialize a project and connect an agent
 
-From the project root, run:
+From the project root (a Git repository), run:
 
 ```powershell
 synesis init
+synesis provider install claude   # or: synesis provider install codex
 synesis doctor
-synesis provider list
 ```
 
 Initialization creates shareable metadata in `.synesis/project.json` and keeps
 identity, provider, and runtime state under `.synesis/local/`. Add that local
-directory to `.gitignore`. Initialization also adds one replaceable Synesis
-section to `AGENTS.md`; user-authored text is preserved.
+directory to `.gitignore`. `init` prints the next steps: connect an agent
+(`synesis provider install`), start it in the project folder (`claude` or
+`codex`) and tell it what to do, and look at what is happening (`synesis ui`,
+or `synesis coordination status`; what needs you: `synesis operator list`).
+
+Synesis writes no instruction file into the project. The agent's instructions
+are the installed `synesis-provider-manual` skill, which `provider install`
+puts in `~/.claude/skills` or `~/.codex/skills`, and the Synesis MCP server
+points the agent at it when it connects. A project initialized by an earlier
+version loses only the `AGENTS.md` section and the rule file Synesis wrote
+(your own text and files stay) the next time `synesis init` runs. To add a
+second computer, see `synesis link invite` and `synesis link join`
+([ADR-0098](../adr/0098-one-project-across-many-computers.md)).
 
 `.synesis/` is the canonical Synesis bookkeeping boundary. Windows marks the
 directory Hidden by default, while Unix-like systems rely on the leading dot.

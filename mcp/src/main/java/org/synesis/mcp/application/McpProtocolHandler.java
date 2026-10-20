@@ -80,6 +80,13 @@ public final class McpProtocolHandler {
      */
     private static final String SERVER_VERSION = "0.1.0-SNAPSHOT";
     /**
+     * Instructions every connected agent sees in the {@code initialize} result. The rules themselves
+     * live in the installed manual skill, the one place for them (ADR-0103 decision 9); this only points
+     * there, so the wording of a rule is never kept in two places.
+     */
+    private static final String INSTRUCTIONS = "This project is coordinated through Synesis. Follow the `" + ProviderManualService.MANUAL_NAME
+            + "` skill, which `synesis provider install` puts in your harness's skills, before reading, changing, or running anything here: use these Synesis tools for project reads, file changes, and commands, and call `get_next_action` to learn what to do next.";
+    /**
      * Prefix the unknown-tool error puts before the raw name; the wire contract advertises raw tool names only.
      */
     private static final String UNKNOWN_TOOL_PREFIX = "synesis.";
@@ -511,6 +518,7 @@ public final class McpProtocolHandler {
         result.put("protocolVersion", negotiateProtocolVersion(params));
         result.put("capabilities", capabilities);
         result.put("serverInfo", serverInfo);
+        result.put("instructions", INSTRUCTIONS);
 
         return createResultResponse(id, result);
     }

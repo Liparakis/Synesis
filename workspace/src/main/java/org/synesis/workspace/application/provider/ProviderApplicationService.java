@@ -1,8 +1,10 @@
 package org.synesis.workspace.application.provider;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,8 +31,7 @@ import static org.synesis.workspace.application.provider.ProviderHookConfigurati
 import static org.synesis.workspace.application.provider.ProviderHookConfiguration.materializeHook;
 import static org.synesis.workspace.application.provider.ProviderHookConfiguration.mergeManagedHooks;
 import static org.synesis.workspace.application.provider.ProviderHookConfiguration.removeManagedHooks;
-import static org.synesis.workspace.application.provider.ProviderProjectInstructions.ensureProjectInstructions;
-import static org.synesis.workspace.application.provider.ProviderProjectInstructions.removeProjectInstructions;
+import static org.synesis.workspace.application.provider.ProviderProjectInstructions.retire;
 import static org.synesis.workspace.application.provider.ProviderResults.decorate;
 import static org.synesis.workspace.application.provider.ProviderResults.failure;
 import static org.synesis.workspace.application.provider.ProviderResults.result;
@@ -128,7 +129,7 @@ public final class ProviderApplicationService {
             }
             Path mcpLauncher = mcpLauncherPath();
             String mcpStatus = ensureMcpConfig(location, provider, mcpLauncher);
-            String instructionsStatus = ensureProjectInstructions(location, provider);
+            String instructionsStatus = retire(location.root(), provider);
             McpHealth health = probeMcp(mcpLauncher, provider.id(), location.root());
             ProviderIntegration.SyntheticCheck synthetic = syntheticCheck(provider);
             ProviderMetadata installed = new ProviderMetadata(provider.id(), provider.supportLevel().name(), Instant.now().toString(), config.toAbsolutePath().normalize().toString(),
@@ -268,6 +269,26 @@ public final class ProviderApplicationService {
     }
 
     /**
+     * Removes, for every provider, the project instruction file an earlier Synesis wrote and that is
+     * still Synesis's own (ADR-0103 decision 9). Project initialization calls it so a project
+     * initialized before the change loses the file without a provider install.
+     *
+     * @param projectRoot project root
+     * @return the removed files, relative to the project root with {@code /} separators
+     * @throws IOException when a Synesis-owned file cannot be read or deleted
+     */
+    public List<String> retireProjectInstructions(Path projectRoot) throws IOException {
+        List<String> removed = new ArrayList<>();
+        Path root = projectRoot.toAbsolutePath().normalize();
+        for (ProviderIntegration provider : ProviderRegistry.providers()) {
+            if ("REMOVED".equals(retire(root, provider))) {
+                removed.add(root.relativize(provider.retiredProjectInstructions(root).orElseThrow()).toString().replace('\\', '/'));
+            }
+        }
+        return removed;
+    }
+
+    /**
      * Uninstalls only the managed hook and local provider metadata.
      *
      * @param location project location
@@ -289,7 +310,7 @@ public final class ProviderApplicationService {
             if (!provider.usesGlobalMcpConfiguration()) {
                 removeMcpConfig(location, provider);
             }
-            removeProjectInstructions(location, provider);
+            retire(location.root(), provider);
             Files.deleteIfExists(metadata);
             try {
                 new ProviderSessionBindingService().revoke(location, provider.id());

@@ -34,6 +34,22 @@ public final class InitCommand implements Callable<Integer> {
     }
 
     /**
+     * What a newcomer does after the project exists: connect an agent, start it, look at what happens. The
+     * agent finds its instructions in the installed {@code synesis-provider-manual} skill, so none is written
+     * into the project (ADR-0103 decision 9). Printed on a re-run too, because running {@code init} again is
+     * how one learns the way back to connecting an agent.
+     */
+    private void printNextSteps(ProjectInitResult result) {
+        if (result.retiredInstructions().contains("AGENTS.md")) {
+            runtime.terminal().stdout("NEXT_STEP=Commit the change to AGENTS.md if Git tracks it: Synesis removed its old section from your file and kept your text");
+        }
+        runtime.terminal().stdout("NEXT_COMMAND=synesis provider install claude");
+        runtime.terminal().stdout("NEXT_STEP=Connect an agent to this project: synesis provider install claude (or: synesis provider install codex)");
+        runtime.terminal().stdout("NEXT_STEP=Start the agent in this folder (claude or codex) and tell it what to do");
+        runtime.terminal().stdout("NEXT_STEP=See what is happening: synesis ui (browser) or synesis coordination status; what needs you: synesis operator list");
+    }
+
+    /**
      * Runs initialization. @return stable exit code
      */
     @Override
@@ -56,10 +72,11 @@ public final class InitCommand implements Callable<Integer> {
             runtime.terminal().stdout("LOCAL_PROFILE=" + location.profile());
             runtime.terminal().stdout("NODE_ID=" + result.identity().nodeId());
             runtime.terminal().stdout("GIT_HEAD_STATUS=" + result.gitHeadStatus());
+            result.retiredInstructions().forEach(path -> runtime.terminal().stdout("INSTRUCTIONS_REMOVED=" + path));
             if (result.status() == ProjectInitStatus.SUCCESS) {
                 runtime.terminal().stdout("GITIGNORE_RECOMMENDATION=.synesis/local/");
-                runtime.terminal().stdout("NEXT_COMMAND=synesis constraint create --help");
             }
+            printNextSteps(result);
             return ExitCodes.OK;
         } catch (ProjectApplicationService.ProjectApplicationException failure) {
             runtime.terminal().stdout("INIT_RESULT=CONFLICT");

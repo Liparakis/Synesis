@@ -23,7 +23,7 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
  */
 public final class ManagedPathPolicy {
 
-    private static final List<String> DEFAULT_MANAGED_PATHS = List.of(".synesis/project.json", "AGENTS.md");
+    private static final List<String> DEFAULT_MANAGED_PATHS = List.of(".synesis/project.json");
 
     /**
      * Creates a policy using the canonical managed contract paths.

@@ -142,21 +142,16 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
     }
 
     /**
-     * Points Claude Code at the Synesis rules through a project rule file.
-     *
-     * <p>Claude Code loads every Markdown file under {@code .claude/rules} as project
-     * instructions and resolves {@code @} imports relative to the importing file; it does not read
-     * {@code AGENTS.md} itself. The rule file therefore imports the managed {@code AGENTS.md}
-     * block, and lives beside the other provider-local files that the control checkout and lane
-     * snapshots already exclude.</p>
+     * The rule file earlier versions wrote so that Claude Code, which does not read {@code AGENTS.md},
+     * would import the managed {@code AGENTS.md} block. Neither exists any more: Claude Code learns the
+     * rules from the {@code synesis-provider-manual} skill and the MCP server's instructions.
      *
      * @param projectRoot control project root
-     * @return the Claude Code rule file
+     * @return the retired Claude Code rule file
      */
     @Override
-    public java.util.Optional<ProjectInstructions> projectInstructions(Path projectRoot) {
-        String content = ProjectInstructions.OWNERSHIP_MARKER + "\n# Synesis\n\nThis project is coordinated through Synesis. The rules imported below apply to this session;\nfollow them before reading, changing, or running anything in the project.\n\n@../../AGENTS.md\n";
-        return java.util.Optional.of(new ProjectInstructions(projectRoot.resolve(".claude/rules/synesis.md").toAbsolutePath().normalize(), content));
+    public java.util.Optional<Path> retiredProjectInstructions(Path projectRoot) {
+        return java.util.Optional.of(projectRoot.resolve(".claude/rules/synesis.md").toAbsolutePath().normalize());
     }
 
     @Override

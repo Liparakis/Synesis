@@ -91,6 +91,18 @@ class McpServerTest {
         assertTrue(responseJson.contains("\"name\":\"synesis\""));
     }
 
+    /** ADR-0103 decision 9: every connected agent is told, at initialize, to follow the installed manual skill. */
+    @Test
+    void testInitializeInstructionsPointToTheInstalledManualSkill() {
+        McpProtocolHandler handler = new McpProtocolHandler(new AgentSessionService(), tempRoot, "codex", "conn-1");
+
+        String responseJson = handler.handleMessage("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}");
+
+        assertTrue(responseJson.contains("\"instructions\":\""));
+        assertTrue(responseJson.contains("Follow the `synesis-provider-manual` skill"), responseJson);
+        assertFalse(responseJson.contains("AGENTS.md"));
+    }
+
     @Test
     void testInitializedNotificationReturnsNoResponse() {
         AgentSessionService sessionService = new AgentSessionService();

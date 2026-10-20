@@ -53,7 +53,7 @@ final class CodeOverLinkFollowTest {
 
     @Test
     void aFolderWithOnlySynesisFilesGetsTheLeadersBranchAndThenFollowsIt() throws Exception {
-        Files.writeString(member.resolve("AGENTS.md"), "written by Synesis\n");
+        Files.writeString(member.resolve(".mcp.json"), "{}\n");
         String branch = TestGit.output(leader, "symbolic-ref", "--short", "HEAD");
 
         assertEquals(new CodeTransferMessage.Fetched(TestGit.output(leader, "rev-parse", "HEAD")), followLeader());
@@ -74,6 +74,15 @@ final class CodeOverLinkFollowTest {
         assertEquals(new CodeTransferMessage.Unavailable(CodeOverLink.FOLDER_NOT_EMPTY), followLeader());
         assertEquals("a person's own file", Files.readString(member.resolve("board.txt")).strip());
         assertFalse(Files.exists(member.resolve(".git")), "no repository was made either");
+    }
+
+    /** Synesis writes no AGENTS.md (ADR-0103 decision 9), so one in the folder is a person's own file. */
+    @Test
+    void anAgentsFileInTheFolderIsAPersonsOwnAndIsNeverCheckedOutOver() throws Exception {
+        Files.writeString(member.resolve("AGENTS.md"), "a person's own rules\n");
+
+        assertEquals(new CodeTransferMessage.Unavailable(CodeOverLink.FOLDER_NOT_EMPTY), followLeader());
+        assertEquals("a person's own rules", Files.readString(member.resolve("AGENTS.md")).strip());
     }
 
     @Test

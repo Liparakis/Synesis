@@ -68,7 +68,7 @@ public final class SnapshotArtifactPolicy {
      */
     public Classification classify(String path) {
         String normalized = normalize(path);
-        if (normalized.equals("AGENTS.md") || normalized.equals(".synesis/project.json")) {
+        if (normalized.equals(".synesis/project.json")) {
             return Classification.MANAGED_CONTRACT;
         }
         if (normalized.equals(".mcp.json") || normalized.startsWith(".codex/") || normalized.startsWith(".claude/") || normalized.startsWith(".synesis/local/") || normalized.startsWith(".synesis/shared/")

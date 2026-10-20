@@ -20,7 +20,7 @@ import org.synesis.projectrecord.domain.ProjectConfig;
 
 import org.synesis.workspace.application.control.ControlBranchAdvancementService;
 import org.synesis.workspace.application.project.GitRepositoryFacts;
-import org.synesis.workspace.application.project.ManagedAgentsSection;
+import org.synesis.workspace.application.project.LegacyAgentsSection;
 import org.synesis.workspace.application.project.ProjectCreateResult;
 import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.application.project.ProjectInitResult;
@@ -216,6 +216,28 @@ public final class ProjectApplicationService {
     }
 
     /**
+     * Removes what earlier versions wrote into the project for the agents: Synesis's section of
+     * {@code AGENTS.md} and the provider rule files it owns. The agent instructions live in the
+     * installed {@code synesis-provider-manual} skill now (ADR-0103 decision 9), so initialization
+     * leaves the user's own text and files alone and removes only what carries Synesis's marker.
+     *
+     * <p>Best effort: this is cleanup that every later initialization repeats, so a file that cannot
+     * be changed must not stop the project from being initialized.</p>
+     */
+    private static List<String> retireLegacyInstructions(Path root) {
+        List<String> retired = new java.util.ArrayList<>();
+        try {
+            if (LegacyAgentsSection.retire(root)) {
+                retired.add(LegacyAgentsSection.FILE_NAME);
+            }
+            retired.addAll(new ProviderApplicationService().retireProjectInstructions(root));
+        } catch (IOException unchanged) {
+            // The file stays as it was; the next initialization tries again.
+        }
+        return List.copyOf(retired);
+    }
+
+    /**
      * Initializes a project without overwriting existing state.
      *
      * <p>For a Git repository, the managed baseline safety gate runs before
@@ -288,11 +310,11 @@ public final class ProjectApplicationService {
                 ProjectLocation existing = readLocation(root, synesis, metadata);
                 try {
                     RepositoryPrivateStateService.ensure(root);
-                    ManagedAgentsSection.ensure(root);
+                    List<String> retired = retireLegacyInstructions(root);
                     if (configureProviderMcp) {
                         registerCodexMcpServer(existing);
                     }
-                    return new ProjectInitResult(ProjectInitStatus.ALREADY_INITIALIZED, existing, identity(existing.profile()), false, ensureGitHead(root));
+                    return new ProjectInitResult(ProjectInitStatus.ALREADY_INITIALIZED, existing, identity(existing.profile()), false, ensureGitHead(root), retired);
                 } catch (Exception failure) {
                     throw new ProjectApplicationException("CONFLICT", "Existing project identity is invalid", failure);
                 }
@@ -308,11 +330,10 @@ public final class ProjectApplicationService {
             RepositoryPrivateStateService.ensure(root);
             Path profile = synesis.resolve("local/profile");
             String metadataContent = ProjectMetadataCodec.json(projectIdentity);
-            String agentsContent = ManagedAgentsSection.merged(root);
             String gitHeadStatus;
             if (GitRepositoryFacts.hasGitMetadata(root)) {
                 ManagedBaselineTransactionService.Result baseline = baselineService.prepare(root,
-                        Map.of(".synesis/project.json", metadataContent.getBytes(StandardCharsets.UTF_8), ManagedAgentsSection.FILE_NAME, agentsContent.getBytes(StandardCharsets.UTF_8)));
+                        Map.of(".synesis/project.json", metadataContent.getBytes(StandardCharsets.UTF_8)));
                 gitHeadStatus = "UNBORN".equals(baseline.originalHead()) ? "GIT_INITIAL_COMMIT_CREATED" : GitRepositoryFacts.HEAD_VALID;
             } else {
                 // Internal non-Git fixtures intentionally bypass the
@@ -320,7 +341,6 @@ public final class ProjectApplicationService {
                 // transaction to create the project directory.
                 ensureMetadataStorage(root);
                 ProjectMetadataCodec.write(metadata, projectIdentity, false);
-                ManagedAgentsSection.ensure(root);
                 gitHeadStatus = GitRepositoryFacts.HEAD_UNAVAILABLE;
             }
             ensureMetadataStorage(root);
@@ -328,13 +348,14 @@ public final class ProjectApplicationService {
             NodeIdentity nodeIdentity = identity(profile);
             ProjectLocation location = readLocation(root, synesis, metadata);
             RepositoryPrivateStateService.ensure(root);
+            List<String> retired = retireLegacyInstructions(root);
             try {
                 if (configureProviderMcp) {
                     registerCodexMcpServer(location);
                 }
             } catch (Exception ignored) {
             }
-            return new ProjectInitResult(ProjectInitStatus.SUCCESS, location, nodeIdentity, true, gitHeadStatus);
+            return new ProjectInitResult(ProjectInitStatus.SUCCESS, location, nodeIdentity, true, gitHeadStatus, retired);
         } catch (ManagedBaselineTransactionService.BaselineFailure failure) {
             throw new ProjectApplicationException(failure.code(), "Managed baseline transaction failed: " + failure.getMessage(), failure);
         } catch (Exception failure) {
@@ -375,7 +396,7 @@ public final class ProjectApplicationService {
                 ProjectMetadataCodec.write(metadata, projectIdentity, false);
             }
             RepositoryPrivateStateService.ensure(root);
-            ManagedAgentsSection.ensure(root);
+            List<String> retired = retireLegacyInstructions(root);
             initializeLocalState(synesis);
             NodeIdentity nodeIdentity = identity(synesis.resolve("local/profile"));
             ProjectLocation location = readLocation(root, synesis, metadata);
@@ -387,7 +408,7 @@ public final class ProjectApplicationService {
                 }
             }
             String gitHeadStatus = ensureGitHead(root);
-            return new ProjectInitResult(ProjectInitStatus.SUCCESS, location, nodeIdentity, true, gitHeadStatus);
+            return new ProjectInitResult(ProjectInitStatus.SUCCESS, location, nodeIdentity, true, gitHeadStatus, retired);
         } catch (ProjectApplicationException failure) {
             throw failure;
         } catch (Exception failure) {

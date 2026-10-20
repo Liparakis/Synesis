@@ -381,6 +381,25 @@ and maintainability decide when a stage is done, by its completion criteria belo
   6. `agents run` without a task, or with a blank one, prints
      `ERROR=agents run needs a task; pass --prompt "<task>" or --prompt-file <file>`, exit 2, and starts no agent; a
      blank `--prompt` used to start agents.
+- **Built 2026-10-20 (decision 9, init's next step, stale documents).** The installed `synesis-provider-manual` skill
+  (version 13) now holds every rule the managed `AGENTS.md` section held, and is the one place for agent instructions.
+  `init` and `provider install` write no `AGENTS.md` section and no `.claude/rules/synesis.md`; `init` (new, existing and
+  replica) removes only an earlier version's marked section (`<!-- SYNESIS-BEGIN -->` … `<!-- SYNESIS-END -->`, user text
+  kept, a file left with nothing else deleted, unpaired markers and symbolic links never touched) and a rule file that
+  carries Synesis's ownership marker, and lists them as `INSTRUCTIONS_REMOVED=<path>`; `provider install` reports
+  `PROJECT_INSTRUCTIONS=REMOVED|ABSENT|CONFLICT|NOT_APPLICABLE`. The MCP `initialize` result now carries `instructions`
+  naming the skill (additive). `AGENTS.md` left the managed paths of `ManagedPathPolicy`, `SnapshotArtifactPolicy`,
+  `SnapshotTreeMaterialization`, `ControlBranchAdvancementService` and `CodeOverLink`: it is the user's own source file, so
+  a lane's change to it travels with the lane, an untracked one counts as a foreign change of the control checkout, and a
+  folder holding one is not "only Synesis's files". The removal is not committed: where Git tracks `AGENTS.md` it shows as
+  a modification the user commits (`init` says so). `init` ends with `NEXT_COMMAND=synesis provider install claude` and
+  three `NEXT_STEP=` lines (connect an agent, start it, `synesis ui` / `coordination status` / `operator list`) instead of
+  `synesis constraint create --help`. Stale documents corrected: the AGENTS.md contract (now
+  `docs/architecture/agent-instructions-contract.md`), `docs/development/current-state.md` (tool count),
+  `docs/architecture/installed-browser-ui.md` (tab list), `docs/getting-started/README.md`, `docs/providers/claude-code.md`,
+  `docs/providers/mcp.md`, `docs/installation/project-layout.md`. Left to the other stage-1 owners: provider refusal
+  messages, the doctor launcher lookup, help groups, `docs/cli/command-reference.md` (its line on untracked
+  `AGENTS.md` not counting as a foreign change is now out of date), the `synesis mcp` runtime start, `agents run`, the UI.
 
 ### Stage 2 — discovery and visibility (additive contract changes; preliminary: two to three days)
 

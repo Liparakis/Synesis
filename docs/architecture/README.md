@@ -9,7 +9,7 @@ these modules.
 - [Package boundaries](package-boundaries.md)
 - [Provider boundary](provider-boundary.md)
 - [Current repository state](../development/current-state.md)
-- [AGENTS.md contract](agents-md-contract.md)
+- [Agent instructions contract](agent-instructions-contract.md)
 - [Zero-touch provider maturity](zero-touch-provider-maturity.md)
 - [Installed browser UI](installed-browser-ui.md)
 

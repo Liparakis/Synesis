@@ -404,43 +404,25 @@ public interface ProviderIntegration {
     SyntheticCheck syntheticCheck(Path profile, Path projectRoot);
 
     /**
-     * Names the project instruction file this provider's harness loads by itself, when it does
-     * not read {@code AGENTS.md}.
-     *
-     * <p>Synesis states its coordination rules once, in the managed block of {@code AGENTS.md}.
-     * A harness that never opens that file would start work without them, so its integration
-     * points the harness's own instruction mechanism at it rather than keeping a second copy.</p>
-     *
-     * @param projectRoot control project root
-     * @return the file to install, or empty when the harness already reads {@code AGENTS.md}
+     * First line of every instruction file an earlier Synesis wrote into a project. A file at the same
+     * path without it belongs to the user and is never removed.
      */
-    default java.util.Optional<ProjectInstructions> projectInstructions(Path projectRoot) {
-        return java.util.Optional.empty();
-    }
+    String RETIRED_INSTRUCTIONS_MARKER = "<!-- Managed by Synesis: replaced by `synesis provider install`, removed by uninstall. -->";
 
     /**
-     * A project-local instruction file owned entirely by Synesis.
+     * Names the project instruction file an earlier Synesis wrote for this provider's harness, if it
+     * wrote one.
      *
-     * @param path    absolute location of the file
-     * @param content complete file content, beginning with {@link #OWNERSHIP_MARKER}
+     * <p>Synesis no longer writes any instruction file into a project: the agent instructions live in
+     * the installed {@code synesis-provider-manual} skill, the one place for them (ADR-0103 decision 9).
+     * Installing the provider removes this file when it is Synesis's own, which only the
+     * {@link #RETIRED_INSTRUCTIONS_MARKER} on its first line shows.</p>
+     *
+     * @param projectRoot control project root
+     * @return the retired file, or empty when no earlier version wrote one for this harness
      */
-    record ProjectInstructions(Path path, String content) {
-
-        /**
-         * First line of every instruction file Synesis owns. A file at the same path without it
-         * belongs to the user and is never replaced or removed.
-         */
-        public static final String OWNERSHIP_MARKER = "<!-- Managed by Synesis: replaced by `synesis provider install`, removed by uninstall. -->";
-
-        /**
-         * Validates that the content declares Synesis ownership.
-         */
-        public ProjectInstructions {
-            java.util.Objects.requireNonNull(path, "path");
-            if (content == null || !content.startsWith(OWNERSHIP_MARKER)) {
-                throw new IllegalArgumentException("project instructions must begin with the ownership marker");
-            }
-        }
+    default java.util.Optional<Path> retiredProjectInstructions(Path projectRoot) {
+        return java.util.Optional.empty();
     }
 
     /**

@@ -40,9 +40,14 @@ telemetry, browser-side Link transport, or arbitrary filesystem endpoint.
 
 ## Product surfaces
 
-The shell exposes Dashboard, Projects, Agents, WorkGroups, Peers & network,
-and Diagnostics. The network surface includes real invite, join, and host
-answer controls over the existing onboarding commands. Empty collections are
+The shell lists the known projects; each project has six tabs (`projectTabs`
+in `web-ui/src/app/routes.ts`): Overview, Agents, Coordination, Trash, Network,
+and Diagnostics. (Corrected 2026-10-20: this section used to name tabs the UI
+does not have: Dashboard, Projects, WorkGroups, "Peers & network".) The UI
+cannot yet start or stop agents, show an agent's output, or recheck or close an
+operator request; those are listed in ADR-0103. The network surface includes
+real invite, join, and host answer controls over the existing onboarding
+commands. Empty collections are
 rendered as explicit empty states. With the current CLI authority boundary,
 the overlay is shown as `UNCONFIGURED`, relay as `DISABLED`, and physical
 peer/route collections remain empty rather than being filled with demo data.

@@ -53,7 +53,7 @@ public final class CodeOverLink implements AutoCloseable {
     public static final String FOLDER_NOT_EMPTY = "CODE_FOLDER_NOT_EMPTY";
 
     /** What Synesis itself writes into a project folder; nothing else may be in a folder that gets its first checkout. */
-    private static final Set<String> SYNESIS_FILES = Set.of(".git", ".synesis", "AGENTS.md", ".codex", ".claude", ".mcp.json");
+    private static final Set<String> SYNESIS_FILES = Set.of(".git", ".synesis", ".codex", ".claude", ".mcp.json");
 
     private static final int TRANSFER_MINUTES = 10;
     private static final Duration TRANSFER_BOUND = Duration.ofMinutes(TRANSFER_MINUTES);
@@ -357,9 +357,11 @@ public final class CodeOverLink implements AutoCloseable {
 
     /**
      * Checks the leader's branch out in a repository that has no commit yet, in a folder that holds only what Synesis
-     * wrote there ({@link #SYNESIS_FILES}). Those files ({@code .synesis/project.json}, {@code AGENTS.md}) are in the
-     * way of the same files of the project, so the checkout overwrites what is in its way, and nothing else is there
-     * to overwrite. The project's own {@code AGENTS.md} then stands as the leader has it. The Git exclusions of
+     * wrote there ({@link #SYNESIS_FILES}). That file ({@code .synesis/project.json}) is in the way of the same file
+     * of the project, so the checkout overwrites it, and nothing else is there to overwrite. Synesis writes no
+     * {@code AGENTS.md} (ADR-0103 decision 9), so one in the folder is the user's and keeps the folder from counting
+     * as holding only Synesis's files; joining initializes the replica first, which has already removed the section
+     * an earlier version wrote there. The Git exclusions of
      * Synesis's private folders are written now, because the folder had no repository to hold them before.
      */
     private void checkOut(CodeTransferClient.Head leader) throws IOException {

@@ -2,7 +2,7 @@
 
 | Capability         | Existing evidence                | SYN-013 design                                          | Completion evidence                |
 |--------------------|----------------------------------|---------------------------------------------------------|------------------------------------|
-| One-command init   | `.synesis` identity/layout tests | tracked config, ignore rules, hooks, AGENTS.md, upgrade | fresh/repeated/legacy init tests   |
+| One-command init   | `.synesis` identity/layout tests | tracked config, ignore rules, hooks, installed manual, upgrade | fresh/repeated/legacy init tests   |
 | Ambient session    | foreground CLI only              | hidden runtime/session manager                          | provider process bootstrap/restart |
 | Isolated workspace | detached speculation tree        | per-session broker and transition proof                 | two real harness worktrees         |
 | Semantic ownership | `OwnershipRegistry`              | intent-driven provisional/active claims                 | overlap/stale/cancel tests         |
