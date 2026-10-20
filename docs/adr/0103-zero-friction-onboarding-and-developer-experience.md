@@ -9,6 +9,12 @@ estimates are preliminary and each stage lists its tasks, blockers, approvals, t
 is built. It changes published CLI output and deprecates commands, so the items marked
 **contract change** need the owner's approval before they are built (AGENTS.md, "Public contract stability").
 
+**Accepted on 2026-10-20 by the repository owner**, deciding the eight items below one by one (USER-STATED): 1 yes,
+2 yes, 3 yes, 4 **remove** `host`, `join`, `sync host` and `sync join` now rather than deprecate them (an explicitly
+approved breaking change to the published CLI: every caller, test and document is migrated in the same change, and
+`link invite`/`link join` are the one way to join), 5 yes, 6 yes, 7 deferred to stage 4, 8 at the first invite.
+Implementation is authorized stage by stage.
+
 Claims are marked VERIFIED (file:line on branch `adr-0098-step3-code-over-link`), MEASURED (real runs of 2026-10-18/19),
 DERIVED, ASSUMED or REQUIRES-MEASUREMENT.
 
