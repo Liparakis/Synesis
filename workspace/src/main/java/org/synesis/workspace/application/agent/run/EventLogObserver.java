@@ -14,7 +14,6 @@ import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationSettings;
-import org.synesis.coordination.replication.ReplicationJournal;
 import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
 import org.synesis.workspace.application.agent.workflow.DisputeNotice;
 import org.synesis.workspace.application.collaboration.ParticipantActivity;
@@ -338,16 +337,19 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
     }
 
     /**
-     * When the newest session began with a peer that this computer's role file names (the leader's members, a
-     * member's leader) and that is connected according to the replication journal, or empty when none is. A journal
-     * line about a node that is no longer a peer of the project counts for nothing. An unreadable role file or
-     * journal reads as not connected: this only decides whether a run keeps waiting and whom it resumes, and must not
-     * end the run.
+     * When the newest connection began with a peer of the project that this computer's replication side records as
+     * connected, or empty when none is. This is the record {@code AwayLanes} judges a computer away by
+     * ({@code replication.members}, ADR-0098 step 6 item 22), so a run does not keep waiting for a computer that the
+     * takeover already counts as away: the replication journal says only that a session is open, and a session behind a
+     * silent path stays open. A record about a node that is no longer a peer of the project counts for nothing. A
+     * missing or unreadable record reads as not connected: this only decides whether a run keeps waiting and whom it
+     * resumes, and must not end the run.
      */
     private static OptionalLong otherComputerConnectedSince(java.nio.file.Path coordination) {
         java.util.Set<String> peers = peersOfProject(coordination);
-        return ReplicationJournal.connectedSince(coordination).entrySet().stream().filter(session -> peers.contains(session.getKey()))
-                .mapToLong(session -> session.getValue().toEpochMilli()).max();
+        return org.synesis.coordination.replication.LeaderReplication.recordedMembers(coordination).orElse(java.util.Map.of()).entrySet().stream()
+                .filter(member -> peers.contains(member.getKey()) && member.getValue().state() == org.synesis.coordination.replication.LeaderReplication.MemberConnection.State.CONNECTED)
+                .mapToLong(member -> member.getValue().since().toEpochMilli()).max();
     }
 
     /**

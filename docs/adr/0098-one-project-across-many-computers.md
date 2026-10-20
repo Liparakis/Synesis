@@ -1282,9 +1282,20 @@ agent on each member, mandatory review; open to the owner):
     (`ScenarioLab.splitSilently`). The same scenario with the joiner as the taker of the owner's lane judges the owner
     away and offers the lane, but then the joiner's agents fail to bind a session (`SESSION_BINDING_FAILED`, then
     `SESSION_RECOVERY_STATE_UNAVAILABLE`) while its session to the owner is silent and open; that test is disabled,
-    OPEN, undiagnosed. Source semantics proven for the record; no real run has shown it. Not changed: `replication.log`, which the agents' wait reads (`ReplicationJournal.connectedSince`),
-    still records session starts and ends only, so a run's decision to keep waiting for a computer behind a silent path
-    still follows the session, not the exchange.
+    OPEN, undiagnosed. Source semantics proven for the record; no real run has shown it. The run controller's wait (`EventLogObserver.otherComputerConnectedSince`) now reads the same record, not `replication.log`, so a run does not
+    keep waiting for a computer that the takeover already counts as away.
+    **s7-run4 (2026-10-20, remaster85, the build with this rule): the rule did not fire, and the evidence says why not here.** The
+    PC's record still read the VM `CONNECTED` from the join, and neither computer's `replication.log` shows a `DISCONNECT`, in a 10-minute
+    "cut" during which both computers' own checks (Link's 30 s expiry on each side, and the pulls every 15 s that the record now follows)
+    reported a healthy path. Both records had in fact moved once, at the join (the `since` of each is the first answered pull after
+    the accept, later than the attach), so the rule appears to be live in the product. A path that really dropped every datagram fails both checks in
+    under a minute (s5-run11, run12 and run13, 2026-10-18: `DISCONNECT ... LIVENESS_EXPIRED` on both sides after 60 s). On this evidence the
+    cut of s5-run14, run15, s7-run1, run3 and run4 did not reach the path Link used; that is a lab fault to check on the VM (the rule set
+    that `partition.sh` leaves, and the peer address of the QUIC flow during the cut), not proven here. The scripted scenarios cannot
+    drop datagrams, and the Linux gate's container has no `iptables`, so the silent path is simulated at the exchange (no answer on a
+    session that stays open); a pull has its own deadline whichever way the silence comes, so the verdict does not wait on Link. One
+    hardening came out of reading the exchange for a way it could stop reporting: the two periodic rounds (pull and notice) are now
+    kept alive after a round that throws, which `scheduleWithFixedDelay` would otherwise never run again.
 
 ### Step 7: Disputes, takeovers and the trash
 

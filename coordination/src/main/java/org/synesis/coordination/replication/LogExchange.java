@@ -164,8 +164,8 @@ public final class LogExchange implements AutoCloseable {
         this.admitted = CoordinationNullException.requireNonNull(admitted, "admitted");
         this.copied = CoordinationNullException.requireNonNull(copied, "copied");
         this.afterArrivals = CoordinationNullException.requireNonNull(afterArrivals, "afterArrivals");
-        worker.scheduleWithFixedDelay(this::pullAll, PULL_INTERVAL_SECONDS, PULL_INTERVAL_SECONDS, TimeUnit.SECONDS);
-        worker.scheduleWithFixedDelay(this::noticeAll, NOTICE_CHECK_MILLIS, NOTICE_CHECK_MILLIS,
+        worker.scheduleWithFixedDelay(surviving(this::pullAll), PULL_INTERVAL_SECONDS, PULL_INTERVAL_SECONDS, TimeUnit.SECONDS);
+        worker.scheduleWithFixedDelay(surviving(this::noticeAll), NOTICE_CHECK_MILLIS, NOTICE_CHECK_MILLIS,
                 TimeUnit.MILLISECONDS);
         worker.execute(this::takeWaiting);
     }
@@ -483,6 +483,20 @@ public final class LogExchange implements AutoCloseable {
                 pullQueued.remove(node);
             }
         }
+    }
+
+    /**
+     * A periodic task that throws is never run again by the executor, which would end the exchange for good and leave
+     * every peer's record as it last was. One failed round is logged and the next one runs.
+     */
+    private static Runnable surviving(Runnable round) {
+        return () -> {
+            try {
+                round.run();
+            } catch (RuntimeException failed) {
+                LOGGER.log(System.Logger.Level.WARNING, "A round of the log exchange failed; the next one runs.", failed);
+            }
+        };
     }
 
     private void pullAll() {
