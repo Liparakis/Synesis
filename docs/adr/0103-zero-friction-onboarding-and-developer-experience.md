@@ -348,6 +348,15 @@ and maintainability decide when a stage is done, by its completion criteria belo
 - **Real-world test.** A fresh VM user follows the new README from install to an interactive `claude` session.
 - **Completion criteria.** Every item merged with its tests green on the Linux gate and the Windows gate; the README path
   works on the fresh VM user without any step the README does not state.
+- **Built, web UI part (2026-10-20).** The coordination tables follow the selected WorkGroup: claims by their
+  `workGroupId`; tasks, ownership records and review disputes through their task id, which an agent's current work or a
+  trash entry pairs with a WorkGroup (a task paired with none stays visible under every group). Capabilities,
+  conversations and operator requests carry no WorkGroup in the snapshot and stay project-wide, which the tab says. A
+  `workGroupId` on tasks, ownerships and disputes in `ControlPlaneReadModel` (additive) would make the rule exact. "View
+  details" opens the row the person picked (click or Enter), the first row until a pick. The overview's and the
+  coordination view's empty state says a WorkGroup appears when an agent announces work, gives `synesis agents run
+  --agent claude --prompt "..."`, and offers "Open agents". Tests: `web-ui/src/app/App.test.tsx`, "the coordination
+  view" (4 tests); `:web-ui:check` green on the Linux gate. Other stage 1 items are not part of this entry.
 
 ### Stage 2 — discovery and visibility (additive contract changes; preliminary: two to three days)
 

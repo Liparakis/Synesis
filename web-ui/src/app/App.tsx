@@ -1,4 +1,4 @@
-import {type ReactNode, useEffect, useRef, useState} from "react";
+import {type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useEffect, useRef, useState} from "react";
 import type {LucideIcon} from "lucide-react";
 import {
   Activity,
@@ -39,6 +39,7 @@ import {
   projectLinkFromLocation,
   selectionIdFromLocation,
 } from "../api/controlPlane";
+import {capabilityKey, chosenRecord, claimKey, ownershipKey, recordsOfWorkGroup, taskKey, type WorkGroupRecords} from "./coordinationScope";
 import {parseRoute, projectTabs, routePath, type ProjectView, type Route} from "./routes";
 
 export type View = ProjectView | "projects";
@@ -729,7 +730,7 @@ function ProjectOverviewView({snapshot, onNavigate}: {snapshot: Snapshot; onNavi
         <OverviewSection title="Coordination" icon={GitBranch} action={<TextAction onClick={() => onNavigate("coordination")}>Open coordination</TextAction>}>
           <div className="overview-two-column">
             <div>
-              {snapshot.workgroups.length === 0 ? <><h3>No workgroups in this project</h3><p className="muted">Create workgroups to enable distributed agents, tasks, and shared capabilities.</p></> : <><h3>WorkGroups</h3><div className="overview-list">{snapshot.workgroups.slice(0, 4).map((group) => <div className="overview-list-row" key={group.id}><span className="mono">{group.id}</span><StatusBadge value={group.status}/></div>)}</div></>}
+              {snapshot.workgroups.length === 0 ? <><h3>No WorkGroups yet</h3><p className="muted">{NO_WORKGROUP_ACTION}</p><TextAction onClick={() => onNavigate("agents")}>Open agents</TextAction></> : <><h3>WorkGroups</h3><div className="overview-list">{snapshot.workgroups.slice(0, 4).map((group) => <div className="overview-list-row" key={group.id}><span className="mono">{group.id}</span><StatusBadge value={group.status}/></div>)}</div></>}
             </div>
             <div>
               <h3>Projection</h3>
@@ -830,11 +831,17 @@ function AgentInspector({agent, onClose}: {agent: AgentSnapshot; onClose(): void
   );
 }
 
+/** A WorkGroup appears when an agent announces work, and no UI action creates one, so the empty state points at starting an agent. */
+const NO_WORKGROUP_ACTION = "A WorkGroup appears when an agent announces work. Start an agent on this project, for example synesis agents run --agent claude --prompt \"Implement X\", or open claude or codex in the project folder and give it a task.";
+const PROJECT_WIDE_TABS: CoordinationTab[] = ["capabilities", "conversations", "operator"];
+
 function CoordinationView({snapshot}: {snapshot: Snapshot}) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(snapshot.workgroups[0]?.id ?? null);
   const [tab, setTab] = useState<CoordinationTab>("claims");
+  const [chosenKey, setChosenKey] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const group = snapshot.workgroups.find((item) => item.id === selectedGroupId) ?? snapshot.workgroups[0] ?? null;
+  const records = group ? recordsOfWorkGroup(snapshot, group.id) : null;
   useEffect(() => {
     if (selectedGroupId && !snapshot.workgroups.some((item) => item.id === selectedGroupId)) setSelectedGroupId(snapshot.workgroups[0]?.id ?? null);
   }, [selectedGroupId, snapshot.workgroups]);
@@ -857,15 +864,16 @@ function CoordinationView({snapshot}: {snapshot: Snapshot}) {
             <div><p className="eyebrow">Coordination state</p><h2>{group?.id ?? "No WorkGroup selected"}</h2>{group && <p>{group.goal || "No goal recorded."}</p>}</div>
             {group && <div className="coordination-header-actions"><StatusBadge value={group.status}/><button className="button button-secondary" type="button" onClick={() => setDetailOpen(true)}>View details</button></div>}
           </div>
-          {!group ? <EmptyState icon={GitBranch} title="No workgroups yet" detail="Claims, tasks, and capabilities will appear when a workgroup is projected."/> : (
+          {!group || !records ? <EmptyState icon={GitBranch} title="No WorkGroups yet" detail={NO_WORKGROUP_ACTION}/> : (
             <>
               <nav className="sub-tabs" aria-label="Coordination records">{(["claims", "tasks", "reviews", "capabilities", "ownership", "conversations", "operator"] as CoordinationTab[]).map((item) => <button key={item} className={cx(tab === item && "is-active")} type="button" onClick={() => setTab(item)}>{capitalize(item)}</button>)}</nav>
-              <CoordinationTable snapshot={snapshot} tab={tab}/>
+              {PROJECT_WIDE_TABS.includes(tab) && <p className="muted">These records belong to the whole project, not to one WorkGroup.</p>}
+              <CoordinationTable snapshot={snapshot} records={records} tab={tab} chosenKey={chosenKey} onChoose={setChosenKey}/>
             </>
           )}
         </section>
       </div>
-      {group && detailOpen && <CoordinationInspector snapshot={snapshot} tab={tab} onClose={() => setDetailOpen(false)}/>}
+      {group && records && detailOpen && <CoordinationInspector records={records} tab={tab} chosenKey={chosenKey} onClose={() => setDetailOpen(false)}/>}
     </div>
   );
 }
@@ -940,25 +948,37 @@ function memberText(member: {participant?: string; claims?: string[]; lane?: str
   return member.participant ? member.participant + (member.claims?.length ? " (" + member.claims.join(", ") + ")" : "") + ended : "ended lane";
 }
 
-function CoordinationTable({snapshot, tab}: {snapshot: Snapshot; tab: CoordinationTab}) {
+/** Row props that make a record pickable by click or keyboard; the inspector opens the picked one, the first until a pick. */
+function pickableRow(key: string, picked: boolean, onChoose: (key: string) => void) {
+  return {
+    className: cx(picked && "is-selected"),
+    tabIndex: 0,
+    "aria-selected": picked,
+    onClick: () => onChoose(key),
+    onKeyDown: (event: ReactKeyboardEvent<HTMLTableRowElement>) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onChoose(key); } },
+  };
+}
+
+function CoordinationTable({snapshot, records, tab, chosenKey, onChoose}: {snapshot: Snapshot; records: WorkGroupRecords; tab: CoordinationTab; chosenKey: string | null; onChoose(key: string): void}) {
+  const chosen = chosenRecords(records, chosenKey);
   if (tab === "claims") return (
     <section className="data-table-wrap panel">
       <table className="data-table"><thead><tr><th>Claim ID</th><th>Claim Owner</th><th>Role</th><th>State</th><th>Selectors</th><th>Conflicts</th></tr></thead>
-        <tbody>{snapshot.claims.length === 0 ? <TableEmpty colSpan={6} text="No claims in the projection."/> : snapshot.claims.map((claim) => <tr key={claim.intentId}><td className="mono">{claim.intentId}</td><td>{claim.participant}</td><td>{claim.role}</td><td><StatusBadge value={claim.state}/></td><td className="table-cell-wrap">{claim.selectors.map(selectorText).join(", ") || "—"}</td><td>{claim.conflicts.length}</td></tr>)}</tbody>
+        <tbody>{records.claims.length === 0 ? <TableEmpty colSpan={6} text="No claims in this WorkGroup."/> : records.claims.map((claim) => <tr key={claim.intentId} {...pickableRow(claimKey(claim), claim === chosen.claim, onChoose)}><td className="mono">{claim.intentId}</td><td>{claim.participant}</td><td>{claim.role}</td><td><StatusBadge value={claim.state}/></td><td className="table-cell-wrap">{claim.selectors.map(selectorText).join(", ") || "—"}</td><td>{claim.conflicts.length}</td></tr>)}</tbody>
       </table>
     </section>
   );
   if (tab === "tasks") return (
     <section className="data-table-wrap panel">
       <table className="data-table"><thead><tr><th>Task ID</th><th>Title</th><th>Capability Requested</th><th>Owner</th></tr></thead>
-        <tbody>{snapshot.tasks.length === 0 ? <TableEmpty colSpan={4} text="No tasks in the projection."/> : snapshot.tasks.map((task) => <tr key={task.id}><td className="mono">{task.id}</td><td>{task.title}</td><td className="mono">{task.capability}</td><td>{task.owner || "Unassigned"}</td></tr>)}</tbody>
+        <tbody>{records.tasks.length === 0 ? <TableEmpty colSpan={4} text="No tasks in this WorkGroup."/> : records.tasks.map((task) => <tr key={task.id} {...pickableRow(taskKey(task), task === chosen.task, onChoose)}><td className="mono">{task.id}</td><td>{task.title}</td><td className="mono">{task.capability}</td><td>{task.owner || "Unassigned"}</td></tr>)}</tbody>
       </table>
     </section>
   );
   if (tab === "reviews") return (
     <section className="data-table-wrap panel">
       <table className="data-table"><thead><tr><th>Snapshot</th><th>Author</th><th>Verdicts</th><th>Dispute</th></tr></thead>
-        <tbody>{snapshot.disputes.length === 0 ? <TableEmpty colSpan={4} text="No reviewers have disagreed."/> : snapshot.disputes.map((dispute) => <tr key={dispute.snapshotId}><td className="mono">{dispute.snapshotId}</td><td>{dispute.author ?? "—"}</td><td className="table-cell-wrap">{Object.entries(dispute.verdicts).map(([reviewer, verdict]) => reviewer + ": " + verdict.toLowerCase()).join(", ")}</td><td><StatusBadge value={dispute.state} label={disputeOutcome(dispute.state)}/></td></tr>)}</tbody>
+        <tbody>{records.disputes.length === 0 ? <TableEmpty colSpan={4} text="No reviewers have disagreed."/> : records.disputes.map((dispute) => <tr key={dispute.snapshotId}><td className="mono">{dispute.snapshotId}</td><td>{dispute.author ?? "—"}</td><td className="table-cell-wrap">{Object.entries(dispute.verdicts).map(([reviewer, verdict]) => reviewer + ": " + verdict.toLowerCase()).join(", ")}</td><td><StatusBadge value={dispute.state} label={disputeOutcome(dispute.state)}/></td></tr>)}</tbody>
       </table>
     </section>
   );
@@ -979,14 +999,14 @@ function CoordinationTable({snapshot, tab}: {snapshot: Snapshot; tab: Coordinati
   if (tab === "capabilities") return (
     <section className="data-table-wrap panel">
       <table className="data-table"><thead><tr><th>Capability</th><th>Requester</th><th>Owner</th><th>State</th><th>Reason</th></tr></thead>
-        <tbody>{snapshot.capabilities.length === 0 ? <TableEmpty colSpan={5} text="No capability requests in the projection."/> : snapshot.capabilities.map((capability) => <tr key={capability.handle}><td className="mono">{capability.capability}</td><td>{capability.requester}</td><td>{capability.owner || "—"}</td><td><StatusBadge value={capability.state}/></td><td className="table-cell-wrap">{capability.reason || "—"}</td></tr>)}</tbody>
+        <tbody>{records.capabilities.length === 0 ? <TableEmpty colSpan={5} text="No capability requests in the projection."/> : records.capabilities.map((capability) => <tr key={capability.handle} {...pickableRow(capabilityKey(capability), capability === chosen.capability, onChoose)}><td className="mono">{capability.capability}</td><td>{capability.requester}</td><td>{capability.owner || "—"}</td><td><StatusBadge value={capability.state}/></td><td className="table-cell-wrap">{capability.reason || "—"}</td></tr>)}</tbody>
       </table>
     </section>
   );
   return (
     <section className="data-table-wrap panel">
       <table className="data-table"><thead><tr><th>Capability</th><th>Task ID</th><th>Owner</th><th>Protected Scopes</th><th>Intent Version</th></tr></thead>
-        <tbody>{snapshot.ownerships.length === 0 ? <TableEmpty colSpan={5} text="No ownership records in the projection."/> : snapshot.ownerships.map((ownership) => <tr key={ownership.capability + ownership.taskId}><td className="mono">{ownership.capability}</td><td className="mono">{ownership.taskId}</td><td>{ownership.owner}</td><td className="table-cell-wrap">{ownership.protectedScopes.join(", ") || "—"}</td><td>{ownership.intentVersion}</td></tr>)}</tbody>
+        <tbody>{records.ownerships.length === 0 ? <TableEmpty colSpan={5} text="No ownership records in this WorkGroup."/> : records.ownerships.map((ownership) => <tr key={ownershipKey(ownership)} {...pickableRow(ownershipKey(ownership), ownership === chosen.ownership, onChoose)}><td className="mono">{ownership.capability}</td><td className="mono">{ownership.taskId}</td><td>{ownership.owner}</td><td className="table-cell-wrap">{ownership.protectedScopes.join(", ") || "—"}</td><td>{ownership.intentVersion}</td></tr>)}</tbody>
       </table>
     </section>
   );
@@ -1000,12 +1020,18 @@ function disputeOutcome(state: string): string {
   return "ended: " + state.replace(/_/g, " ");
 }
 
-function CoordinationInspector({snapshot, tab, onClose}: {snapshot: Snapshot; tab: CoordinationTab; onClose(): void}) {
+function chosenRecords(records: WorkGroupRecords, chosenKey: string | null) {
+  return {
+    claim: chosenRecord(records.claims, claimKey, chosenKey),
+    task: chosenRecord(records.tasks, taskKey, chosenKey),
+    capability: chosenRecord(records.capabilities, capabilityKey, chosenKey),
+    ownership: chosenRecord(records.ownerships, ownershipKey, chosenKey),
+  };
+}
+
+function CoordinationInspector({records, tab, chosenKey, onClose}: {records: WorkGroupRecords; tab: CoordinationTab; chosenKey: string | null; onClose(): void}) {
   const title = tab === "claims" ? "Claim Detail" : tab === "tasks" ? "Task Detail" : tab === "capabilities" ? "Capability Detail" : tab === "ownership" ? "Ownership Detail" : "Detail";
-  const claim = snapshot.claims[0];
-  const task = snapshot.tasks[0];
-  const capability = snapshot.capabilities[0];
-  const ownership = snapshot.ownerships[0];
+  const {claim, task, capability, ownership} = chosenRecords(records, chosenKey);
   return (
     <DetailModal title={title} onClose={onClose}>
       {tab === "claims" && claim && <><div className="inspector-title"><h2>{claim.intentId}</h2><StatusBadge value={claim.state}/></div><DetailList><DetailRow label="Claim Owner" value={claim.participant}/><DetailRow label="WorkGroup" value={claim.workGroupId}/><DetailRow label="Role" value={claim.role}/><DetailRow label="Selectors" value={claim.selectors.map(selectorText).join(", ") || "—"}/><DetailRow label="Conflicts" value={String(claim.conflicts.length)}/></DetailList></>}
