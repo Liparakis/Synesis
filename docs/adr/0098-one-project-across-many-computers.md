@@ -1178,6 +1178,15 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     `AgentRunController`) reproduces the state: both original reviewers closed, their grants released within a second, the
     combine holder the only live agent, and the other agent never woken ("waits for another reviewer").
 
+31. **A combine opened after every agent has stopped waits for the next agents run** (designer, 2026-10-20). Under a
+    real cut each computer can finish its own work and end its run before the heal (s5-run17: the VM's run ended
+    COMPLETED after 244 s, during the cut); the re-merge after the heal then opens a combine with no agent running on
+    either computer. It waits, as a merge conflict in Git waits for whoever works next; a run does not wait for a
+    computer that may stay away for days (the premise). The lab models later work with `run.sh --restart-after-heal`,
+    which now starts any ended run again after the heal. Still open (PARTIAL): with agents started again, s5-run18
+    ended with two combines for one snapshot and a reviewer lane open, and the copies did not meet within the run's
+    50 minutes.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory
@@ -1495,7 +1504,7 @@ losing their lanes.
      the repository over Link.
    - **Done when:** run 7 again with no Git remote: the WorkGroup completes on both computers and `main` is equal on
      both. A 450 MB history joins over Link in three or more pieces through an interruption. Compatibility 7.
-4. **Each computer writes its own log, and claims lock between connected computers.** DONE 2026-10-19: logs byte-identical on both computers after 5- and 10-minute Link splits (s5-run14, s5-run15, s7-run1, remaster81–83); claim lock and overlap refusal also proven by the scripted scenarios S1–S4.
+4. **Each computer writes its own log, and claims lock between connected computers.** DONE 2026-10-20: under real Link cuts (s5-run16 to s5-run18, s7-run5, s7-run6; both computers logged `LIVENESS_EXPIRED` about 60 s in) each kept claiming, publishing and reviewing apart, and after the heal both held byte-identical logs. Correction: the cuts of 2026-10-19 (s5-run14, s5-run15, s7-run1) and s7-run3/s7-run4 did not reach the Link (the PC had rotated to an IPv6 address `partition.sh` did not block; fixed 2026-10-20 by blocking the LAN prefix), so they were connected runs.
    - **Built:** own `events/` plus `peers/<node>/events/`; the local applied order; notice and pull per log; the
      proposal path removed; a claim's answer waiting for connected computers (designer item 1). Every projection throw
      an arriving entry can reach becomes "both stand" or "counts for nothing, reported" (ADR-0100's table; the sites
@@ -1508,7 +1517,7 @@ losing their lanes.
      claiming, publishing and reviewing, and no agent sees `LEADER_UNREACHABLE`. Within one pull after reconnecting,
      both computers hold byte-identical copies of both logs and show the overlap and the dispute the same way. The
      disputed snapshot stays off `main`. Compatibility 8.
-5. **Each computer merges its own lanes, and the copies of `main` meet peer to peer.** DONE 2026-10-19: s7-run1 (remaster83, `3666a4f8`) RESULT=PASS after a 10-minute split: the four packages and NOTES landed, `main` equal, logs byte-identical, tests pass on both, both runs COMPLETED. Scripted scenarios S1, S2, S3 cover re-merge, combine and cross-computer review.
+5. **Each computer merges its own lanes, and the copies of `main` meet peer to peer.** PARTIAL 2026-10-20 (owner's rule 16): connected, the copies meet and goals complete (s7-run1, s7-run6); under a real 5-minute cut the copies re-merge and a combine is opened, but in s5-run16, s5-run17 and s5-run18 the two copies of `main` did not end equal (designer items 30 and 31). The scripted scenarios S1, S2, S3 pass; `CombineUnderRunControllerScenarioTest` is disabled (1 in 3).
    - **Built:** the merge pass on every computer; sharing `main` over Link; the diverged-copy rule (designer item 5);
      one merge commit per integration; re-review of each re-merge by the original reviewer; the combine lane through the
      repair path; "on `main`" read from each copy; attribution with no exemption, and integration entries written only
@@ -1527,7 +1536,7 @@ losing their lanes.
      claims, an overlapping claim is refused, and their copies of `main` meet. With Synesis on the PC started again,
      all three copies of `main` become equal. The owner removes the third computer: its open work ends, and an entry it
      writes afterwards is copied and counts for nothing. Compatibility 10.
-7. **Disputes, taking over stalled work, and the trash.** SOURCE-PROVEN 2026-10-19, real run NOT REACHED: the scripted scenario S4 (`TakeoverScenarioTest`) proves the takeover, `LANE_TAKEN_OVER` to the returning agent, the trash (`TAKEN_OVER`), late work trashed, restore and empty. s7-run1 had no away lane to take over (the VM finished its own). A dispute stays source-level (two lawful reviewers are not reachable).
+7. **Disputes, taking over stalled work, and the trash.** DONE 2026-10-20: s7-run6 (remaster87) RESULT=PASS under a real 10-minute cut: the VM's agent stalled on an announced lane, the PC's idle agent took it over (`LANE_CONTINUATION_ACCEPTED`, written by the PC during the cut), after the heal the VM wrote `WORK_TRASHED` for its version, all four packages and NOTES landed, `main` equal, logs identical. The returning-agent notice is proven by `TakeoverScenarioTest` (in the run the stalled agent was replaced by a new one, which has no notice to receive). A dispute stays source-level.
    - **Built:** agents of a dispute told to settle it by messages, and a new verdict replacing a reviewer's own;
      the dispute and its end shown in the UI; the stall test (designer item 4) and takeover through lane continuation;
      the reconnecting agent told to stop, release and close; the trash (designer item 6) for late work and for a

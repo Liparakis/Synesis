@@ -1,3 +1,27 @@
+# 2026-10-20 — ADR-0098 step 7 proven under a real cut; step 5 PARTIAL; yesterday's cuts did not reach the Link
+
+**Correction to 2026-10-19.** The lab's Link cut (`~/accept/partition.sh` on the VM) blocked the PC's IPv6 addresses
+by name, and the PC had rotated to a temporary address it did not list, so s5-run14, s5-run15, s7-run1 (the "PASS after
+a 10-minute split"), s7-run3 and s7-run4 were connected runs, not split runs. The cut now blocks the LAN prefix
+(internet hosts are outside it, so agents keep their providers); every cut since logs `LIVENESS_EXPIRED` on both
+computers about 60 s in.
+
+**Real runs with a real cut (remaster86–88; PC `claude:sonnet:medium`, VM `codex:gpt-6-luna:high`).**
+- s7-run6: **RESULT=PASS**. The VM's agent stalled on an announced lane (`D:\SynesisAcceptance\lab\vm-stall.sh` cuts
+  the Link and stops it), the PC's idle agent took the lane over during the cut, the VM trashed its version after the
+  heal, the goal landed, `main` equal, logs identical. ADR-0098 step 7 DONE.
+- s5-run16, s5-run17, s5-run18: logs identical after the heal, the re-merge opened a combine, but the copies of
+  `main` did not end equal. ADR-0098 step 5 PARTIAL (owner's rule 16); designer items 30 and 31.
+
+**Fixed today:** the owner recorded a member as connected after the Link went silent, and the run controller now
+reads the same record (step 6 item 22); a stopped agent with no lane is woken for a takeover offer (ADR-0099 fix 15);
+a stopped agent is woken for a re-merge review it may take, an agent the controller resumes is recorded as its earlier
+session's successor, and a combine's holder may review as a last resort (fix 16). Lab: each Linux gate run has its own
+Gradle home (no more journal-lock timeouts); `build-and-copy.ps1` refuses a PC copy without the Windows QUIC jar.
+
+**ADR-0101** is open with its candidate rules and the owner's constraint (an agent's identity cannot be inferred from
+a provider's session). **Open:** step 5 under a real cut; `CombineUnderRunControllerScenarioTest` disabled (1 in 3).
+
 # 2026-10-19 — ADR-0098 steps 4 to 6 done, step 7 source-proven; ADR-0099 fixes 12 to 14; ADR-0102 built
 
 On `adr-0098-step3-code-over-link`. ADR-0102 (a fast loop) was built and used the same day: scripted multi-computer
