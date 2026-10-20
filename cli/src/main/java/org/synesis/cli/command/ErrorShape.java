@@ -147,6 +147,8 @@ public final class ErrorShape {
     }
 
     /**
+     * Returns the codes this class explains.
+     *
      * @return every code this class explains, which {@code docs/cli/command-reference.md} must list
      */
     public static java.util.Set<String> codes() {
@@ -154,6 +156,8 @@ public final class ErrorShape {
     }
 
     /**
+     * Tells whether this class explains a code.
+     *
      * @param code error code
      * @return whether this class has its own message and fix for the code
      */

@@ -158,12 +158,17 @@ class LifecycleModeCharacterizationTest {
 
     @Test
     void providerMigrateRejectsConflictingModes() {
-        run("provider", "migrate", "--dry-run", "--prepare").assertIs(2, NONE, CONFLICT);
-        run("provider", "migrate", "--show-plan", "a", "--execute", "b").assertIs(2, NONE, CONFLICT);
+        // The provider commands add ERROR/MESSAGE/FIX after the old line (ADR-0103 decision 1, additive).
+        List<String> conflict = List.of("USAGE_ERROR=CONFLICTING_MODES", "ERROR=CONFLICTING_MODES",
+                "MESSAGE=Only one of --dry-run, --prepare, --show-plan and --execute can be given.", "FIX=repeat the command with one of them");
+        run("provider", "migrate", "--dry-run", "--prepare").assertIs(2, NONE, conflict);
+        run("provider", "migrate", "--show-plan", "a", "--execute", "b").assertIs(2, NONE, conflict);
     }
 
     @Test
     void providerMigrateFailuresPrintTheReviewMarkerOnStderr() {
-        run("provider", "migrate", "--show-plan", "").assertIs(10, NONE, List.of("PROVIDER_MIGRATION_RESULT=REQUIRES_HUMAN_REVIEW"));
+        run("provider", "migrate", "--show-plan", "").assertIs(10, NONE, List.of("PROVIDER_MIGRATION_RESULT=REQUIRES_HUMAN_REVIEW",
+                "ERROR=PROVIDER_MIGRATION_REVIEW_REQUIRED", "MESSAGE=Provider configuration could not be migrated safely.",
+                "FIX=run 'synesis provider migrate --dry-run' and read each provider it flags"));
     }
 }
