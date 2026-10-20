@@ -346,6 +346,10 @@ and maintainability decide when a stage is done, by its completion criteria belo
   launcher path; a test that every command appears in the generated reference; web-ui tests for the WorkGroup filter and
   the details record; a test that `synesis mcp` starts a stopped runtime; `agents run` without a task starts no agent.
 - **Real-world test.** A fresh VM user follows the new README from install to an interactive `claude` session.
+  Done on 2026-10-20 without a README (decision 9) as VM user `synesis3`, build remaster89: `init` wrote no `AGENTS.md`
+  and printed the next steps, `provider install codex` installed the skill, `agents run` without a task named the fix,
+  and two `codex:gpt-6-luna:high` agents given "Make the failing test pass without changing the test" finished in 64 s
+  with the fix on `main`, the test file unchanged and the tests passing (REAL, one run).
 - **Completion criteria.** Every item merged with its tests green on the Linux gate and the Windows gate; the README path
   works on the fresh VM user without any step the README does not state.
 - **Built, web UI part (2026-10-20).** The coordination tables follow the selected WorkGroup: claims by their
@@ -697,6 +701,19 @@ and maintainability decide when a stage is done, by its completion criteria belo
   further agent harnesses.
 - **Dependencies and blockers.** Each needs its own design and approval; release signing needs a key the owner holds.
 - **Completion criteria.** Set in its own ADR or amendment.
+- **Status on 2026-10-21 (designer).** Stages 1 to 3 are built. Of stage 4:
+  - **Done or not needed:** removal of the old commands happened in stage 3 (decision 4). AppCDS is not needed: the
+    measured baseline is `--help` about 0.45 s median and `coordination status` about 0.46 s on the Linux gate (stage 2
+    measurement), so no start-time budget is missed yet. The old error keys stay until a separate, authorized removal.
+  - **Needs the owner before it is built:** (a) "ready without a task" — deferred by decision 7; it needs a person-to-agent
+    message path and a rule for what such a message may authorize (never review, merge or authority). (b) Starting and
+    stopping agents from the UI — a daemon-side runner shared with `agents run`; it gives the browser page the power to
+    start processes, so the authority of that route must be decided. (c) OS packages with signed manifests — needs a
+    release signing key only the owner holds (`bootstrap/main.go`'s manifest key is a placeholder). (d) Adapters for
+    further harnesses — which ones.
+  - **Also left for the owner:** the `org.synesis.projectrecord.sync` protocol classes and `Onboarding.hostCompact` /
+    `joinOnce` have no production caller after decision 4 (about 2,400 lines); deleting another module's public API is a
+    separate, explicitly authorized change.
 
 ## Acceptance tests and targets
 

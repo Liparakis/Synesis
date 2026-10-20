@@ -1,8 +1,8 @@
 package org.synesis.cli.command.project;
 
-import org.synesis.coordination.application.MembershipService;
-
 import org.synesis.cli.bootstrap.CliRuntime;
+
+import org.synesis.workspace.transport.control.ProjectSharing;
 
 import picocli.CommandLine.Command;
 
@@ -22,11 +22,12 @@ public final class ProjectRemoveMemberCommand extends ProjectMemberCommand {
     }
 
     @Override
-    boolean change(MembershipService membership, String node) throws Exception {
-        if (!membership.isMember(node)) {
-            throw new Refusal("NOT_A_MEMBER");
+    boolean change(Role role, String node) throws Exception {
+        try {
+            ProjectSharing.removeMember(role.location(), role.coordination(), node);
+        } catch (ProjectSharing.Refusal refusal) {
+            throw new Refusal(refusal.code());
         }
-        membership.remove(node);
         return true;
     }
 }
