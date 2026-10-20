@@ -43,6 +43,42 @@ This run does not test Windows behaviour: file locking, path and line-ending
 handling, the launcher and the installer. Run the Windows gate above before a
 change is pushed.
 
+## Measuring onboarding
+
+[ADR-0103](../adr/0103-zero-friction-onboarding-and-developer-experience.md)
+sets two times, measured apart: from the installer starting to the agent being
+ready, and to a predefined task done and verified. The task is the fixture in
+`docs/fixtures/first-task` (a repository with one failing test; the task text is
+in `task.txt`). Neither measurement is part of `check`, because a time is a
+number to read, not a pass or fail.
+
+On a real computer, with the agent signed in beforehand (that time is not
+measured):
+
+```powershell
+pwsh scripts/onboarding-measure/measure-onboarding.ps1 -Agent claude -Model sonnet -Effort medium -Network "home Wi-Fi" -Runs 5
+```
+
+The script follows the commands of the getting-started guide's `WALKTHROUGH`
+block, so it times what the guide tells a person to do. It reports the median
+time to agent readiness and to the first task, Synesis's own part (the commands,
+and during the task the time Synesis held each MCP request, read from the opt-in
+trace `SYNESIS_MCP_TRACE_FILE`) apart from the model's time (from Claude Code's
+transcript; only each entry's type and timestamp are read), the number of user
+actions and prompts, and the conditions (machine, OS, network, provider, model,
+effort, harness version). Add `-SkipTask` to measure readiness without a model
+and `-Installer <path> -InstallDir <folder>` to time the installer too.
+`-HomeDirectory <folder>` runs everything with a disposable home directory, which
+is how to try the script without touching the real provider files. The script
+reads no credential.
+
+The guide's commands also run as a test, in the Linux gate
+(`GettingStartedWalkthroughTest`), so a command that stops working fails the
+build. The CLI's start-up time is recorded on the Linux gate with
+`scripts\linux-gate\run.ps1 :cli:cliStartupBaseline`, which prints the minimum,
+median and 95th percentile of `--help`, `version` and a read of an initialized
+project; the budget is set later from those numbers.
+
 The Go module is `bootstrap`; run its checks from that directory:
 
 ```powershell

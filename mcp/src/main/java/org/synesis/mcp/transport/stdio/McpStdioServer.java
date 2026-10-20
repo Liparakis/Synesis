@@ -62,12 +62,29 @@ public final class McpStdioServer {
      * @param err     error stream for diagnostic logging
      */
     public McpStdioServer(McpProtocolHandler handler, InputStream in, PrintStream out, PrintStream err) {
+        this(handler, in, out, err, configuredTraceFile());
+    }
+
+    /**
+     * Creates a server that traces to the given file, for tests that cannot set the environment.
+     *
+     * @param handler   protocol message handler
+     * @param in        input stream for requests
+     * @param out       output stream for protocol frames ONLY
+     * @param err       error stream for diagnostic logging
+     * @param traceFile append-only trace path, or {@code null} to trace nothing
+     */
+    McpStdioServer(McpProtocolHandler handler, InputStream in, PrintStream out, PrintStream err, Path traceFile) {
         this.handler = Objects.requireNonNull(handler, "handler");
         this.in = Objects.requireNonNull(in, "in");
         this.out = Objects.requireNonNull(out, "out");
         this.err = Objects.requireNonNull(err, "err");
+        this.traceFile = traceFile;
+    }
+
+    private static Path configuredTraceFile() {
         String tracePath = System.getenv(TRACE_FILE_ENV);
-        this.traceFile = tracePath == null || tracePath.isBlank() ? null : Path.of(tracePath);
+        return tracePath == null || tracePath.isBlank() ? null : Path.of(tracePath);
     }
 
     /**
@@ -110,8 +127,11 @@ public final class McpStdioServer {
      */
     private void process(String line) {
         // The method name only feeds tracing, so skip the extra parse when tracing is off.
-        String method = traceFile == null ? null : messageMethod(line);
+        Map<?, ?> message = traceFile == null ? null : parsedMessage(line);
+        String method = message != null && message.get("method") instanceof String name ? name : null;
         traceInbound(method);
+        long startedMillis = System.currentTimeMillis();
+        long startedNanos = System.nanoTime();
         String responseJson = handler.handleMessage(line);
         if (responseJson == null) {
             return;
@@ -121,6 +141,29 @@ public final class McpStdioServer {
         }
         out.println(responseJson);
         out.flush();
+        traceCall(method, message, startedMillis, System.nanoTime() - startedNanos);
+    }
+
+    /**
+     * Traces how long Synesis held one answered request, from the frame being read to the answer being flushed, so
+     * the onboarding measurement can tell Synesis's own time from the model's (ADR-0103). Only the method and the tool
+     * name are recorded, never arguments or results. The line is written after the answer, so tracing is not in the
+     * time it reports.
+     *
+     * @param method        JSON-RPC method of the frame, or {@code null} when unknown
+     * @param message       the parsed frame
+     * @param startedMillis wall-clock time the frame was read, as epoch milliseconds
+     * @param elapsedNanos  time from reading the frame to flushing its answer
+     */
+    private void traceCall(String method, Map<?, ?> message, long startedMillis, long elapsedNanos) {
+        if (traceFile == null || method == null) {
+            return;
+        }
+        String tool = "?";
+        if ("tools/call".equals(method) && message.get("params") instanceof Map<?, ?> params && params.get("name") instanceof String name && name.matches("[A-Za-z0-9_.-]{1,64}")) {
+            tool = name;
+        }
+        trace("mcp_call method=" + method + " tool=" + tool + " started_epoch_ms=" + startedMillis + " duration_micros=" + elapsedNanos / 1_000L);
     }
 
     /**
@@ -141,16 +184,15 @@ public final class McpStdioServer {
     }
 
     /**
-     * Reads a method name for transport tracing without taking over protocol validation.
+     * Parses a frame for transport tracing without taking over protocol validation.
      *
      * @param line raw JSON-RPC input frame
-     * @return method name when the frame contains one, otherwise {@code null}
+     * @return the frame as an object, or {@code null} when it is not one
      */
-    private String messageMethod(String line) {
+    private Map<?, ?> parsedMessage(String line) {
         try {
-            Object value = ProviderJson.parse(line);
-            if (value instanceof Map<?, ?> map && map.get("method") instanceof String method) {
-                return method;
+            if (ProviderJson.parse(line) instanceof Map<?, ?> map) {
+                return map;
             }
         } catch (RuntimeException ignored) {
             // Malformed input is handled by the protocol handler.

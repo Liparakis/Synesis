@@ -498,6 +498,54 @@ and maintainability decide when a stage is done, by its completion criteria belo
   4. Registered under "Coordinate work"; `docs/cli/command-reference.md` (generated list and two new sections) and
      `docs/getting-started/README.md` updated. All output keys are additive; nothing existing changed meaning.
 
+- **Built 2026-10-20 (measurement and executed walkthroughs; source semantics proven on the Linux gate, not yet a real
+  run).**
+  1. *The predefined task fixture* is checked in at `docs/fixtures/first-task`: `repo/` (a shell function with a
+     wrong operator and the one test that exposes it, `sh test.sh`; it needs only `sh`, which Git for Windows ships) and
+     `task.txt` ("Make the failing test pass without changing the test"). `FirstTaskFixtureTest` pins the task text,
+     that the test fails before the one-line fix, passes after it, and that the test file is unchanged.
+  2. *The measuring script* is `scripts/onboarding-measure/measure-onboarding.ps1` (PowerShell 7, Windows or Linux; how
+     to run it: `docs/development/build-and-test.md`, "Measuring onboarding"). Per run it times the installer (when
+     given), the commands of the getting-started guide's `WALKTHROUGH` block up to the first `provider status`
+     (readiness, and the user actions to it), then `agents run` with the fixture's task and the check that the test
+     passes on `main` and the test file is unchanged (first task). It records the conditions (machine, OS, network,
+     provider, model and effort, harness version, Synesis version) and reports medians over the runs; failed runs and
+     runs whose task did not succeed are listed, not averaged. It reads no credential and closes every command's
+     standard input. Synesis's own time during the task comes from the MCP server's trace: the one product change is
+     additive, in `McpStdioServer`: with the existing opt-in `SYNESIS_MCP_TRACE_FILE` set, each answered request also
+     writes `mcp_call method=<m> tool=<name> started_epoch_ms=<ms> duration_micros=<n>` (frame read to answer flushed;
+     no arguments or results; a tool name that is not a plain identifier is written as `?`), and nothing changes
+     without the variable (`McpStdioServerTraceTest`, 2 tests). Model time comes from Claude Code's transcript, reading
+     only each entry's type and timestamp; for Codex it is reported as missing.
+  3. *Executed walkthroughs*: `GettingStartedWalkthroughTest` runs the guide's `WALKTHROUGH` block (`init`, `provider
+     install claude`, `provider status claude`, `doctor`) through the staged launcher in a disposable Git repository,
+     with a stand-in `claude` and a home directory and Link profile of the test's own, and fails on any non-zero exit;
+     it skips on Windows, where the stand-in is not a shell script. Another walkthrough joins the same way by marking
+     its block.
+     Gate results: `:cli:check` 271 tests, 0 failures (2 skipped, both existing) and `repositoryHygieneCheck` green; the
+     whole `check` of the other modules, including the whole `mcp` suite, was green in an earlier run whose container
+     was lost before `cli` finished; a guide with a command that does not exist fails the walkthrough test.
+  4. *CLI responsiveness*: `scripts/linux-gate/cli-startup-baseline.sh`, run as `:cli:cliStartupBaseline`, prints the
+     first run, minimum, median, p95 (nearest rank) and maximum of 20 starts of `--help`, `version` and `coordination
+     status` on an initialized project. It is not part of `check`; the budget is set from it later.
+  - **Not built, and why.** `init`'s sub-steps (git checks, baseline commit, discovery, provider connection, health
+    probe) are not timed separately: `init` prints no timestamps and its behaviour belongs to another stage-2 item, so
+    the script times the commands from outside. The installer's extraction and activation are one command (`install`
+    prints no phase times; the wizard's phase events are not reachable from the command line). "Runtime start" is read
+    as the time until `agents run` prints `PROJECT_RUNTIME=`, null when it does not. Whether Claude Code passes
+    `SYNESIS_MCP_TRACE_FILE` through to the MCP server it starts is unknown until a real run; the script reports a
+    missing trace instead of a zero.
+  - **First baseline (conditions stated; not the targets' measurement).** Linux gate, a Podman container on this PC (16
+    logical CPUs, WSL2 kernel, Java 25.0.4.1), 20 starts each, two runs, milliseconds (the second while other sessions used
+    the PC, so the spread is the noise to budget for): `--help` median 456 and 589, p95 510 and 620; `version` median 402
+    and 631, p95 452 and 741; `coordination status` median 458 and 519, p95 485 and 626. Windows, the build
+    installed on this PC, a disposable home directory, no agent task, 6 runs in three sessions: `init` about 3 s,
+    `provider install` about 2 s, `provider status` about 0.8 s, so readiness through `provider status` took 4.0 to
+    6.0 s on a quiet PC and 7.4 to 8.3 s while a Linux gate ran beside it (a median of 5.7 s over the first two), with 4
+    user actions (`cd` and the three guide commands) and no prompt, against the target's `cd` and `init`: stage 2's
+    `init` is to connect the agent, and the health check is for the script. Time to first task, MCP overhead per call
+    and model time need a real signed-in agent and have not been measured.
+
 ### Stage 3 — behaviour changes (owner approval first; preliminary: about two days)
 
 - **Tasks.** Interactive approval in `link invite` (who asks; accept? y/N). The firewall fix offered by `link invite`

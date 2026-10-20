@@ -382,6 +382,16 @@ tasks.register<Sync>("testInstallDist") {
     }
 }
 
+// A start-up time is a baseline to set a budget from (ADR-0103, "Other measures"), not a pass or fail, so it is not
+// part of `check`. Run it on the Linux gate: scripts/linux-gate/run.ps1 :cli:cliStartupBaseline
+tasks.register<Exec>("cliStartupBaseline") {
+    group = "verification"
+    description = "Times the CLI's start-up (--help, version, a read of an initialized project) and prints min, median and p95."
+    dependsOn("testInstallDist")
+    commandLine("bash", rootProject.file("scripts/linux-gate/cli-startup-baseline.sh").path,
+            layout.buildDirectory.file("install/synesis/bin/synesis").get().asFile.path, providers.gradleProperty("startupRuns").getOrElse("20"))
+}
+
 tasks.register("launcherSmoke") {
     group = "verification"
     description = "Checks that the standard Application launchers are generated."

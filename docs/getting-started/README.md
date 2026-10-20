@@ -18,9 +18,11 @@ For the full verification matrix, see [build and test](../development/build-and-
 
 From the project root (a Git repository), run:
 
+<!-- WALKTHROUGH: GettingStartedWalkthroughTest runs this block in a disposable Git repository; a command that stops working fails the build -->
 ```powershell
 synesis init
 synesis provider install claude   # or: synesis provider install codex
+synesis provider status claude
 synesis doctor
 ```
 
