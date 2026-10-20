@@ -1128,7 +1128,7 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
 
 30. **A re-merge review owed to agents the run controller had already closed** (s5-run16, PC owner with 2 Claude agents,
     VM member with 2 Codex agents, build remaster86 = `3dbbbf92`, 2026-10-20; a real 5-minute cut, both journals
-    `LIVENESS_EXPIRED` after 60 s; FAIL: `main` PC `e523d3d5`, VM `ffd76e6e`; **the fix is NOT BUILT**, this is the record).
+    `LIVENESS_EXPIRED` after 60 s; FAIL: `main` PC `e523d3d5`, VM `ffd76e6e`; the fix is built, see below).
     *Proven from the evidence* (`D:\SynesisAcceptance\evidence\s5-run16`; the VM's own log has timestamps):
     - The PC's run ended `COMPLETED` after 128 s, while cut. Its log named no head of the VM's, so
       `MainMeeting.holdsEveryHead` held for the one head it knew, and no agent had a lane or a grant to come back to, so
@@ -1156,7 +1156,16 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
       closed sessions together leave no one, which scenarios with four or six agents per computer never meet.
     *Hypothesis, not proven:* that the PC's stopped agents would have been resumed if the PC's run had still been running;
     its run ended 4 minutes before the heal, so nothing tested it.
-    *What a fix has to hold* (decided with the invariant of item 27, *a re-merge review owed on this computer is offered to
+    **Built 2026-10-20 as ADR-0099 fix 16** (a), (b) and (c) below, as named, plus two defects the scenario found: a run
+    whose own work is closed ends no sooner than 30 s after another computer connected (`COPIES_MEETING`; it ended within
+    a second of the heal, before the combine was written), and `AwayLanes.liveHere` reads the session a connection has now
+    from its binding, because a lease still names the session before the one a refresh or a combine join put at the same path
+    and a review offered to that name was never taken and, its lease live, never released (a re-merge grant to a lane-less
+    session of this computer that no entry introduced is now released when it is gone). The combine is also refused to every
+    session of its authors' agents (`CombineLaneJoin.sessionsOfAgent`), not only to the author's own handle: the fresh
+    session of a resumed author was offered it. `CombineUnderRunControllerScenarioTest` is enabled and passed 4 of 4 times
+    (Linux gate); the combine lands and both mains end equal with every re-merge grant consumed. Not proved in a real run.
+    *What the fix holds* (decided with the invariant of item 27, *a re-merge review owed on this computer is offered to
     an agent that is live, may review it, and can see it in its next action*): (a) a stopped agent whose session was
     closed, with a re-merge snapshot waiting for a reviewer that none of its sessions authored, is resumed for it (the
     pass can only choose a session that exists; `reviewsOffered` names today only what exists for a session); (b) the
@@ -1165,11 +1174,9 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     work; (c) the holder of a combine lane whose snapshot is published is shown a re-merge grant addressed to it
     (`AgentReviewActionProjection.reviewActions` shows it today only to a lane-less caller or an admitted reviewer) and the
     pass may choose it, because the original reviewer can be the combiner and the combine snapshot is, by item 22, not
-    reviewed on its own. Scripted scenario `CombineUnderRunControllerScenarioTest` (two agents per computer started by
-    a real `AgentRunController`) is written and disabled: on the Linux gate it stalls with `COMBINE_REQUIRED` written and no
-    re-merge snapshot, but it does not yet reproduce the leases the real run had (the scenario's merge pass logs
-    "session leases not all readable; no reviewer of this computer is judged gone", so item 24's release never runs
-    there), so it is not yet proof of the mechanism above.
+    reviewed on its own. Scripted scenario `CombineUnderRunControllerScenarioTest` (two agents per computer started by a real
+    `AgentRunController`) reproduces the state: both original reviewers closed, their grants released within a second, the
+    combine holder the only live agent, and the other agent never woken ("waits for another reviewer").
 
 ### Step 6: Membership in the owner's log
 

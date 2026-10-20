@@ -405,12 +405,43 @@ class RemergeServiceTest {
     }
 
     /**
-     * Defect 3 of the scripted scenarios: the holder of a combine lane of this re-merge waits for it to land and is shown
-     * no review before then, so a review offered to it would never be taken.
+     * s5-run16 (ADR-0098 step 5, item 30): with two agents on a computer, the holder of the combine lane of this re-merge may be the
+     * only one that did not write a lane under review. It is shown the grant while its lane waits for the re-merge, so it is offered
+     * the review when no other agent may take it.
      */
     @Test
-    void aReleasedReMergeReviewIsNeverOfferedToTheHolderOfACombineLaneOfThatReMerge() throws Exception {
+    void aReleasedReMergeReviewIsOfferedToTheHolderOfACombineLaneOfThatReMergeWhenNoOtherAgentMayTakeIt() throws Exception {
         String rms = builtReMerge();
+        String holder = combineHolder(rms);
+
+        assertTrue(new WorkGroupService(project.store(), self).revokeStalledReview(grantFor(rms).identity()));
+        run();
+        run();
+
+        assertEquals(2, grantsOn(rms), "the combiner is the only live agent, and is offered it");
+        assertTrue(project.store().workGroupProjection().grants().stream().anyMatch(grant -> rms.equals(grant.snapshotId()) && holder.equals(grant.targetParticipant())));
+    }
+
+    /** The holder is the last resort: another live agent that may review the lane is offered it first, whatever their handles. */
+    @Test
+    void aReleasedReMergeReviewIsOfferedToAnotherLiveAgentBeforeTheHolderOfACombineLane() throws Exception {
+        String rms = builtReMerge();
+        String holder = combineHolder(rms);
+        String otherSession = "session-zzz-other";
+        liveSession(otherSession);
+
+        assertTrue(new WorkGroupService(project.store(), self).revokeStalledReview(grantFor(rms).identity()));
+        run();
+        run();
+
+        assertEquals(2, grantsOn(rms));
+        assertTrue(project.store().workGroupProjection().grants().stream().anyMatch(grant -> rms.equals(grant.snapshotId())
+                && WorkspaceCollaborationService.participantHandle(otherSession).equals(grant.targetParticipant())), "offered to the agent that holds no combine lane");
+        assertTrue(project.store().workGroupProjection().grants().stream().noneMatch(grant -> rms.equals(grant.snapshotId()) && holder.equals(grant.targetParticipant())));
+    }
+
+    /** Announces a combine lane of the re-merge for a live session and returns its participant handle. */
+    private String combineHolder(String rms) throws Exception {
         CombinePayload combine = new CombinePayload("cb-test", remergeId, "a".repeat(40), "b".repeat(40), base, "c".repeat(40), List.of("snap_a"));
         store.append(UUID.randomUUID(), PredictionEventType.COMBINE_REQUIRED, self.nodeId(), combine.encode(), self);
         String holderSession = "session-combiner";
@@ -420,12 +451,7 @@ class RemergeServiceTest {
                 "acceptance", base, List.of(ResourceSelector.pathExact("combined.txt")), 1, combine.workGroupId(), WorkIntent.defaultAuthorityLineage(combineLane),
                 WorkIntent.Status.ANNOUNCED)).acquired());
         liveSession(holderSession);
-
-        assertTrue(new WorkGroupService(project.store(), self).revokeStalledReview(grantFor(rms).identity()));
-        run();
-        run();
-
-        assertEquals(1, grantsOn(rms), "the combiner is the only live agent, and may not be offered it");
+        return holder;
     }
 
     @Test

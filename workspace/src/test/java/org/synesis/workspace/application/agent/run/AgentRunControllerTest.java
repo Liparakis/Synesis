@@ -959,6 +959,7 @@ final class AgentRunControllerTest {
         assertEquals(AgentRunController.RESUME_PROMPT, script.prompts.getLast(), "the resume names no review");
         assertEquals(AgentRunController.Outcome.TIMED_OUT, result.outcome(), "the foreign author's lane is still open");
         assertTrue(script.connections.containsAll(List.of("ended conn-1", "open conn-3")), "a resumed agent whose connection ended gets a new one: " + script.connections);
+        assertEquals(List.of("conn-3 continues conn-1", "conn-4 continues conn-2"), script.continuations, "and the project is told whose agent it is, once for each resume on a new connection, so that it is not offered its own earlier work to review (item 30)");
     }
 
     /**
@@ -1309,6 +1310,8 @@ final class AgentRunControllerTest {
         private final Map<String, Integer> laneHeldUnderConnection = new java.util.HashMap<>();
         private final List<String> heldByOperator = new ArrayList<>();
         private final List<String> connections = new ArrayList<>();
+        /** Each connection the controller opened for an agent that had an earlier one, with that one. */
+        private final List<String> continuations = new ArrayList<>();
         private final List<Map<String, String>> environments = new ArrayList<>();
         private final List<List<String>> commands = new ArrayList<>();
         private final List<Integer> resumedAtTicks = new ArrayList<>();
@@ -1348,6 +1351,13 @@ final class AgentRunControllerTest {
                 public String open() {
                     String identity = "conn-" + ++opened;
                     connections.add("open " + identity);
+                    return identity;
+                }
+
+                @Override
+                public String open(String earlier) {
+                    String identity = open();
+                    continuations.add(identity + " continues " + earlier);
                     return identity;
                 }
 

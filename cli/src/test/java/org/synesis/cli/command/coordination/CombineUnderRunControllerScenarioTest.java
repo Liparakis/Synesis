@@ -13,11 +13,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -28,7 +26,6 @@ import org.synesis.cli.command.coordination.TestComputers.Computer;
 import org.synesis.workspace.application.agent.run.AgentRunController;
 import org.synesis.workspace.application.agent.run.ControllerConnections;
 import org.synesis.workspace.application.agent.run.EventLogObserver;
-import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.provider.ProviderIntegration.HeadlessOptions;
 import org.synesis.workspace.provider.ProviderIntegration.HeadlessSession;
 
@@ -55,7 +52,9 @@ final class CombineUnderRunControllerScenarioTest {
     private final Map<String, ScenarioAgent> byConnection = new ConcurrentHashMap<>();
     private final Map<String, AgentScript> scripts = new ConcurrentHashMap<>();
     private final List<String> events = new CopyOnWriteArrayList<>();
-    private final AtomicInteger resumedConnections = new AtomicInteger();
+    /** Held by the run's third process, which stands for an agent that is still working at the heal, so that the run is not over before the combine. */
+    private final java.util.concurrent.CountDownLatch released = new java.util.concurrent.CountDownLatch(1);
+    private final Map<String, ScenarioAgent> byLabel = new ConcurrentHashMap<>();
     private Computer high;
 
     /** What a controller-started agent does when its process begins, by the agent's label. */
@@ -78,13 +77,14 @@ final class CombineUnderRunControllerScenarioTest {
         lab.close();
     }
 
-    @Disabled("ADR-0098 step 5 item 30 (s5-run16): not fixed yet; the scenario stalls with the combine written and nobody woken for it or for its re-merge reviews")
     @Test
     void theCombineLandsAndMainEndsEqualWhenTheHigherComputersTwoAgentsAreRunByARunControllerThatEndsTheirConnections() throws Exception {
         Computer low = lab.lower();
         ScenarioAgent low1 = lab.agent(low, "low-1");
         ScenarioAgent low2 = lab.agent(low, "low-2");
+        // As in s5-run16 the two changes are integrated one after the other, so the file both computers changed is an advance of its own.
         scripts.put("codex#1", agent -> {
+            lab.await("the second agent has published its change", () -> byLabel.containsKey("codex#2") && byLabel.get("codex#2").trace.stream().anyMatch(call -> call.startsWith("finish_lane")));
             agent.claim("Change shared.txt on the higher computer", "shared.txt");
             agent.edit("shared.txt", "two", "two, by the higher computer");
             agent.publish();
@@ -103,12 +103,14 @@ final class CombineUnderRunControllerScenarioTest {
         low2.create("low.txt", "written by the lower computer\n");
         low1.publish();
         low2.publish();
-        AgentRunController controller = new AgentRunController(this::process, new EventLogObserver(high.location), connections(), System::currentTimeMillis, Thread::sleep);
+        AgentRunController controller = new AgentRunController(this::process, new EventLogObserver(high.location), new ControllerConnections(high.location.root()), System::currentTimeMillis, Thread::sleep);
         AgentRunController.Request request = new AgentRunController.Request(high.location.root(),
-                List.of(spec(), spec()), "go", Duration.ofMinutes(8), Duration.ofMillis(300), 8);
+                List.of(spec(), spec(), spec()), "go", Duration.ofMinutes(8), Duration.ofMillis(300), 8);
         threads.submit(() -> {
             try {
-                return controller.run(request, events::add);
+                var result = controller.run(request, line -> events.add(java.time.LocalTime.now().toString().substring(0, 8) + " " + line));
+                events.add(java.time.LocalTime.now().toString().substring(0, 8) + " RUN_RESULT " + result);
+                return result;
             } catch (InterruptedException | IOException | RuntimeException failed) {
                 events.add("RUN_FAILED " + failed);
                 return null;
@@ -117,14 +119,55 @@ final class CombineUnderRunControllerScenarioTest {
         lab.drive("the lower computer's two changes are on its main", () -> lab.hasOnBranch(low, "low.txt") && lab.onBranch(low, "shared.txt").contains("by the lower computer"), low1, low2);
         lab.await("the higher computer's two changes are on its main; events " + events, () -> lab.hasOnBranch(high, "high.txt") && lab.onBranch(high, "shared.txt").contains("by the higher computer"));
         lab.await("the controller has ended both agents' first processes; events " + events,
-                () -> events.contains("AGENT_EXITED=codex#1 exitCode=0") && events.contains("AGENT_EXITED=codex#2 exitCode=0"));
+                () -> events.stream().anyMatch(event -> event.endsWith("AGENT_EXITED=codex#1 exitCode=0")) && events.stream().anyMatch(event -> event.endsWith("AGENT_EXITED=codex#2 exitCode=0")));
 
+        assertTrue(new org.synesis.workspace.lifecycle.lease.SessionLeaseStore().listAllComplete(high.location.root()).isPresent(), "leases readable: " + leaseFiles());
         // The Link comes back. The higher computer re-merges onto the lower one's main and the combine, and its reviews, must land.
+        events.add(java.time.LocalTime.now().toString().substring(0, 8) + " HEAL");
         lab.heal();
-        lab.drive("both computers hold the same combined main; events " + events, () -> lab.mainsEqual() && COMBINED.equals(lab.onBranch(low, "shared.txt")) && lab.hasOnBranch(low, "high.txt")
-                && lab.hasOnBranch(high, "low.txt"), low1, low2);
-        assertEquals(COMBINED, lab.onBranch(high, "shared.txt"));
-        assertTrue(events.stream().anyMatch(event -> event.startsWith("AGENT_RESUMED=")), "the controller woke a stopped agent: " + events);
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MINUTES.toNanos(4);
+        while (!(lab.mainsEqual() && COMBINED.strip().equals(lab.onBranch(low, "shared.txt")) && lab.hasOnBranch(low, "high.txt") && lab.hasOnBranch(high, "low.txt"))) {
+            assertTrue(System.nanoTime() < deadline, "the copies never met; events " + events + System.lineSeparator() + grants() + System.lineSeparator() + "heads high " + lab.head(high) + " low " + lab.head(low) + " shared.txt high [" + lab.onBranch(high, "shared.txt") + "] low [" + lab.onBranch(low, "shared.txt") + "] "
+                    + System.lineSeparator() + "leases " + leaseFiles() + System.lineSeparator() + offers());
+            Thread.sleep(200);
+        }
+        assertEquals(COMBINED.strip(), lab.onBranch(high, "shared.txt"));
+        assertTrue(events.stream().anyMatch(event -> event.contains("AGENT_RESUMED=")), "the controller woke a stopped agent: " + events);
+    }
+
+    private String offers() throws Exception {
+        StringBuilder out = new StringBuilder();
+        var observation = new EventLogObserver(high.location).observe();
+        for (var entry : byConnection.entrySet()) {
+            {
+                out.append(entry.getKey()).append(" as ").append(entry.getValue().participant()).append(" offered ").append(observation.reviewsOffered("codex", List.of(entry.getKey())))
+                        .append(" combines ").append(entry.getValue().combinesOffered().size()).append(" connected ").append(observation.otherComputerConnected()).append(" complete ").append(observation.complete()).append(System.lineSeparator());
+            }
+        }
+        return out.toString();
+    }
+
+    private String grants() throws Exception {
+        var groups = high.store().workGroupProjection();
+        StringBuilder out = new StringBuilder();
+        for (var grant : groups.grants()) {
+            out.append("grant to ").append(grant.targetParticipant()).append(" on ").append(grant.snapshotId()).append(groups.grantConsumed(grant.grantId()) ? " consumed" : "")
+                    .append(groups.grantRevoked(grant.identity()) ? " revoked" : "").append(groups.grantAvailable(grant.grantId()) ? " available" : "").append(System.lineSeparator());
+        }
+        return out.toString();
+    }
+
+    private String leaseFiles() {
+        Path dir = org.synesis.workspace.lifecycle.lease.SessionLeaseStore.resolveLeasesDirectory(high.location.root());
+        try (var files = java.nio.file.Files.list(dir)) {
+            String names = dir + " " + files.map(f -> f.getFileName().toString()).sorted().toList();
+            for (String file : List.of("continuations.txt", "successions.txt")) {
+                names += System.lineSeparator() + file + ":" + System.lineSeparator() + (java.nio.file.Files.exists(dir.resolve(file)) ? java.nio.file.Files.readString(dir.resolve(file)) : "none");
+            }
+            return names;
+        } catch (IOException missing) {
+            return dir + " " + missing;
+        }
     }
 
     private static AgentRunController.AgentSpec spec() {
@@ -135,19 +178,33 @@ final class CombineUnderRunControllerScenarioTest {
     private AgentRunController.RunningAgent process(List<String> command, Path workingDirectory, Map<String, String> environment, String prompt, String label,
             Function<String, Optional<String>> sessionIdReader) {
         String connection = command.get(command.size() - 1);
-        boolean first = !byConnection.containsKey(connection);
+        if ("codex#3".equals(label)) {
+            return running(new Thread(() -> {
+                try {
+                    released.await();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                }
+            }), connection);
+        }
+        boolean first = !byLabel.containsKey(label);
         ScenarioAgent agent = byConnection.computeIfAbsent(connection, name -> lab.agent(high, name));
+        byLabel.put(label, agent);
         Thread thread = new Thread(() -> {
             try {
                 if (first && scripts.containsKey(label)) {
                     scripts.get(label).begin(agent);
                 }
                 follow(agent);
-                events.add("PROCESS_ENDED " + label + " on " + connection + " as " + agent.participant() + " after " + agent.trace + " next " + agent.next());
+                events.add(java.time.LocalTime.now().toString().substring(0, 8) + " PROCESS_ENDED " + label + " on " + connection + " as " + agent.participant() + " calls " + agent.trace.size() + " last " + (agent.trace.isEmpty() ? "-" : agent.trace.getLast()));
             } catch (RuntimeException | AssertionError failed) {
                 events.add("AGENT_FAILED " + label + " " + failed + " " + agent.trace);
             }
         });
+        return running(thread, connection);
+    }
+
+    private static AgentRunController.RunningAgent running(Thread thread, String connection) {
         thread.start();
         return new AgentRunController.RunningAgent() {
 
@@ -179,7 +236,9 @@ final class CombineUnderRunControllerScenarioTest {
         for (int step = 0; step < 40; step++) {
             List<Map<String, Object>> combines = agent.combinesOffered();
             if (!combines.isEmpty()) {
-                agent.call("ensure_session", (Map<String, Object>) combines.getFirst().get("ensureSession"));
+                if (!"ready".equals(agent.call("ensure_session", (Map<String, Object>) combines.getFirst().get("ensureSession")).get("status"))) {
+                    return;
+                }
                 agent.rewrite("shared.txt", COMBINED);
                 agent.finish();
                 continue;
@@ -188,42 +247,6 @@ final class CombineUnderRunControllerScenarioTest {
                 return;
             }
         }
-    }
-
-    /** The real connections of a run controller, with names the scenario can tell: the first two are the agents', later ones are resumes on a new connection. */
-    private AgentRunController.Connections connections() {
-        ControllerConnections real = new ControllerConnections(high.location.root());
-        SessionLeaseService leases = new SessionLeaseService();
-        AtomicInteger opened = new AtomicInteger();
-        return new AgentRunController.Connections() {
-
-            @Override
-            public String open() {
-                int number = opened.incrementAndGet();
-                String name = number <= 2 ? "high-" + number : "resumed-" + resumedConnections.incrementAndGet();
-                try {
-                    leases.reserveKeeper(high.location.root(), name);
-                } catch (IOException unwritable) {
-                    // kept from the first look, as in the controller
-                }
-                return name;
-            }
-
-            @Override
-            public void ended(String connectionInstanceId) {
-                real.ended(connectionInstanceId);
-            }
-
-            @Override
-            public boolean end(String connectionInstanceId) {
-                return real.end(connectionInstanceId);
-            }
-
-            @Override
-            public boolean keep(String connectionInstanceId) {
-                return real.keep(connectionInstanceId);
-            }
-        };
     }
 
     private static HeadlessSession session() {

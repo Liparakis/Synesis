@@ -245,11 +245,14 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             @Override
             public List<String> reviewsOffered(String provider, List<String> connectionInstanceIds) {
                 List<String> sessions = connectionInstanceIds.stream().map(connection -> participantOf(provider, connection)).filter(Objects::nonNull).distinct().toList();
-                // A re-merge to review again is offered to its original reviewer alone, whatever it holds (ADR-0098 step 5).
+                // A re-merge to review again is offered to its original reviewer, whatever it holds (ADR-0098 step 5), and
+                // while no grant on it is held to an agent that may review it, whose session the pass cannot offer it to
+                // before it has one (item 30).
                 // So is a combine lane, to the agents of this computer that wrote none of what it combines (designer item 22),
                 // and a lane of an away computer to an agent here with no lane while this computer is stalled (item 10).
                 return java.util.stream.Stream.of(CollaborationResponseMapper.openReviewSnapshots(store, sessions).stream(),
-                        CollaborationResponseMapper.remergeReviewsGranted(store, sessions).stream(), combinesOffered(store, location, sessions).stream(),
+                        CollaborationResponseMapper.remergeReviewsGranted(store, sessions).stream(), CollaborationResponseMapper.remergeReviewsWaiting(store, sessions).stream(),
+                        combinesOffered(store, location, sessions).stream(),
                         takeoversOffered(store, sessions).stream())
                         .flatMap(java.util.function.Function.identity()).distinct().toList();
             }

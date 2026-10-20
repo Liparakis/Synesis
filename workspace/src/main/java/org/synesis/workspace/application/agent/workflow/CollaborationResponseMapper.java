@@ -104,6 +104,31 @@ public final class CollaborationResponseMapper {
     }
 
     /**
+     * Names the re-merge snapshots that wait for a reviewer and that an agent with none of them granted may review once
+     * it has a session: under review, no grant on it that is not released, and none of the agent's sessions its author
+     * or an author in its lineage. The merge pass offers a review only to a session that exists, and an agent the run
+     * controller closed has none, so this is what a stopped agent is resumed for (ADR-0098 step 5, item 30).
+     *
+     * @param store    current project projection
+     * @param sessions exact participant handles of the agent's sessions; none gives none
+     * @return the snapshots' identifiers, empty when there are none
+     */
+    public static List<String> remergeReviewsWaiting(PredictionEventStore store, java.util.Collection<String> sessions) {
+        Objects.requireNonNull(store, "store");
+        if (sessions.isEmpty()) {
+            return List.of();
+        }
+        var workGroups = store.workGroupProjection();
+        var completion = store.taskCompletionProjection();
+        return completion.remergeSnapshots().stream()
+                .filter(snapshot -> completion.snapshotState(snapshot.snapshotId()).orElse(null) == org.synesis.coordination.domain.task.TaskCompletionState.REVIEW_PENDING)
+                .filter(snapshot -> workGroups.grants().stream().noneMatch(grant -> snapshot.snapshotId().equals(grant.snapshotId()) && !workGroups.grantRevoked(grant.identity())))
+                .filter(snapshot -> sessions.stream().noneMatch(session -> session.equals(snapshot.provenance().participant()) || org.synesis.coordination.domain.collaboration.ReviewAdmissionRules
+                        .authoredInLineage(store, new org.synesis.coordination.domain.identity.ParticipantId(session), snapshot.provenance().lineageIdentity())))
+                .map(TaskSnapshotRecord::snapshotId).toList();
+    }
+
+    /**
      * Says what a session that holds no lane yet may take up, as {@code ensure_session} shows it to
      * an agent that announces right after: the held lanes to continue first, in the form
      * {@code get_next_action} offers them, or else the {@link #openReviewCandidates review

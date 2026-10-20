@@ -124,8 +124,11 @@ public final class AwayLanes {
             var service = new WorkGroupService(store, identity);
             for (LaneGrant grant : workGroups.grants()) {
                 String reviewer = grant.targetParticipant();
+                // A session no entry introduced is this computer's when this computer offered it a re-merge: the pass chooses among its
+                // own live sessions, a lane-less one is on no log, and its connection may go on to a fresh session (s5-run16, item 30).
                 boolean unreachable = collaboration.introducingNode(new ParticipantId(reviewer))
-                        .map(node -> node.equals(thisNode) ? goneHere.test(reviewer) : stalled && away.test(node)).orElse(false);
+                        .map(node -> node.equals(thisNode) ? goneHere.test(reviewer) : stalled && away.test(node))
+                        .orElseGet(() -> goneHere.test(reviewer) && ownReMerge(store, grant, thisNode));
                 boolean released = unreachable && grant.snapshot().isPresent() && ReviewAdmissionRules.holdsReview(store, grant)
                         && workGroups.reviewValidationForGrant(grant.identity()).isEmpty()
                         && store.taskCompletionProjection().snapshotState(grant.snapshot().get()).orElse(null) == TaskCompletionState.REVIEW_PENDING
@@ -137,6 +140,11 @@ public final class AwayLanes {
         } catch (Exception failure) {
             LOG.log(System.Logger.Level.WARNING, "unreachable reviewers' reviews not released; the next pass tries again", failure);
         }
+    }
+
+    private static boolean ownReMerge(PredictionEventStore store, LaneGrant grant, String thisNode) {
+        var completion = store.taskCompletionProjection();
+        return grant.snapshot().filter(id -> completion.remergeOf(id).isPresent()).flatMap(completion::findSnapshotById).map(snapshot -> thisNode.equals(snapshot.nodeId())).orElse(false);
     }
 
     /**
@@ -172,7 +180,24 @@ public final class AwayLanes {
                     case ACTIVE, SUSPECTED_STALE, AMBIGUOUS -> true;
                     default -> false;
                 })
-                .map(lease -> WorkspaceCollaborationService.participantHandle(lease.sessionId())).collect(Collectors.toSet()));
+                .map(lease -> WorkspaceCollaborationService.participantHandle(currentSession(controlRoot, lease))).collect(Collectors.toSet()));
+    }
+
+    /**
+     * The session a live lease's connection has now. A lease names the session of the connection's last call, and a
+     * fresh session at the same path (a refresh, or a combine joined after the first {@code ensure_session}) replaces the
+     * binding before the next call renews the lease, so for that time the lease names a session nobody speaks as: a review
+     * offered to it is never taken and, with its lease live, never released (item 30). The binding is the authority; the
+     * lease's session stands where the binding cannot be read.
+     */
+    private static String currentSession(Path controlRoot, SessionLeaseRecord lease) {
+        try {
+            var location = new org.synesis.workspace.application.ProjectApplicationService().locate(controlRoot);
+            return new org.synesis.workspace.application.provider.ProviderSessionBindingService().find(location, lease.provider(), lease.connectionInstanceId())
+                    .map(org.synesis.workspace.application.provider.ProviderSessionBindingService.Binding::sessionId).orElse(lease.sessionId());
+        } catch (Exception unreadable) {
+            return lease.sessionId();
+        }
     }
 
     /**

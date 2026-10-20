@@ -113,9 +113,11 @@ public final class CombineLaneJoin {
         if (existing.isPresent()) {
             return new ClaimResult(true, existing.get(), List.of());
         }
-        Optional<String> refused = refusal(store, combine, participant, identity.nodeId());
-        if (refused.isPresent()) {
-            throw new IOException(refused.get());
+        for (String session : sessionsOfAgent(location.root(), participant)) {
+            Optional<String> refused = refusal(store, combine, session, identity.nodeId());
+            if (refused.isPresent()) {
+                throw new IOException(refused.get());
+            }
         }
         if (!waiting(store, combine)) {
             throw new IOException("COMBINE_TAKEN_OR_CLOSED");
@@ -180,6 +182,20 @@ public final class CombineLaneJoin {
         }
         return store.taskCompletionProjection().combines().stream().filter(combine -> waiting(store, combine))
                 .filter(combine -> participants.stream().allMatch(participant -> refusal(store, combine, participant, node).isEmpty())).toList();
+    }
+
+    /**
+     * The sessions of the agent a session belongs to, newest first, as far as this computer can prove it (ADR-0098 step 5,
+     * item 30): a session that replaced another at its connection's path, or that a run controller started on a new
+     * connection to go on with an agent, is its agent's next session and wrote what the earlier ones wrote. Where the
+     * records cannot be read, only the session itself.
+     *
+     * @param controlRoot this computer's checkout
+     * @param participant the session's participant handle
+     * @return the agent's sessions up to and including this one
+     */
+    public static List<String> sessionsOfAgent(Path controlRoot, String participant) {
+        return org.synesis.workspace.application.collaboration.AwayLanes.Agents.of(controlRoot).map(agents -> agents.sessionsUpTo(participant)).orElse(List.of(participant));
     }
 
     /**

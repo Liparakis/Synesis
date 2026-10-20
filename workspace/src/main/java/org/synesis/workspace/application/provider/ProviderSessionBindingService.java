@@ -147,7 +147,9 @@ public final class ProviderSessionBindingService {
                     return new BindingResult(resumeBound(location, identity, provider, fingerprint, bindingPath, binding), fallback);
                 }
             }
-            return new BindingResult(persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint))), fallback);
+            Binding fresh = persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint)));
+            recordContinuation(location, provider, instanceEvidence, fresh);
+            return new BindingResult(fresh, fallback);
         } catch (BindingException failure) {
             throw failure;
         } catch (Exception failure) {
@@ -161,6 +163,31 @@ public final class ProviderSessionBindingService {
             throw new BindingException("SESSION_IDENTITY_MISMATCH",
                     "Stored provider binding does not match this project: " + binding.projectId() + "/" + binding.nodeId() + "/" + binding.provider() + "/" + binding.providerInstanceFingerprint() + " expected "
                             + location.projectId() + "/" + identity.nodeId() + "/" + provider + "/" + fingerprint);
+        }
+    }
+
+    /**
+     * When a run controller started this connection to go on with an agent's earlier one
+     * ({@link SessionSuccessions#continueConnection}), its first session is that agent's next session: what the earlier
+     * session was owed, or barred from, passes to it, as when a session replaces another at one path. A connection
+     * that continues nothing, or whose earlier session cannot be read, records nothing.
+     */
+    private void recordContinuation(ProjectLocation location, String provider, String instanceEvidence, Binding fresh) throws IOException {
+        if (instanceEvidence == null || instanceEvidence.isBlank()) {
+            return;
+        }
+        java.util.Optional<String> earlier = SessionSuccessions.continuedFrom(location.root(), instanceEvidence);
+        if (earlier.isEmpty()) {
+            return;
+        }
+        java.util.Optional<Binding> previous;
+        try {
+            previous = find(location, provider, earlier.get());
+        } catch (BindingException unreadable) {
+            return;
+        }
+        if (previous.isPresent()) {
+            SessionSuccessions.record(location.root(), previous.get().sessionId(), fresh.sessionId());
         }
     }
 

@@ -603,6 +603,33 @@ before it. The ADR stays Proposed. Source-level evidence only: none of these has
     appears with the record, not before, not while this computer is not stalled; it failed before the change). Not proved
     in a real run. The wake is not what ended s7-run5: see ADR-0098 step 7 item 19.
 
+16. **A re-merge review owed to agents the run controller had closed** (s5-run16, PC and VM, 2026-10-20, remaster86;
+    ADR-0098 step 5, item 30, which has the evidence). One rule, the one of fixes 9, 13 and 15: *a stopped agent is resumed
+    for what it is offered, once for each offer*. What was missing is the offer. The merge pass offers a re-merge review
+    only to a session that exists, and the controller ends the session of an agent with nothing to come back to, so a
+    review owed to such an agent had no session to be offered to and nothing resumed it.
+    (a) `EventLogObserver.reviewsOffered` adds `CollaborationResponseMapper.remergeReviewsWaiting`: the re-merge snapshots
+    under review that hold no grant that is not released and that none of the agent's sessions wrote or authored in the lineage
+    of. The agent is resumed once for each, takes a session, and the next pass grants it the review.
+    (b) `AgentRunController.Connections.open(earlier)`: a resume on a new connection tells the project which connection it
+    continues (`SessionSuccessions.continueConnection`), and the binding service records the new session as the
+    earlier session's successor when it creates it (`ProviderSessionBindingService.recordContinuation`). Before this an agent
+    resumed on a new connection was no one's successor, so the pass could offer it a review of its own earlier work, and
+    `CombineLaneJoin` offered it a combine of its own earlier lane (now refused for every session of the agent,
+    `CombineLaneJoin.sessionsOfAgent`).
+    (c) The holder of an open combine lane is offered a re-merge review last, not never (`RemergeService.anotherReviewer`),
+    and is shown the grant (`AgentReviewActionProjection.reviewActions` shows a re-merge grant to the participant it names,
+    lane or none): with two agents on a computer it may be the only one that wrote neither snapshot.
+    Two things the scenario found: a run whose own work is closed no longer ends while another computer connected moments ago
+    (`AgentRunController.justMetAnotherComputer`, `COPIES_MEETING`; it ended within a second of the heal, before the re-merge
+    opened its combine), and `AwayLanes` judges live the session a connection has now (its binding), not the one its lease last
+    named, and releases a re-merge grant to a session of this computer that no entry introduced (a lane-less session) when it is
+    gone. Proved by scripted scenario `CombineUnderRunControllerScenarioTest` (two agents per computer started by a real
+    `AgentRunController` over real `ControllerConnections`, a third process standing for an agent still working at the heal): it
+    failed before the change with the combine written and no re-merge landing, failed twice more with the review granted to a
+    session its lease still named and its connection had left, and passed in 4 of 4 runs with the last change. Unit: `RemergeReviewsOfferedTest`,
+    `RemergeServiceTest`, `AgentRunControllerTest`, `SessionSuccessionsTest`. Not proved in a real run.
+
 ### Not done
 
 - Fix 9 counts only agents resumed for a review as looking at it. A running agent here with no lane may see the same

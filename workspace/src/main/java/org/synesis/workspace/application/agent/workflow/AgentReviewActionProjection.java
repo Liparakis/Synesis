@@ -521,7 +521,10 @@ static List<Map<String, Object>> reviewActions(PredictionEventStore store, Strin
                     .anyMatch(intent -> intent.participant().equals(participantId) && intent.workGroupId().equals(grant.workGroupId()) && intent.role() == WorkIntent.Role.REVIEWER && (reviewedIntent != null
                             ? reviewTargetsMatch(intent, reviewedIntent) : reviewTargetsMatch(intent, snapshot)));
             boolean unannouncedReviewer = activeIntents.stream().noneMatch(intent -> intent.participant().equals(participantId));
-            boolean explicitReviewGrant = hasExplicitReviewGrant(store, grant, participantId);
+            // The merge pass addresses a re-merge's grant to its reviewer itself, so no request admitted it: the holder of a
+            // combine lane, whose own lane only waits for that re-merge, is shown it like a reviewer that holds no lane.
+            boolean explicitReviewGrant = hasExplicitReviewGrant(store, grant, participantId)
+                    || grant.snapshotId() != null && store.taskCompletionProjection().remergeOf(new org.synesis.coordination.domain.identity.SnapshotId(grant.snapshotId())).isPresent();
             boolean completedReviewer = reviewGroupFilter != null && reviewGroupFilter.contains(grant.workGroupId());
             if (!activeReviewer && !unannouncedReviewer && !explicitReviewGrant && !completedReviewer) {
                 continue;

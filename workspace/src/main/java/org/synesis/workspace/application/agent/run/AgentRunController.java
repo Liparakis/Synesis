@@ -201,7 +201,7 @@ public final class AgentRunController {
                             agent.resumes++;
                             agent.startedAtSequence = observation.headSequence();
                             agent.startedAtMillis = now;
-                            HeadlessOptions options = agent.connectionEnded ? agent.connect(connections.open()) : agent.spec.options().withConnection(agent.connectionId);
+                            HeadlessOptions options = agent.connectionEnded ? agent.connect(connections.open(agent.connectionId)) :agent.spec.options().withConnection(agent.connectionId);
                             agent.process = processes.start(agent.spec.session().resumeCommand(request.projectRoot(), agent.providerSessionId, options), request.projectRoot(),
                                     agent.spec.session().environment(options), RESUME_PROMPT, agent.label(), agent.spec.session()::sessionId);
                             listener.accept("AGENT_RESUMED=" + agent.label() + " resume=" + agent.resumes);
@@ -219,7 +219,7 @@ public final class AgentRunController {
                         waiting = Wait.ANSWER_DEADLINE;
                     } else {
                         Outcome outcome = observation.complete() ? closedOutcome(observation) : stalledOutcome(agents, observation, request.maxResumesPerAgent());
-                        waiting = outcome == Outcome.STALLED ? progressElsewhere(agents, observation, request.maxResumesPerAgent(), now) : null;
+                        waiting = outcome == Outcome.STALLED ? progressElsewhere(agents, observation, request.maxResumesPerAgent(), now) : justMetAnotherComputer(agents, observation, request.maxResumesPerAgent(), now);
                         if (waiting == null) {
                             if (outcome == Outcome.NEEDS_OPERATOR) {
                                 observation.operatorRequests().forEach(open -> listener.accept("OPERATOR_REQUEST=" + open));
@@ -412,6 +412,17 @@ public final class AgentRunController {
         return null;
     }
 
+    /**
+     * Why a run whose work is all closed still waits: another computer connected moments ago, and its log, with the
+     * head of its {@code main} that this copy does not hold yet, may not be here (s5-run16's scripted counterpart: a run
+     * that ended within a second of the heal, before the re-merge of the other copy opened a combine for its agents).
+     * {@code null} when it does not, so a run that nothing is joining ends as before.
+     */
+    private static Wait justMetAnotherComputer(List<Agent> agents, Observation observation, int maxResumes, long now) {
+        return observation.complete() && observation.otherComputerKnown() && justReconnected(observation, now) && agents.stream().anyMatch(agent -> agent.resumable(maxResumes)) ? Wait.COPIES_MEETING
+                : null;
+    }
+
     private static boolean justReconnected(Observation observation, long now) {
         OptionalLong since = observation.otherComputerConnectedSince();
         return since.isPresent() && now - since.getAsLong() < RECONNECT_SETTLE_MILLIS;
@@ -530,6 +541,18 @@ public final class AgentRunController {
          * @return identity the process's Synesis MCP server will use
          */
         String open();
+
+        /**
+         * Returns a new connection identity for an agent that had an earlier connection, which has ended. The agent's
+         * next session is the same agent as its earlier one, and a review it was owed or is barred from is owed or
+         * barred for the next as well, so a project that can tell must be told (ADR-0098 step 5, item 30).
+         *
+         * @param earlier the agent's previous connection, whose end was recorded
+         * @return identity the process's Synesis MCP server will use
+         */
+        default String open(String earlier) {
+            return open();
+        }
 
         /**
          * Records that a connection has ended: no process of this controller will use it again. Waits

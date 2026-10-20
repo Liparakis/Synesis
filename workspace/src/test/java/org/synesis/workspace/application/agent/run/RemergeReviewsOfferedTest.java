@@ -132,8 +132,9 @@ final class RemergeReviewsOfferedTest {
                         snapshot(lane, ownerBinding, owner, REMERGE, true)).encode(),
                 identity);
         AgentRunController.Observation before = new EventLogObserver(location).observe();
-        assertEquals(List.of(), before.reviewsOffered("codex", List.of("remerge-reviewer")),
-                "nothing is offered before a grant names the re-merge snapshot");
+        assertEquals(List.of(REMERGE), before.reviewsOffered("codex", List.of("remerge-reviewer")),
+                "a re-merge nobody holds a grant on is offered to an agent that did not write it, so a stopped one is resumed to take a session that can be granted it (ADR-0098 step 5, item 30)");
+        assertEquals(List.of(), before.reviewsOffered("codex", List.of("remerge-owner")), "and never to the agent that wrote it");
 
         LaneGrant grant = new LaneGrant(UUID.randomUUID(), groupId, lane.intentId(), reviewer, lane.version(), true,
                 REMERGE);

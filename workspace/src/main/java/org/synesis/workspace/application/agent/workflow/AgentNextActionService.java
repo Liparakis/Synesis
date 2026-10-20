@@ -939,7 +939,8 @@ public final class AgentNextActionService {
     private static List<Map<String, Object>> combineCandidates(PredictionEventStore store, String participantId, ProjectLocation location) {
         try {
             String node = location.loadOrCreateIdentity().nodeId();
-            return org.synesis.workspace.application.collaboration.CombineLaneJoin.offeredTo(store, List.of(participantId), node).stream()
+            return org.synesis.workspace.application.collaboration.CombineLaneJoin.offeredTo(store,
+                    org.synesis.workspace.application.collaboration.CombineLaneJoin.sessionsOfAgent(location.root(), participantId), node).stream()
                     .map(combine -> org.synesis.workspace.application.collaboration.CombineLaneJoin.describe(store, combine)).toList();
         } catch (Exception unreadable) {
             return List.of();

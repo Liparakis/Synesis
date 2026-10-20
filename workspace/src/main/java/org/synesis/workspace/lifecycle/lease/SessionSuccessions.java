@@ -24,6 +24,7 @@ import java.util.Optional;
 public final class SessionSuccessions {
 
     private static final String FILE = "successions.txt";
+    private static final String CONTINUATIONS = "continuations.txt";
 
     private SessionSuccessions() {
     }
@@ -74,5 +75,44 @@ public final class SessionSuccessions {
             return Optional.empty();
         }
         return Optional.of(Map.copyOf(predecessors));
+    }
+
+    /**
+     * Records that an agent a run controller starts on a new connection is the one that had the earlier connection. The
+     * controller ends the connection of an agent with nothing to come back to and resumes it on a new one, which gets a
+     * session of its own at a new path, so no replacement at one path ({@link #record}) says whose agent it is; the
+     * binding service turns this line into a succession when it creates that session.
+     *
+     * @param controlRoot control project root path
+     * @param connection  the new connection
+     * @param earlier     the connection the same agent had before
+     * @throws IOException when the line cannot be written
+     */
+    public static void continueConnection(Path controlRoot, String connection, String earlier) throws IOException {
+        Objects.requireNonNull(connection, "connection");
+        Objects.requireNonNull(earlier, "earlier");
+        Path directory = SessionLeaseStore.resolveLeasesDirectory(controlRoot.toAbsolutePath().normalize());
+        Files.createDirectories(directory);
+        Files.writeString(directory.resolve(CONTINUATIONS), connection + " " + earlier + System.lineSeparator(), StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+    }
+
+    /**
+     * The connection a connection continues, when {@link #continueConnection} recorded one. A missing or unreadable
+     * record names none: the session is then no one's successor, which only keeps the exclusions of a review from
+     * reaching it.
+     *
+     * @param controlRoot control project root path
+     * @param connection  the connection
+     * @return the earlier connection of the same agent, or empty
+     */
+    public static Optional<String> continuedFrom(Path controlRoot, String connection) {
+        Path file = SessionLeaseStore.resolveLeasesDirectory(controlRoot.toAbsolutePath().normalize()).resolve(CONTINUATIONS);
+        try {
+            return Files.readAllLines(file, StandardCharsets.UTF_8).stream().map(line -> line.trim().split(" ")).filter(pair -> pair.length == 2 && pair[0].equals(connection))
+                    .map(pair -> pair[1]).findFirst();
+        } catch (IOException missing) {
+            return Optional.empty();
+        }
     }
 }

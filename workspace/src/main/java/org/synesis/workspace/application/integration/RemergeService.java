@@ -523,10 +523,12 @@ final class RemergeService {
         return agents.live().stream()
                 .filter(handle -> !releasedFrom.contains(handle) && !agents.sameAgent(handle, author))
                 .filter(handle -> collaboration.participantState(handle).map(state -> state == Participant.State.ACTIVE).orElse(true))
-                .filter(handle -> waiting.stream().noneMatch(holder -> agents.sameAgent(handle, holder)))
                 .filter(handle -> agents.sessionsUpTo(handle).stream()
                         .noneMatch(session -> ReviewAdmissionRules.authoredInLineage(store, new ParticipantId(session), original.provenance().lineageIdentity())))
-                .min(Comparator.comparing((String handle) -> releasedFrom.stream().noneMatch(from -> agents.sameAgent(handle, from))).thenComparing(Comparator.naturalOrder()));
+                // The holder of an open combine lane of this re-merge is the last resort: it is shown the grant while its lane waits, and
+                // with two agents on a computer it may be the only one that did not write the lane under review.
+                .min(Comparator.comparing((String handle) -> waiting.stream().anyMatch(holder -> agents.sameAgent(handle, holder)))
+                        .thenComparing((String handle) -> releasedFrom.stream().noneMatch(from -> agents.sameAgent(handle, from))).thenComparing(Comparator.naturalOrder()));
     }
 
     /**
