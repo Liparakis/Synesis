@@ -246,9 +246,11 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             public List<String> reviewsOffered(String provider, List<String> connectionInstanceIds) {
                 List<String> sessions = connectionInstanceIds.stream().map(connection -> participantOf(provider, connection)).filter(Objects::nonNull).distinct().toList();
                 // A re-merge to review again is offered to its original reviewer alone, whatever it holds (ADR-0098 step 5).
-                // So is a combine lane, to the agents of this computer that wrote none of what it combines (designer item 22).
+                // So is a combine lane, to the agents of this computer that wrote none of what it combines (designer item 22),
+                // and a lane of an away computer to an agent here with no lane while this computer is stalled (item 10).
                 return java.util.stream.Stream.of(CollaborationResponseMapper.openReviewSnapshots(store, sessions).stream(),
-                        CollaborationResponseMapper.remergeReviewsGranted(store, sessions).stream(), combinesOffered(store, location, sessions).stream())
+                        CollaborationResponseMapper.remergeReviewsGranted(store, sessions).stream(), combinesOffered(store, location, sessions).stream(),
+                        takeoversOffered(store, sessions).stream())
                         .flatMap(java.util.function.Function.identity()).distinct().toList();
             }
 
@@ -410,6 +412,20 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         } catch (Exception unreadable) {
             return List.of();
         }
+    }
+
+    /**
+     * The lanes of computers that are away which these sessions' agent may take over now, by lane ID: the same offer
+     * {@code get_next_action} makes, and made only to an agent none of whose sessions holds a lane (a session holds one
+     * lane, so a taker with a lane is refused). Whether a computer is away is not an event, so nothing else resumes a
+     * stopped agent when the record of member sessions turns (ADR-0099 fix 15).
+     */
+    private List<String> takeoversOffered(PredictionEventStore store, List<String> sessions) {
+        if (sessions.isEmpty() || sessions.stream().anyMatch(session -> WorkspaceCollaborationService.laneOf(store, session).isPresent())) {
+            return List.of();
+        }
+        return thisNode().map(node -> org.synesis.workspace.application.collaboration.AwayLanes.offered(store, location.coordinationDirectory(), node).stream()
+                .map(lane -> lane.intentId().toString()).toList()).orElse(List.of());
     }
 
     /** This computer's node ID, or empty when its identity cannot be read: then no review counts as another computer's. */

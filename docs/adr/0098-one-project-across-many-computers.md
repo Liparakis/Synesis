@@ -1403,6 +1403,25 @@ Decided while building step 7 (designer, 2026-10-18; each open to the owner):
     such a lane is an open lane for the stall test of the computers that are not its own, and a report published after
     the group completed goes to the trash.
 
+19. **An agent whose only lane waits for its review cannot take a lane over** (s7-run5, 2026-10-20, remaster86: PC owner
+    with one `claude` agent, VM member with one `codex` agent; the VM cut the Link for 600 s the moment its agent announced a
+    lane). VERIFIED from the PC's evidence: Link ended the session at 09:12:57 (`DISCONNECT ... LIVENESS_EXPIRED`), the cut
+    was real; the PC's agent had published `primes` at 09:12:25 and held that lane, `REVIEW_PENDING`, for the whole cut;
+    the transcript shows no resume between 09:12:30 and the heal at 09:22:25, and the first answer after it was the
+    unchanged `waiting / validation_required`. So the PC was not stalled by item 9 (its one agent held an open lane, and
+    `AwayLanes.stalled` counts a lane that only waits for review as held), and its agent could not have taken a lane over
+    if it had been (a session holds one lane for its life; `RecoveryContinuationProjection.continuationBlock`
+    `CURRENT_PARTICIPANT_HOLDS_A_LANE`, and a takeover materialises the snapshot into the taker's one worktree). The
+    `STALLED` end of the PC's run followed the heal, not the cut. This is the design as written, not a missing offer: the
+    expected "owner's idle agent" did not exist. It is also the right outcome for one agent per computer: the taker's
+    own `fib` lane would need a reviewer that is not the taker, and none is on the PC. A takeover during a cut needs a
+    lane-less agent on the taker's computer, and a second one to review for the lane to land. The lab for step 7 therefore
+    runs two agents on the PC (the one that is lane-less reviews the other's lane; both are then lane-less and offered the
+    lane), or starts the PC's agent only after the cut has begun. NOT DECIDED, for the owner: letting an agent whose lane only waits for review end
+    that lane's session to take another (it would give up admitting its reviewer and any rework of the snapshot, and a
+    taker's lane would then wait on the same missing reviewer). The one defect found while reading the run controller for
+    this, and fixed, is ADR-0099 fix 15: a stopped lane-less agent was never woken for a takeover offer.
+
 ## Build order
 
 Each step is small, works on its own, and ends with a real run on this PC and `synesis-peer-vm` (scripts in

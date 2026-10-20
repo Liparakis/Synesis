@@ -591,6 +591,18 @@ before it. The ADR stays Proposed. Source-level evidence only: none of these has
     row while the other computer's review entries (`COORDINATION_*`, `LANE_GRANT_*`, `REVIEW_VALIDATION_RECORDED`) arrived,
     which `NOT_STALING_A_FINISH` does not list.
 
+15. **A takeover offer wakes an agent with no lane** (s7-run5, PC and VM, 2026-10-20, remaster86; ADR-0098 step 7, items
+    10 and 19). The run controller resumes a stopped agent for what it is offered: open reviews, re-merge reviews and combine
+    lanes (`Observation.reviewsOffered`, each once while it stays offered). The lane of an away computer, which step 7
+    offers to a lane-less agent when this computer is stalled, was not in that list. Whether a computer is away is
+    `replication.members`, which no entry announces, so nothing resumed a stopped agent when the record turned, and its next
+    `get_next_action` was never asked. The offer is now counted like a review: `EventLogObserver.reviewsOffered` adds the
+    lanes `AwayLanes.offered` gives, by lane ID, only when none of the agent's sessions holds a lane (a session holds one
+    lane, so a taker with a lane is refused: `CURRENT_PARTICIPANT_HOLDS_A_LANE`). The same once-per-offer rule applies, and
+    the offer is forgotten when the takeover makes the lane no longer offered. Proved by `AwayLanesTest` (the offer
+    appears with the record, not before, not while this computer is not stalled; it failed before the change). Not proved
+    in a real run. The wake is not what ended s7-run5: see ADR-0098 step 7 item 19.
+
 ### Not done
 
 - Fix 9 counts only agents resumed for a review as looking at it. A running agent here with no lane may see the same

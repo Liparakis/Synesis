@@ -82,6 +82,36 @@ final class AwayLanesTest {
         assertEquals(List.of(fixture.awayLane), offered());
     }
 
+    /**
+     * s7-run5 (2026-10-20): a lane-less agent that has stopped is resumed by the run controller for what it is offered, and
+     * a takeover was never counted. Whether a computer is away is not an event, so without this nothing resumed the agent
+     * when the record of member sessions turned, and the run waited for the taker that could have taken the lane over.
+     */
+    @Test
+    void theRunControllerOffersTheAwayLaneToAnAgentWithNoLaneOnceThisComputerIsStalledAndAwayIsRecorded() throws Exception {
+        fixture.awayIs(State.CONNECTED);
+        assertEquals(List.of(), wakeOffers(), "a connected computer's lane is not offered");
+
+        fixture.awayIs(State.DISCONNECTED);
+
+        assertEquals(List.of(fixture.awayLane.intentId().toString()), wakeOffers());
+        assertEquals(List.of(), new org.synesis.workspace.application.agent.run.EventLogObserver(fixture.project.location).observe()
+                .reviewsOffered(AwayComputerFixture.PROVIDER, List.of("never-connected")), "nothing is offered to a connection with no session");
+    }
+
+    @Test
+    void theRunControllerOffersNoAwayLaneWhileThisComputerIsNotStalled() throws Exception {
+        fixture.awayIs(State.DISCONNECTED);
+        notStalled();
+
+        assertEquals(List.of(), wakeOffers());
+    }
+
+    private List<String> wakeOffers() throws Exception {
+        return new org.synesis.workspace.application.agent.run.EventLogObserver(fixture.project.location).observe()
+                .reviewsOffered(AwayComputerFixture.PROVIDER, List.of(AwayComputerFixture.TAKER));
+    }
+
     @Test
     void aLaneOfAConnectedComputerIsNotOffered() throws Exception {
         fixture.awayIs(State.CONNECTED);

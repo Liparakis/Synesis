@@ -859,7 +859,9 @@ public final class AgentRunController {
          * up, as {@code get_next_action} offers them to a session that holds no lane: review required,
          * its author active, no reviewer holding it, and authored in its lineage by none of the
          * current sessions behind these connections. A stopped agent with no lane of its own is
-         * resumed for such a snapshot, and for each one once while it stays offered (ADR-0099).
+         * resumed for such a snapshot, and for each one once while it stays offered (ADR-0099). The
+         * same holds for a lane of an away computer, by lane ID, offered to an agent with no lane
+         * while this computer is stalled (ADR-0098 step 7 item 10; ADR-0099 fix 15).
          *
          * @param provider              provider identifier
          * @param connectionInstanceIds every connection the agent's processes have had
