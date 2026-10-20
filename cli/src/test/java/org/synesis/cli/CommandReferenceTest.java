@@ -6,17 +6,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.link.onboarding.Onboarding;
+import org.synesis.workspace.application.provider.ProviderApplicationService;
 import picocli.CommandLine;
 
 /**
@@ -47,9 +55,41 @@ final class CommandReferenceTest {
         for (String code : org.synesis.cli.command.ErrorShape.codes()) {
             assertTrue(document.contains("`" + code + "`"), "docs/cli/command-reference.md does not explain the error code " + code);
         }
-        for (int exit : List.of(0, 1, 2, 3, 10, 11, 12, 13, 14, 15, 70)) {
-            assertTrue(document.contains("| `" + exit + "` |"), "docs/cli/command-reference.md does not list exit code " + exit);
+    }
+
+    @Test
+    void theExitCodeTableIsExactlyTheCodesTheCliUses() throws IOException, IllegalAccessException {
+        String document = Files.readString(referenceFile(), StandardCharsets.UTF_8).replace("\r\n", "\n");
+        String section = document.substring(document.indexOf("| Exit code | Meaning |"));
+        section = section.substring(0, section.indexOf("\n\n"));
+        Set<Integer> documented = new TreeSet<>();
+        Matcher row = Pattern.compile("^\\| `(\\d+)` \\|", Pattern.MULTILINE).matcher(section);
+        while (row.find()) {
+            documented.add(Integer.parseInt(row.group(1)));
         }
+        Set<Integer> used = new TreeSet<>();
+        for (Field field : ExitCodes.class.getDeclaredFields()) {
+            if (Modifier.isStatic(field.getModifiers()) && field.getType() == int.class) {
+                used.add(field.getInt(null));
+            }
+        }
+        for (Field field : ProviderApplicationService.class.getFields()) {
+            if (field.getName().startsWith("EXIT_")) {
+                assertTrue(used.contains(field.getInt(null)), "ExitCodes does not carry the provider service's " + field.getName());
+            }
+        }
+        assertEquals(used, documented, "docs/cli/command-reference.md's exit-code table and ExitCodes must list the same codes");
+    }
+
+    @Test
+    void everyExitCodeHasOneName() throws IllegalAccessException {
+        List<Integer> values = new ArrayList<>();
+        for (Field field : ExitCodes.class.getDeclaredFields()) {
+            if (Modifier.isStatic(field.getModifiers()) && field.getType() == int.class) {
+                values.add(field.getInt(null));
+            }
+        }
+        assertEquals(values.size(), new TreeSet<>(values).size(), "two ExitCodes constants share a code: " + values);
     }
 
     @Test

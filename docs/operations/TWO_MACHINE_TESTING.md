@@ -22,11 +22,11 @@ tests remain `TWO_PROCESS_VERIFIED` and must not be relabeled.
 For launcher validation, build with
 `./gradlew.bat :cli:installDist --dependency-verification=strict` and run the
 generated `cli\build\install\synesis\bin\synesis.bat` on both machines. The
-normal flow is `synesis host`, copy its
-`synesis://join/SLB3-...` output to the other machine, and run
-`synesis join "<link>"`. On different networks, paste the `ANSWER_LINK` the
-join prints into the waiting `synesis host`, or start the host with
-`--open-router-port`; see ADR-0097 for which networks each gets through.
+normal flow is `synesis link invite` on one machine, copy its `INVITE_LINK=synesis://project/SLP1-...`
+output to the other machine, and run `synesis link join "<link>"` there. On different networks, give the
+`ANSWER_LINK` the join prints to the waiting invitation (`synesis link answer`), or invite from the browser (`synesis ui`)
+with "Ask my router to open a port" ticked; see ADR-0097 for which networks each gets through (the one-shot
+`synesis host`/`join` commands were removed on 2026-10-20, ADR-0103).
 No signaling server or mailbox is used. Use a temporary PATH change only in the current
 shell if desired; do not record a permanent PATH or installation claim.
 Capture sanitized launcher output in `docs/evidence/PHYSICAL-CLI-ONBOARDING.md`; the existing
@@ -140,7 +140,7 @@ and every 30 seconds after that, for as long as it is still the leader of that m
 computer that ran `link invite` keeps its port open and admits the redial with no new invitation, but only from the
 leader it follows (on a member) or from a current member (on a leader). Nothing needs doing; if the dialing computer
 can only dial out (no inbound firewall rule on Windows, say), that is why it is the one that dials. Both computers
-use a looser liveness timing than a one-shot `synesis host`/`join` (heartbeat 5 s, `SUSPECT` after 15 s, `EXPIRED`
+use a looser liveness timing than a one-shot onboarding session (heartbeat 5 s, `SUSPECT` after 15 s, `EXPIRED`
 after 30 s), so a pause of up to half a minute does not end the session.
 
 `synesis coordination status` shows `REPLICATION_LAST_DISCONNECT=<reason> <time> <details>` for the last session that

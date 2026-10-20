@@ -53,9 +53,63 @@ final class SynesisCliParsingTest {
     }
 
     @Test
+    void shortHelpListsExactlyTheEverydayCommands() throws Exception {
+        for (String[] arguments : new String[][]{{}, {"--help"}, {"help"}}) {
+            Invocation invocation = invocation();
+            assertEquals(0, SynesisCli.execute(arguments, invocation.runtime()), String.join(" ", arguments));
+            String help = invocation.stdout();
+            assertEquals(List.of("init", "status", "ui", "agents", "link", "doctor", "help"), commandsUnder(help, "Everyday commands"), help);
+            assertEquals(SynesisCli.EVERYDAY_COMMANDS, commandsUnder(help, "Everyday commands"), help);
+            assertTrue(help.contains("synesis help --all"), help);
+            assertFalse(help.contains("Other commands:") || help.contains("Called by agents") || help.contains("Maintain a project:"), help);
+        }
+    }
+
+    @Test
+    void helpAllListsEveryCommandWithItsGroup() throws Exception {
+        for (String[] arguments : new String[][]{{"help", "--all"}, {"--help", "--all"}}) {
+            Invocation invocation = invocation();
+            assertEquals(0, SynesisCli.execute(arguments, invocation.runtime()), String.join(" ", arguments));
+            String help = invocation.stdout();
+            assertTrue(help.contains("Set up:") && help.contains("Coordinate work:") && help.contains("Called by agents and integrations:"), help);
+            assertFalse(help.contains("Everyday commands:"), help);
+            List<String> lines = help.lines().toList();
+            List<String> listed = new java.util.ArrayList<>(lines.stream().filter(line -> line.startsWith("  ") && !line.startsWith("   ")).map(line -> line.strip().split("[\\s,]+")[0]).toList());
+            listed.addAll(List.of(lines.get(lines.indexOf("Called by agents and integrations:") + 1).strip().split(",\\s*")));
+            for (String command : SynesisCli.commandTree(invocation().runtime()).getSubcommands().keySet()) {
+                assertTrue(listed.contains(command), "help --all does not list: " + command);
+            }
+        }
+    }
+
+    @Test
+    void everyCommandOfHelpAllStillRuns() throws Exception {
+        CommandLine tree = SynesisCli.commandTree(invocation().runtime());
+        for (String name : tree.getSubcommands().keySet().stream().filter(command -> !command.equals("help")).toList()) {
+            Invocation invocation = invocation();
+            assertEquals(0, SynesisCli.execute(new String[]{name, "--help"}, invocation.runtime()), name);
+            assertTrue(invocation.stdout().contains("synesis " + name), name);
+        }
+    }
+
+    @Test
+    void theCommandsThatLinkInviteAndJoinReplacedAreUnknown() throws Exception {
+        CommandLine tree = SynesisCli.commandTree(invocation().runtime());
+        for (String removed : new String[]{"host", "join", "sync"}) {
+            assertFalse(tree.getSubcommands().containsKey(removed), removed);
+            assertEquals(ExitCodes.USAGE, SynesisCli.execute(new String[]{removed}, invocation().runtime()), removed);
+        }
+        assertEquals(ExitCodes.USAGE, SynesisCli.execute(new String[]{"sync", "host"}, invocation().runtime()));
+        assertEquals(ExitCodes.USAGE, SynesisCli.execute(new String[]{"sync", "join", "synesis://join/SLB3-x"}, invocation().runtime()));
+        assertEquals(ExitCodes.USAGE, SynesisCli.execute(new String[]{"host", "--open-router-port"}, invocation().runtime()));
+        assertEquals(ExitCodes.USAGE, SynesisCli.execute(new String[]{"join", "synesis://join/SLB3-x"}, invocation().runtime()));
+        assertTrue(tree.getSubcommands().get("link").getSubcommands().keySet().containsAll(List.of("invite", "join")));
+    }
+
+    @Test
     void publicCoordinationSurfaceIsReachableFromRootHelp() throws Exception {
         Invocation invocation = invocation();
-        assertEquals(0, SynesisCli.execute(new String[0], invocation.runtime()));
+        assertEquals(0, SynesisCli.execute(new String[]{"help", "--all"}, invocation.runtime()));
         String help = invocation.stdout();
         for (String command : new String[]{"coordination", "task", "ownership", "prediction", "speculation", "events", "supervisor", "integration"}) {
             assertTrue(help.contains(command), "missing command: " + command);
@@ -67,7 +121,7 @@ final class SynesisCliParsingTest {
     @Test
     void linkAndConversationsAreListedUnderTheirHelpGroups() throws Exception {
         Invocation invocation = invocation();
-        assertEquals(0, SynesisCli.execute(new String[0], invocation.runtime()));
+        assertEquals(0, SynesisCli.execute(new String[]{"help", "--all"}, invocation.runtime()));
         assertTrue(commandsUnder(invocation.stdout(), "Work with another person").contains("link"), invocation.stdout());
         assertTrue(commandsUnder(invocation.stdout(), "Coordinate work").contains("conversations"), invocation.stdout());
         assertFalse(commandsUnder(invocation.stdout(), "Other commands").contains("link"), invocation.stdout());
@@ -80,7 +134,7 @@ final class SynesisCliParsingTest {
         if (start < 0) {
             return List.of();
         }
-        return lines.stream().skip(start + 1).takeWhile(line -> !line.isBlank()).map(line -> line.strip().split("\\s+")[0]).toList();
+        return lines.stream().skip(start + 1).takeWhile(line -> !line.isBlank()).filter(line -> !line.startsWith("   ")).map(line -> line.strip().split("\\s+")[0]).toList();
     }
 
     @Test
@@ -133,8 +187,6 @@ final class SynesisCliParsingTest {
     @Test
     void malformedAndUnknownSyntaxReturnsUsageExit() throws Exception {
         assertEquals(2, SynesisCli.execute(new String[]{"unknown"}, invocation().runtime()));
-        assertEquals(2, SynesisCli.execute(new String[]{"join"}, invocation().runtime()));
-        assertEquals(2, SynesisCli.execute(new String[]{"host", "--expect-peer"}, invocation().runtime()));
     }
 
     @Test

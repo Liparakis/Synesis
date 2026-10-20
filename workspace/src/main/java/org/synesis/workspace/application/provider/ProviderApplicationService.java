@@ -44,6 +44,18 @@ import static org.synesis.workspace.application.provider.ProviderResults.withVal
 @SuppressWarnings("DuplicatedCode")
 public final class ProviderApplicationService {
 
+    /**
+     * Process exit code of a result that names a provider which does not exist, or one that has nothing of the kind
+     * asked for (no shared user-level MCP entry). The command-line parser's own usage code (2) is not reused: it
+     * means a syntax error (ADR-0103, decision 6).
+     */
+    public static final int EXIT_PROVIDER_UNAVAILABLE = 20;
+    /**
+     * Process exit code of a status that found the integration broken. {@code synesis doctor --strict} owns 3 for
+     * "a broken local component", so a provider result no longer reuses it (ADR-0103, decision 6).
+     */
+    public static final int EXIT_PROVIDER_BROKEN = 21;
+
     private final ProviderManualService manualService = new ProviderManualService();
     private final ProviderMcpConfigurationService mcpConfiguration = new ProviderMcpConfigurationService();
 
@@ -115,7 +127,7 @@ public final class ProviderApplicationService {
     public ProviderResult install(ProjectLocation location, String id) {
         ProviderIntegration provider = provider(id);
         if (provider == null) {
-            return failure(id, "UNKNOWN_PROVIDER", "PROVIDER_INSTALL_RESULT", 2);
+            return failure(id, "UNKNOWN_PROVIDER", "PROVIDER_INSTALL_RESULT", EXIT_PROVIDER_UNAVAILABLE);
         }
         try {
             Path launcher = ProviderLauncherResolution.launcher();
@@ -233,7 +245,7 @@ public final class ProviderApplicationService {
     private ProviderResult statusInternal(ProjectLocation location, String id) {
         ProviderIntegration provider = provider(id);
         if (provider == null) {
-            return failure(id, "UNKNOWN_PROVIDER", "PROVIDER_STATUS", 2);
+            return failure(id, "UNKNOWN_PROVIDER", "PROVIDER_STATUS", EXIT_PROVIDER_UNAVAILABLE);
         }
         Path config = provider.configurationPath(location.root());
         Path metadataPath = metadata(location, provider);
@@ -254,10 +266,10 @@ public final class ProviderApplicationService {
             boolean profilePresent = validMetadata && Files.isDirectory(Path.of(metadata.profilePath()));
             boolean configurationCorrect = count == 1 && launcherPresent && profilePresent && managedCommandMatches(root, provider, Path.of(metadata.launcherPath()), Path.of(metadata.profilePath()));
             if (!schemaValid) {
-                return failure(id, "OBSOLETE_PROVIDER_STATE", "PROVIDER_STATUS", 3);
+                return failure(id, "OBSOLETE_PROVIDER_STATE", "PROVIDER_STATUS", EXIT_PROVIDER_BROKEN);
             }
             if (!configPresent) {
-                return ProviderResults.status(provider, "BROKEN", config, true, count, launcherPresent, profilePresent, false, 3);
+                return ProviderResults.status(provider, "BROKEN", config, true, count, launcherPresent, profilePresent, false, EXIT_PROVIDER_BROKEN);
             }
             if (!validMetadata || !configurationCorrect) {
                 return ProviderResults.status(provider, "DEGRADED", config, metadataPresent, count, launcherPresent, profilePresent, false, 1);
@@ -284,9 +296,9 @@ public final class ProviderApplicationService {
             }
             return result;
         } catch (IllegalArgumentException failure) {
-            return failure(id, "INVALID_CONFIG", "PROVIDER_STATUS", 3);
+            return failure(id, "INVALID_CONFIG", "PROVIDER_STATUS", EXIT_PROVIDER_BROKEN);
         } catch (Exception failure) {
-            return failure(id, "BROKEN", "PROVIDER_STATUS", 3);
+            return failure(id, "BROKEN", "PROVIDER_STATUS", EXIT_PROVIDER_BROKEN);
         }
     }
 
@@ -320,7 +332,7 @@ public final class ProviderApplicationService {
     public ProviderResult uninstall(ProjectLocation location, String id) {
         ProviderIntegration provider = provider(id);
         if (provider == null) {
-            return failure(id, "UNKNOWN_PROVIDER", "PROVIDER_UNINSTALL_RESULT", 2);
+            return failure(id, "UNKNOWN_PROVIDER", "PROVIDER_UNINSTALL_RESULT", EXIT_PROVIDER_UNAVAILABLE);
         }
         Path config = provider.configurationPath(location.root());
         Path metadata = metadata(location, provider);
@@ -359,10 +371,10 @@ public final class ProviderApplicationService {
     public ProviderResult uninstallGlobalMcpConfiguration(String id) {
         ProviderIntegration provider = provider(id);
         if (provider == null) {
-            return failure(id, "UNKNOWN_PROVIDER", "PROVIDER_UNINSTALL_RESULT", 2);
+            return failure(id, "UNKNOWN_PROVIDER", "PROVIDER_UNINSTALL_RESULT", EXIT_PROVIDER_UNAVAILABLE);
         }
         if (!provider.usesGlobalMcpConfiguration()) {
-            return failure(id, "GLOBAL_MCP_UNSUPPORTED", "PROVIDER_UNINSTALL_RESULT", 2);
+            return failure(id, "GLOBAL_MCP_UNSUPPORTED", "PROVIDER_UNINSTALL_RESULT", EXIT_PROVIDER_UNAVAILABLE);
         }
         try {
             String outcome = mcpConfiguration.removeGlobal(provider);

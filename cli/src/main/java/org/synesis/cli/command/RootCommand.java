@@ -24,10 +24,29 @@ public final class RootCommand implements Runnable, IVersionProvider {
       description = "Print stable KEY=VALUE lines for scripts. This is already the default when output is not a terminal.")
   private boolean porcelain;
 
+  @Option(names = "--all", description = "With --help or help: list every command, grouped, not only the everyday ones.")
+  private boolean all;
+
   /**
    * Creates the root command.
    */
   public RootCommand() {
+  }
+
+  /**
+   * Makes this command's help list every command instead of the everyday ones.
+   */
+  public void listEveryCommand() {
+    all = true;
+  }
+
+  /**
+   * Whether this command's help lists every command.
+   *
+   * @return true after {@code --all} or {@code help --all}
+   */
+  public boolean listsEveryCommand() {
+    return all;
   }
 
   /**

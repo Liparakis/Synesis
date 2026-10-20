@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.terminal.ConsoleTerminal;
 import org.synesis.cli.terminal.StatusRenderer;
 import org.synesis.link.onboarding.Onboarding;
@@ -52,9 +53,9 @@ class ProviderRefusalCausesTest {
     @Test
     void anUnknownProviderIsNamedUnknown() throws Exception {
         Path project = initialized("unknown-provider");
-        CliHarness.run(tmp.resolve("profile"), withProject(new String[]{"provider", "install", "nope"}, project)).assertIs(2,
+        CliHarness.run(tmp.resolve("profile"), withProject(new String[]{"provider", "install", "nope"}, project)).assertIs(ExitCodes.PROVIDER_UNAVAILABLE,
                 List.of("PROVIDER_INSTALL_RESULT=UNKNOWN_PROVIDER", "ERROR=UNKNOWN_PROVIDER", "PROVIDER=nope", "~MESSAGE=.{6,}", "~FIX=.{6,}"), List.of());
-        CliHarness.run(tmp.resolve("profile"), withProject(new String[]{"provider", "status", "nope"}, project)).assertIs(2,
+        CliHarness.run(tmp.resolve("profile"), withProject(new String[]{"provider", "status", "nope"}, project)).assertIs(ExitCodes.PROVIDER_UNAVAILABLE,
                 List.of("PROVIDER_STATUS=UNKNOWN_PROVIDER", "ERROR=UNKNOWN_PROVIDER", "PROVIDER=nope", "SESSION_BINDING=UNBOUND", "CONTINUITY_MODE=SESSION_BOUND", "~MESSAGE=.{6,}", "~FIX=.{6,}"), List.of());
     }
 

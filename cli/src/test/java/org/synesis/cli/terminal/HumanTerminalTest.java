@@ -79,10 +79,10 @@ final class HumanTerminalTest {
         Capture capture = new Capture(StandardCharsets.US_ASCII);
         HumanTerminal terminal = new HumanTerminal(capture.terminal, false);
 
-        terminal.stdout("NEXT_COMMAND=synesis join --invite=abc=");
+        terminal.stdout("NEXT_COMMAND=synesis link join abc=");
         terminal.stdout("EMPTY_VALUE=");
 
-        assertEquals(List.of("  Next command              synesis join --invite=abc=", "  Empty value               "), capture.outLines());
+        assertEquals(List.of("  Next command              synesis link join abc=", "  Empty value               "), capture.outLines());
     }
 
     @Test

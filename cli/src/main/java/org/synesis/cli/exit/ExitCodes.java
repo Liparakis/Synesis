@@ -1,7 +1,11 @@
 package org.synesis.cli.exit;
 
+import org.synesis.workspace.application.provider.ProviderApplicationService;
+
 /**
- * Stable process exit codes for the standalone Synesis CLI.
+ * Stable process exit codes for the standalone Synesis CLI. Every code a command can return is a constant here, and
+ * {@code docs/cli/command-reference.md} documents each one (a test fails when it does not). A code has one meaning in
+ * every command.
  */
 public final class ExitCodes {
 
@@ -18,9 +22,8 @@ public final class ExitCodes {
      */
     public static final int USAGE = 2;
     /**
-     * Doctor found a broken local component.
+     * {@code synesis doctor --strict} found a project that is not healthy.
      */
-    @SuppressWarnings("unused")
     public static final int DOCTOR_BROKEN = 3;
     /**
      * Local identity or configuration failure.
@@ -45,7 +48,15 @@ public final class ExitCodes {
     /**
      * Bounded session/network failure.
      */
-    static final int SESSION_FAILED = 13;
+    public static final int SESSION_FAILED = 13;
+    /**
+     * A provider result names a provider that does not exist, or one without the thing asked for.
+     */
+    public static final int PROVIDER_UNAVAILABLE = ProviderApplicationService.EXIT_PROVIDER_UNAVAILABLE;
+    /**
+     * A provider status found the integration broken.
+     */
+    public static final int PROVIDER_BROKEN = ProviderApplicationService.EXIT_PROVIDER_BROKEN;
     /**
      * Unexpected redacted internal failure.
      */

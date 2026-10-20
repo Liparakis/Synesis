@@ -10,7 +10,6 @@ import org.synesis.workspace.application.constraint.ConstraintApplicationService
 import org.synesis.workspace.application.guardrail.GuardrailApplicationService;
 import org.synesis.workspace.application.hook.HookApplicationService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
-import org.synesis.workspace.application.sync.SyncApplicationService;
 
 /**
  * Manual composition point for one CLI invocation.
@@ -21,12 +20,11 @@ import org.synesis.workspace.application.sync.SyncApplicationService;
  * @param constraintService  constraint service
  * @param guardrailService   guardrail service
  * @param hookService        hook service
- * @param syncService        synchronization service
  * @param providerService    provider lifecycle service
  * @since 1.0
  */
 public record CliRuntime(Onboarding onboarding, Terminal terminal, ProjectApplicationService projectService, ConstraintApplicationService constraintService,
-                         GuardrailApplicationService guardrailService, HookApplicationService hookService, SyncApplicationService syncService, ProviderApplicationService providerService) {
+                         GuardrailApplicationService guardrailService, HookApplicationService hookService, ProviderApplicationService providerService) {
 
     /**
      * Creates an injectable runtime for command tests and process execution.
@@ -41,7 +39,6 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ProjectApplic
                 new ConstraintApplicationService(),
                 new GuardrailApplicationService(),
                 new HookApplicationService(),
-                new SyncApplicationService(),
                 new ProviderApplicationService());
     }
 
@@ -54,7 +51,6 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ProjectApplic
      * @param constraintService  constraint service
      * @param guardrailService   guardrail service
      * @param hookService        hook service
-     * @param syncService        synchronization service
      * @param providerService    provider lifecycle service
      */
     public CliRuntime {
@@ -130,16 +126,6 @@ public record CliRuntime(Onboarding onboarding, Terminal terminal, ProjectApplic
     @Override
     public HookApplicationService hookService() {
         return hookService;
-    }
-
-    /**
-     * Returns the synchronization application service.
-     *
-     * @return synchronization application service
-     */
-    @Override
-    public SyncApplicationService syncService() {
-        return syncService;
     }
 
     /**

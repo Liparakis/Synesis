@@ -655,6 +655,37 @@ and maintainability decide when a stage is done, by its completion criteria belo
   5. *Needs a real machine with elevation.* The UAC prompt after a ticked install, that the rule then names the new
      version's `java.exe` and an upgrade keeps Link reachable, the printed `netsh` command run in an administrator
      terminal, and the one-action-per-side join count on PC + VM with the question answered by a person.
+- **Built 2026-10-20 (CLI surface: removal of the four commands, help in depths, exit codes; source semantics proven on
+  the Linux gate, `:cli:check` 318 tests and the workspace `*Provider*` and `ProjectContextExchangeTest` classes 110, 0
+  failures, plus `repositoryHygieneCheck`; not yet the Windows gate or a real run).** The rest of stage 3 (interactive
+  approval in `link invite`, the firewall offer, the installer default, the web UI) is not part of this entry.
+  1. **Removed, not deprecated (the owner's decision 4).** `host`, `join`, `sync host`, `sync join` and the `sync` parent
+     are unknown commands (exit 2). Deleted: `HostCommand`, `JoinCommand`, `SyncCommand`, `SyncHostCommand`,
+     `SyncJoinCommand` (`cli.command.sync`), `SyncApplicationService` (workspace) and `CliRuntime.syncService()`, which
+     only they used; the tests that ran them, `UnifiedCliSyncProcessTest` and `GeneratedOnboardingTest`; the obsolete
+     `docs/demo/FIRST_TWO_PERSON_PROJECT_DEMO.md` (it also described `decision` commands that do not exist); the installed
+     Link probe of `scripts/maximum-release-acceptance.ps1` (it ran `sync host`/`sync join`; Link is covered by the PC + VM
+     runs and the test suites, which `docs/release/protected-acceptance.md` now says). `FailureMapper`'s texts (still used
+     by `identity show`) name `link answer` and the browser's router option instead of `host --open-router-port`;
+     `TWO_MACHINE_TESTING.md`, `SYNESIS_LINK_V1.md`, `package-boundaries.md` and the command reference are migrated.
+     `ProjectContextExchange` stays (the runtime owner uses it). **Consequence to know:** asking the router for a port
+     (UPnP) was `host --open-router-port`; `link invite` has no such option, so it is now the browser's invitation
+     checkbox only. **Left, now without a production caller:** the `org.synesis.projectrecord.sync` protocol classes
+     (`ProjectRecordSync`, `ProjectReconciliationSync`, `ReconciliationClient`, `ReconciliationHost`, `InventorySnapshot`,
+     their `protocol` messages and tests) and `Onboarding.hostCompact`/`joinOnce`; they are another module's public API
+     and wire format, so deleting them is a separate, authorized change.
+  2. **Help in depths (decision 5).** `synesis`, `synesis --help` and `synesis help` list the everyday commands
+     (`init`, `status`, `ui`, `agents`, `link`, `doctor`, `help`) and name `synesis help --all`; `synesis help --all`
+     and `synesis --help --all` list every command by group, as before without `host`, `join` and `sync`. Both are views
+     of the one command tree (`SynesisCli.EVERYDAY_COMMANDS`); every command still runs. New tests in
+     `SynesisCliParsingTest`: short help lists exactly the everyday set, `help --all` lists every root command with its
+     group, every root command answers `--help`, the removed commands are unknown.
+  3. **Exit codes (decision 6).** `doctor --strict` exits 3 (`DOCTOR_BROKEN`, was 10). Provider results stop reusing 2
+     and 3: an unknown provider or a missing user-level entry is 20 (`PROVIDER_UNAVAILABLE`, was 2), a broken
+     integration status is 21 (`PROVIDER_BROKEN`, was 3); `provider` option mistakes stay 2 (usage). The codes live in
+     `ExitCodes` (the provider ones defined by `ProviderApplicationService` and carried by `ExitCodes`), the one table is
+     in `docs/cli/command-reference.md`, and `CommandReferenceTest` fails when the table and `ExitCodes` differ.
+     Not changed: a provider status whose synthetic check fails still exits 1 although it reports `BROKEN`.
 
 ### Stage 4 — needs foundations first
 

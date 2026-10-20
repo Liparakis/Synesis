@@ -32,7 +32,6 @@ import org.synesis.workspace.application.guardrail.GuardrailApplicationService;
 import org.synesis.workspace.application.hook.HookApplicationService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderDiscovery;
-import org.synesis.workspace.application.sync.SyncApplicationService;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
@@ -113,7 +112,7 @@ final class InitAgentSetupTest {
         ConsoleTerminal terminal = new ConsoleTerminal(new PrintStream(out, true, StandardCharsets.UTF_8), new PrintStream(err, true, StandardCharsets.UTF_8),
                 new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)), interactive);
         CliRuntime runtime = new CliRuntime(new Onboarding(tmp.resolve("profile"), new StatusRenderer(terminal)), terminal, new ProjectApplicationService(), new ConstraintApplicationService(),
-                new GuardrailApplicationService(), new HookApplicationService(), new SyncApplicationService(), new ProviderApplicationService(discovery));
+                new GuardrailApplicationService(), new HookApplicationService(), new ProviderApplicationService(discovery));
         String[] full = Stream.concat(Stream.of("init", "--project", project.toString()), Stream.of(arguments)).toArray(String[]::new);
         int exit = SynesisCli.execute(full, runtime);
         return new Run(exit, out.toString(StandardCharsets.UTF_8), err.toString(StandardCharsets.UTF_8));

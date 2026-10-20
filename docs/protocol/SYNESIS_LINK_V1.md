@@ -44,8 +44,8 @@ bounded one-shot heartbeat schedule. Defaults are one-second HEARTBEAT, three
 seconds to `SUSPECT`, and five seconds to `EXPIRED`. They are local `Duration`
 defaults, not wire constants. A session a runtime retains (`LivenessConfiguration.RETAINED`)
 uses a five-second HEARTBEAT, fifteen seconds to `SUSPECT` and thirty to `EXPIRED`, and its QUIC
-connection closes after sixty seconds without a packet; the one-shot `host` and `join` keep the
-defaults and set no idle timeout. A host's QUIC server codec uses a shareable connection handler,
+connection closes after sixty seconds without a packet; a one-shot onboarding session (the former `synesis host`/`join`, removed from the CLI) keeps the
+defaults and sets no idle timeout. A host's QUIC server codec uses a shareable connection handler,
 without which it accepted one connection and silently dropped every later one.
 
 HEARTBEAT and HEARTBEAT_ACK are 41-byte, versioned payloads bound to the current

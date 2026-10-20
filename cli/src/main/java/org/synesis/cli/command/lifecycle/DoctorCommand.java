@@ -38,7 +38,7 @@ public final class DoctorCommand implements Callable<Integer> {
     @Option(names = "--verbose", description = "Outputs detailed per-finding diagnostic explanation and recommendations.")
     private boolean verbose;
 
-    @Option(names = "--strict", description = "Enforces strict health checking, returning non-zero exit code if WARNING or worse.")
+    @Option(names = "--strict", description = "Enforces strict health checking, exiting with 3 if the project is WARNING or worse.")
     private boolean strict;
 
     @Option(names = "--fix", description = "Makes the safe repairs, then reports again: stale Synesis lock files and corrupt plan files, a connected agent's out-of-date managed files, and a shared project's stopped runtime. Never touches your files, the firewall, or operator requests.")
@@ -103,7 +103,7 @@ public final class DoctorCommand implements Callable<Integer> {
             }
 
             if (strict && report.overallStatus() != DoctorStatus.HEALTHY) {
-                return ExitCodes.LOCAL_CONFIGURATION;
+                return ExitCodes.DOCTOR_BROKEN;
             }
 
             return ExitCodes.OK;

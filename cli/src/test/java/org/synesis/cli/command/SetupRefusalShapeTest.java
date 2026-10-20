@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.application.ProjectApplicationService;
 
 /**
@@ -46,16 +47,16 @@ class SetupRefusalShapeTest {
         Path project = initialized("project");
         for (String verb : List.of("install", "status", "uninstall")) {
             CliHarness.Result refused = CliHarness.run(profile, withProject(new String[]{"provider", verb, "nope"}, project));
-            assertEquals(2, refused.exit(), refused.toString());
+            assertEquals(ExitCodes.PROVIDER_UNAVAILABLE, refused.exit(), refused.toString());
             assertShapeFollowsError(refused.stdout(), "UNKNOWN_PROVIDER");
             assertTrue(refused.stdout().contains("PROVIDER=nope"), "the keys it printed before are still printed: " + refused);
             assertEquals(List.of(), refused.stderr());
         }
         CliHarness.Result global = CliHarness.run(profile, "provider", "uninstall", "nope", "--global");
-        assertEquals(2, global.exit(), global.toString());
+        assertEquals(ExitCodes.PROVIDER_UNAVAILABLE, global.exit(), global.toString());
         assertShapeFollowsError(global.stdout(), "UNKNOWN_PROVIDER");
         CliHarness.Result unsupported = CliHarness.run(profile, "provider", "uninstall", "claude", "--global");
-        assertEquals(2, unsupported.exit(), unsupported.toString());
+        assertEquals(ExitCodes.PROVIDER_UNAVAILABLE, unsupported.exit(), unsupported.toString());
         assertShapeFollowsError(unsupported.stdout(), "GLOBAL_MCP_UNSUPPORTED");
     }
 
@@ -68,7 +69,7 @@ class SetupRefusalShapeTest {
 
         CliHarness.Result status = CliHarness.run(tmp.resolve("profile"), withProject(new String[]{"provider", "status", "codex"}, project));
 
-        assertEquals(3, status.exit(), status.toString());
+        assertEquals(ExitCodes.PROVIDER_BROKEN, status.exit(), status.toString());
         assertTrue(status.stdout().stream().anyMatch(line -> line.startsWith("ERROR=")), status.toString());
         assertShapeFollowsError(status.stdout(), status.stdout().stream().filter(line -> line.startsWith("ERROR=")).findFirst().orElseThrow().substring("ERROR=".length()));
     }
