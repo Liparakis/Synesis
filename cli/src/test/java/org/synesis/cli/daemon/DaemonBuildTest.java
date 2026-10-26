@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.synesis.cli.command.BuildInfo;
 
 /**
  * D8 of the 2026-10-26 real runs: a command never silently uses a daemon of another build.

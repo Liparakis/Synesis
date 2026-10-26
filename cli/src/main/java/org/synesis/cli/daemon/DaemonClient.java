@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import org.synesis.cli.command.BuildInfo;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 

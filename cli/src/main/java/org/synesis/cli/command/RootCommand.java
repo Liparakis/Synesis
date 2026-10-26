@@ -1,5 +1,6 @@
 package org.synesis.cli.command;
 
+import org.synesis.cli.daemon.BuildInfo;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.IVersionProvider;
 import picocli.CommandLine.Model.CommandSpec;

@@ -1,4 +1,4 @@
-package org.synesis.cli.command;
+package org.synesis.cli.daemon;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,11 +24,21 @@ public final class BuildInfo {
         return values.getProperty("version", "0.1.0-dev.local") + " " + values.getProperty("commit", "UNKNOWN") + " " + values.getProperty("time", "UNKNOWN");
     }
 
-    static String version() {
+    /**
+     * Returns this build's version.
+     *
+     * @return the version, or a development placeholder
+     */
+    public static String version() {
         return properties().getProperty("version", "0.1.0-dev.local");
     }
 
-    static String text() {
+    /**
+     * Returns the text {@code synesis version} prints.
+     *
+     * @return version, commit and build time
+     */
+    public static String text() {
         Properties values = properties();
         return "SYNESIS_VERSION=" + values.getProperty("version", "0.1.0-dev.local") + System.lineSeparator() + "RECORD_FORMAT=" + values.getProperty("recordFormat", "SDR2") + System.lineSeparator()
                 + "RECONCILIATION_PROTOCOL=" + values.getProperty("reconciliationProtocol", "PRP1") + System.lineSeparator()
