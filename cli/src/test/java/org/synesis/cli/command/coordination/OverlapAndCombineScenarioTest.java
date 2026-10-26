@@ -163,6 +163,49 @@ final class OverlapAndCombineScenarioTest {
     }
 
     /**
+     * s5-run19 (2026-10-26): while the combine waits for an agent, the lower computer goes on integrating lanes, so its
+     * {@code main} moves again and again, and each move named a new re-merge that met the same conflict on the same advance and
+     * opened another combine (three for one snapshot, two of them never taken). A combine is about the conflicting advance, not
+     * about the other copy's head: one is opened, its result is merged with the newer head, and the copies end equal.
+     */
+    @Test
+    void theOtherComputerGoesOnIntegratingWhileTheCombineWaitsAndOneCombineIsOpenedAndMainEndsEqual() throws Exception {
+        Scene scene = toTheCombine(false);
+        ScenarioAgent low3 = lab.agent(scene.low(), "low-3");
+        ScenarioAgent low4 = lab.agent(scene.low(), "low-4");
+        ScenarioAgent[] working = {scene.high1(), scene.high2(), scene.low1(), scene.low2(), low3, low4};
+        // Two producers at a time, who review each other, so the lower computer's main moves twice (an advance for each lane).
+        int later = 0;
+        for (int round = 0; round < 2; round++) {
+            String first = "later-" + later++ + ".txt";
+            String second = "later-" + later++ + ".txt";
+            long seen = lab.entriesWrittenUnchecked(scene.high(), scene.low(), PredictionEventType.CONTROL_BRANCH_ADVANCED);
+            low3.claim("Write " + first + " on the lower computer", first);
+            low4.claim("Write " + second + " on the lower computer", second);
+            low3.create(first, "written by the lower computer, later\n");
+            low4.create(second, "written by the lower computer, later\n");
+            low3.publish();
+            low4.publish();
+            lab.drive("the lower computer's main holds " + first + " and " + second + " and the higher computer has their heads",
+                    () -> lab.hasOnBranch(scene.low(), first) && lab.hasOnBranch(scene.low(), second)
+                            && lab.entriesWrittenUnchecked(scene.high(), scene.low(), PredictionEventType.CONTROL_BRANCH_ADVANCED) >= seen + 2, working);
+            // Give the higher computer's passes time to meet the new heads while the combine still waits.
+            for (int pass = 0; pass < 6; pass++) {
+                scene.high1().step();
+                Thread.sleep(300);
+            }
+        }
+        assertEquals(1, lab.entriesWrittenUnchecked(scene.high(), scene.high(), PredictionEventType.COMBINE_REQUIRED), "one combine for one conflicting advance");
+        assertEquals("ready", scene.combiner1().call("ensure_session", scene.ensureSession()).get("status"));
+
+        combineAndMeet(scene);
+        assertEquals(1, lab.entriesWrittenUnchecked(scene.high(), scene.high(), PredictionEventType.COMBINE_REQUIRED), "and still one when the copies meet");
+        for (int present = 0; present < 4; present++) {
+            assertTrue(lab.hasOnBranch(scene.high(), "later-" + present + ".txt"), "the lower computer's later work is on the met main");
+        }
+    }
+
+    /**
      * DEFECT 1 (found 2026-10-19 in every run, fixed by the retry answer of 23312223): the agent that lost the race for the combine is told
      * {@code blocked / policy_denied / request_human_help}. A lost race is the normal outcome of two agents asking at once,
      * the refusal changed nothing, and ADR-0098 item 22 offers the combine to every lane-less agent of the computer; a

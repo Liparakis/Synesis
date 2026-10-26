@@ -43,6 +43,7 @@ import org.synesis.workspace.application.project.execution.ProjectProcessExecuto
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
 import org.synesis.workspace.lifecycle.lease.SessionSuccessions;
+import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
  * The re-merge of two diverged copies of {@code main} (ADR-0098 step 5, designer items 13 to 15): which computer acts,
@@ -506,7 +507,7 @@ class RemergeServiceTest {
     }
 
     /** Both copies added {@code shared.txt}: Git cannot merge this copy's one advance onto the other head. */
-    private record Conflict(Lane lane, String own, String otherHead) {
+    private record Conflict(Lane lane, String own, String otherHead, NodeIdentity other) {
     }
 
     private Conflict conflict() throws Exception {
@@ -517,7 +518,7 @@ class RemergeServiceTest {
         ownAdvance(base, own, lane.snapshotId());
         String otherHead = commit("other", base, "shared.txt", "other side");
         otherAdvance(other, otherHead);
-        return new Conflict(lane, own, otherHead);
+        return new Conflict(lane, own, otherHead, other);
     }
 
     /** The merge pass released the author's lane when it integrated it, which frees the paths it claimed. */
@@ -619,6 +620,65 @@ class RemergeServiceTest {
         assertEquals(1, project.store().taskCompletionProjection().remerge(RemergeService.remergeId(conflict.otherHead(), moved)).size(),
                 "the re-merge of the moved copy is built with the one combine's result, and its one lane needing review waits for its reviewer");
         assertEquals(1, project.store().taskCompletionProjection().combines().size());
+    }
+
+    /**
+     * s5-run19: the other copy goes on integrating while the combine waits, so each of its new heads named a new re-merge
+     * that opened another combine for the same advance (three for one snapshot). The combine is about the advance: one is
+     * opened however often the other head moves, and its result, made on the first other head, is merged with the last.
+     */
+    @Test
+    void theOtherCopyMovingWhileACombineWaitsOpensNoSecondCombineAndTheResultIsMergedWithItsNewestHead() throws Exception {
+        Conflict conflict = conflict();
+        run();
+        CombinePayload combine = combine();
+        Lane combiner = combineLane(combine);
+        String second = commit("other-second", conflict.otherHead(), "later-1.txt", "the other copy, later");
+        otherAdvance(conflict.other(), second);
+        run();
+        String third = commit("other-third", second, "later-2.txt", "the other copy, later still");
+        otherAdvance(conflict.other(), third);
+        run();
+        run();
+
+        assertEquals(1, events(PredictionEventType.COMBINE_REQUIRED).size(), "one combine for one conflicting advance");
+        assertEquals(combine, combine());
+
+        String combined = combineSnapshot(combine, combiner, "snap_combine", 1, false);
+        run();
+
+        RemergeSnapshotPayload remerge = built(third, conflict.own());
+        String result = remerge.result();
+        assertTrue(GitProcessRunner.isAncestor(project.root, third, result), "the result holds the other copy's newest head");
+        assertEquals(project.git("show", combined + ":shared.txt"), project.git("show", result + ":shared.txt"), "and the combine lane's file");
+        assertEquals(1, events(PredictionEventType.COMBINE_REQUIRED).size());
+    }
+
+    /**
+     * An advance with a combine that waits for its lane is merged by Git once the other copy has taken an equivalent
+     * change, and the combine's work group is cancelled when nothing diverges any more.
+     */
+    @Test
+    void aCombineWhoseConflictTheOtherCopyResolvedItselfIsMergedByGitAndItsGroupIsCancelled() throws Exception {
+        Conflict conflict = conflict();
+        run();
+        CombinePayload combine = combine();
+        String same = commit("other-same", conflict.otherHead(), "shared.txt", "own side");
+        otherAdvance(conflict.other(), same);
+
+        run();
+
+        assertEquals(1, events(PredictionEventType.COMBINE_REQUIRED).size(), "no second combine");
+        RemergeSnapshotPayload remerge = built(same, conflict.own());
+        verdict(conflict.lane(), remerge.snapshot().snapshotId(), grantFor(remerge.snapshot().snapshotId()), "ACCEPTED");
+        run();
+        assertEquals(remerge.result(), project.head(), "Git's merge landed");
+        assertEquals(WorkGroup.Status.ACTIVE, project.store().workGroupProjection().group(combine.workGroupId()).orElseThrow().status(),
+                "the pass that landed it does not close the combine");
+
+        run();
+
+        assertEquals(WorkGroup.Status.CANCELLED, project.store().workGroupProjection().group(combine.workGroupId()).orElseThrow().status());
     }
 
     @Test

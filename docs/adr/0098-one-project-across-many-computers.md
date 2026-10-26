@@ -1233,6 +1233,47 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     completes the group, the other's reviewer lane is ended after the heal). Source semantics proven; not proved in a
     real run.
 
+34. **One combine per conflicting advance, whatever either copy's head does meanwhile** (s5-run19, 2026-10-26, build
+    remaster91; the VM is the re-merging computer, the PC the other copy). Result `TIME_BOUND`, `main` apart (PC
+    `a9accc1e`, VM `a44cfc92`). *Proven from both log dumps* (`D:\SynesisAcceptance\evidence\s5-run19`, applied order):
+    the VM wrote three combines for the one snapshot `snap_3e7f6f09…`: `cb-2eb0fbbb…` (other head `223fc5a2`, pos 134),
+    `cb-c6fe733e…` (`a0235c09`, pos 148), `cb-da5d997b…` (`a9accc1e`, pos 160). Each is the PC's next head after an ordinary
+    lane of the PC (pos 140 to 153): item 32 made the combine independent of *this* copy's head but still looked combines
+    up by the *other* head (`combinesOnto(store, other)`), and a copy that keeps integrating moves it each time. The VM's
+    own head `a44cfc92` was the same in all three, and so was the advance head they all combine.
+    *Why the lane and the snapshot stayed open, and why the copies never met:* the first combine was taken (lane
+    `7b166133…`, work group `832cb455…`) and its result `snap_b3864df2…` was written (pos 162, on base `223fc5a2`). The
+    build then looked only for the combines of the newest other head (`a9accc1e`), found the third, which nobody had
+    taken, and waited for it: the result of the first was never used, so the re-merge never landed, the snapshot stayed
+    `INTEGRATION_PENDING` (a combine lane's result is merged by the re-merge, nothing else integrates it) and its lane
+    stayed `ACTIVE` as a producer waiting for that landing. The other two groups (`1cfd28b2…`, `31814a29…`) stayed `ACTIVE`
+    with no lane. So the same missing invariant: one combine per conflicting advance. (`snap_a0e72df4…`
+    `REVIEW_REJECTED` is an ordinary rejected snapshot of the group `8c7dfc15…`, whose lane was re-done as `snap_a3ec2f8e…`;
+    it is not part of this.)
+    *Identity chosen:* the combine is about the advance of this computer that Git cannot merge, named by its head: its ID is
+    `cb-` + digest of the advance head (`RemergeService.openCombine`), and every lookup is by `CombinePayload.theirs`, the
+    same field, so combines logged under the earlier IDs are found as they are (no format change; `COMBINE_REQUIRED`
+    is as before). `CombinePayload.combineId` still names the combine's work group and task.
+    *Rule:* `openCombine` writes nothing when any combine names the advance; the build starts from the base of the last
+    combine that has a result (`combinesWithResult`) and, when that base lacks the other copy's newest head, merges that
+    head into the result last, so the result holds the combine lane's work and what the other copy took since; the
+    reviewer choice excludes the holders of the combines that name the snapshots the re-merge carries
+    (`anotherReviewer`). An advance whose combine has no result yet is merged by Git against the newest heads, so a
+    conflict the other copy resolved itself (an equivalent change) is gone and no lane is needed; once no other copy
+    diverges from this one, `closeCombines` cancels the work group of such a combine (`cancelWhenResolved`, this
+    computer's lanes only, a head not here yet stops it), and a lane in it is told to end by item 33. Where one advance
+    has several combines already (run 19), the one with a result is used and the others are cancelled the same way.
+    *Limit:* if the other copy's newest head conflicts with the combined result (it changed the same lines again),
+    the re-merge stops and is tried again when a head moves, and no second combine is opened for it. A combine lane that
+    finishes after the conflict went away is recorded integrated without its tree being used (both versions are on
+    `main` through Git's own merge).
+    Tests: `RemergeServiceTest.theOtherCopyMovingWhileACombineWaitsOpensNoSecondCombineAndTheResultIsMergedWithItsNewestHead`
+    and `aCombineWhoseConflictTheOtherCopyResolvedItselfIsMergedByGitAndItsGroupIsCancelled`, and the scenario
+    `OverlapAndCombineScenarioTest.theOtherComputerGoesOnIntegratingWhileTheCombineWaitsAndOneCombineIsOpenedAndMainEndsEqual`
+    (after the heal the lower computer integrates four more lanes while the combine waits: one `COMBINE_REQUIRED`, mains
+    equal, the later files on both). All three fail without the change. Source semantics proven; not proved in a real
+    run.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

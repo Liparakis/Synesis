@@ -18,7 +18,7 @@ import org.synesis.coordination.exception.CoordinationNullException;
  * authors combines the two versions in a combine lane (ADR-0098 step 5, designer item 22; ADR-0100 "The combine
  * lane"). The combine lane works in a work group and on a task of its own, both named by the combine.
  *
- * @param combineId   the combine: one per re-merge and advance
+ * @param combineId   the combine: one per advance, named by its head, whichever re-merge or other head met the conflict
  * @param remergeId   the re-merge that met the conflict
  * @param otherHead   the other copy's head the re-merge started from
  * @param ownHead     this copy's head when the re-merge was built
