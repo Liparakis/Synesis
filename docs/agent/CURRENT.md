@@ -1,3 +1,24 @@
+# 2026-10-26 — ADR-0098 step 5 DONE under a real Link cut; ADR-0103 stage 4 built
+
+**ADR-0098 step 5:** s5-run25 (remaster97 = b45415be) RESULT=PASS under a real 5-minute cut — diverged, re-merged
+through two combines, `main` equal on both computers, logs identical, goal complete, tests pass. Designer items 32–39,
+each found in a real run with the live stuck project and pinned by a scenario: one combine per conflicting change; a
+lane that has published nothing is shown none of the pump's waits; the combine wait shown only to a combine lane; a
+combine lane that keeps the other copy publishes that as its result; a lane in a closed group is told to end; a combine
+lane is released once its result is published; and a trace test of the whole two-combine path that fails on any answer
+an agent cannot act on. All seven ADR-0098 steps are now proven in real runs.
+
+**ADR-0103 stage 4:** "ready without a task" (`agents run --wait-for-task`, `agents task`; a task message carries no
+authority), UI start/stop of agents through one runner, OS package definitions and signing that turns on only with the
+owner's key. Real runs of stages 2–3 passed with defects D1–D9 fixed (D9: Synesis's JVM crash files now go to its own
+state folder, never the project). The unused project-record sync protocol was deleted (3,866 lines).
+
+**Lab:** the Linux gate starts its container inside the Podman WSL distro; scenarios run on the Linux gate only;
+the VM loses its network now and then and is reset.
+
+**Open:** the installer's admin-prompt check (needs the owner); adapters for further harnesses (owner's choice);
+ADR-0101 open; a late snapshot of a cancelled lane waits for review for ever (ADR-0098 step 5, noted).
+
 # 2026-10-20 — ADR-0098 step 7 proven under a real cut; step 5 PARTIAL; yesterday's cuts did not reach the Link
 
 **Correction to 2026-10-19.** The lab's Link cut (`~/accept/partition.sh` on the VM) blocked the PC's IPv6 addresses
