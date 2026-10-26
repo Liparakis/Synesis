@@ -24,5 +24,24 @@ public enum DoctorConfidence {
     /**
      * Diagnostic state ambiguous or contradictory.
      */
-    AMBIGUOUS
+    AMBIGUOUS,
+
+    /**
+     * Not a defect: something a person may want to act on, which changes no health status.
+     */
+    ADVICE;
+
+    /**
+     * Returns how a report marks the finding for a person: confirmed, suspected or advice. Evidence that is strong but
+     * not exact, and evidence that is contradictory, are suspected.
+     *
+     * @return lowercase mark
+     */
+    public String mark() {
+        return switch (this) {
+            case CONFIRMED -> "confirmed";
+            case ADVICE -> "advice";
+            case HIGH_CONFIDENCE, SUSPECTED, AMBIGUOUS -> "suspected";
+        };
+    }
 }

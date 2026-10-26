@@ -55,8 +55,8 @@ public final class FailureMapper {
             case HOST_IDENTITY_MISMATCH -> "The authenticated host identity did not match the invitation.";
             case OWN_INVITATION -> "This invitation was created by this identity. Join it from another identity or machine.";
             case NO_USABLE_CANDIDATE -> "The invitation names no address this computer can reach, for example only IPv6 addresses when this computer has no IPv6.";
-            case HOST_TIMEOUT -> "Nobody connected before the invitation expired. Create a new one; if the other computer is on another network, paste the answer link it shows, or start with synesis host --open-router-port.";
-            case CONNECTION_FAILED -> "No connection was made. If the computers are on different networks, the host must paste the answer link shown here, or start again with synesis host --open-router-port.";
+            case HOST_TIMEOUT -> "Nobody connected before the invitation expired. Create a new one; if the other computer is on another network, give the invitation the answer link it shows (synesis link answer), or invite from the browser (synesis ui) with the router option ticked.";
+            case CONNECTION_FAILED -> "No connection was made. If the computers are on different networks, the inviting computer must be given the answer link shown here (synesis link answer), or invite from the browser (synesis ui) with the router option ticked.";
             case INTERNAL -> "Unexpected internal failure.";
         };
     }

@@ -5,9 +5,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.provider.AgentLogEntry;
 import org.synesis.workspace.provider.ProviderIntegration;
 import org.synesis.workspace.provider.ProviderMcpEvidenceTier;
 import org.synesis.workspace.provider.ProviderSupportLevel;
+import org.synesis.workspace.provider.StreamEvents;
 
 /**
  * Codex project-local PreToolUse provider integration.
@@ -50,6 +52,26 @@ public final class CodexProviderIntegration implements ProviderIntegration {
     @Override
     public String id() {
         return "codex";
+    }
+
+    /**
+     * {@code codex login status} prints "Logged in using ..." with exit 0, or "Not logged in" (checked
+     * against Codex 0.163, 2026-10-20). A version without the command answers with a usage error and is
+     * reported as unknown.
+     */
+    @Override
+    public java.util.Optional<List<String>> signInStatusArguments() {
+        return java.util.Optional.of(List.of("login", "status"));
+    }
+
+    @Override
+    public SignIn signInState(int exitCode, String output) {
+        // Codex may print a warning before its answer, so the answer is the last non-blank line.
+        String answer = output == null ? "" : output.lines().map(String::strip).filter(line -> !line.isEmpty()).reduce((first, last) -> last).orElse("").toLowerCase(java.util.Locale.ROOT);
+        if (answer.startsWith("not logged in")) {
+            return SignIn.SIGNED_OUT;
+        }
+        return exitCode == 0 && answer.startsWith("logged in") ? SignIn.SIGNED_IN : SignIn.UNKNOWN;
     }
 
     @Override
@@ -129,7 +151,60 @@ public final class CodexProviderIntegration implements ProviderIntegration {
                 // Codex's own environment, and the Stop hook finds the agent's wait by this identity.
                 return options.connectionInstanceId() == null ? Map.of() : Map.of(CONNECTION_INSTANCE_VARIABLE, options.connectionInstanceId());
             }
+
+            @Override
+            public List<AgentLogEntry> logEntries(String outputLine) {
+                return codexEntries(StreamEvents.parse(outputLine));
+            }
         });
+    }
+
+    /**
+     * Reads one {@code exec --json} event. Only a completed item says what happened: its message, its MCP call with
+     * the answer, or its command with the output. A failed turn is read as a failure.
+     */
+    private static List<AgentLogEntry> codexEntries(Map<?, ?> event) {
+        if (event == null) {
+            return List.of();
+        }
+        String type = StreamEvents.text(event, "type");
+        if ("turn.failed".equals(type) || "error".equals(type)) {
+            return List.of(new AgentLogEntry(AgentLogEntry.Kind.FAILED, "", failureText(event.get("error") == null ? event.get("message") : event.get("error"))));
+        }
+        if (!"item.completed".equals(type) || !(event.get("item") instanceof Map<?, ?> item)) {
+            return List.of();
+        }
+        switch (StreamEvents.text(item, "type")) {
+            case "agent_message":
+                return List.of(new AgentLogEntry(AgentLogEntry.Kind.SAID, "", StreamEvents.text(item, "text")));
+            case "mcp_tool_call":
+                String tool = StreamEvents.text(item, "server") + "." + StreamEvents.text(item, "tool");
+                AgentLogEntry call = new AgentLogEntry(AgentLogEntry.Kind.CALLED, tool, ProviderJson.write(item.get("arguments")));
+                return item.get("error") != null ? List.of(call, new AgentLogEntry(AgentLogEntry.Kind.FAILED, tool, failureText(item.get("error"))))
+                        : List.of(call, new AgentLogEntry(AgentLogEntry.Kind.RESULT, tool, mcpResultText(item.get("result"))));
+            case "command_execution":
+                return List.of(new AgentLogEntry(AgentLogEntry.Kind.CALLED, "command", StreamEvents.text(item, "command")),
+                        new AgentLogEntry(AgentLogEntry.Kind.RESULT, "command", StreamEvents.text(item, "aggregated_output")));
+            default:
+                return List.of();
+        }
+    }
+
+    /** An MCP result is a list of content blocks; the text ones are read. */
+    private static String mcpResultText(Object result) {
+        StringBuilder text = new StringBuilder();
+        if (result instanceof Map<?, ?> answer && answer.get("content") instanceof List<?> blocks) {
+            for (Object block : blocks) {
+                if (block instanceof Map<?, ?> part && part.get("text") instanceof String words) {
+                    text.append(text.isEmpty() ? "" : " ").append(words);
+                }
+            }
+        }
+        return text.toString();
+    }
+
+    private static String failureText(Object failure) {
+        return failure instanceof Map<?, ?> detail && detail.get("message") instanceof String message ? message : String.valueOf(failure);
     }
 
     private static List<String> sessionArguments(HeadlessOptions options) {

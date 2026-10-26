@@ -274,14 +274,6 @@ class WorkspaceMutationBrokerTest {
     }
 
     @Test
-    void test13AgentsMdInstructsBrokeredMutation() throws Exception {
-        String agentsText = Files.readString(location.root().resolve("AGENTS.md"));
-
-        assertTrue(agentsText.contains("Use Synesis tools for project reads, file changes, and commands."));
-        assertTrue(agentsText.contains("Do not modify the control checkout or another worker's files directly."));
-    }
-
-    @Test
     void test15ControlCheckoutRemainsUnchanged() throws Exception {
         setVerifiedTrustState();
 

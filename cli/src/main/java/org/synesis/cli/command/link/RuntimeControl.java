@@ -32,15 +32,31 @@ interface RuntimeControl {
 
         private static final long serialVersionUID = 1L;
 
+        /** Stable error code. */
         private final String code;
+        /** One sentence saying what happened, or {@code null}. */
+        private final String detail;
 
         Rejected(String code) {
+            this(code, null);
+        }
+
+        /**
+         * @param code   stable error code
+         * @param detail one sentence saying what happened, or {@code null} to use the code's standard message
+         */
+        Rejected(String code, String detail) {
             super(code);
             this.code = code;
+            this.detail = detail;
         }
 
         String code() {
             return code;
+        }
+
+        String detail() {
+            return detail;
         }
     }
 

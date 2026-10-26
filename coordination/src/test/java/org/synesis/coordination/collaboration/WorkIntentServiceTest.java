@@ -625,6 +625,41 @@ final class WorkIntentServiceTest {
         assertEquals(slug.version(), consumed.collaborationProjection().intent(slug.intentId()).orElseThrow().version());
     }
 
+    /**
+     * s6-run1 (ADR-0098 step 6, designer item 3): two computers announcing at the same moment each open a work group, so the
+     * only producer of one group is the only one who can review the only producer of the other. Independence is the
+     * lineage rule; the group is not part of it. A producer that has published nothing is still refused.
+     */
+    @Test
+    void aPublishedProducerOfAnotherWorkGroupIsAdmittedToReviewAndAnUnpublishedOneIsNot(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID groupA = UUID.randomUUID();
+        UUID groupB = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntentService service = mandatoryGroup(temp, project, groupA, identity);
+        new WorkGroupService(new PredictionEventStore(temp, project), identity).create(new WorkGroup(groupB, project, "Build other modules",
+                "Every module reviewed by a non-author", 1, WorkGroup.Status.ACTIVE, ReviewPolicy.mandatoryIndependent()));
+        WorkIntent slug = lane(project, groupA, "agt-slug", WorkIntent.Role.PRODUCER, "slug.py", List.of());
+        WorkIntent wrap = lane(project, groupB, "agt-wrap", WorkIntent.Role.PRODUCER, "wrap.py", List.of());
+        TaskSnapshotPayload wrapSnapshot = publishBoth(temp, project, identity, service, slug, wrap);
+        WorkIntent late = lane(project, groupA, "agt-late", WorkIntent.Role.PRODUCER, "late.py", List.of());
+        assertTrue(service.announce(late).acquired());
+
+        IOException unpublished = assertThrows(IOException.class,
+                () -> service.request(late.participant(), wrap.intentId(), CoordinationRequest.Kind.REVIEW, "Review wrap.py", wrapSnapshot.snapshotId()));
+        assertEquals("REVIEWER_INTENT_REQUIRED", unpublished.getMessage());
+
+        CoordinationRequest request = service.request(slug.participant(), wrap.intentId(), CoordinationRequest.Kind.REVIEW, "Review wrap.py", wrapSnapshot.snapshotId());
+        service.respond(wrap.participant(), request.requestId(), CoordinationRequest.Status.ACCEPTED, "admitted");
+
+        PredictionEventStore admitted = new PredictionEventStore(temp, project);
+        LaneGrant grant = admitted.workGroupProjection().grants().getFirst();
+        assertEquals(slug.participant(), grant.targetParticipant());
+        assertEquals(wrapSnapshot.snapshotId(), grant.snapshotId());
+        assertEquals(List.of(slug.intentId(), late.intentId()), admitted.collaborationProjection().activeIntents().stream()
+                .filter(intent -> intent.workGroupId().equals(groupA)).map(WorkIntent::intentId).toList(), "the reviewer keeps its one lane, in its own group");
+    }
+
     @Test
     void theReviewAProducerHeldMovesToTheParticipantThatContinuesItsLane(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();

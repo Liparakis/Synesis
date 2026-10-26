@@ -106,6 +106,16 @@ public final class KnownProjectRegistry {
     }
 
     /**
+     * Returns the files recording a project in the default registry writes: the registry and the lock file it takes beside it.
+     * {@code synesis init} names them among the files it wrote.
+     *
+     * @return the registry file and its lock file
+     */
+    public static java.util.List<Path> defaultWrittenFiles() {
+        return java.util.List.of(defaultFile(), defaultFile().resolveSibling(LOCK_FILE));
+    }
+
+    /**
      * Records one already validated project observation.
      *
      * <p>Observation is idempotent for the same project identity and normalized

@@ -16,6 +16,7 @@ import org.synesis.coordination.persistence.ProjectAppendLock;
 final class ProjectAppends {
 
     private final PredictionEventStore store;
+    private final boolean readOnly;
 
     /**
      * Binds the helper to one project log.
@@ -23,7 +24,19 @@ final class ProjectAppends {
      * @param store event store naming the project root and project identity
      */
     ProjectAppends(PredictionEventStore store) {
+        this(store, false);
+    }
+
+    /**
+     * Binds the helper to one project log, for reading only when {@code readOnly}: every view is replayed without
+     * creating, moving or removing anything, and no sequence that decides and appends runs.
+     *
+     * @param store    event store naming the project root and project identity
+     * @param readOnly whether the helper may only read
+     */
+    ProjectAppends(PredictionEventStore store, boolean readOnly) {
         this.store = CoordinationNullException.requireNonNull(store, "store");
+        this.readOnly = readOnly;
     }
 
     /**
@@ -36,6 +49,9 @@ final class ProjectAppends {
      * @throws GeneralSecurityException when signing or signature verification fails
      */
     <T> T call(Action<T> action) throws IOException, GeneralSecurityException {
+        if (readOnly) {
+            throw new CoordinationException("COORDINATION_READ_ONLY");
+        }
         try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
             return action.apply(freshUnder(lock));
         }
@@ -78,7 +94,8 @@ final class ProjectAppends {
      * @throws GeneralSecurityException when signature verification fails
      */
     PredictionEventStore fresh() throws IOException, GeneralSecurityException {
-        return new PredictionEventStore(store.rootDirectory(), store.projectId());
+        return readOnly ? PredictionEventStore.openReadOnly(store.rootDirectory(), store.projectId())
+                : new PredictionEventStore(store.rootDirectory(), store.projectId());
     }
 
     /**

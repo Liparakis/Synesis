@@ -281,6 +281,13 @@ final class McpSessionEstablishment {
                     AgentNextAction.RETRY,
                     object("repairJoined", true, "intentId", joined.intent().intentId().toString(), "claimEpoch", joined.intent().version()));
         } catch (Exception repairFailure) {
+            if ("COMBINE_TAKEN_OR_CLOSED".equals(repairFailure.getMessage())) {
+                // Losing the race for a combine is an ordinary answer: both refusal points precede the worktree move,
+                // so the session holds what it held before. Sent to a person, the losing agent stopped (s5-run8).
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, object("reason", "COMBINE_TAKEN_OR_CLOSED", "instruction",
+                        "Another session took this combine first, or it has closed. Nothing was claimed, your worktree was not moved, and no person is needed. "
+                                + "Do not repeat this join: call get_next_action and take the work it offers."));
+            }
             // The snapshot to repair is on a computer that does not answer now: the join is asked again, not a person.
             AgentNextAction next = repairFailure instanceof CodeRemote.Refused refused && refused.retryable() ? AgentNextAction.RETRY : AgentNextAction.REQUEST_HUMAN_HELP;
             return policyDenied(next, "reason", repairFailure.getMessage() == null ? "REPAIR_JOIN_FAILED" : repairFailure.getMessage());
@@ -426,7 +433,8 @@ final class McpSessionEstablishment {
         return new AgentResponse(AgentStatus.BLOCKED,
                 AgentReason.POLICY_DENIED,
                 AgentNextAction.ENSURE_SESSION,
-                object("reason", "REVIEW_CLAIM_REQUIRED", "message", "A reviewer must explicitly claim a disjoint report or test path; " + "reviewTargets identify evidence to inspect but do not grant ownership."));
+                object("reason", "REVIEW_CLAIM_REQUIRED", "message", "A reviewer must explicitly claim a disjoint report or test path, such as reviews/<snapshotId>.md for the review notes its lane ends by publishing; "
+                        + "reviewTargets identify evidence to inspect but do not grant ownership."));
     }
 
     private static boolean isScopeExtensionFailure(String message) {

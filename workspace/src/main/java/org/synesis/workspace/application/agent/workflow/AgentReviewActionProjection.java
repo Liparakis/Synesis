@@ -389,6 +389,10 @@ static AgentResponse pendingReviewRequestResponse(Map<String, Object> collaborat
             }
         }
         remergeGrants(store, List.of(participant)).forEach(grant -> groups.add(grant.workGroupId()));
+        // A review still owed counts whether or not the participant produced anything: the session's open authority
+        // lists it (PENDING_REVIEW), so the lane's answer must project the review that finishes it, not a CLOSE.
+        var workGroups = store.workGroupProjection();
+        workGroups.grants().stream().filter(grant -> participant.equals(grant.targetParticipant()) && workGroups.grantUnresolved(grant.identity())).forEach(grant -> groups.add(grant.workGroupId()));
         return Set.copyOf(groups);
     }
 
@@ -483,7 +487,8 @@ static List<Map<String, Object>> reviewActions(PredictionEventStore store, Strin
         var projection = store.workGroupProjection();
         List<WorkIntent> activeIntents = store.collaborationProjection().activeIntents();
         for (LaneGrant grant : projection.grants()) {
-            if (projection.grantSuperseded(grant.grantId()) || grantTargetsSupersededIntent(store, grant)) {
+            // A revoked grant holds no review: its reviewer could not be reached, and its verdict would be refused.
+            if (projection.grantSuperseded(grant.grantId()) || projection.grantRevoked(grant.identity()) || grantTargetsSupersededIntent(store, grant)) {
                 continue;
             }
             if (!grant.targetParticipant().equals(participantId)) {
@@ -516,7 +521,10 @@ static List<Map<String, Object>> reviewActions(PredictionEventStore store, Strin
                     .anyMatch(intent -> intent.participant().equals(participantId) && intent.workGroupId().equals(grant.workGroupId()) && intent.role() == WorkIntent.Role.REVIEWER && (reviewedIntent != null
                             ? reviewTargetsMatch(intent, reviewedIntent) : reviewTargetsMatch(intent, snapshot)));
             boolean unannouncedReviewer = activeIntents.stream().noneMatch(intent -> intent.participant().equals(participantId));
-            boolean explicitReviewGrant = hasExplicitReviewGrant(store, grant, participantId);
+            // The merge pass addresses a re-merge's grant to its reviewer itself, so no request admitted it: the holder of a
+            // combine lane, whose own lane only waits for that re-merge, is shown it like a reviewer that holds no lane.
+            boolean explicitReviewGrant = hasExplicitReviewGrant(store, grant, participantId)
+                    || grant.snapshotId() != null && store.taskCompletionProjection().remergeOf(new org.synesis.coordination.domain.identity.SnapshotId(grant.snapshotId())).isPresent();
             boolean completedReviewer = reviewGroupFilter != null && reviewGroupFilter.contains(grant.workGroupId());
             if (!activeReviewer && !unannouncedReviewer && !explicitReviewGrant && !completedReviewer) {
                 continue;
@@ -634,9 +642,12 @@ static List<Map<String, Object>> reviewCandidates(PredictionEventStore store) {
                         .noneMatch(grant -> ReviewAdmissionRules.holdsReview(store, grant) && (source.snapshot().snapshotId().equals(grant.snapshotId()) || (
                                 grant.snapshotId() == null && grant.workGroupId().equals(source.snapshot().provenance().workGroupId()) && grant.targetIntentId().equals(source.snapshot().provenance().laneId())
                                         && grant.claimEpoch() == source.snapshot().provenance().claimEpoch()))))
+                // An accepted request holds the review until its grant is issued; from then on the grant does, as at
+                // admission (ReviewAdmissionRules), so a review released from an unreachable reviewer is offered again.
                 .filter(source -> collaboration.requests().stream()
                         .noneMatch(request -> request.kind() == CoordinationRequest.Kind.REVIEW && source.snapshot().snapshotId().equals(request.snapshotId()) && (request.status() == CoordinationRequest.Status.PENDING
-                                || request.status() == CoordinationRequest.Status.ACCEPTED))).sorted(Comparator.comparing(source -> source.snapshot().snapshotId())).map(source -> {
+                                || request.status() == CoordinationRequest.Status.ACCEPTED && workGroups.grants().stream()
+                                        .noneMatch(grant -> grant.grantId().equals(LaneGrant.reviewGrantId(request.requestId())))))).sorted(Comparator.comparing(source -> source.snapshot().snapshotId())).map(source -> {
                     TaskSnapshotRecord snapshot = source.snapshot();
                     WorkGroup group = workGroups.group(snapshot.provenance().workGroupId()).orElseThrow();
                     WorkIntent producer = source.producer();
@@ -743,6 +754,9 @@ static Map<String, Object> reviewerIntentGuidance(WorkGroup group, TaskSnapshotR
         task.put(NextActionKeys.WORK_GROUP_ID, group.workGroupId().toString());
         task.put("role", WorkIntent.Role.REVIEWER.wireValue());
         task.put(NextActionKeys.REVIEW_TARGETS, snapshotReviewTargets(snapshot));
+        // The notes this reviewer ends its lane by publishing (ADR-0102 item 10). Left to name a path of its own, a
+        // reviewer had nothing it was asked to write once its verdict was recorded.
+        task.put("claims", List.of(Map.of(NextActionKeys.KIND, "path_exact", "path", ReviewNotes.offeredPath(snapshot.snapshotId()))));
 
         Map<String, Object> claimRequirement = new LinkedHashMap<>();
         claimRequirement.put("field", "task.claims");
@@ -750,7 +764,8 @@ static Map<String, Object> reviewerIntentGuidance(WorkGroup group, TaskSnapshotR
         claimRequirement.put("purpose", "review report or test evidence");
         claimRequirement.put("selectorKinds", List.of("path_exact", "path_subtree"));
         claimRequirement.put("mustBeDisjointFrom", List.of("producer snapshot paths", "all active claims"));
-        claimRequirement.put("guidance", "Choose a report or test path to claim; Synesis will validate that the claim is disjoint.");
+        claimRequirement.put("guidance", "The arguments claim " + ReviewNotes.offeredPath(snapshot.snapshotId())
+                + " for your review notes; you may name another report or test path instead. Synesis validates that the claim is disjoint.");
 
         return Map.of(NextActionKeys.SNAPSHOT_ID, snapshot.snapshotId(), NextActionKeys.TOOL, NextActionProtocol.TOOL_ENSURE_SESSION, NextActionKeys.ARGUMENTS, Map.of("task", task), "claimRequirement", claimRequirement);
     }

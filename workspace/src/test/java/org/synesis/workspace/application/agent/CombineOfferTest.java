@@ -2,6 +2,7 @@ package org.synesis.workspace.application.agent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -16,7 +17,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import org.synesis.coordination.domain.collaboration.CollaborationCodec;
+import org.synesis.coordination.domain.collaboration.ResourceSelector;
+import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
+import org.synesis.coordination.persistence.ProjectIntegrationLock;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
@@ -24,6 +29,9 @@ import org.synesis.coordination.domain.task.TaskCompletionState;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.agent.session.AgentSessionService;
+import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.agent.completion.CompleteTaskRequest;
 import org.synesis.workspace.application.agent.run.EventLogObserver;
 import org.synesis.workspace.application.agent.workflow.AgentNextActionService;
@@ -79,6 +87,69 @@ final class CombineOfferTest {
         assertEquals(fixture.authorSnapshot.snapshotId(), task.get("repairSnapshotId"));
         String instruction = String.valueOf(result.get("instruction"));
         assertTrue(instruction.contains("combine lane") && instruction.contains("combineCandidates[0].ensureSession"), instruction);
+    }
+
+    private void assertOfferedTheCombine(AgentResponse response) {
+        List<?> candidates = (List<?>) map(response.result()).get("combineCandidates");
+        assertNotNull(candidates, response.toJson());
+        assertEquals(fixture.combine.combineId(), map(candidates.getFirst()).get("combineId"), response.toJson());
+    }
+
+    /** s5-run6: the second fresh agent was told to wait while another call's pass held the integration lock. */
+    @Test
+    void aLanelessSessionIsOfferedTheCombineWhileAnotherPassHoldsTheIntegrationLock() throws Exception {
+        try (ProjectIntegrationLock held = ProjectIntegrationLock.tryAcquire(fixture.store().rootDirectory())) {
+            assertNotNull(held);
+            assertOfferedTheCombine(new AgentNextActionService().getNextAction(new NextActionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER)));
+        }
+    }
+
+    /** s5-run6: resumed for the combine, it was told to wait for the review of another lane's snapshot instead. */
+    @Test
+    void aLanelessSessionIsOfferedTheCombineWhileAnotherLanesSnapshotAwaitsReview() throws Exception {
+        fixture.awaitingReview("combine-other", "src/g.txt", "combine-reviewer");
+
+        assertOfferedTheCombine(new AgentNextActionService().getNextAction(new NextActionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER)));
+    }
+
+    /** A combine's group never had a lane, so with every other group closed the project looked finished. */
+    @Test
+    void aLanelessSessionIsOfferedTheCombineWhenEveryOtherGroupIsClosed() throws Exception {
+        PredictionEventStore store = fixture.store();
+        WorkGroup group = store.workGroupProjection().group(fixture.authorLane.workGroupId()).orElseThrow();
+        WorkGroup completed = new WorkGroup(group.workGroupId(), group.projectId(), group.goal(), group.acceptance(), group.version() + 1,
+                WorkGroup.Status.COMPLETED, group.reviewPolicy());
+        store.append(group.workGroupId(), PredictionEventType.WORK_GROUP_STATUS_CHANGED, fixture.identity.nodeId(), CollaborationCodec.encodeWorkGroup(completed),
+                fixture.identity);
+
+        assertOfferedTheCombine(new AgentNextActionService().getNextAction(new NextActionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER)));
+    }
+
+    /**
+     * s5-run7: with every other group closed, an agent that announced ordinary work joined the combine's group, the
+     * only active one. The combine then read as taken, so the agent shown it was refused, and every later lane and
+     * snapshot landed in the group whose snapshots wait for the re-merge.
+     */
+    @Test
+    void anOrdinaryLaneOpensOutsideTheCombinesGroupAndTheCombineIsStillTaken() throws Exception {
+        PredictionEventStore store = fixture.store();
+        WorkGroup group = store.workGroupProjection().group(fixture.authorLane.workGroupId()).orElseThrow();
+        WorkGroup completed = new WorkGroup(group.workGroupId(), group.projectId(), group.goal(), group.acceptance(), group.version() + 1,
+                WorkGroup.Status.COMPLETED, group.reviewPolicy());
+        store.append(group.workGroupId(), PredictionEventType.WORK_GROUP_STATUS_CHANGED, fixture.identity.nodeId(), CollaborationCodec.encodeWorkGroup(completed),
+                fixture.identity);
+        assertOfferedTheCombine(new AgentNextActionService().getNextAction(new NextActionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER)));
+        fixture.session("combine-other");
+
+        WorkIntent ordinary = fixture.collaboration.announce(fixture.root, CombineFixture.PROVIDER, "combine-other", "change g", "g changed",
+                List.of(ResourceSelector.pathExact("src/g.txt"))).intent();
+
+        assertNotEquals(fixture.combine.workGroupId(), ordinary.workGroupId());
+        assertOfferedTheCombine(new AgentNextActionService().getNextAction(new NextActionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER)));
+        WorkIntent combineLane = fixture.collaboration.joinRepair(fixture.root, CombineFixture.PROVIDER, COMBINER, fixture.authorLane.intentId(),
+                fixture.authorSnapshot.snapshotId()).intent();
+        assertEquals(fixture.combine.workGroupId(), combineLane.workGroupId());
+        assertEquals(fixture.combine.taskId(), combineLane.taskId());
     }
 
     @Test
@@ -142,6 +213,27 @@ final class CombineOfferTest {
         assertTrue(events(PredictionEventType.CONTROL_BRANCH_ADVANCED).stream().noneMatch(event -> names(event, snapshot.snapshotId())));
         assertEquals(fixture.base, TestGit.output(fixture.root, "rev-parse", "HEAD"), "main did not move");
         assertEquals("other\n", Files.readString(fixture.root.resolve(CombineFixture.FILE)).replace("\r\n", "\n"));
+    }
+
+    @Test
+    void anAgentCombinesAndFinishesWhileThisComputersMainIsTheOtherCopy() throws Exception {
+        String ownMain = fixture.divergeThisCopyOfMain();
+        String apart = "combine-apart";
+        fixture.session(apart);
+        fixture.collaboration.joinRepair(fixture.root, CombineFixture.PROVIDER, apart, fixture.authorLane.intentId(), fixture.authorSnapshot.snapshotId());
+        AgentResponse ready = new AgentSessionService().ensureSession(new SessionResolutionRequest(fixture.root, CombineFixture.PROVIDER, apart, null, false));
+        assertEquals(AgentStatus.READY, ready.status(), "s5-run8 answered WORKSPACE_STALE_DIRTY: " + ready.toJson());
+        Path worktree = Path.of(fixture.binding(apart).worktreePath());
+        Files.writeString(worktree.resolve(CombineFixture.FILE), "both\n");
+
+        AgentResponse finished = new AgentTaskCompletionService().completeTask(new CompleteTaskRequest(fixture.root, CombineFixture.PROVIDER, apart, "combined both versions"));
+
+        List<TaskSnapshotRecord> made = fixture.store().taskCompletionProjection().allSnapshots().stream().filter(snapshot -> snapshot.taskId().equals(fixture.combine.taskId())).toList();
+        assertEquals(1, made.size(), "finishing created the combine's snapshot; the response was " + finished.toJson());
+        assertEquals(fixture.combine.base(), made.getFirst().baseCommit());
+        assertEquals(List.of(CombineFixture.FILE), made.getFirst().changedPaths());
+        assertEquals("both", TestGit.output(fixture.root, "show", made.getFirst().commitSha() + ":" + CombineFixture.FILE).trim());
+        assertEquals(ownMain, TestGit.output(fixture.root, "rev-parse", "HEAD"), "this computer's main did not move");
     }
 
     private static boolean names(PredictionEvent event, String snapshotId) {

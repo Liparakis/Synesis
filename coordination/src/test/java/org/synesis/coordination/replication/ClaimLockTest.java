@@ -173,6 +173,10 @@ final class ClaimLockTest {
         return new ReplicationMessage.ClaimSeen(project, announced.encoded());
     }
 
+    private ReplicationMessage.ClaimIntent registrationOf(ReplicationMessage.ClaimSeen seen) throws Exception {
+        return new ReplicationMessage.ClaimIntent(project, PredictionEvent.decode(seen.entry()).payload());
+    }
+
     private static String codeOf(byte[] answer) {
         try {
             return ((ReplicationMessage.ClaimAnswer) ReplicationCodec.decode(answer)).code();
@@ -248,6 +252,10 @@ final class ClaimLockTest {
             String path = "src/race" + race + ".txt";
             ReplicationMessage.ClaimSeen fromLeader = claimBy(leader, "agt-a", path);
             ReplicationMessage.ClaimSeen fromMember = claimBy(member, "agt-b", path);
+            // As the agent's process does before it appends (ClaimLock.announce): each computer knows its own claim
+            // is coming, so whichever check starts or finishes first, the other's question finds it.
+            computers.leaderSide.exchange().registerClaim(registrationOf(fromLeader));
+            computers.memberSide.exchange().registerClaim(registrationOf(fromMember));
             CountDownLatch together = new CountDownLatch(1);
             CompletableFuture<String> leaders = CompletableFuture.supplyAsync(() -> {
                 await(together);

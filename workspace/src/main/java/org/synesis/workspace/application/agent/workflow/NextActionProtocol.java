@@ -196,6 +196,11 @@ final class NextActionProtocol {
     static final String REASON_WORK_GROUP_NOT_ACTIVE = "WORK_GROUP_NOT_ACTIVE";
 
     /**
+     * The caller's lane is in a work group that is no longer active, so the lane can only be ended.
+     */
+    static final String STATE_LANE_GROUP_CLOSED = "LANE_GROUP_CLOSED";
+
+    /**
      * The lane diff could not be inspected.
      */
     static final String REASON_SNAPSHOT_DIFF_INSPECTION_FAILED = "SNAPSHOT_DIFF_INSPECTION_FAILED";

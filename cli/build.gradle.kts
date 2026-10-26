@@ -329,6 +329,8 @@ dependencies {
     runtimeOnly(project(":mcp"))
     implementation(libs.picocli)
     add("protectionLite", libs.proguard.base)
+    // The scripted multi-computer scenarios (ADR-0102 item 1) drive the MCP tools of two computers.
+    testImplementation(project(":mcp"))
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -359,6 +361,11 @@ tasks.test {
     useJUnitPlatform()
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     dependsOn("testInstallDist")
+    // The multi-computer scenarios run on the Linux gate (ADR-0102 item 7): on Windows their Git-heavy steps outrun the
+    // bounds and their temporary folders stay held open at cleanup (2026-10-20, 2026-10-26).
+    if (System.getProperty("os.name").lowercase().contains("windows")) {
+        exclude("**/*ScenarioTest*")
+    }
 }
 
 // Process-level CLI tests exercise the generated Java launcher. Stage the
@@ -378,6 +385,16 @@ tasks.register<Sync>("testInstallDist") {
     from(configurations.runtimeClasspath) {
         into("lib")
     }
+}
+
+// A start-up time is a baseline to set a budget from (ADR-0103, "Other measures"), not a pass or fail, so it is not
+// part of `check`. Run it on the Linux gate: scripts/linux-gate/run.ps1 :cli:cliStartupBaseline
+tasks.register<Exec>("cliStartupBaseline") {
+    group = "verification"
+    description = "Times the CLI's start-up (--help, version, a read of an initialized project) and prints min, median and p95."
+    dependsOn("testInstallDist")
+    commandLine("bash", rootProject.file("scripts/linux-gate/cli-startup-baseline.sh").path,
+            layout.buildDirectory.file("install/synesis/bin/synesis").get().asFile.path, providers.gradleProperty("startupRuns").getOrElse("20"))
 }
 
 tasks.register("launcherSmoke") {
@@ -586,13 +603,19 @@ val platformBundle = tasks.register("platformBundle") {
             }
         }
         bin.resolve("synesis.cmd").writeText(
-            "@echo off\r\nsetlocal\r\nset \"APP_HOME=%~dp0..\"\r\nset \"SYNESIS_LAUNCHER=%~f0\"\r\nset \"SYNESIS_UNIX_SOCKET_DIR=%PUBLIC%\\s\"\r\nif not exist \"%SYNESIS_UNIX_SOCKET_DIR%\" mkdir \"%SYNESIS_UNIX_SOCKET_DIR%\" >NUL 2>&1\r\n\"%APP_HOME%\\runtime\\bin\\java.exe\" --enable-native-access=ALL-UNNAMED$loopbackJvmArg -cp \"%APP_HOME%\\app\\synesis-cli.jar;%APP_HOME%\\app\\lib\\*\" org.synesis.cli.SynesisCli %*\r\nexit /b %ERRORLEVEL%\r\n"
+            "@echo off\r\nsetlocal\r\nset \"APP_HOME=%~dp0..\"\r\nset \"SYNESIS_LAUNCHER=%~f0\"\r\nset \"SYNESIS_UNIX_SOCKET_DIR=%PUBLIC%\\s\"\r\nif not exist \"%SYNESIS_UNIX_SOCKET_DIR%\" mkdir \"%SYNESIS_UNIX_SOCKET_DIR%\" >NUL 2>&1\r\nif not exist \"%LOCALAPPDATA%\\Synesis\\crash\" mkdir \"%LOCALAPPDATA%\\Synesis\\crash\" >NUL 2>&1\r\n\"%APP_HOME%\\runtime\\bin\\java.exe\" --enable-native-access=ALL-UNNAMED \"-XX:ErrorFile=%LOCALAPPDATA%\\Synesis\\crash\\hs_err_pid%%p.log\"$loopbackJvmArg -cp \"%APP_HOME%\\app\\synesis-cli.jar;%APP_HOME%\\app\\lib\\*\" org.synesis.cli.SynesisCli %*\r\nexit /b %ERRORLEVEL%\r\n"
         )
         bin.resolve("synesis").writeText(
             $$"""#!/bin/sh
 APP_HOME="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 export SYNESIS_LAUNCHER="$APP_HOME/bin/synesis"
-exec "$APP_HOME/runtime/bin/java" --enable-native-access=ALL-UNNAMED -cp "$APP_HOME/app/synesis-cli.jar:$APP_HOME/app/lib/*" org.synesis.cli.SynesisCli "$@"
+# A JVM crash report goes to Synesis's state folder, not into the project the command runs in.
+case "$(uname -s)" in
+  Darwin) STATE_BASE="$HOME/Library/Application Support" ;;
+  *) STATE_BASE="${XDG_STATE_HOME:-$HOME/.local/state}" ;;
+esac
+mkdir -p "$STATE_BASE/Synesis/crash" 2>/dev/null
+exec "$APP_HOME/runtime/bin/java" --enable-native-access=ALL-UNNAMED "-XX:ErrorFile=$STATE_BASE/Synesis/crash/hs_err_pid%p.log" -cp "$APP_HOME/app/synesis-cli.jar:$APP_HOME/app/lib/*" org.synesis.cli.SynesisCli "$@"
 """
         )
         root.resolve("VERSION").writeText(bundleVersion.get() + "\n")

@@ -2,16 +2,20 @@ package org.synesis.workspace.transport.control;
 
 import static org.synesis.workspace.transport.control.ControlPlaneHttpJson.ordered;
 
+import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.function.Supplier;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 
 import org.synesis.coordination.application.CoordinationService;
@@ -21,9 +25,12 @@ import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.coordination.domain.membership.MembershipProjection;
 import org.synesis.coordination.domain.ownership.OwnershipClaim;
 import org.synesis.coordination.domain.task.CoordinationTask;
 import org.synesis.coordination.domain.task.TaskCompletionState;
+import org.synesis.coordination.persistence.ReplicationSettings;
+import org.synesis.link.identity.IdentityBootstrap;
 
 import org.synesis.workspace.application.conversation.ConversationService;
 import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
@@ -35,6 +42,7 @@ import org.synesis.workspace.doctor.DoctorFinding;
 import org.synesis.workspace.doctor.DoctorRenderer;
 import org.synesis.workspace.doctor.DoctorReport;
 import org.synesis.workspace.doctor.DoctorService;
+import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
 import org.synesis.workspace.transport.control.network.NetworkSnapshot;
 
 /**
@@ -89,6 +97,11 @@ public final class ControlPlaneReadModel {
     private final KnownProjectRegistry projectRegistry;
 
     /**
+     * Application state root that agent run logs and tasks live under.
+     */
+    private final Path stateRoot;
+
+    /**
      * Creates a read model over the current project's durable services and network view.
      *
      * @param location        current project location
@@ -104,6 +117,29 @@ public final class ControlPlaneReadModel {
             DoctorService doctorService,
             Supplier<NetworkSnapshot> network,
             KnownProjectRegistry projectRegistry) {
+        this(location, coordination, providerService, doctorService, network, projectRegistry, AdministrativeStateLocator.applicationStateRoot());
+    }
+
+    /**
+     * Creates a read model whose agent runs keep their state under an explicit root, so a test never touches the
+     * state of the person who runs it.
+     *
+     * @param location        current project location
+     * @param coordination    durable coordination service for the current project
+     * @param providerService provider lifecycle service for the current project
+     * @param doctorService   read-only diagnostic service for the current project
+     * @param network         authoritative network state source
+     * @param projectRegistry installation-local discovery index, or {@code null} to track only the current project
+     * @param stateRoot       application state root
+     */
+    public ControlPlaneReadModel(ProjectLocation location,
+            CoordinationService coordination,
+            ProviderApplicationService providerService,
+            DoctorService doctorService,
+            Supplier<NetworkSnapshot> network,
+            KnownProjectRegistry projectRegistry,
+            Path stateRoot) {
+        this.stateRoot = Objects.requireNonNull(stateRoot, "stateRoot");
         this.location = Objects.requireNonNull(location, "location");
         this.coordination = Objects.requireNonNull(coordination, "coordination");
         this.providerService = Objects.requireNonNull(providerService, "provider service");
@@ -132,10 +168,13 @@ public final class ControlPlaneReadModel {
         result.put("capabilities", capabilities());
         result.put("conversations", conversations());
         result.put("operatorRequests", operatorRequests());
-        result.put("tasks", tasks());
-        result.put("disputes", disputes());
-        result.put("trash", trash());
-        result.put("ownerships", ownerships());
+        List<Map<String, Object>> trash = trash();
+        Map<String, String> workGroupOfTask = workGroupOfTask(trash);
+        result.put("tasks", tasks(workGroupOfTask));
+        result.put("disputes", disputes(workGroupOfTask));
+        result.put("trash", trash);
+        result.put("ownerships", ownerships(workGroupOfTask));
+        result.put("membership", membership());
         result.put("network", networkSnapshot.toMap());
         result.put("diagnostics", diagnostics());
         return result;
@@ -190,6 +229,19 @@ public final class ControlPlaneReadModel {
      */
     ProjectLocation location() {
         return location;
+    }
+
+    /**
+     * Returns the provider service the model lists providers from, so agents are started only on providers it shows installed.
+     *
+     * @return provider lifecycle service
+     */
+    Path stateRoot() {
+        return stateRoot;
+    }
+
+    ProviderApplicationService providerService() {
+        return providerService;
     }
 
     /**
@@ -468,9 +520,10 @@ public final class ControlPlaneReadModel {
     /**
      * Builds the task list, ordered by task id.
      *
-     * @return tasks with id, title, capability, and owner only
+     * @param workGroupOfTask the WorkGroup of each task that has exactly one
+     * @return tasks with id, title, capability, owner and WorkGroup only
      */
-    private List<Map<String, Object>> tasks() {
+    private List<Map<String, Object>> tasks(Map<String, String> workGroupOfTask) {
         return coordination.coordinationProjection().tasks().values().stream().sorted(Comparator.comparing(view -> view.task().taskId())).limit(MAX_COLLECTION_ITEMS).map(view -> {
             CoordinationTask task = view.task();
             Map<String, Object> result = new LinkedHashMap<>();
@@ -478,6 +531,7 @@ public final class ControlPlaneReadModel {
             result.put("title", task.title());
             result.put("capability", task.capability());
             result.put("owner", view.ownerNodeId());
+            result.put("workGroupId", workGroupOfTask.get(task.taskId().toString()));
             return result;
         }).toList();
     }
@@ -487,15 +541,17 @@ public final class ControlPlaneReadModel {
      * and the snapshot's state, which says whether the dispute is open ({@code review_disputed}) or how it ended
      * (ADR-0098 step 7).
      *
+     * @param workGroupOfTask the WorkGroup of each task that has exactly one
      * @return disputes
      */
-    private List<Map<String, Object>> disputes() {
+    private List<Map<String, Object>> disputes(Map<String, String> workGroupOfTask) {
         var completion = coordination.taskCompletionProjection();
         return completion.disputedSnapshots().stream().limit(MAX_COLLECTION_ITEMS).map(id -> {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("snapshotId", id.value());
             completion.findSnapshotById(id).ifPresent(snapshot -> {
                 result.put("taskId", snapshot.taskId().toString());
+                result.put("workGroupId", workGroupOfTask.get(snapshot.taskId().toString()));
                 result.put("author", snapshot.provenance().participant());
             });
             result.put("verdicts", new java.util.TreeMap<>(completion.verdicts(id)));
@@ -518,18 +574,76 @@ public final class ControlPlaneReadModel {
     /**
      * Builds the ownership list, ordered by capability.
      *
+     * @param workGroupOfTask the WorkGroup of each task that has exactly one
      * @return ownership claims
      */
-    private List<Map<String, Object>> ownerships() {
+    private List<Map<String, Object>> ownerships(Map<String, String> workGroupOfTask) {
         return coordination.coordinationProjection().ownerships().values().stream().sorted(Comparator.comparing(OwnershipClaim::capability)).limit(MAX_COLLECTION_ITEMS).map(claim -> {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("capability", claim.capability());
             result.put("taskId", claim.taskId().toString());
+            result.put("workGroupId", workGroupOfTask.get(claim.taskId().toString()));
             result.put("owner", claim.ownerNodeId());
             result.put("protectedScopes", claim.protectedScopes());
             result.put("intentVersion", claim.intentVersion());
             return result;
         }).toList();
+    }
+
+    /**
+     * Finds the WorkGroup of each task: the group its lanes work in, active or trashed. A task with no lane, or with
+     * lanes in several groups (restored trash is worked in a group of its own), has no entry, so no record claims a
+     * WorkGroup it may not belong to.
+     *
+     * @param trash the trash section already built
+     * @return WorkGroup identifier by task identifier
+     */
+    private Map<String, String> workGroupOfTask(List<Map<String, Object>> trash) {
+        Map<String, Set<String>> groups = new HashMap<>();
+        for (WorkIntent intent : coordination.collaborationProjection().activeIntents()) {
+            groups.computeIfAbsent(intent.taskId().toString(), task -> new TreeSet<>()).add(intent.workGroupId().toString());
+        }
+        for (Map<String, Object> item : trash) {
+            groups.computeIfAbsent(String.valueOf(item.get("taskId")), task -> new TreeSet<>()).add(String.valueOf(item.get("workGroupId")));
+        }
+        Map<String, String> result = new HashMap<>();
+        groups.forEach((task, taskGroups) -> {
+            if (taskGroups.size() == 1) {
+                result.put(task, taskGroups.iterator().next());
+            }
+        });
+        return result;
+    }
+
+    /**
+     * Builds who belongs to the project: its owner, whether this computer is that owner, and each computer with its
+     * connection (ADR-0103 stage 3). It is the rule {@code synesis status} follows ({@link ProjectMembers}), so the CLI
+     * and the page agree. The process that serves a snapshot is the project's runtime, so connections are as it
+     * recorded them. A role file that cannot be read leaves the project looking like one on a single computer; it never
+     * invents a member, and removing one is checked again by the owner rule of the log.
+     *
+     * @return membership map; {@code members} is empty for a project on one computer
+     */
+    private Map<String, Object> membership() {
+        Path data = location.coordinationDirectory();
+        var inspection = new IdentityBootstrap(location.linkDirectory()).inspect();
+        String self = inspection.identityPresent() && inspection.identityValid() ? inspection.nodeId() : "";
+        Optional<ReplicationSettings> settings;
+        try {
+            settings = ReplicationSettings.read(data);
+        } catch (IOException unreadable) {
+            settings = Optional.empty();
+        }
+        MembershipProjection projection = coordination.membershipProjection();
+        ProjectMembers members = ProjectMembers.read(data, projection, settings, self, true);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("shared", members.shared());
+        result.put("owner", members.owner().isEmpty() ? null : members.owner());
+        result.put("self", self.isEmpty() ? null : self);
+        result.put("selfIsOwner", !self.isEmpty() && self.equals(members.owner()));
+        result.put("members", members.members().stream().limit(MAX_COLLECTION_ITEMS).map(member -> ordered("nodeId", member.node(), "self", member.self(), "owner", member.owner(),
+                "state", member.state(), "since", member.since().map(Instant::toString).orElse(null), "lastReceived", member.lastReceived().map(Instant::toString).orElse(null))).toList());
+        return result;
     }
 
     /**
@@ -559,7 +673,11 @@ public final class ControlPlaneReadModel {
      * @return finding map without raw detail
      */
     private static Map<String, Object> finding(DoctorFinding finding) {
-        return DoctorRenderer.findingMap(finding, finding.code().name());
+        Map<String, Object> result = DoctorRenderer.findingMap(finding, finding.code().name());
+        result.put("group", finding.group().value());
+        result.put("mark", finding.confidence().mark());
+        result.put("fix", finding.fix());
+        return result;
     }
 
     /**

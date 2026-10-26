@@ -5,6 +5,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.agents.AgentsCommand;
+import org.synesis.cli.command.agents.AgentsLogCommand;
+import org.synesis.cli.command.agents.AgentsTaskCommand;
 import org.synesis.cli.command.agents.AgentsRunCommand;
 import org.synesis.cli.command.ConstraintCommand;
 import org.synesis.cli.command.ConstraintCreateCommand;
@@ -60,6 +62,8 @@ import org.synesis.cli.command.link.LinkAnswerCommand;
 import org.synesis.cli.command.link.LinkDeclineCommand;
 import org.synesis.cli.command.link.LinkRequestsCommand;
 import org.synesis.cli.command.link.LinkCommand;
+import org.synesis.cli.command.log.LogCommand;
+import org.synesis.cli.command.log.LogDumpCommand;
 import org.synesis.cli.command.link.LinkInviteCommand;
 import org.synesis.cli.command.link.LinkJoinCommand;
 import org.synesis.cli.command.project.ProjectAddMemberCommand;
@@ -85,11 +89,7 @@ import org.synesis.cli.command.speculation.SpeculationInvalidateCommand;
 import org.synesis.cli.command.speculation.SpeculationPrepareCommand;
 import org.synesis.cli.command.speculation.SpeculationRetireCommand;
 import org.synesis.cli.command.speculation.SpeculationValidateCommand;
-import org.synesis.cli.command.sync.HostCommand;
-import org.synesis.cli.command.sync.JoinCommand;
-import org.synesis.cli.command.sync.SyncCommand;
-import org.synesis.cli.command.sync.SyncHostCommand;
-import org.synesis.cli.command.sync.SyncJoinCommand;
+import org.synesis.cli.command.status.StatusCommand;
 import org.synesis.cli.command.task.TaskClaimCommand;
 import org.synesis.cli.command.task.TaskCommand;
 import org.synesis.cli.command.task.TaskCreateCommand;
@@ -114,6 +114,8 @@ import picocli.CommandLine;
  */
 public final class SynesisCli {
 
+    /** The commands the default help shows: what a person uses without learning the rest. */
+    static final List<String> EVERYDAY_COMMANDS = List.of("init", "status", "ui", "agents", "link", "doctor", "help");
     private static final Map<String, List<String>> COMMAND_GROUPS = commandGroups();
     private static final List<String> PLUMBING_COMMANDS = List.of("check-action", "daemon", "hook", "integration", "mcp", "open", "prediction", "speculation", "supervisor", "workspace");
 
@@ -123,8 +125,8 @@ public final class SynesisCli {
     private static Map<String, List<String>> commandGroups() {
         Map<String, List<String>> groups = new LinkedHashMap<>();
         groups.put("Set up", List.of("init", "provider", "doctor", "ui", "version", "help"));
-        groups.put("Work with another person", List.of("host", "join", "sync", "identity"));
-        groups.put("Coordinate work", List.of("agents", "collaboration", "task", "ownership", "constraint", "events", "coordination"));
+        groups.put("Work with another person", List.of("link", "identity"));
+        groups.put("Coordinate work", List.of("status", "agents", "collaboration", "task", "ownership", "constraint", "events", "coordination", "log", "conversations"));
         groups.put("Maintain a project", List.of("operator", "trash", "cleanup", "reconcile", "repair", "migrate", "project"));
         return groups;
     }
@@ -137,9 +139,23 @@ public final class SynesisCli {
      * @return stable process exit code
      */
     public static int execute(String[] arguments, CliRuntime runtime) {
+        CommandLine command = commandTree(runtime);
+        try {
+            return command.execute(arguments);
+        } catch (RuntimeException failure) {
+            return FailureMapper.internal(runtime.terminal());
+        }
+    }
+
+    /**
+     * Builds every command of the CLI. It is the one list of commands, so the help and the generated command reference
+     * cannot disagree with what runs.
+     *
+     * @param runtime manually composed runtime
+     * @return the root command with its subcommands and handlers
+     */
+    static CommandLine commandTree(CliRuntime runtime) {
         CommandLine command = new CommandLine(new RootCommand());
-        command.addSubcommand("host", new HostCommand(runtime));
-        command.addSubcommand("join", new JoinCommand(runtime));
         command.addSubcommand("identity", new IdentityCommand());
         CommandLine identity = command.getSubcommands().get("identity");
         identity.addSubcommand("show", new IdentityShowCommand(runtime));
@@ -188,9 +204,6 @@ public final class SynesisCli {
                 .addSubcommand("contract", new CommandLine(new CollaborationContractCommand(runtime)).addSubcommand("status", new CollaborationContractStatusCommand(runtime)))
                 .addSubcommand("readiness", new CollaborationReadinessCommand(runtime));
         command.addSubcommand("collaboration", collaboration);
-        command.addSubcommand("sync", new SyncCommand());
-        command.getSubcommands().get("sync").addSubcommand("host", new SyncHostCommand(runtime));
-        command.getSubcommands().get("sync").addSubcommand("join", new SyncJoinCommand(runtime));
         command.addSubcommand("check-action", new CheckActionCommand(runtime));
         command.addSubcommand("coordination", new CoordinationOperatorCommand());
         command.getSubcommands().get("coordination").addSubcommand("serve", new CoordinationServeCommand(runtime));
@@ -207,6 +220,8 @@ public final class SynesisCli {
         command.addSubcommand("supervisor", new SupervisorCommand());
         command.getSubcommands().get("supervisor").addSubcommand("run", new SupervisorRunCommand(runtime));
         command.getSubcommands().get("supervisor").addSubcommand("status", new SupervisorStatusCommand(runtime));
+        command.addSubcommand("log", new LogCommand());
+        command.getSubcommands().get("log").addSubcommand("dump", new LogDumpCommand(runtime));
         command.addSubcommand("events", new EventsCommand());
         command.getSubcommands().get("events").addSubcommand("follow", new EventsFollowCommand(runtime));
         command.addSubcommand("prediction", new PredictionCommand());
@@ -224,6 +239,9 @@ public final class SynesisCli {
         command.getSubcommands().get("integration").addSubcommand("gate", new IntegrationGateCommand(runtime));
         command.addSubcommand("agents", new AgentsCommand());
         command.getSubcommands().get("agents").addSubcommand("run", new AgentsRunCommand(runtime));
+        command.getSubcommands().get("agents").addSubcommand("log", new AgentsLogCommand(runtime));
+        command.getSubcommands().get("agents").addSubcommand("task", new AgentsTaskCommand(runtime));
+        command.addSubcommand("status", new StatusCommand(runtime));
         command.addSubcommand("operator", new org.synesis.cli.command.operator.OperatorCommand());
         command.getSubcommands().get("operator").addSubcommand("list", new org.synesis.cli.command.operator.OperatorListCommand(runtime));
         command.getSubcommands().get("operator").addSubcommand("recheck", new org.synesis.cli.command.operator.OperatorRecheckCommand(runtime));
@@ -238,53 +256,72 @@ public final class SynesisCli {
         command.getSubcommands().get("hook").addSubcommand("codex", new HookCodexCommand(runtime));
         groupRootCommands(command);
         configureHandlers(command, runtime);
-        try {
-            return command.execute(arguments);
-        } catch (RuntimeException failure) {
-            return FailureMapper.internal(runtime.terminal());
-        }
+        return command;
+    }
+
+    /**
+     * Shows the everyday commands by default and every command, grouped, when {@code --all} was asked for (ADR-0103,
+     * decision 5). Both are views of the one command tree: a command missing from {@link #EVERYDAY_COMMANDS} is still
+     * reachable and still listed by {@code help --all}.
+     */
+    static void groupRootCommands(CommandLine command) {
+        command.getHelpSectionMap().put(CommandLine.Model.UsageMessageSpec.SECTION_KEY_COMMAND_LIST_HEADING, _ -> "");
+        command.getHelpSectionMap().put(CommandLine.Model.UsageMessageSpec.SECTION_KEY_COMMAND_LIST,
+                help -> ((RootCommand) command.getCommand()).listsEveryCommand() ? everyCommand(help) : everydayCommands(help));
+    }
+
+    private static String everydayCommands(CommandLine.Help help) {
+        Map<String, CommandLine.Help> members = new LinkedHashMap<>();
+        EVERYDAY_COMMANDS.forEach(name -> members.put(name, help.subcommands().get(name)));
+        return String.format("%nEveryday commands:%n") + help.commandList(members)
+                + String.format("%nSynesis has more commands. 'synesis help --all' lists every one, grouped.%n");
     }
 
     /**
      * Lists root commands by what a person is trying to do instead of in registration order.
      *
      * <p>Commands that only agents and integrations call are named on one line so they stay
-     * discoverable without crowding the everyday ones. A command missing from every group is
-     * still listed, so registering a new command can never hide it from help.</p>
+     * discoverable without crowding the others. A command missing from every group is still
+     * listed, so registering a new command can never hide it from help.</p>
      */
-    static void groupRootCommands(CommandLine command) {
-        command.getHelpSectionMap().put(CommandLine.Model.UsageMessageSpec.SECTION_KEY_COMMAND_LIST_HEADING, _ -> "");
-        command.getHelpSectionMap().put(CommandLine.Model.UsageMessageSpec.SECTION_KEY_COMMAND_LIST, help -> {
-            Map<String, CommandLine.Help> remaining = new LinkedHashMap<>(help.subcommands());
-            StringBuilder text = new StringBuilder();
-            COMMAND_GROUPS.forEach((heading, names) -> {
-                Map<String, CommandLine.Help> members = new LinkedHashMap<>();
-                names.forEach(name -> {
-                    CommandLine.Help member = remaining.remove(name);
-                    if (member != null) {
-                        members.put(name, member);
-                    }
-                });
-                if (!members.isEmpty()) {
-                    text.append(String.format("%n%s:%n", heading)).append(help.commandList(members));
+    private static String everyCommand(CommandLine.Help help) {
+        Map<String, CommandLine.Help> remaining = new LinkedHashMap<>(help.subcommands());
+        StringBuilder text = new StringBuilder();
+        COMMAND_GROUPS.forEach((heading, names) -> {
+            Map<String, CommandLine.Help> members = new LinkedHashMap<>();
+            names.forEach(name -> {
+                CommandLine.Help member = remaining.remove(name);
+                if (member != null) {
+                    members.put(name, member);
                 }
             });
-            List<String> plumbing = PLUMBING_COMMANDS.stream().filter(name -> remaining.remove(name) != null).toList();
-            if (!remaining.isEmpty()) {
-                text.append(String.format("%nOther commands:%n")).append(help.commandList(remaining));
+            if (!members.isEmpty()) {
+                text.append(String.format("%n%s:%n", heading)).append(help.commandList(members));
             }
-            if (!plumbing.isEmpty()) {
-                text.append(String.format("%nCalled by agents and integrations:%n  %s%n", String.join(", ", plumbing)));
-            }
-            return text.toString();
         });
+        List<String> plumbing = PLUMBING_COMMANDS.stream().filter(name -> remaining.remove(name) != null).toList();
+        if (!remaining.isEmpty()) {
+            text.append(String.format("%nOther commands:%n")).append(help.commandList(remaining));
+        }
+        if (!plumbing.isEmpty()) {
+            text.append(String.format("%nCalled by agents and integrations:%n  %s%n", String.join(", ", plumbing)));
+        }
+        return text.toString();
     }
+
+    private static final java.util.Set<String> REMOVED_LINK_COMMANDS = java.util.Set.of("host", "join", "sync");
 
     static void configureHandlers(CommandLine command, CliRuntime runtime) {
         command.setOut(runtime.terminal().out());
         command.setErr(runtime.terminal().err());
         command.setParameterExceptionHandler((exception, _) -> {
             CommandLine failed = exception.getCommandLine();
+            // Someone following an older document still types the commands that `link invite` / `link join` replaced.
+            boolean removedLinkCommand = exception instanceof CommandLine.UnmatchedArgumentException unmatched
+                    && failed.getParent() == null && !unmatched.getUnmatched().isEmpty() && REMOVED_LINK_COMMANDS.contains(unmatched.getUnmatched().getFirst());
+            if (removedLinkCommand) {
+                runtime.terminal().stderr("This command was replaced: use synesis link invite / link join");
+            }
             if (runtime.terminal() instanceof HumanTerminal) {
                 // A person can act on the parser's own explanation and on near-miss suggestions;
                 // the machine contract below stays a single stable line.
@@ -325,9 +362,12 @@ public final class SynesisCli {
      */
     public static void main(String[] arguments) {
         configureWindowsLoopbackSocketDirectory();
-        Terminal terminal = new ConsoleTerminal();
         java.io.Console console = System.console();
-        if (HumanTerminal.selected(List.of(arguments), console != null && console.isTerminal(), System.getenv(HumanTerminal.OUTPUT_VARIABLE))) {
+        boolean attached = console != null && console.isTerminal();
+        boolean human = HumanTerminal.selected(List.of(arguments), attached, System.getenv(HumanTerminal.OUTPUT_VARIABLE));
+        // A prompt is only for a person at a terminal who did not ask for the machine form.
+        Terminal terminal = new ConsoleTerminal(System.out, System.err, System.in, attached && human);
+        if (human) {
             terminal = new HumanTerminal(terminal, HumanTerminal.colorSupported(System.getenv()));
         }
         System.exit(execute(arguments, CliRuntime.defaults(terminal)));

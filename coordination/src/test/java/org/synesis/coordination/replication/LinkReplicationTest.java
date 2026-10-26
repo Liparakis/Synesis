@@ -22,6 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.AfterEach;
@@ -89,6 +90,11 @@ final class LinkReplicationTest {
         }
     }
 
+    /** While {@code silent} is set, an end of the session hears every request and answers none: the path went silent, the session stays open. */
+    private static PeerSession.ApplicationStreamHandler unlessSilent(AtomicBoolean silent, PeerSession.ApplicationStreamHandler handler) {
+        return (remote, payload) -> silent.get() ? new CompletableFuture<>() : handler.handle(remote, payload);
+    }
+
     private <T extends AutoCloseable> T closing(T resource) {
         toClose.add(resource);
         return resource;
@@ -109,6 +115,8 @@ final class LinkReplicationTest {
         final MemberReplication memberSide;
         final PeerSession leaderSession;
         final PeerSession memberSession;
+        /** Silences the first session. */
+        final AtomicBoolean silent = new AtomicBoolean();
 
         Computers(Set<String> members) throws Exception {
             this(members, () -> {
@@ -120,8 +128,15 @@ final class LinkReplicationTest {
             memberSide = closing(MemberReplication.open(memberRoot, project));
             server(leaderRoot, leader);
             memberSide.serve(server(memberRoot, member));
+            PeerSession[] first = link(silent);
+            leaderSession = first[0];
+            memberSession = first[1];
+        }
+
+        /** A new Link session between the two computers, as a redial makes one: the leader's end, then the member's. */
+        PeerSession[] link(AtomicBoolean silent) throws Exception {
             Onboarding.PreparedHost host = closing(new Onboarding(leaderProfile, ignored -> {
-            }).createCompactInvitation(null, leaderSide.handler(), ignored -> {
+            }).createCompactInvitation(null, unlessSilent(silent, leaderSide.handler()), ignored -> {
             }));
             CompletableFuture<PeerSession> hosted = CompletableFuture.supplyAsync(() -> {
                 try {
@@ -131,12 +146,13 @@ final class LinkReplicationTest {
                 }
             });
             Onboarding.PreparedJoin join = closing(new Onboarding(memberProfile, ignored -> {
-            }).importInvitation(host.invitationLink(), memberSide.handler(), ignored -> {
+            }).importInvitation(host.invitationLink(), unlessSilent(silent, memberSide.handler()), ignored -> {
             }));
-            memberSession = join.connectAndKeepAlive();
-            leaderSession = hosted.get(30, TimeUnit.SECONDS);
-            closing(() -> memberSession.closeGracefully(SessionCloseReason.LOCAL_REQUEST));
-            closing(() -> leaderSession.closeGracefully(SessionCloseReason.LOCAL_REQUEST));
+            PeerSession fromMember = join.connectAndKeepAlive();
+            PeerSession fromLeader = hosted.get(30, TimeUnit.SECONDS);
+            closing(() -> fromMember.closeGracefully(SessionCloseReason.LOCAL_REQUEST));
+            closing(() -> fromLeader.closeGracefully(SessionCloseReason.LOCAL_REQUEST));
+            return new PeerSession[] {fromLeader, fromMember};
         }
 
         void attach() {
@@ -391,6 +407,57 @@ final class LinkReplicationTest {
         assertEquals(Optional.empty(), LeaderReplication.recordedMembers(leaderRoot));
     }
 
+    /** One pull interval, then the wait for the answer that does not come, then the record: the bound after traffic stops. */
+    private static final int NOT_CONNECTED_WITHIN_SECONDS = LogExchange.PULL_INTERVAL_SECONDS + 15;
+
+    private void awaitRecordedAs(LeaderReplication.MemberConnection.State state) throws InterruptedException {
+        await(() -> recorded(member.nodeId()).filter(found -> found.state() == state).isPresent(), NOT_CONNECTED_WITHIN_SECONDS);
+    }
+
+    /**
+     * S7 run 3 (2026-10-20): the Link between two computers was cut by a firewall that drops every packet. The session
+     * that Link still holds open stayed {@code CONNECTED} in the owner's record for ten minutes, so the owner never
+     * judged the member away. Every computer, whichever side dialled, records a peer as not connected within the bound
+     * after traffic to it stops, and as connected again when it is answered.
+     */
+    @Test
+    void aSessionWhosePathWentSilentIsRecordedNotConnectedWithinTheBoundOnBothSidesAndConnectedAgainWhenItIsAnsweredAgain() throws Exception {
+        Computers computers = new Computers(Set.of(member.nodeId()));
+        computers.attach();
+        awaitRecordedAs(CONNECTED);
+        await(() -> computers.memberSide.state() == MemberReplication.State.CONNECTED, 8);
+        Instant connected = recorded(member.nodeId()).orElseThrow().since();
+
+        computers.silent.set(true);
+        awaitRecordedAs(DISCONNECTED);
+        await(() -> computers.memberSide.state() == MemberReplication.State.DISCONNECTED, NOT_CONNECTED_WITHIN_SECONDS);
+        assertFalse(computers.leaderSession.terminalCompletion().toCompletableFuture().isDone(), "Link still holds the session: the record does not wait for its end");
+        assertFalse(recorded(member.nodeId()).orElseThrow().since().isBefore(connected));
+
+        computers.silent.set(false);
+        awaitRecordedAs(CONNECTED);
+        await(() -> computers.memberSide.state() == MemberReplication.State.CONNECTED, NOT_CONNECTED_WITHIN_SECONDS);
+    }
+
+    @Test
+    void aNewSessionIsRecordedConnectedWhileTheSilentOneIsStillHeldOpen() throws Exception {
+        Computers computers = new Computers(Set.of(member.nodeId()));
+        computers.attach();
+        awaitRecordedAs(CONNECTED);
+        computers.silent.set(true);
+        awaitRecordedAs(DISCONNECTED);
+
+        PeerSession[] fresh = computers.link(new AtomicBoolean());
+        computers.leaderSide.attach(fresh[0]);
+        computers.memberSide.attach(fresh[1]);
+
+        awaitRecordedAs(CONNECTED);
+        assertFalse(computers.leaderSession.terminalCompletion().toCompletableFuture().isDone(), "the silent session is still open");
+        // The first pull of the new session is answered: the leader holds what the member wrote.
+        assertTrue(new WorkIntentService(store(memberRoot), member).announce(lane(project, UUID.randomUUID(), "agt-b", "src/b.py")).acquired());
+        await(() -> PredictionEventStore.recordedEvents(leaderRoot) == 2, 8);
+    }
+
     @Test
     void theLeadersRecordNamesOnlyCurrentMembersAndSkipsLinesItCannotRead() throws Exception {
         Files.writeString(leaderRoot.resolve(LeaderReplication.MEMBERS_FILE),
@@ -471,6 +538,22 @@ final class LinkReplicationTest {
 
         await(() -> calls.get() >= 1, 10);
         assertEquals(2, PredictionEventStore.recordedEvents(leaderRoot));
+    }
+
+    @Test
+    void theOwnersCodeIsToldAfterEveryPullThatReachedTheMemberEvenWhenNothingNewCameSoALateCommitIsRetried() throws Exception {
+        AtomicInteger told = new AtomicInteger();
+        Computers computers = new Computers(Set.of(member.nodeId()));
+        computers.leaderSide.whenPulled(told::incrementAndGet);
+        computers.attach();
+        await(() -> computers.leaderSide.exchange().state(member.nodeId()) == LogExchange.State.CONNECTED, 8);
+        await(() -> told.get() >= 1, 10);
+        int first = told.get();
+
+        // No entry arrives, so only the periodic pull can tell the code again (the commit may be what is late).
+        await(() -> told.get() > first, LogExchange.PULL_INTERVAL_SECONDS + 10);
+
+        assertEquals(0, PredictionEventStore.recordedEvents(leaderRoot), "no entry was placed");
     }
 
     @Test

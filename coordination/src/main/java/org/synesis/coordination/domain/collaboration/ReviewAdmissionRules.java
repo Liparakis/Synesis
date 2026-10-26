@@ -113,13 +113,15 @@ public final class ReviewAdmissionRules {
                 .filter(intent -> intent.workGroupId().equals(target.workGroupId()))
                 .filter(intent -> intent.role() == WorkIntent.Role.REVIEWER).toList();
         if (sameGroupReviewers.isEmpty()) {
-            if (requesterIntents.stream().noneMatch(intent -> intent.workGroupId().equals(target.workGroupId()))) {
+            boolean sameGroupLane = requesterIntents.stream().anyMatch(intent -> intent.workGroupId().equals(target.workGroupId()));
+            if (!sameGroupLane && !holdsProducerLane(requesterIntents)) {
                 throw new CoordinationException("REVIEW_WORK_GROUP_MISMATCH");
             }
 
             // A producer lane may ask to review another lane of its work
-            // group. Admission still requires a reviewer lane or authorship
-            // of a snapshot in the group (validateReviewAdmission).
+            // group, or of another group of the project (see validateReviewAdmission).
+            // Admission still requires a reviewer lane or authorship
+            // of a snapshot.
             return;
         }
         if (sameGroupReviewers.stream().noneMatch(reviewer -> reviewTargetsMatch(reviewer, target))) {
@@ -161,9 +163,19 @@ public final class ReviewAdmissionRules {
         // snapshot from every other reviewer.
         boolean holdsLaneInGroup = current.collaborationProjection().activeIntents().stream()
                 .anyMatch(intent -> intent.participantIdentity().equals(requester) && intent.group().equals(target.group()));
-        if (!matchingReviewer && !(holdsLaneInGroup && authoredInGroup(current, requester, target))) {
+        // Two computers that announce at the same moment each open a work group of their own, and the only agent of each
+        // then holds the only producer lane of its group (s6-run1, ADR-0098 step 6, item 3). Its published snapshot may
+        // be reviewed by the producer of the other group: independence is the lineage rule above, and the group is no
+        // part of it. Its review is still the grant for the one snapshot and no lane of its own.
+        boolean publishedProducerOfAnotherGroup = holdsProducerLane(current.collaborationProjection().activeIntents().stream()
+                .filter(intent -> intent.participantIdentity().equals(requester)).toList()) && authored(current, requester).findAny().isPresent();
+        if (!matchingReviewer && !(holdsLaneInGroup && authoredInGroup(current, requester, target)) && !publishedProducerOfAnotherGroup) {
             throw new CoordinationException("REVIEWER_INTENT_REQUIRED");
         }
+    }
+
+    private static boolean holdsProducerLane(List<WorkIntent> lanes) {
+        return lanes.stream().anyMatch(intent -> intent.role() == WorkIntent.Role.PRODUCER);
     }
 
     /**

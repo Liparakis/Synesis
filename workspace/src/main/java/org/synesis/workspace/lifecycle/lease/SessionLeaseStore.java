@@ -204,6 +204,31 @@ public final class SessionLeaseStore {
         Files.deleteIfExists(keeperFile(controlRoot, connectionInstanceId));
     }
 
+    /**
+     * Lists every lease, or nothing when the list may be incomplete: the leases folder is missing, cannot be listed,
+     * or holds a lease file that cannot be read. {@link #listAll} skips such files; a caller that concludes something
+     * from a session's absence needs to know it did not miss one.
+     *
+     * @param controlRoot control project root path
+     * @return every session lease record, or empty when any may be missing
+     */
+    public Optional<List<SessionLeaseRecord>> listAllComplete(Path controlRoot) {
+        Objects.requireNonNull(controlRoot, "controlRoot");
+        Path leasesDir = resolveLeasesDirectory(controlRoot.toAbsolutePath().normalize());
+        if (!Files.isDirectory(leasesDir)) {
+            return Optional.empty();
+        }
+        List<SessionLeaseRecord> records = new ArrayList<>();
+        try (var stream = Files.list(leasesDir)) {
+            for (Path file : stream.filter(p -> p.getFileName().toString().endsWith(".json")).toList()) {
+                records.add(fromSerializableMap(Files.readString(file, StandardCharsets.UTF_8)));
+            }
+        } catch (Exception unreadable) {
+            return Optional.empty();
+        }
+        return Optional.of(Collections.unmodifiableList(records));
+    }
+
     /** Beside the lease, under a suffix {@link #listAll} does not read. */
     private static Path keeperFile(Path controlRoot, String connectionInstanceId) {
         return resolveLeasesDirectory(controlRoot.toAbsolutePath().normalize()).resolve(connectionInstanceId + ".keeper");

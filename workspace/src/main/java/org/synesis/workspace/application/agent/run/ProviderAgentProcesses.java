@@ -10,7 +10,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -20,6 +19,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
+import org.synesis.workspace.application.provider.ProviderExecutables;
+
 /**
  * Starts provider agent processes and keeps each one's output as a log file.
  *
@@ -27,8 +28,6 @@ import java.util.function.Function;
  * provider's session identifier. It is never interpreted, summarised, or shown to another agent.</p>
  */
 public final class ProviderAgentProcesses implements AgentRunController.AgentProcesses {
-
-    private static final java.util.regex.Pattern CMD_QUOTED = java.util.regex.Pattern.compile("[\\s<>&|^]");
 
     private final Path logDirectory;
     private final String pathVariable;
@@ -106,46 +105,10 @@ public final class ProviderAgentProcesses implements AgentRunController.AgentPro
     }
 
     /**
-     * Resolves the provider executable so a script shim can be started as reliably as a binary.
-     *
-     * <p>Windows starts only {@code .exe} files by bare name. Provider tools are also distributed
-     * as {@code .cmd} shims, which need the command interpreter; the arguments passed to it are
-     * built by Synesis from validated tokens and paths, never from the prompt.</p>
+     * Resolves the provider executable so a script shim can be started as reliably as a binary
+     * ({@link ProviderExecutables#command}).
      */
     List<String> executable(List<String> command) throws IOException {
-        if (!windows) {
-            return command;
-        }
-        String name = command.getFirst();
-        for (String directory : pathVariable.split(java.io.File.pathSeparator)) {
-            if (directory.isBlank()) {
-                continue;
-            }
-            for (String extension : List.of(".exe", ".cmd", ".bat")) {
-                Path candidate = Path.of(directory, name + extension);
-                if (!Files.isRegularFile(candidate)) {
-                    continue;
-                }
-                List<String> resolved = new ArrayList<>(command);
-                resolved.set(0, candidate.toAbsolutePath().toString());
-                if (extension.equals(".exe")) {
-                    return resolved;
-                }
-                // The interpreter reads < > & | ^ outside quotes as its own operators (a Codex hook's
-                // trust key holds < and >), and /c alone strips the first and last quote of a line that
-                // starts with one, which breaks a shim in a folder with a space. So the line goes as one
-                // argument under /s, which strips only the quotes around it, with each argument that holds
-                // a space or an operator quoted inside it.
-                StringBuilder line = new StringBuilder("\"");
-                for (String argument : resolved) {
-                    if (argument.contains("\"")) {
-                        throw new IOException("a provider argument holds a quote: " + argument);
-                    }
-                    line.append(line.length() == 1 ? "" : " ").append(CMD_QUOTED.matcher(argument).find() ? "\"" + argument + "\"" : argument);
-                }
-                return List.of("cmd.exe", "/d", "/s", "/c", line.append('"').toString());
-            }
-        }
-        throw new IOException("provider executable not found on PATH: " + name);
+        return ProviderExecutables.command(command, pathVariable, windows);
     }
 }

@@ -52,6 +52,23 @@ final class WorkGroupServiceTest {
         assertThrows(Exception.class, () -> service.consume(grantId, "agt-target", intentId, 4));
     }
 
+    /** A grant consumed on one computer and revoked on another is finished: it obliges nobody, as a revoked one never taken does not. */
+    @Test
+    void aConsumedGrantThatWasRevokedIsNoLongerUnresolved(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID groupId = UUID.randomUUID();
+        UUID intentId = UUID.randomUUID();
+        WorkGroupService service = new WorkGroupService(new PredictionEventStore(temp, project), NodeIdentity.generate());
+        service.create(new WorkGroup(groupId, project, "review", "revoked after use", 1, WorkGroup.Status.ACTIVE));
+        UUID grantId = UUID.randomUUID();
+        service.issue(new LaneGrant(grantId, groupId, intentId, "agt-reviewer", 1, true));
+        service.consume(grantId, "agt-reviewer", intentId, 1);
+        var consumed = new PredictionEventStore(temp, project).workGroupProjection();
+        assertEquals(true, consumed.grantUnresolved(new org.synesis.coordination.domain.identity.LaneGrantId(grantId)));
+        service.revoke(grantId);
+        assertEquals(false, new PredictionEventStore(temp, project).workGroupProjection().grantUnresolved(new org.synesis.coordination.domain.identity.LaneGrantId(grantId)));
+    }
+
     @Test
     void grantCannotBeConsumedByWrongReviewer(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();

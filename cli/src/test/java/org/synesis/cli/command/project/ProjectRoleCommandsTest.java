@@ -276,6 +276,39 @@ class ProjectRoleCommandsTest {
     }
 
     @Test
+    void removeMemberDropsOnlyTheRemovedNodeFromReplicationPeers() throws Exception {
+        String kept = NodeIdentity.generate().nodeId();
+        share("--code-remote", "origin");
+        add(peer);
+        add(kept);
+        ReplicationPeers.rememberHosted(coordination(), 40000, peer);
+        ReplicationPeers.rememberDialed(coordination(), peer, "synesis://join/SLB3-x");
+        ReplicationPeers.rememberHosted(coordination(), 40001, kept);
+
+        Run removed = remove(peer);
+
+        assertEquals(ExitCodes.OK, removed.exit(), removed.toString());
+        ReplicationPeers after = ReplicationPeers.read(coordination());
+        assertTrue(after.dialed().isEmpty() && after.hosted().values().stream().noneMatch(nodes -> nodes.contains(peer)), "the removed node is gone from replication.peers: " + after);
+        assertEquals(Set.of(kept), after.hosted().get(40001), "a node still a member keeps its record");
+    }
+
+    @Test
+    void removeMemberRefusesWithTheCodesTheCommandAlwaysPrintedAndExitsWithLocalConfiguration() throws Exception {
+        assertEquals(List.of("ERROR=NOT_A_LEADER"), remove(peer).stderr());
+        share("--code-remote", "origin");
+
+        assertEquals(List.of("ERROR=INVALID_NODE_ID"), remove("not a node").stderr());
+        assertEquals(List.of("ERROR=MEMBER_IS_THIS_COMPUTER"), remove(ownNode()).stderr());
+        Run unknown = remove(peer);
+        assertEquals(ExitCodes.LOCAL_CONFIGURATION, unknown.exit(), unknown.toString());
+        assertEquals(List.of("ERROR=NOT_A_MEMBER"), unknown.stderr());
+
+        ReplicationSettings.member(peer).write(coordination());
+        assertEquals(List.of("ERROR=ALREADY_A_MEMBER"), remove(NodeIdentity.generate().nodeId()).stderr());
+    }
+
+    @Test
     void addMemberOnAStepFiveLeaderFileMigratesFirstAndRefusesWhatIsNotAMemberOrNotACommand() throws Exception {
         assertEquals(List.of("ERROR=NOT_A_LEADER"), add(peer).stderr());
         share("--code-remote", "origin");

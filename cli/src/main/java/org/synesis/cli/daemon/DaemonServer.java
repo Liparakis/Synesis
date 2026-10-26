@@ -211,7 +211,8 @@ final class DaemonServer implements AutoCloseable {
     private synchronized Map<String, Object> status() {
         closeUnreachableRuntimes();
         selections.expireStale();
-        return response("RUNNING", Map.of("runtimeCount", runtimes.size()));
+        // The folders are local paths on a loopback socket that needs the daemon's token; `synesis doctor` reads them.
+        return response("RUNNING", Map.of("runtimeCount", runtimes.size(), "projects", runtimes.keySet().stream().map(Path::toString).toList()));
     }
 
     private void closeUnreachableRuntimes() {
@@ -549,13 +550,14 @@ final class DaemonServer implements AutoCloseable {
     private static Map<String, Object> response(String state, Map<String, Object> fields) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("ok", true);
+        result.put("build", BuildInfo.identity());
         result.put("state", state);
         result.putAll(fields);
         return result;
     }
 
     private static Map<String, Object> error(String code) {
-        return Map.of("ok", false, "error", code);
+        return Map.of("ok", false, "build", BuildInfo.identity(), "error", code);
     }
 
     private static void write(BufferedWriter writer, Map<String, Object> value) throws IOException {

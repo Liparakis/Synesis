@@ -44,6 +44,16 @@ final class CliHarness {
         }
     }
 
+    /**
+     * The lines of the error shape for {@link Result#assertIs}: the code, a message and a fix that say something, then
+     * the legacy lines a command keeps printing.
+     */
+    static List<String> shaped(String code, String... legacy) {
+        List<String> lines = new java.util.ArrayList<>(List.of("ERROR=" + code, "~MESSAGE=.{6,}", "~FIX=.{6,}"));
+        lines.addAll(List.of(legacy));
+        return lines;
+    }
+
     static Result run(Path profile, String... arguments) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteArrayOutputStream err = new ByteArrayOutputStream();

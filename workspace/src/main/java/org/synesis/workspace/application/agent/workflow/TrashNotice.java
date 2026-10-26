@@ -9,6 +9,7 @@ import java.util.Optional;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.trash.TrashProjection;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.workspace.application.task.SnapshotRefs;
 
 /**
  * What an agent is told when its work left its hands (ADR-0098 step 7, designer items 12 and 14): another computer
@@ -36,6 +37,7 @@ final class TrashNotice {
                 Map<String, Object> notice = new LinkedHashMap<>();
                 notice.put("laneId", taken.intentId().toString());
                 notice.put("claimEpoch", taken.version());
+                notice.put("trashRef", SnapshotRefs.trashRef(taken.intentId(), taken.version()));
                 notice.put("takenOverBy", successor.participant());
                 notice.put("successorIntentId", successor.intentId().toString());
                 notice.put("instruction", "Another computer's agent took over your lane while your computer was away. Stop working on it: its claims "

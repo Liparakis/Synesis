@@ -105,8 +105,7 @@ public final class LinkJoinCommand extends LinkOperationCommand {
             }
             return parsed;
         } catch (IncompatibleVersionException differentVersion) {
-            runtime.terminal().stderr("MESSAGE=" + differentVersion.mismatch().message());
-            throw new RuntimeControl.Rejected("INCOMPATIBLE_VERSION");
+            throw new RuntimeControl.Rejected("INCOMPATIBLE_VERSION", differentVersion.mismatch().message());
         } catch (IOException | IllegalArgumentException | GeneralSecurityException invalid) {
             throw new RuntimeControl.Rejected("INVITE_INVALID");
         }

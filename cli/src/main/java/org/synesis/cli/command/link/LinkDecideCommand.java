@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ErrorShape;
 import org.synesis.cli.command.ProjectOptions;
 import org.synesis.cli.exit.ExitCodes;
 
@@ -37,21 +38,30 @@ abstract class LinkDecideCommand implements Callable<Integer> {
     @Override
     public final Integer call() {
         if (!NodeIdentity.isNodeId(node)) {
-            runtime.terminal().stderr("ERROR=INVALID_NODE_ID");
+            ErrorShape.print(runtime.terminal()::stderr, "INVALID_NODE_ID");
             return ExitCodes.LOCAL_CONFIGURATION;
         }
         try {
             RuntimeControl control = source.open(ProjectOptions.locate(runtime, project).root());
-            Map<String, Object> decided = control.command(commandName, Map.of("nodeId", node));
-            runtime.terminal().stdout("JOIN_REQUEST=" + node + " STATE=" + decided.get("state"));
+            decide(runtime, control, commandName, node);
             return ExitCodes.OK;
-        } catch (RuntimeControl.Rejected rejected) {
-            runtime.terminal().stderr("ERROR=" + rejected.code());
-        } catch (ProjectApplicationException failure) {
-            runtime.terminal().stderr("ERROR=" + failure.code());
-        } catch (java.io.IOException failure) {
-            runtime.terminal().stderr("ERROR=PROJECT_RUNTIME_UNAVAILABLE");
+        } catch (RuntimeControl.Rejected | ProjectApplicationException | java.io.IOException failure) {
+            LinkCommand.refuse(runtime, failure);
         }
         return ExitCodes.LOCAL_CONFIGURATION;
+    }
+
+    /**
+     * Tells the runtime the owner's decision and prints its outcome. The one path both {@code link accept|decline} and
+     * the question {@code link invite} asks at a terminal take, so that a decision has one authority.
+     *
+     * @param commandName {@code accept-join} or {@code decline-join}
+     * @param node        the waiting computer's node ID
+     * @throws java.io.IOException     when the runtime cannot be reached
+     * @throws RuntimeControl.Rejected when the runtime refuses, for example because the request is gone
+     */
+    static void decide(CliRuntime runtime, RuntimeControl control, String commandName, String node) throws java.io.IOException, RuntimeControl.Rejected {
+        Map<String, Object> decided = control.command(commandName, Map.of("nodeId", node));
+        runtime.terminal().stdout("JOIN_REQUEST=" + node + " STATE=" + decided.get("state"));
     }
 }

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.synesis.cli.SynesisCli;
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.exit.ExitCodes;
 import org.synesis.cli.terminal.ConsoleTerminal;
 
 /**
@@ -34,5 +35,17 @@ public class DoctorCommandTest {
         String output = stdout.toString();
         assertTrue(output.contains("DOCTOR_RESULT="));
         assertTrue(output.contains("FINDINGS="));
+    }
+
+    @Test
+    public void strictExitsWithDoctorBrokenWhenTheProjectIsNotHealthy(@TempDir Path tempDir) {
+        ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+        ConsoleTerminal terminal = new ConsoleTerminal(new PrintStream(stdout, true, StandardCharsets.UTF_8), new PrintStream(new ByteArrayOutputStream(), true, StandardCharsets.UTF_8));
+
+        int strict = SynesisCli.execute(new String[]{"doctor", "--strict", "--project", tempDir.toString()}, CliRuntime.defaults(terminal));
+
+        assertTrue(!stdout.toString(StandardCharsets.UTF_8).contains("DOCTOR_RESULT=HEALTHY"), "a folder that is not a project is not healthy: " + stdout);
+        assertEquals(ExitCodes.DOCTOR_BROKEN, strict);
+        assertEquals(3, strict);
     }
 }

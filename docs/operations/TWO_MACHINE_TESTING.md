@@ -22,11 +22,11 @@ tests remain `TWO_PROCESS_VERIFIED` and must not be relabeled.
 For launcher validation, build with
 `./gradlew.bat :cli:installDist --dependency-verification=strict` and run the
 generated `cli\build\install\synesis\bin\synesis.bat` on both machines. The
-normal flow is `synesis host`, copy its
-`synesis://join/SLB3-...` output to the other machine, and run
-`synesis join "<link>"`. On different networks, paste the `ANSWER_LINK` the
-join prints into the waiting `synesis host`, or start the host with
-`--open-router-port`; see ADR-0097 for which networks each gets through.
+normal flow is `synesis link invite` on one machine, copy its `INVITE_LINK=synesis://project/SLP1-...`
+output to the other machine, and run `synesis link join "<link>"` there. On different networks, give the
+`ANSWER_LINK` the join prints to the waiting invitation (`synesis link answer`), or invite from the browser (`synesis ui`)
+with "Ask my router to open a port" ticked; see ADR-0097 for which networks each gets through (the one-shot
+`synesis host`/`join` commands were removed on 2026-10-20, ADR-0103).
 No signaling server or mailbox is used. Use a temporary PATH change only in the current
 shell if desired; do not record a permanent PATH or installation claim.
 Capture sanitized launcher output in `docs/evidence/PHYSICAL-CLI-ONBOARDING.md`; the existing
@@ -140,7 +140,7 @@ and every 30 seconds after that, for as long as it is still the leader of that m
 computer that ran `link invite` keeps its port open and admits the redial with no new invitation, but only from the
 leader it follows (on a member) or from a current member (on a leader). Nothing needs doing; if the dialing computer
 can only dial out (no inbound firewall rule on Windows, say), that is why it is the one that dials. Both computers
-use a looser liveness timing than a one-shot `synesis host`/`join` (heartbeat 5 s, `SUSPECT` after 15 s, `EXPIRED`
+use a looser liveness timing than a one-shot onboarding session (heartbeat 5 s, `SUSPECT` after 15 s, `EXPIRED`
 after 30 s), so a pause of up to half a minute does not end the session.
 
 `synesis coordination status` shows `REPLICATION_LAST_DISCONNECT=<reason> <time> <details>` for the last session that
@@ -174,3 +174,57 @@ there treats the other computer as not connected.
 What still needs a new `link invite` and `link join`: the hosting computer's port was taken by another program when it
 started again (`HOST_RESUME_FAILED`), the dialing computer can no longer reach the endpoints of the invitation (the host's
 address changed), or the file was lost or unreadable. A member list is local state of A.
+
+## Fast loop rules
+
+These rules come from ADR-0102 (items 3, 7, 8 and 9).
+
+**Splits are short and firewall-only (item 3).** A Link split lasts about 5 minutes. Make it with the VM firewall
+partition: `~/accept/partition.sh <seconds>` on the VM, for example `~/accept/partition.sh 300`. Never pull a cable.
+A pulled cable also cuts the agents' model provider, so the run then tests the network, not the protocol. The
+partition drops only the traffic between the two computers.
+
+**Fixers test only what they touch (item 7).** A fixer runs only the affected test classes, on Linux, with
+`D:\Podman\work\linux-gate.ps1 :workspace:test --tests '*AgentNextActionServiceTest'`. Use the test classes the fix
+touches. Windows runs only the touched classes too. One final Windows gate runs before a push.
+
+**Each parallel session gets its own state and Gradle home (item 8).** Run Gradle with
+`D:\SynesisAcceptance\lab\gradle-session.ps1 -Session <name> <gradle arguments>`, for example
+`D:\SynesisAcceptance\lab\gradle-session.ps1 -Session fix-42 :workspace:test --tests '*AgentNextActionServiceTest'`.
+The session uses `C:\t\<name>` for temp files and test state, and `D:\gradle-homes\<name>` as its Gradle home. Pick a
+new name for each parallel session. Run it from inside the checkout.
+
+**A background gate checks each new commit (item 9).** Start it with
+`D:\SynesisAcceptance\lab\background-gate.ps1 -Branch <name> [-Checkout <path>]`. It runs the whole Linux gate on the
+newest commit of the branch each time the branch moves, and checks every 60 seconds. It reads local refs only and
+fetches nothing. The result goes to `D:\SynesisAcceptance\lab\gate-status.txt`: `RESULT=GREEN`, `RED`, `RUNNING` or
+`INTERRUPTED`, with the failing lines. Stop it with Ctrl+C.
+
+## Fast loop scripts
+
+Three scripts in `D:\SynesisAcceptance\lab\` cover a real run end to end (ADR-0102 items 4, 5 and 2). Run the `.sh`
+scripts from Git Bash and the `.ps1` script from PowerShell. They never start or stop Podman.
+
+**Build once, copy to the VM (item 4).** `pwsh -File D:\SynesisAcceptance\lab\build-and-copy.ps1 <tag>` builds
+`:cli:installDist` as `0.1.0-dev.<tag>`, copies it to `D:\SynesisAcceptance\offline\synesis<tag>` (with the
+`synesis.cmd` shim), and copies the same distribution to `~/synesis/<tag>` for the VM users `synesis` and `synesis3`.
+On the VM, `~/.local/bin/synesis` is a small wrapper that sets `JAVA_HOME=/opt/synesis/openjdk` (the VM has no `java`
+on PATH) and runs `~/synesis/current`. The shared `/usr/local/bin/synesis` is not touched. `~/.local/bin` is not on
+PATH for non-interactive ssh, so the lab scripts put it first, as agents are started. It prints the version seen from
+each place. Options: `-Check` (read-only look at both VM users), `-NoVm`, `-NoBuild`, `-Force`. It keeps the last three
+builds on the VM, which has little free disk.
+
+**One call per run (item 5).** `bash D:/SynesisAcceptance/lab/run.sh <together|apart|three> <name> <tag> [seconds]`.
+`together` has no split. `apart` partitions the PC and the VM with `~/accept/partition.sh` for `[seconds]` (default
+300). `three` adds the VM user `synesis3` as a third computer. It creates and shares the project, invites and joins each
+VM user, starts logwatch on every computer, starts the agents (`claude:sonnet:medium` on the PC, `codex:gpt-6-luna:high`
+on the VM), waits for the runs to end, runs `evidence.sh`, and validates: the copies of `main` are equal, every computer
+holds the same logs byte for byte, logwatch saw no log removed or changed, and the goal's test command passes on every
+computer. The last line is `RESULT=PASS`, `FAIL`, `PARTIAL` (a run did not end COMPLETED) or `TIME_BOUND`. Add
+`--check` to verify the prerequisites only, and `--help` for the goal file, prompt, agent counts and models. The goal
+file may name its test command in a line `Test command: ` followed by the command in backticks.
+
+**Evidence from every computer (item 2).** `bash D:/SynesisAcceptance/lab/evidence.sh <name> [tag]` copies each
+computer's coordination folder, agent transcripts, `git log --all --oneline --graph`, refs, worktree list and leases to
+`D:\SynesisAcceptance\evidence\<name>\<pc|vm|vm3>\`, and runs `synesis log dump` on each when the build has that command
+(otherwise `log-dump.txt` says it is absent). `run.sh` calls it; run it by hand after any run that stopped early.

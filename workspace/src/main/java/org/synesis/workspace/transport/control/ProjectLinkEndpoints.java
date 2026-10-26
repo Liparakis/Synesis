@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.IncompatibleVersionException;
 import org.synesis.link.protocol.ProjectInvitation;
@@ -219,6 +220,36 @@ final class ProjectLinkEndpoints {
         Map<String, Object> response = newResponse();
         response.put("nodeId", nodeId);
         response.put("state", accept ? "ACCEPTED" : "DECLINED");
+        sendJson(exchange, 200, response);
+    }
+
+    /**
+     * Removes a member from the project, a person's action on the owner's computer (ADR-0103 stage 3). Removing ends
+     * the member's open work on every computer, so it also requires {@code confirmed: true}: the page asks first, and
+     * no other caller removes a computer by mistake. The owner rule is the log's, as for {@code project remove-member}.
+     *
+     * @param exchange HTTP exchange
+     * @param body     request body with {@code nodeId} and {@code confirmed}
+     * @throws IOException when the response cannot be written
+     * @throws ApiFailure  400 without the confirmation, 409 when the member cannot be removed, 500 when the log failed
+     */
+    void removeMember(HttpExchange exchange, Map<String, Object> body) throws IOException, ApiFailure {
+        String nodeId = requiredText(body, "nodeId", MAX_NODE_LENGTH);
+        if (!Boolean.TRUE.equals(body.get("confirmed"))) {
+            throw failure(400, "CONFIRMATION_REQUIRED", "removing a member ends its open work on every computer");
+        }
+        try {
+            ProjectSharing.removeMember(readModel.location(), coordination(), nodeId);
+        } catch (ProjectSharing.Refusal refusal) {
+            throw failure(refusal.code().equals("INVALID_NODE_ID") ? 400 : 409, refusal.code(), "the member cannot be removed: " + refusal.code());
+        } catch (CoordinationException refused) {
+            throw failure(409, refused.code(), "the project's log refused the removal: " + refused.code());
+        } catch (IOException | GeneralSecurityException failed) {
+            throw failure(500, "PROJECT_STORAGE_FAILED", "the member could not be removed");
+        }
+        Map<String, Object> response = newResponse();
+        response.put("nodeId", nodeId);
+        response.put("state", "REMOVED");
         sendJson(exchange, 200, response);
     }
 

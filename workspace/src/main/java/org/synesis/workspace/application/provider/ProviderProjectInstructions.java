@@ -3,18 +3,17 @@ package org.synesis.workspace.application.provider;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 
-import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.provider.ProviderIntegration;
 
-import static org.synesis.workspace.application.provider.ProviderConfigurationFiles.atomicWrite;
-
 /**
- * Installs and removes the instruction file a provider reads from the project root. Only a regular
- * file that opens with the ownership marker is Synesis's to replace or remove; any other file at
- * that path belongs to the user and is left untouched. It is separate from
- * {@link ProviderApplicationService} so the ownership test is the same for install and uninstall.
+ * Removes the instruction file an earlier Synesis wrote into the project for a provider. Synesis writes
+ * no instruction file any more (the installed manual is the one place for the agent instructions), so
+ * only the removal is left. Only a regular file that opens with the ownership marker is Synesis's to
+ * remove; any other file at that path belongs to the user and is left untouched. It is separate from
+ * {@link ProviderApplicationService} so install, uninstall and project initialization share one test.
  */
 final class ProviderProjectInstructions {
 
@@ -22,42 +21,33 @@ final class ProviderProjectInstructions {
     }
 
     /**
-     * Installs the provider's project instruction file, if it has one.
+     * Removes the provider's retired project instruction file when it is Synesis's own.
      *
-     * @param location project location
-     * @param provider provider integration
-     * @return {@code NOT_APPLICABLE}, {@code INSTALLED}, {@code UNCHANGED}, or {@code CONFLICT}
-     *         when a file the user owns already occupies the path and was left alone
-     * @throws IOException when the file cannot be read or written
+     * @param projectRoot project root
+     * @param provider    provider integration
+     * @return {@code NOT_APPLICABLE} when the harness never had one, {@code ABSENT} when none is there,
+     *         {@code REMOVED}, or {@code CONFLICT} when a file the user owns occupies the path and was
+     *         left alone
+     * @throws IOException when the file cannot be read or deleted
      */
-    static String ensureProjectInstructions(ProjectLocation location, ProviderIntegration provider) throws IOException {
-        ProviderIntegration.ProjectInstructions instructions = provider.projectInstructions(location.root()).orElse(null);
-        if (instructions == null) {
+    static String retire(Path projectRoot, ProviderIntegration provider) throws IOException {
+        Path path = provider.retiredProjectInstructions(projectRoot).orElse(null);
+        if (path == null) {
             return "NOT_APPLICABLE";
         }
-        Path path = instructions.path();
-        if (Files.exists(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
-            if (!ownedInstructions(path)) {
-                return "CONFLICT";
-            }
-            if (instructions.content().equals(Files.readString(path, StandardCharsets.UTF_8))) {
-                return "UNCHANGED";
-            }
+        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+            return "ABSENT";
         }
-        atomicWrite(path, instructions.content());
-        return "INSTALLED";
+        if (!ownedInstructions(path)) {
+            return "CONFLICT";
+        }
+        Files.delete(path);
+        return "REMOVED";
     }
 
-    static void removeProjectInstructions(ProjectLocation location, ProviderIntegration provider) throws IOException {
-        ProviderIntegration.ProjectInstructions instructions = provider.projectInstructions(location.root()).orElse(null);
-        if (instructions != null && ownedInstructions(instructions.path())) {
-            Files.delete(instructions.path());
-        }
-    }
-
-    /** Only a regular file that opens with the ownership marker is Synesis's to replace or remove. */
+    /** Only a regular file that opens with the ownership marker is Synesis's to remove. */
     private static boolean ownedInstructions(Path path) throws IOException {
-        return Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)
-                && Files.readString(path, StandardCharsets.UTF_8).startsWith(ProviderIntegration.ProjectInstructions.OWNERSHIP_MARKER);
+        return Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+                && Files.readString(path, StandardCharsets.UTF_8).startsWith(ProviderIntegration.RETIRED_INSTRUCTIONS_MARKER);
     }
 }

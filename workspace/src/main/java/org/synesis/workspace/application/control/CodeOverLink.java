@@ -53,7 +53,7 @@ public final class CodeOverLink implements AutoCloseable {
     public static final String FOLDER_NOT_EMPTY = "CODE_FOLDER_NOT_EMPTY";
 
     /** What Synesis itself writes into a project folder; nothing else may be in a folder that gets its first checkout. */
-    private static final Set<String> SYNESIS_FILES = Set.of(".git", ".synesis", "AGENTS.md", ".codex", ".claude", ".mcp.json");
+    private static final Set<String> SYNESIS_FILES = Set.of(".git", ".synesis", ".codex", ".claude", ".mcp.json");
 
     private static final int TRANSFER_MINUTES = 10;
     private static final Duration TRANSFER_BOUND = Duration.ofMinutes(TRANSFER_MINUTES);
@@ -190,7 +190,10 @@ public final class CodeOverLink implements AutoCloseable {
     }
 
     /**
-     * What a computer does after a pull, on its own thread, returning at once: a member with no commit yet checks the
+     * What a computer does after each pull, on its own thread, returning at once. It is level-triggered: the pull
+     * that brought the entries naming a head is not always the one after which its commit can be had or this
+     * computer's own pass has finished, so every pull runs it again until this copy has met every head; a head
+     * already met costs only a comparison. A member with no commit yet checks the
      * owner's branch out ({@link #followMain}); otherwise every head another computer's pass advanced to that this copy
      * lacks is fetched and, when this copy is behind it and the audit passes, taken by fast-forward (ADR-0098 step 5,
      * {@link MainMeeting}). Requests made while one is waiting to run count once.
@@ -268,6 +271,7 @@ public final class CodeOverLink implements AutoCloseable {
         // Not while this computer's own pass moves its branch: the pass holds the integration lock.
         try (var onePass = org.synesis.coordination.persistence.ProjectIntegrationLock.tryAcquire(coordination)) {
             if (onePass == null) {
+                LOG.log(System.Logger.Level.INFO, "Another computer's main is not taken while this computer's own pass runs; the next pull tries again.");
                 return;
             }
             synchronized (transfers) {
@@ -333,6 +337,7 @@ public final class CodeOverLink implements AutoCloseable {
     private void followBranch(String leaderHead) throws IOException {
         if (GitProcessRunner.runOptional(repository, "symbolic-ref", "-q", "HEAD").isEmpty()) {
             // A detached checkout is a person's; only a branch follows.
+            LOG.log(System.Logger.Level.INFO, "The checkout is detached, so it does not follow another computer's main.");
             return;
         }
         try {
@@ -352,9 +357,11 @@ public final class CodeOverLink implements AutoCloseable {
 
     /**
      * Checks the leader's branch out in a repository that has no commit yet, in a folder that holds only what Synesis
-     * wrote there ({@link #SYNESIS_FILES}). Those files ({@code .synesis/project.json}, {@code AGENTS.md}) are in the
-     * way of the same files of the project, so the checkout overwrites what is in its way, and nothing else is there
-     * to overwrite. The project's own {@code AGENTS.md} then stands as the leader has it. The Git exclusions of
+     * wrote there ({@link #SYNESIS_FILES}). That file ({@code .synesis/project.json}) is in the way of the same file
+     * of the project, so the checkout overwrites it, and nothing else is there to overwrite. Synesis writes no
+     * {@code AGENTS.md} (ADR-0103 decision 9), so one in the folder is the user's and keeps the folder from counting
+     * as holding only Synesis's files; joining initializes the replica first, which has already removed the section
+     * an earlier version wrote there. The Git exclusions of
      * Synesis's private folders are written now, because the folder had no repository to hold them before.
      */
     private void checkOut(CodeTransferClient.Head leader) throws IOException {

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.application.ProjectApplicationService.ProjectApplicationException;
 import org.synesis.workspace.application.project.ProjectLocation;
 
@@ -57,5 +58,27 @@ public final class ProjectOptions {
      */
     public static Path profile(ProjectLocation location, String profile) {
         return profile == null ? location.profile() : Path.of(profile);
+    }
+
+    /**
+     * Reports why a project could not be located, with the cause the failure carries. A directory that is not an
+     * initialized project keeps its own code, {@code PROJECT_NOT_CONFIGURED}; every other cause names itself, so a
+     * damaged project, an unusable path or an unreadable file is never reported as a missing setup.
+     *
+     * @param runtime CLI runtime
+     * @param failure what {@link #locate} (or the work after it) threw
+     * @return {@link ExitCodes#LOCAL_CONFIGURATION}, as the blanket report always returned
+     */
+    public static int refuse(CliRuntime runtime, Exception failure) {
+        if (failure instanceof ProjectApplicationException application && "NOT_FOUND".equals(application.code())) {
+            ErrorShape.print(runtime.terminal()::stderr, "PROJECT_NOT_CONFIGURED");
+        } else if (failure instanceof ProjectApplicationException application) {
+            ErrorShape.print(runtime.terminal()::stderr, application.code());
+            runtime.terminal().stderr("REASON=" + application.getMessage());
+        } else {
+            ErrorShape.print(runtime.terminal()::stderr, "PROJECT_ACCESS_FAILED");
+            runtime.terminal().stderr("REASON=" + (failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage()));
+        }
+        return ExitCodes.LOCAL_CONFIGURATION;
     }
 }

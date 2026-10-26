@@ -435,12 +435,14 @@ class McpToolMalformedArgumentsTest {
     }
 
     @Test
-    void aCompletedManagedConnectionIsRejectedOutsideTheThreeReviewCoordinationTools() throws Exception {
+    void aCompletedManagedConnectionIsRejectedOutsideTheReviewTools() throws Exception {
         McpProtocolHandler handler = managedHandler("conn-managed-completed", true);
-        for (String tool : List.of("ensure_session", "read_file", "apply_patch", "run_command", "publish_capability_implementation", "finish_lane", "cancel_lane", "bogus")) {
+        for (String tool : List.of("ensure_session", "apply_patch", "publish_capability_implementation", "finish_lane", "cancel_lane", "bogus")) {
             assertManagedRefusal("managed_attachment_rejected", call(handler, tool, "{}"));
         }
-        for (String tool : List.of("get_next_action", "request_coordination", "respond_coordination")) {
+        // The reads and test runs of a review it holds reach the review snapshot service, which alone
+        // accepts a completed binding (McpProducersReviewEachOtherTest).
+        for (String tool : List.of("get_next_action", "request_coordination", "respond_coordination", "read_file", "run_command")) {
             assertFalse(call(handler, tool, "{}").contains("managed_attachment_"), tool);
         }
     }
@@ -478,6 +480,10 @@ class McpToolMalformedArgumentsTest {
         for (String tool : List.of("apply_patch", "finish_lane", "bogus")) {
             assertText(denied("reason", "SESSION_RECOVERY_STATE_UNAVAILABLE", "request_human_help"), call(handler, tool, "{}"));
         }
+        // Reads and commands pass the fence for the review a completed lane may hold; holding none,
+        // the lane has no workspace left and is sent to start a fresh session.
+        assertText("{'status':'retry_required','reason':'workspace_stale','nextAction':'ensure_session'}", call(handler, "read_file", "{'path':'README.md'}"));
+        assertText("{'status':'retry_required','reason':'workspace_stale','nextAction':'ensure_session'}", call(handler, "run_command", "{'argv':['git','status']}"));
         Map<String, Object> closingRead = innerResponse(call(handler, "get_next_action", "{}"));
         assertEquals("completed", closingRead.get("status"));
         assertEquals("COMPLETED", ((Map<?, ?>) closingRead.get("result")).get("state"));

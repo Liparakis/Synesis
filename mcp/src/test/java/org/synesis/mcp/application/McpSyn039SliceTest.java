@@ -54,8 +54,12 @@ final class McpSyn039SliceTest {
         return arguments;
     }
 
-    @SuppressWarnings("unchecked")
     private static ReviewFixture prepareReviewFixture(Path temp) throws Exception {
+        return prepareReviewFixture(temp, ResourceSelector.pathExact("review-report.md"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ReviewFixture prepareReviewFixture(Path temp, ResourceSelector reviewerClaim) throws Exception {
         Path project = temp.resolve("review-publication-project");
         Files.createDirectories(project);
         git(project, "init");
@@ -88,7 +92,7 @@ final class McpSyn039SliceTest {
                 "syn039-reviewer-publication",
                 "Review Todo",
                 "Review the completed Todo snapshot",
-                List.of(ResourceSelector.pathExact("review-report.md")),
+                List.of(reviewerClaim),
                 ids.groupId,
                 WorkIntent.Role.REVIEWER,
                 List.of(ResourceSelector.pathExact("todo.py")));
@@ -1253,6 +1257,63 @@ final class McpSyn039SliceTest {
         assertEquals(List.of("review-report.md"), reviewerSnapshot.changedPaths());
         assertEquals(reviewerAssignedBaseCommit, reviewerSnapshot.baseCommit());
         assertTrue(Files.exists(fixture.project.resolve("review-report.md")));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> acceptOwnerCandidate(ReviewFixture fixture) {
+        Map<String, Object> reviewProjection = innerResult(fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> reviewPayload = new LinkedHashMap<>((Map<String, Object>) ((Map<String, Object>) reviewProjection.get("result")).get("nextProtocolPayload"));
+        return innerResult(fixture.reviewer.handleMessage(toolCall("respond_coordination", ProviderJson.write(reviewArguments(reviewPayload, "accepted", null)))));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aReviewerThatRecordedItsVerdictIsToldToWriteItsNotesToItsClaimedPathAndFinish(@TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp, ResourceSelector.pathSubtree("reviews"));
+        String snapshotId = publishOwnerCandidate(fixture);
+        assertEquals("completed", acceptOwnerCandidate(fixture).get("status"));
+        String notes = "reviews/" + snapshotId + ".md";
+
+        Map<String, Object> next = innerResult(fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+        Map<String, Object> told = (Map<String, Object>) next.get("result");
+        assertEquals(notes, told.get("reviewNotesPath"), "s1-run5, s5-run3, s5-run5: shown only IMPLEMENT, the reviewer had nothing it was asked to write: " + next);
+        String instruction = String.valueOf(told.get("instruction"));
+        assertTrue(instruction.contains("write them to " + notes) && instruction.contains("A one-line note is enough"), instruction);
+
+        Map<String, Object> noChange = innerResult(fixture.reviewer.handleMessage(toolCall("finish_lane", "{\"outcome\":\"no_change\",\"summary\":\"Nothing to add\"}")));
+        assertNotEquals("completed", noChange.get("status"), "a reviewer lane still ends by publishing its notes: " + noChange);
+        assertEquals("finish_lane", noChange.get("nextAction"), noChange.toString());
+        assertEquals(notes, ((Map<String, Object>) noChange.get("result")).get("reviewNotesPath"), noChange.toString());
+
+        assertEquals("ready", innerResult(fixture.reviewer.handleMessage(toolCall("ensure_session", "{\"refresh\":true}"))).get("status"));
+        Map<String, Object> nothingYet = innerResult(fixture.reviewer.handleMessage(toolCall("get_next_action", "{\"completionRequested\":true}")));
+        Map<String, Object> nothingYetResult = (Map<String, Object>) nothingYet.get("result");
+        assertEquals(notes, nothingYetResult.get("reviewNotesPath"), nothingYet.toString());
+        assertFalse(String.valueOf(nothingYetResult.get("instruction")).contains("cancel_lane"), "a reviewer is not offered to cancel the lane it must finish: " + nothingYet);
+
+        Map<String, Object> written = innerResult(fixture.reviewer.handleMessage(toolCall("apply_patch",
+                ProviderJson.write(Map.of("path", notes, "create", true, "content", "Nothing to add: the snapshot meets the acceptance.\n")))));
+        assertEquals("completed", written.get("status"), written.toString());
+        Map<String, Object> publication = innerResult(fixture.reviewer.handleMessage(toolCall("get_next_action", "{\"completionRequested\":true}")));
+        assertEquals("snapshot_publication_required", publication.get("reason"), publication.toString());
+        Map<String, Object> finish = (Map<String, Object>) ((Map<String, Object>) ((Map<String, Object>) publication.get("result")).get("workflow")).get("arguments");
+        Map<String, Object> finished = innerResult(fixture.reviewer.handleMessage(toolCall("finish_lane", ProviderJson.write(finish))));
+        assertEquals("completed", finished.get("status"), finished.toString());
+        var location = new ProjectApplicationService().locate(fixture.project);
+        assertEquals("COMPLETED", new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId()).workGroupProjection().group(fixture.groupId).orElseThrow()
+                .status().name(), "the work group closes");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aReviewerThatClaimedAReportPathOfItsOwnIsToldToWriteItsNotesThere(@TempDir Path temp) throws Exception {
+        ReviewFixture fixture = prepareReviewFixture(temp);
+        publishOwnerCandidate(fixture);
+        acceptOwnerCandidate(fixture);
+
+        Map<String, Object> next = innerResult(fixture.reviewer.handleMessage(toolCall("get_next_action", "{}")));
+
+        assertEquals("review-report.md", ((Map<String, Object>) next.get("result")).get("reviewNotesPath"), "never a path the lane may not write: " + next);
     }
 
     /**

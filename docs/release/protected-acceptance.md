@@ -68,7 +68,7 @@ acceptance.
 
 The extracted acceptance harness also writes a `performance` object with
 `status=BOUNDARY_TIMINGS_ONLY` and per-check `durationMs` values for the
-shipped provider/doctor, Link onboarding, UI smoke, authenticated control-plane
+shipped provider/doctor, UI smoke, authenticated control-plane
 HTTP/SSE, and relay forwarding checks. Unique physical-memory measurement,
 route-selection microbenchmarks, commercial transformation overhead, and
 AV/EDR impact remain explicitly open; the profile harness's aggregate
@@ -210,14 +210,11 @@ first authenticated `text/event-stream` snapshot. This is a shipped-artifact
 HTTP/SSE acceptance check; it is not browser automation and it does not prove
 the protected Link, overlay, relay, or commercial transformation rings.
 
-The CLI harness also exercises the installed Link boundary with two isolated
-profiles. It creates reciprocal one-peer project configuration, starts an
-installed host, passes the signed invitation transiently to a second installed
-joiner, and requires the authenticated remote identity plus a successful
-project synchronization. The invitation is not written to evidence. This is
-local shipped CLI/Link serialization, authentication, native QUIC/PeerSession,
-and onboarding evidence; it does not prove Internet NAT traversal, multi-peer
-overlay routing, or relay forwarding.
+The CLI harness no longer exercises the installed Link boundary: its two-process probe
+used `synesis sync host` and `synesis sync join`, which were removed on 2026-10-20
+(ADR-0103, decision 4). Link onboarding is covered by the real PC and VM runs of
+`docs/operations/TWO_MACHINE_TESTING.md` and by the Link, coordination and CLI test
+suites; this harness makes no Link claim.
 
 The CLI path first locates the packaged `web-ui/index.html` and all packaged
 JavaScript/CSS assets inside the installed JAR. It rejects external runtime

@@ -368,7 +368,9 @@ class TaskIntegrationServiceTest {
     Files.writeString(root.resolve("README.md"), "base\n");
     git(root, "add", "README.md");
     git(root, "commit", "-m", "base");
-    Files.writeString(root.resolve("AGENTS.md"), "changed\n");
+    // The managed contract is the project file; AGENTS.md is the user's own source since ADR-0103 decision 9.
+    Files.createDirectories(root.resolve(".synesis"));
+    Files.writeString(root.resolve(".synesis/project.json"), "changed\n");
 
     IllegalStateException failure = org.junit.jupiter.api.Assertions.assertThrows(
         IllegalStateException.class,

@@ -210,7 +210,7 @@ public final class CollaborationCodec {
      * @return intent ID
      * @throws IOException malformed bytes
      */
-    static UUID decodeRelease(byte[] encoded) throws IOException {
+    public static UUID decodeRelease(byte[] encoded) throws IOException {
         return decode(encoded, MAGIC_RELEASE, "release", WireFormat::readUuid);
     }
 

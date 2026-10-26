@@ -83,7 +83,8 @@ public final class MemberReplication implements AutoCloseable {
         this.root = CoordinationNullException.requireNonNull(root, "root");
         CoordinationNullException.requireNonNull(projectId, "project ID");
         this.leaderNodeId = CoordinationNullException.requireNonNull(leaderNodeId, "leader node ID");
-        this.exchange = new LogExchange(root, projectId, leaderNodeId::equals, log -> true, this::tellPulled);
+        this.exchange = new LogExchange(root, projectId, leaderNodeId::equals, log -> true, () -> {
+        }, this::tellPulled);
         exchange.watch((node, next) -> {
             setState(switch (next) {
                 case CONNECTED -> State.CONNECTED;
@@ -113,7 +114,7 @@ public final class MemberReplication implements AutoCloseable {
     }
 
     /**
-     * Tells {@code listener} after each pull that brought entries and after the first good pull of each session, so
+     * Tells {@code listener} after each good pull, with or without entries, so
      * this computer's code can follow what the logs now name (ADR-0098 step 3, "Members follow {@code main}"). It
      * runs on the exchange thread and must return at once.
      *

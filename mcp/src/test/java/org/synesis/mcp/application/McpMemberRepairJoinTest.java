@@ -94,7 +94,7 @@ class McpMemberRepairJoinTest {
         var sourceClaim = collaboration.announce(root, "codex", "repair-source", "source", "repair", selectors);
         assertTrue(sourceClaim.acquired());
         UUID sourceIntentId = UUID.nameUUIDFromBytes(("codex:" + sourceBinding.sessionId()).getBytes(StandardCharsets.UTF_8));
-        UUID group = UUID.nameUUIDFromBytes(("default-work-group:" + location.projectId()).getBytes(StandardCharsets.UTF_8));
+        UUID group = sourceClaim.intent().workGroupId();
         Files.createDirectories(sourceWorktree.resolve("src"));
         Files.writeString(sourceWorktree.resolve("src/conflict.py"), "original\n");
         TaskSnapshotRecord snapshot = new TaskSnapshotService().createSnapshot(new SnapshotRequest(sourceClaim.intent().taskId(), "node", "sup", "worker", sourceBinding.sessionId(), sourceWorktree, root, "conflict",

@@ -11,6 +11,12 @@ The server/configuration namespace is `synesis`; the wire contract advertises
 raw names only. Decorated `synesis.*` calls are rejected.
 migration.
 
+The `initialize` result carries an `instructions` string (ADR-0103 decision 9),
+shown to every connected agent, which tells it to follow the installed
+`synesis-provider-manual` skill. The rules themselves live only in that skill;
+the project carries no `AGENTS.md` section or rule file. The field is additive:
+a client that ignores it behaves as before.
+
 Session establishment verifies the provider-managed Synesis Manual manifest,
 version, and content hash. Invalid attestation blocks mutation and other
 authority-increasing operations, while inspection, inbox reads, own-lane
@@ -28,7 +34,7 @@ repository-relative `path_exact` or `path_subtree` selector and is the existing
 intent/ownership announcement. Claims must be disjoint; Synesis rejects
 overlapping ownership. `likelyScopes` is descriptive planning information only
 and does not announce intent or acquire claims. There is no separate announce
-tool in the ten-tool MCP surface.
+tool in the eleven-tool MCP surface.
 
 Keep all task members inside `task`. If a `task` object is present, placing task
 fields beside it is rejected instead of silently defaulting omitted fields.

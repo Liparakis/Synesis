@@ -7,14 +7,21 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationSettings;
 
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 import org.synesis.workspace.infrastructure.process.ProcessInspector;
@@ -37,7 +44,8 @@ import org.synesis.workspace.migration.ProviderConfigMigrationService;
  *
  * <p>DoctorService is read-only by construction: it performs zero file creations, zero file
  * modifications,
- * zero file deletions, zero process terminations, and zero lock acquisitions.
+ * zero file deletions, zero process terminations, and zero lock acquisitions. The only process it starts is
+ * {@code git --version}; the connected agents' own status checks and the operator-request projection only read.
  *
  * @since 1.0
  */
@@ -48,19 +56,61 @@ public final class DoctorService {
      * details vary per instance and are supplied to {@link #finding}.
      */
     private record Facts(DoctorSeverity severity, DoctorConfidence confidence, String summary, String explanation, String affectedResourceType, boolean repairSupported,
-                         DoctorRecommendation recommendation) {
+                         DoctorRecommendation recommendation, DoctorGroup group, String fix) {
     }
 
+    /**
+     * The group of the findings that existed before the groups did and do not belong to the project itself.
+     */
+    private static final Map<DoctorFindingCode, DoctorGroup> EARLIER_GROUPS = Map.of(
+            DoctorFindingCode.MISSING_INSTALLED_LAUNCHER, DoctorGroup.ENVIRONMENT,
+            DoctorFindingCode.PROVIDER_MIGRATION_REQUIRED, DoctorGroup.ENVIRONMENT,
+            DoctorFindingCode.PROVIDER_CONFIG_MALFORMED, DoctorGroup.ENVIRONMENT,
+            DoctorFindingCode.PROVIDER_CONFIG_SYNSESIS_ENTRY_DUPLICATED, DoctorGroup.ENVIRONMENT,
+            DoctorFindingCode.STALE_SESSION_LEASE, DoctorGroup.WORK_GROUPS,
+            DoctorFindingCode.AMBIGUOUS_SESSION_LIVENESS, DoctorGroup.WORK_GROUPS,
+            DoctorFindingCode.CLEANUP_RECOMMENDED, DoctorGroup.WORK_GROUPS);
+
+    /**
+     * A finding that existed before the groups: its fix is its recommendation's.
+     */
     private static Map.Entry<DoctorFindingCode, Facts> facts(DoctorFindingCode code, DoctorSeverity severity, DoctorConfidence confidence, String summary, String explanation, String affectedResourceType,
             boolean repairSupported, DoctorRecommendation recommendation) {
-        return Map.entry(code, new Facts(severity, confidence, summary, explanation, affectedResourceType, repairSupported, recommendation));
+        return Map.entry(code, new Facts(severity, confidence, summary, explanation, affectedResourceType, repairSupported, recommendation, EARLIER_GROUPS.getOrDefault(code, DoctorGroup.PROJECT), null));
+    }
+
+    /**
+     * A finding of one of the groups, with the one command or step that resolves it.
+     */
+    private static Map.Entry<DoctorFindingCode, Facts> facts(DoctorGroup group, DoctorFindingCode code, DoctorSeverity severity, DoctorConfidence confidence, String summary, String explanation,
+            String affectedResourceType, DoctorRecommendation recommendation, String fix) {
+        return Map.entry(code, new Facts(severity, confidence, summary, explanation, affectedResourceType, false, recommendation, group, fix));
     }
 
     private static final Map<DoctorFindingCode, Facts> FACTS = Map.ofEntries(
+            facts(DoctorGroup.ENVIRONMENT, DoctorFindingCode.GIT_MISSING, DoctorSeverity.ERROR, DoctorConfidence.CONFIRMED, "Git is not available", "Running 'git --version' failed, so Synesis cannot work with any repository.",
+                    "git", DoctorRecommendation.HUMAN_REVIEW_REQUIRED, "install Git from https://git-scm.com, then open a new terminal and run 'synesis doctor' again"),
+            facts(DoctorGroup.ENVIRONMENT, DoctorFindingCode.AGENT_NOT_ON_PATH, DoctorSeverity.WARNING, DoctorConfidence.SUSPECTED, "A connected agent is not on the PATH",
+                    "The agent connected to this project was not found on the PATH of this terminal; it may still start from where you normally launch it.", "agent", DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                    "install the agent, or add its folder to the PATH, then open a new terminal"),
+            facts(DoctorGroup.ENVIRONMENT, DoctorFindingCode.PROVIDER_FILES_STALE, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED, "A connected agent's Synesis files are out of date",
+                    "The hook, launcher, profile or skill Synesis wrote for the agent is missing or does not match this Synesis.", "provider_config", DoctorRecommendation.PREPARE_REPAIR_PLAN,
+                    "run 'synesis doctor --fix', which writes the agent's managed files again like 'synesis provider install <provider>'"),
+            facts(DoctorGroup.NETWORK, DoctorFindingCode.PROJECT_RUNTIME_NOT_RUNNING, DoctorSeverity.WARNING, DoctorConfidence.SUSPECTED, "The project's runtime is not running",
+                    "This project is shared with another computer, and the installation daemon holds no runtime for it; a runtime started by hand with 'synesis coordination serve' would not show.", "runtime", DoctorRecommendation.PREPARE_REPAIR_PLAN,
+                    "run 'synesis doctor --fix' to start it"),
+            facts(DoctorGroup.NETWORK, DoctorFindingCode.LINK_FIREWALL_MISSING, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED, "No firewall rule lets another computer connect",
+                    "Windows Firewall has no 'Synesis Link' rule, so another computer cannot dial this one.", "firewall", DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                    "run the Synesis installer again with 'Let other computers connect to this one' ticked; 'synesis link invite' prints the exact netsh command"),
+            facts(DoctorGroup.NETWORK, DoctorFindingCode.LINK_FIREWALL_STALE, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED, "The firewall rule names another Synesis version",
+                    "The 'Synesis Link' rule names another version's java.exe, so another computer cannot dial this one.", "firewall", DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                    "run the Synesis installer again with 'Let other computers connect to this one' ticked; 'synesis link invite' prints the exact netsh command"),
+            facts(DoctorGroup.WORK_GROUPS, DoctorFindingCode.OPERATOR_REQUESTS_OPEN, DoctorSeverity.INFO, DoctorConfidence.ADVICE, "The project is waiting for a person",
+                    "One or more operator requests are open: work that stopped until a person answers.", "operator_request", DoctorRecommendation.NO_ACTION, "run 'synesis operator list'"),
             facts(DoctorFindingCode.HEALTHY, DoctorSeverity.INFO, DoctorConfidence.CONFIRMED, "System and repository healthy", "All checked components operate within expected parameters.", "project", false,
                     DoctorRecommendation.NO_ACTION),
             facts(DoctorFindingCode.MISSING_INSTALLED_LAUNCHER, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED, "Missing installed launcher",
-                    "Installed Synesis bin directory does not contain expected launcher script.", "installation", false, DoctorRecommendation.REINSTALL_SYNESIS),
+                    "The installer's Synesis bin directory exists but holds no launcher.", "installation", false, DoctorRecommendation.REINSTALL_SYNESIS),
             facts(DoctorFindingCode.PROJECT_NOT_INITIALIZED, DoctorSeverity.ERROR, DoctorConfidence.CONFIRMED, "Project not initialized", "Directory is missing .synesis/project.json configuration.", "project", false,
                     DoctorRecommendation.HUMAN_REVIEW_REQUIRED),
             facts(DoctorFindingCode.PROJECT_SCHEMA_UNSUPPORTED, DoctorSeverity.ERROR, DoctorConfidence.CONFIRMED, "Project schema unsupported", "Project metadata uses a schema this Synesis build cannot migrate.",
@@ -126,12 +176,27 @@ public final class DoctorService {
     private final SessionLeaseService leaseService;
     private final SessionLeaseStore leaseStore;
     private final ProcessInspector processInspector;
+    private final Supplier<Path> launcherLocation;
+    private final ProviderApplicationService providerService = new ProviderApplicationService();
+    private final BooleanSupplier gitAvailable;
+    private final Predicate<String> executableOnPath;
+    private final NetworkProbe network;
 
     /**
      * Creates a doctor service with default dependencies.
      */
     public DoctorService() {
-        this(new ProjectApplicationService(), new LifecycleInventoryService(), new CleanupEligibilityService(), new SessionLeaseService(), new SessionLeaseStore(), ProcessInspector.system());
+        this(NetworkProbe.UNKNOWN);
+    }
+
+    /**
+     * Creates a doctor service that reads the network of a shared project through the given probe.
+     *
+     * @param network what only the calling process can observe about the runtime and the firewall
+     */
+    public DoctorService(NetworkProbe network) {
+        this(new ProjectApplicationService(), new LifecycleInventoryService(), new CleanupEligibilityService(), new SessionLeaseService(), new SessionLeaseStore(), ProcessInspector.system(),
+                new ProviderApplicationService()::launcherPath, DoctorService::gitStarts, DoctorService::onPath, network);
     }
 
     /**
@@ -150,6 +215,33 @@ public final class DoctorService {
             SessionLeaseService leaseService,
             SessionLeaseStore leaseStore,
             ProcessInspector processInspector) {
+        this(projectService, inventoryService, eligibilityService, leaseService, leaseStore, processInspector, new ProviderApplicationService()::launcherPath);
+    }
+
+    DoctorService(ProjectApplicationService projectService,
+            LifecycleInventoryService inventoryService,
+            CleanupEligibilityService eligibilityService,
+            SessionLeaseService leaseService,
+            SessionLeaseStore leaseStore,
+            ProcessInspector processInspector,
+            Supplier<Path> launcherLocation) {
+        this(projectService, inventoryService, eligibilityService, leaseService, leaseStore, processInspector, launcherLocation, DoctorService::gitStarts, DoctorService::onPath, NetworkProbe.UNKNOWN);
+    }
+
+    DoctorService(ProjectApplicationService projectService,
+            LifecycleInventoryService inventoryService,
+            CleanupEligibilityService eligibilityService,
+            SessionLeaseService leaseService,
+            SessionLeaseStore leaseStore,
+            ProcessInspector processInspector,
+            Supplier<Path> launcherLocation,
+            BooleanSupplier gitAvailable,
+            Predicate<String> executableOnPath,
+            NetworkProbe network) {
+        this.gitAvailable = Objects.requireNonNull(gitAvailable, "gitAvailable");
+        this.executableOnPath = Objects.requireNonNull(executableOnPath, "executableOnPath");
+        this.network = Objects.requireNonNull(network, "network");
+        this.launcherLocation = Objects.requireNonNull(launcherLocation, "launcherLocation");
         this.projectService = Objects.requireNonNull(projectService, "projectService");
         this.inventoryService = Objects.requireNonNull(inventoryService, "inventoryService");
         this.eligibilityService = Objects.requireNonNull(eligibilityService, "eligibilityService");
@@ -163,6 +255,13 @@ public final class DoctorService {
      * per-instance details.
      */
     private static DoctorFinding finding(DoctorFindingCode code, String fingerprintSeed, Map<String, String> details) {
+        return finding(code, fingerprintSeed, details, null);
+    }
+
+    /**
+     * @param fix what a person does about this instance, or {@code null} for the code's own fix
+     */
+    private static DoctorFinding finding(DoctorFindingCode code, String fingerprintSeed, Map<String, String> details, String fix) {
         Facts facts = Objects.requireNonNull(FACTS.get(code), () -> "no facts for " + code);
         return new DoctorFinding(code,
                 facts.severity(),
@@ -173,7 +272,9 @@ public final class DoctorService {
                 facts.repairSupported(),
                 facts.recommendation(),
                 Sha256.hex(fingerprintSeed),
-                details);
+                details,
+                facts.group(),
+                fix != null ? fix : facts.fix() != null ? facts.fix() : facts.recommendation().fix());
     }
 
     private static DoctorFinding finding(DoctorFindingCode code, String fingerprintSeed) {
@@ -210,6 +311,17 @@ public final class DoctorService {
 
         checkProviderConfiguration(root, findings);
 
+        checkGit(findings);
+
+        if (projectIdStr != null) {
+            checkConnectedProviders(root, findings);
+        }
+
+        boolean shared = Files.exists(root.resolve(".synesis/coordination").resolve(ReplicationSettings.FILE));
+        if (shared) {
+            checkNetwork(root, findings);
+        }
+
         if (findings.isEmpty()) {
             findings.add(finding(DoctorFindingCode.HEALTHY, "healthy"));
         }
@@ -234,22 +346,108 @@ public final class DoctorService {
         boolean reconcRec = findings.stream().anyMatch(f -> f.code() == DoctorFindingCode.STALE_SESSION_LEASE);
         boolean repairAvail = findings.stream().anyMatch(DoctorFinding::repairSupported);
 
-        return new DoctorReport(1, reportId, projectIdStr != null ? projectIdStr : "unbound", now, status, critical, errors, warnings, info, cleanupRec, reconcRec, repairAvail, Collections.unmodifiableList(findings));
+        return new DoctorReport(1, reportId, projectIdStr != null ? projectIdStr : "unbound", now, status, critical, errors, warnings, info, cleanupRec, reconcRec, repairAvail, Collections.unmodifiableList(findings), shared);
     }
 
-    private void checkInstallationAndRuntime(List<DoctorFinding> findings) {
-        String userHome = System.getProperty("user.home");
-        if (userHome != null) {
-            Path synesisBin = Path.of(userHome, ".synesis", "bin");
-            if (Files.isDirectory(synesisBin)) {
-                Path launcherFile = synesisBin.resolve("synesis.bat");
-                if (!Files.exists(launcherFile)) {
-                    launcherFile = synesisBin.resolve("synesis");
-                }
-                if (!Files.exists(launcherFile)) {
-                    findings.add(finding(DoctorFindingCode.MISSING_INSTALLED_LAUNCHER, "missing_launcher"));
+    private void checkGit(List<DoctorFinding> findings) {
+        if (!gitAvailable.getAsBoolean()) {
+            findings.add(finding(DoctorFindingCode.GIT_MISSING, "git_missing"));
+        }
+    }
+
+    /**
+     * Looks at each provider connected to the project, which is one with saved state in it: whether its executable is on
+     * the {@code PATH} of this process (suspected only, since the agent may be started from elsewhere), and whether the
+     * files Synesis wrote for it are intact. A provider with real-agent validation pending is not stale for that: it is
+     * judged by what the status check inspected, not by its state name. No file is read that holds a credential.
+     */
+    private void checkConnectedProviders(Path root, List<DoctorFinding> findings) {
+        ProjectLocation location;
+        try {
+            location = projectService.locate(root);
+        } catch (Exception unreadable) {
+            return;
+        }
+        for (ProviderApplicationService.ProviderRow row : providerService.list(location)) {
+            if (!"INSTALLED".equals(row.status())) {
+                continue;
+            }
+            Map<String, String> details = Map.of("provider", row.id());
+            if (!executableOnPath.test(row.id())) {
+                findings.add(finding(DoctorFindingCode.AGENT_NOT_ON_PATH, "agent_not_on_path_" + row.id(), details,
+                        "install " + row.id() + ", or add its folder to the PATH, then open a new terminal"));
+            }
+            if (filesStale(providerService.status(location, row.id()).values())) {
+                findings.add(finding(DoctorFindingCode.PROVIDER_FILES_STALE, "provider_files_stale_" + row.id(), details,
+                        "run 'synesis doctor --fix', which writes " + row.id() + "'s managed files again like 'synesis provider install " + row.id() + "'"));
+            }
+        }
+    }
+
+    private static boolean filesStale(Map<String, String> status) {
+        String state = status.get("PROVIDER_STATUS");
+        return "BROKEN".equals(state) || status.containsKey("ERROR") || "DEGRADED".equals(state) && "NOT_RUN".equals(status.get("SYNTHETIC_BLOCK_CHECK"));
+    }
+
+    private void checkNetwork(Path root, List<DoctorFinding> findings) {
+        if (network.runtimeRunning(root).filter(running -> !running).isPresent()) {
+            findings.add(finding(DoctorFindingCode.PROJECT_RUNTIME_NOT_RUNNING, "project_runtime_not_running"));
+        }
+        network.firewall().ifPresent(problem -> findings.add(problem == NetworkProbe.Firewall.MISSING
+                ? finding(DoctorFindingCode.LINK_FIREWALL_MISSING, "link_firewall_missing") : finding(DoctorFindingCode.LINK_FIREWALL_STALE, "link_firewall_stale")));
+    }
+
+    private static boolean gitStarts() {
+        try {
+            Process process = new ProcessBuilder("git", "--version").redirectErrorStream(true).start();
+            process.getOutputStream().close();
+            process.getInputStream().readAllBytes();
+            if (!process.waitFor(10, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                return false;
+            }
+            return process.exitValue() == 0;
+        } catch (IOException failure) {
+            return false;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
+    /**
+     * Whether a program of this name sits in a {@code PATH} directory, with the extensions Windows starts.
+     */
+    private static boolean onPath(String program) {
+        String path = System.getenv("PATH");
+        if (path == null) {
+            return false;
+        }
+        boolean windows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+        for (String directory : path.split(java.io.File.pathSeparator)) {
+            if (directory.isBlank()) {
+                continue;
+            }
+            for (String name : windows ? List.of(program + ".exe", program + ".cmd", program + ".bat") : List.of(program)) {
+                Path candidate = Path.of(directory, name);
+                if (Files.isRegularFile(candidate) && (windows || Files.isExecutable(candidate))) {
+                    return true;
                 }
             }
+        }
+        return false;
+    }
+
+    /**
+     * Reports an installation whose launcher is gone. The launcher is looked for where provider hooks run it from
+     * (the {@code PATH}, a configured one, then the installer's own {@code Synesis/bin}); when none exists the answer is
+     * a path inside the installer's directory, and only an existing directory there means an installation that lost
+     * its launcher, so a machine with no installation is not reported.
+     */
+    private void checkInstallationAndRuntime(List<DoctorFinding> findings) {
+        Path launcher = launcherLocation.get();
+        if (!Files.isRegularFile(launcher) && launcher.getParent() != null && Files.isDirectory(launcher.getParent())) {
+            findings.add(finding(DoctorFindingCode.MISSING_INSTALLED_LAUNCHER, "missing_launcher"));
         }
     }
 
@@ -282,8 +480,9 @@ public final class DoctorService {
         if (Files.isDirectory(coordDir)) {
             try {
                 UUID pId = UUID.fromString(projectIdStr);
-                new PredictionEventStore(coordDir, pId);
+                PredictionEventStore store = new PredictionEventStore(coordDir, pId);
                 // If loaded without exception, store signatures & chain are verified
+                checkOperatorRequests(store, findings);
             } catch (Exception ex) {
                 DoctorFindingCode failureCode = DoctorFindingCode.classifyDurableStateFailure(ex);
                 if (failureCode == DoctorFindingCode.EVENT_LOG_VERIFICATION_FAILURE) {
@@ -292,6 +491,21 @@ public final class DoctorService {
                     findings.add(finding(failureCode, "durable_ambiguous"));
                 }
             }
+        }
+    }
+
+    /**
+     * Advice, not a defect: an open operator request is work waiting for a person. A projection that cannot be read adds
+     * nothing here, since the store was just verified.
+     */
+    private static void checkOperatorRequests(PredictionEventStore store, List<DoctorFinding> findings) {
+        try {
+            int open = store.operatorRequestProjection().open().size();
+            if (open > 0) {
+                findings.add(finding(DoctorFindingCode.OPERATOR_REQUESTS_OPEN, "operator_requests_open", Map.of("open", Integer.toString(open))));
+            }
+        } catch (RuntimeException unreadable) {
+            // Left to the durable-state findings.
         }
     }
 

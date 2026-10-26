@@ -133,6 +133,27 @@ public final class ProviderSessionTerminalizationService {
         return hasPendingRequest(store, participant, intentIds) || hasOpenGrant(store, participant, intentIds);
     }
 
+    /**
+     * Returns whether one participant holds a review grant it has not finished for a snapshot that another computer's
+     * agent published: the review that only that computer's code can complete, and the one a reader of the snapshot is
+     * refused with {@code CODE_REMOTE_UNAVAILABLE} while the Link is down. The grant is judged by the projection's one
+     * rule for what a grant still obliges ({@code grantUnresolved}), as {@link #holdsRequestOrGrant} judges it.
+     *
+     * @param store       current project projection
+     * @param participant exact participant handle of the session
+     * @param thisNode    this computer's node ID
+     * @return {@code true} while it holds such a grant
+     */
+    public static boolean holdsReviewOfAnotherComputer(PredictionEventStore store, String participant, String thisNode) {
+        for (LaneGrant grant : store.workGroupProjection().grants()) {
+            if (grant.targetParticipant().equals(participant) && store.workGroupProjection().grantUnresolved(grant.identity())
+                    && grant.snapshot().flatMap(store.taskCompletionProjection()::findSnapshotById).map(snapshot -> !snapshot.nodeId().equals(thisNode)).orElse(false)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static Set<String> terminalBlockers(PredictionEventStore store, ProviderSessionBindingService.Binding binding, String participant) {
         Set<String> blockers = new LinkedHashSet<>();
         List<WorkIntent> intents = store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participant)).toList();
@@ -177,8 +198,10 @@ public final class ProviderSessionTerminalizationService {
     private static boolean hasOpenGrant(PredictionEventStore store, String participant, Set<java.util.UUID> intentIds) {
         for (LaneGrant grant : store.workGroupProjection().grants()) {
             boolean exact = grant.targetParticipant().equals(participant) || intentIds.contains(grant.targetIntentId());
-            if (exact && !store.workGroupProjection().grantSuperseded(grant.grantId()) && (store.workGroupProjection().grantAvailable(grant.grantId()) || (store.workGroupProjection().grantConsumed(grant.grantId())
-                    && store.workGroupProjection().reviewValidationForGrant(grant.grantId()).isEmpty()))) {
+            // The projection's one rule for what a grant still obliges. A revoked grant is finished (its review was
+            // released to another reviewer), and a continuation grant is no review at all: it restores a lane, takes
+            // no verdict, and counted here it held a successor's session open for ever.
+            if (exact && store.workGroupProjection().grantUnresolved(grant.identity())) {
                 return true;
             }
         }

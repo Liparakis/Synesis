@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
@@ -35,9 +36,14 @@ import org.synesis.coordination.persistence.ProjectAppendLock;
 import org.synesis.link.identity.NodeIdentity;
 
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.control.MainMeeting;
 import org.synesis.workspace.application.integration.IntegrationValidationRefusalTest.Project;
 import org.synesis.workspace.application.project.execution.ProjectProcessExecutor;
+import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
+import org.synesis.workspace.lifecycle.lease.SessionSuccessions;
+import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
  * The re-merge of two diverged copies of {@code main} (ADR-0098 step 5, designer items 13 to 15): which computer acts,
@@ -46,8 +52,10 @@ import org.synesis.workspace.application.project.execution.ProjectProcessExecuto
  */
 class RemergeServiceTest {
 
-    private static final String AUTHOR = "agt-author";
-    private static final String REVIEWER = "agt-reviewer";
+    private static final String AUTHOR_SESSION = "session-author";
+    private static final String REVIEWER_SESSION = "session-reviewer";
+    private static final String AUTHOR = WorkspaceCollaborationService.participantHandle(AUTHOR_SESSION);
+    private static final String REVIEWER = WorkspaceCollaborationService.participantHandle(REVIEWER_SESSION);
 
     @TempDir
     Path temp;
@@ -176,7 +184,17 @@ class RemergeServiceTest {
 
     /** The other computer advanced its main from the base to {@code head}; its entry arrives here as a copy of its log. */
     private void otherAdvance(NodeIdentity other, String head) throws Exception {
+        otherAdvance(other, head, false);
+    }
+
+    private void otherAdvance(NodeIdentity other, String head, boolean introducingReviewer) throws Exception {
         PredictionEventStore theirs = new PredictionEventStore(temp.resolve("other-" + other.nodeId()), project.location.projectId());
+        if (introducingReviewer) {
+            UUID theirLane = UUID.randomUUID();
+            assertTrue(new WorkIntentService(theirs, other).announce(new WorkIntent(theirLane, project.location.projectId(), REVIEWER, "codex", UUID.randomUUID(), "review",
+                    "acceptance", base, List.of(ResourceSelector.pathExact("elsewhere.txt")), 1, UUID.randomUUID(), WorkIntent.defaultAuthorityLineage(theirLane),
+                    WorkIntent.Status.ANNOUNCED)).acquired());
+        }
         theirs.append(UUID.randomUUID(), PredictionEventType.CONTROL_BRANCH_ADVANCED, other.nodeId(),
                 new IntegrationAttemptPayload("att_" + head.substring(0, 8), project.location.projectId(), List.of(), base, head, "advanced", "")
                         .encode(), other);
@@ -249,6 +267,196 @@ class RemergeServiceTest {
         assertEquals(own, project.head());
     }
 
+    /**
+     * A producer of this computer, its participant named by its session, with a lane open and, when {@code live}, a
+     * live session lease here.
+     */
+    private String producerHere(String session, String path, boolean live) throws Exception {
+        String participant = WorkspaceCollaborationService.participantHandle(session);
+        UUID lane = UUID.randomUUID();
+        WorkIntent intent = new WorkIntent(lane, project.location.projectId(), participant, "codex", UUID.randomUUID(), "implement", "acceptance", base,
+                List.of(ResourceSelector.pathExact(path)), 1, UUID.randomUUID(), WorkIntent.defaultAuthorityLineage(lane), WorkIntent.Status.ANNOUNCED);
+        assertTrue(new WorkIntentService(store, self).announce(intent).acquired());
+        if (live) {
+            new SessionLeaseService().createOrRenewLease(project.root, project.location.projectId().toString(), "codex", "conn-" + session, self.nodeId(), session,
+                    new SessionLeasePolicy());
+        }
+        return participant;
+    }
+
+    /**
+     * Designer item 2: the reviewer who accepted the original cannot be reached, so its re-merge grant was released.
+     * The next pass offers the re-merge to another agent of this computer that is live and not the author, once.
+     */
+    @Test
+    void aReMergeWhoseReviewerWasReleasedIsOfferedToAnotherLiveNonAuthorHere() throws Exception {
+        NodeIdentity other = lowerNode();
+        Lane lane = lane("snap_a", "own.txt", true);
+        String own = ownMain("own.txt", "own");
+        ownAdvance(base, own, lane.snapshotId());
+        String otherHead = commit("other", base, "other.txt", "other");
+        otherAdvance(other, otherHead);
+        run();
+        String rms = built(otherHead, own).snapshot().snapshotId();
+        LaneGrant first = grantFor(rms);
+        assertEquals(REVIEWER, first.targetParticipant());
+        String gone = producerHere("session-gone-producer", "gone.txt", false);
+        String live = producerHere("session-live-producer", "live.txt", true);
+        run();
+        assertEquals(1, grants().stream().filter(grant -> rms.equals(grant.snapshotId())).count(), "a held re-merge review is offered to nobody else");
+
+        assertTrue(new WorkGroupService(project.store(), self).revokeStalledReview(first.identity()));
+        run();
+        run();
+
+        List<LaneGrant> offered = grants().stream().filter(grant -> rms.equals(grant.snapshotId())).toList();
+        assertEquals(2, offered.size(), "one more grant, written once: " + offered);
+        assertEquals(live, offered.get(1).targetParticipant(), "the live agent here, not " + gone + " whose session is gone, nor the author");
+        assertNotEquals(first.grantId(), offered.get(1).grantId());
+    }
+
+    private void liveSession(String session) throws Exception {
+        new SessionLeaseService().createOrRenewLease(project.root, project.location.projectId().toString(), "codex", "conn-" + session, self.nodeId(), session,
+                new SessionLeasePolicy());
+    }
+
+    /** A session name whose handle sorts before {@code handle}, so that only a rule other than the order can choose another. */
+    private static String sessionSortingBefore(String handle) {
+        for (int i = 0; ; i++) {
+            String session = "session-decoy-" + i;
+            if (WorkspaceCollaborationService.participantHandle(session).compareTo(handle) < 0) {
+                return session;
+            }
+        }
+    }
+
+    /** The re-merge of one own lane that needed review, built, with its first grant on the log; returns its re-merge snapshot ID. */
+    private String builtReMerge() throws Exception {
+        return builtReMerge(lowerNode(), false);
+    }
+
+    /** As {@link #builtReMerge()}; with {@code reviewerElsewhere} the other computer's log introduces the original reviewer. */
+    private String builtReMerge(NodeIdentity other, boolean reviewerElsewhere) throws Exception {
+        Lane lane = lane("snap_a", "own.txt", true);
+        String own = ownMain("own.txt", "own");
+        ownAdvance(base, own, lane.snapshotId());
+        String otherHead = commit("other", base, "other.txt", "other");
+        otherAdvance(other, otherHead, reviewerElsewhere);
+        run();
+        remergeId = RemergeService.remergeId(otherHead, own);
+        builtOtherHead = otherHead;
+        return built(otherHead, own).snapshot().snapshotId();
+    }
+
+    private String remergeId;
+    private String builtOtherHead;
+
+    private long grantsOn(String rms) throws Exception {
+        return grants().stream().filter(grant -> rms.equals(grant.snapshotId())).count();
+    }
+
+    /**
+     * Defect 2 of the scripted scenarios: the reviewer's agent refreshed its workspace and its connection went on to a fresh
+     * session with no lane on the log. The released review is owed to that session, ahead of another live agent that sorts
+     * first.
+     */
+    @Test
+    void aReleasedReMergeReviewGoesToTheSessionThatReplacedTheReviewersWhateverItsLaneAndOrder() throws Exception {
+        String rms = builtReMerge();
+        String successor = "session-reviewer-2";
+        String successorHandle = WorkspaceCollaborationService.participantHandle(successor);
+        String decoy = sessionSortingBefore(successorHandle);
+        SessionSuccessions.record(project.root, REVIEWER_SESSION, successor);
+        liveSession(successor);
+        liveSession(decoy);
+
+        assertTrue(new WorkGroupService(project.store(), self).revokeStalledReview(grantFor(rms).identity()));
+        run();
+        run();
+
+        List<LaneGrant> offered = grants().stream().filter(grant -> rms.equals(grant.snapshotId())).toList();
+        assertEquals(2, offered.size(), "one more grant, written once: " + offered);
+        assertEquals(successorHandle, offered.get(1).targetParticipant());
+    }
+
+    @Test
+    void aReleasedReMergeReviewIsNeverOfferedToTheSessionThatReplacedTheAuthors() throws Exception {
+        String rms = builtReMerge();
+        SessionSuccessions.record(project.root, AUTHOR_SESSION, "session-author-2");
+        liveSession("session-author-2");
+
+        assertTrue(new WorkGroupService(project.store(), self).revokeStalledReview(grantFor(rms).identity()));
+        run();
+        run();
+
+        assertEquals(1, grantsOn(rms), "the author's next session may not review the author's work");
+    }
+
+    /**
+     * The reviewer who accepted the original is another computer's agent, which is connected but runs no agent: only a
+     * live agent here can take the review, so it is offered to that agent first, and to the original reviewer only when
+     * there is none.
+     */
+    @Test
+    void aReMergeReviewOwedToAnotherComputersAgentGoesToALiveAgentHereWhenThereIsOne() throws Exception {
+        NodeIdentity other = lowerNode();
+        liveSession("session-idle-here");
+
+        String rms = builtReMerge(other, true);
+
+        assertEquals(WorkspaceCollaborationService.participantHandle("session-idle-here"), grantFor(rms).targetParticipant());
+    }
+
+    /**
+     * s5-run16 (ADR-0098 step 5, item 30): with two agents on a computer, the holder of the combine lane of this re-merge may be the
+     * only one that did not write a lane under review. It is shown the grant while its lane waits for the re-merge, so it is offered
+     * the review when no other agent may take it.
+     */
+    @Test
+    void aReleasedReMergeReviewIsOfferedToTheHolderOfACombineLaneOfThatReMergeWhenNoOtherAgentMayTakeIt() throws Exception {
+        String rms = builtReMerge();
+        String holder = combineHolder(rms);
+
+        assertTrue(new WorkGroupService(project.store(), self).revokeStalledReview(grantFor(rms).identity()));
+        run();
+        run();
+
+        assertEquals(2, grantsOn(rms), "the combiner is the only live agent, and is offered it");
+        assertTrue(project.store().workGroupProjection().grants().stream().anyMatch(grant -> rms.equals(grant.snapshotId()) && holder.equals(grant.targetParticipant())));
+    }
+
+    /** The holder is the last resort: another live agent that may review the lane is offered it first, whatever their handles. */
+    @Test
+    void aReleasedReMergeReviewIsOfferedToAnotherLiveAgentBeforeTheHolderOfACombineLane() throws Exception {
+        String rms = builtReMerge();
+        String holder = combineHolder(rms);
+        String otherSession = "session-zzz-other";
+        liveSession(otherSession);
+
+        assertTrue(new WorkGroupService(project.store(), self).revokeStalledReview(grantFor(rms).identity()));
+        run();
+        run();
+
+        assertEquals(2, grantsOn(rms));
+        assertTrue(project.store().workGroupProjection().grants().stream().anyMatch(grant -> rms.equals(grant.snapshotId())
+                && WorkspaceCollaborationService.participantHandle(otherSession).equals(grant.targetParticipant())), "offered to the agent that holds no combine lane");
+        assertTrue(project.store().workGroupProjection().grants().stream().noneMatch(grant -> rms.equals(grant.snapshotId()) && holder.equals(grant.targetParticipant())));
+    }
+
+    /** Announces a combine lane of the re-merge for a live session and returns its participant handle. */
+    private String combineHolder(String rms) throws Exception {
+        CombinePayload combine = new CombinePayload("cb-test", remergeId, builtOtherHead, "b".repeat(40), base, "c".repeat(40), List.of("snap_a"));
+        store.append(UUID.randomUUID(), PredictionEventType.COMBINE_REQUIRED, self.nodeId(), combine.encode(), self);
+        String holderSession = "session-combiner";
+        String holder = WorkspaceCollaborationService.participantHandle(holderSession);
+        UUID combineLane = UUID.randomUUID();
+        assertTrue(new WorkIntentService(store, self).announce(new WorkIntent(combineLane, project.location.projectId(), holder, "codex", UUID.randomUUID(), "implement",
+                "acceptance", base, List.of(ResourceSelector.pathExact("combined.txt")), 1, combine.workGroupId(), WorkIntent.defaultAuthorityLineage(combineLane),
+                WorkIntent.Status.ANNOUNCED)).acquired());
+        liveSession(holderSession);
+        return holder;
+    }
+
     @Test
     void onceTheReMergeSnapshotIsAcceptedTheNextPassMovesMainForwardAndTheOtherComputersAuditTakesIt() throws Exception {
         NodeIdentity other = lowerNode();
@@ -299,7 +507,7 @@ class RemergeServiceTest {
     }
 
     /** Both copies added {@code shared.txt}: Git cannot merge this copy's one advance onto the other head. */
-    private record Conflict(Lane lane, String own, String otherHead) {
+    private record Conflict(Lane lane, String own, String otherHead, NodeIdentity other) {
     }
 
     private Conflict conflict() throws Exception {
@@ -310,7 +518,7 @@ class RemergeServiceTest {
         ownAdvance(base, own, lane.snapshotId());
         String otherHead = commit("other", base, "shared.txt", "other side");
         otherAdvance(other, otherHead);
-        return new Conflict(lane, own, otherHead);
+        return new Conflict(lane, own, otherHead, other);
     }
 
     /** The merge pass released the author's lane when it integrated it, which frees the paths it claimed. */
@@ -381,6 +589,96 @@ class RemergeServiceTest {
 
         assertEquals(entries + 2, project.store().events().size(), "later runs write nothing more");
         assertEquals(conflict.own(), project.head());
+    }
+
+    /**
+     * s5-run18: while a combine waited, an ordinary lane landed on this copy, so the re-merge's ID changed and the next pass
+     * opened a second combine for the same snapshot. The combine is about the other head and the advance, so it is found again.
+     */
+    @Test
+    void anOrdinaryAdvanceOfThisCopyWhileACombineWaitsOpensNoSecondCombineAndTheNewReMergeUsesTheFirst() throws Exception {
+        Conflict conflict = conflict();
+        run();
+        CombinePayload combine = combine();
+        Lane combiner = combineLane(combine);
+        Lane ordinary = lane("snap_ordinary", "ordinary.txt", false);
+        String moved = commit("ordinary-advance", conflict.own(), "ordinary.txt", "an ordinary lane");
+        project.git("merge", "-q", "--ff-only", moved);
+        ownAdvance(conflict.own(), moved, ordinary.snapshotId());
+        int entries = project.store().events().size();
+
+        run();
+        run();
+
+        assertEquals(entries, project.store().events().size(), "the combine is waited for: nothing new is written, in particular no second COMBINE_REQUIRED");
+        assertEquals(combine, combine(), "still the one combine");
+        assertEquals(1, events(PredictionEventType.COMBINE_REQUIRED).size());
+
+        combineSnapshot(combine, combiner, "snap_combine", 1, false);
+        run();
+
+        assertEquals(1, project.store().taskCompletionProjection().remerge(RemergeService.remergeId(conflict.otherHead(), moved)).size(),
+                "the re-merge of the moved copy is built with the one combine's result, and its one lane needing review waits for its reviewer");
+        assertEquals(1, project.store().taskCompletionProjection().combines().size());
+    }
+
+    /**
+     * s5-run19: the other copy goes on integrating while the combine waits, so each of its new heads named a new re-merge
+     * that opened another combine for the same advance (three for one snapshot). The combine is about the advance: one is
+     * opened however often the other head moves, and its result, made on the first other head, is merged with the last.
+     */
+    @Test
+    void theOtherCopyMovingWhileACombineWaitsOpensNoSecondCombineAndTheResultIsMergedWithItsNewestHead() throws Exception {
+        Conflict conflict = conflict();
+        run();
+        CombinePayload combine = combine();
+        Lane combiner = combineLane(combine);
+        String second = commit("other-second", conflict.otherHead(), "later-1.txt", "the other copy, later");
+        otherAdvance(conflict.other(), second);
+        run();
+        String third = commit("other-third", second, "later-2.txt", "the other copy, later still");
+        otherAdvance(conflict.other(), third);
+        run();
+        run();
+
+        assertEquals(1, events(PredictionEventType.COMBINE_REQUIRED).size(), "one combine for one conflicting advance");
+        assertEquals(combine, combine());
+
+        String combined = combineSnapshot(combine, combiner, "snap_combine", 1, false);
+        run();
+
+        RemergeSnapshotPayload remerge = built(third, conflict.own());
+        String result = remerge.result();
+        assertTrue(GitProcessRunner.isAncestor(project.root, third, result), "the result holds the other copy's newest head");
+        assertEquals(project.git("show", combined + ":shared.txt"), project.git("show", result + ":shared.txt"), "and the combine lane's file");
+        assertEquals(1, events(PredictionEventType.COMBINE_REQUIRED).size());
+    }
+
+    /**
+     * An advance with a combine that waits for its lane is merged by Git once the other copy has taken an equivalent
+     * change, and the combine's work group is cancelled when nothing diverges any more.
+     */
+    @Test
+    void aCombineWhoseConflictTheOtherCopyResolvedItselfIsMergedByGitAndItsGroupIsCancelled() throws Exception {
+        Conflict conflict = conflict();
+        run();
+        CombinePayload combine = combine();
+        String same = commit("other-same", conflict.otherHead(), "shared.txt", "own side");
+        otherAdvance(conflict.other(), same);
+
+        run();
+
+        assertEquals(1, events(PredictionEventType.COMBINE_REQUIRED).size(), "no second combine");
+        RemergeSnapshotPayload remerge = built(same, conflict.own());
+        verdict(conflict.lane(), remerge.snapshot().snapshotId(), grantFor(remerge.snapshot().snapshotId()), "ACCEPTED");
+        run();
+        assertEquals(remerge.result(), project.head(), "Git's merge landed");
+        assertEquals(WorkGroup.Status.ACTIVE, project.store().workGroupProjection().group(combine.workGroupId()).orElseThrow().status(),
+                "the pass that landed it does not close the combine");
+
+        run();
+
+        assertEquals(WorkGroup.Status.CANCELLED, project.store().workGroupProjection().group(combine.workGroupId()).orElseThrow().status());
     }
 
     @Test

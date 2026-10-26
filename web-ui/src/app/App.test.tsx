@@ -837,3 +837,100 @@ describe("shared project invitations", () => {
     expect(screen.queryByRole("group", {name: "Computers waiting to join"})).not.toBeInTheDocument();
   });
 });
+
+describe("the coordination view", () => {
+  const original = {claims: mockSnapshot.claims, workgroups: mockSnapshot.workgroups};
+  const checkerClaim = {intentId: "intent-checker-03", participant: "test-runner-03", workGroupId: "wg-type-checker", role: "executor", state: "CLAIM_HELD", selectors: [{kind: "file", value: "src/types"}], conflicts: []};
+
+  beforeEach(() => {
+    mockSnapshot.claims = [...original.claims, checkerClaim];
+  });
+
+  afterEach(() => {
+    mockSnapshot.claims = original.claims;
+    mockSnapshot.workgroups = original.workgroups;
+  });
+
+  async function openProjectView(user: ReturnType<typeof userEvent.setup>, view: string) {
+    window.history.replaceState(null, "", "/projects?mock=1");
+    render(<App/>);
+    await screen.findByRole("button", {name: "Add project"});
+    await user.click(screen.getByRole("button", {name: "Open project"}));
+    await user.click(within(screen.getByRole("navigation", {name: "Project views"})).getByRole("button", {name: view}));
+  }
+
+  async function openTab(user: ReturnType<typeof userEvent.setup>, tab: string) {
+    await user.click(within(screen.getByRole("navigation", {name: "Coordination records"})).getByRole("button", {name: tab}));
+  }
+
+  it("shows the claims and tasks of the selected WorkGroup only", async () => {
+    const user = userEvent.setup();
+    await openProjectView(user, "Coordination");
+
+    expect(screen.getByRole("row", {name: /intent-planner-01/})).toBeInTheDocument();
+    expect(screen.getByRole("row", {name: /intent-executor-02/})).toBeInTheDocument();
+    expect(screen.queryByRole("row", {name: /intent-checker-03/})).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", {name: /wg-type-checker/}));
+    expect(screen.getByRole("heading", {name: "wg-type-checker"})).toBeInTheDocument();
+    expect(screen.getByRole("row", {name: /intent-checker-03/})).toBeInTheDocument();
+    expect(screen.queryByRole("row", {name: /intent-planner-01/})).not.toBeInTheDocument();
+
+    // task-001 is the current work of wg-backend-refactor's agent; task-002 is paired with no WorkGroup and stays visible.
+    await openTab(user, "Tasks");
+    expect(screen.queryByRole("row", {name: /task-001/})).not.toBeInTheDocument();
+    expect(screen.getByRole("row", {name: /task-002/})).toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: /wg-backend-refactor/}));
+    expect(screen.getByRole("row", {name: /task-001/})).toBeInTheDocument();
+  });
+
+  it("says which tabs belong to the whole project", async () => {
+    const user = userEvent.setup();
+    await openProjectView(user, "Coordination");
+    expect(screen.queryByText(/belong to the whole project/)).not.toBeInTheDocument();
+    await openTab(user, "Capabilities");
+    expect(screen.getByText(/belong to the whole project/)).toBeInTheDocument();
+  });
+
+  it("opens the details of the picked record, the first one until a pick", async () => {
+    const user = userEvent.setup();
+    await openProjectView(user, "Coordination");
+
+    await user.click(screen.getByRole("button", {name: "View details"}));
+    expect(within(screen.getByRole("dialog")).getByRole("heading", {name: "intent-planner-01"})).toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "Close claim detail"}));
+
+    await user.click(screen.getByRole("row", {name: /intent-executor-02/}));
+    expect(screen.getByRole("row", {name: /intent-executor-02/})).toHaveAttribute("aria-selected", "true");
+    await user.click(screen.getByRole("button", {name: "View details"}));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("heading", {name: "intent-executor-02"})).toBeInTheDocument();
+    expect(within(dialog).getByText("code-executor-02")).toBeInTheDocument();
+    expect(within(dialog).queryByText("intent-planner-01")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "Close claim detail"}));
+
+    await openTab(user, "Tasks");
+    const row = screen.getByRole("row", {name: /task-002/});
+    row.focus();
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByRole("button", {name: "View details"}));
+    expect(within(screen.getByRole("dialog")).getByRole("heading", {name: "task-002"})).toBeInTheDocument();
+  });
+
+  it("names an action when the project has no WorkGroup, on the overview and on the coordination view", async () => {
+    mockSnapshot.workgroups = [];
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/projects?mock=1");
+    render(<App/>);
+    await screen.findByRole("button", {name: "Add project"});
+    await user.click(screen.getByRole("button", {name: "Open project"}));
+
+    expect(screen.getByRole("heading", {name: "No WorkGroups yet"})).toBeInTheDocument();
+    expect(screen.getByText(/synesis agents run --agent claude --prompt/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", {name: "Open agents"}));
+    expect(screen.getByRole("heading", {name: "Agents"})).toBeInTheDocument();
+
+    await user.click(within(screen.getByRole("navigation", {name: "Project views"})).getByRole("button", {name: "Coordination"}));
+    expect(screen.getByText(/A WorkGroup appears when an agent announces work/)).toBeInTheDocument();
+  });
+});

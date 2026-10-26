@@ -128,12 +128,15 @@ export interface TaskSnapshot {
   title: string;
   capability: string;
   owner: string;
+  /** The WorkGroup its lanes work in, when exactly one is known. */
+  workGroupId?: string | null;
 }
 
 /** A snapshot whose reviewers disagreed: open while its state is review_disputed, otherwise the state says how it ended. */
 export interface DisputeSnapshot {
   snapshotId: string;
   taskId?: string;
+  workGroupId?: string | null;
   author?: string;
   verdicts: Record<string, string>;
   state: string;
@@ -155,6 +158,7 @@ export interface TrashSnapshot {
 export interface OwnershipSnapshot {
   capability: string;
   taskId: string;
+  workGroupId?: string | null;
   owner: string;
   protectedScopes: string[];
   intentVersion: number;
@@ -221,6 +225,12 @@ export interface NetworkSnapshot {
 
 export interface DiagnosticFinding {
   code: string;
+  /** The part of the setup it is about: project, environment, network or work_groups. */
+  group?: string;
+  /** How sure the doctor is: confirmed, suspected or advice. */
+  mark?: string;
+  /** One command or step a person can take. */
+  fix?: string;
   severity: string;
   confidence: string;
   summary: string;
@@ -246,6 +256,40 @@ export interface DiagnosticsSnapshot {
   findings: DiagnosticFinding[];
 }
 
+/** One computer of a shared project. state is SELF, CONNECTED, DISCONNECTED (away) or RUNTIME_STOPPED. */
+export interface MemberSnapshot {
+  nodeId: string;
+  self: boolean;
+  owner: boolean;
+  state: string;
+  since: string | null;
+  lastReceived: string | null;
+}
+
+/** Who belongs to the project; `members` is empty for a project on one computer. */
+/** A set of agents the project's runtime started for the page, with what it last printed. */
+export interface AgentRunSnapshot {
+  id: string;
+  state: string;
+  agents: string[];
+  recent: string[];
+}
+
+/** One agent to start: an installed provider, and optionally the model and effort to run it with. */
+export interface AgentChoice {
+  provider: string;
+  model?: string;
+  effort?: string;
+}
+
+export interface MembershipSnapshot {
+  shared: boolean;
+  owner: string | null;
+  self: string | null;
+  selfIsOwner: boolean;
+  members: MemberSnapshot[];
+}
+
 export interface Snapshot {
   apiVersion: string;
   runtime: RuntimeSnapshot;
@@ -262,6 +306,8 @@ export interface Snapshot {
   disputes: DisputeSnapshot[];
   trash: TrashSnapshot[];
   ownerships: OwnershipSnapshot[];
+  membership: MembershipSnapshot;
+  agentRuns: AgentRunSnapshot[];
   network: NetworkSnapshot;
   onboarding?: OnboardingSnapshot;
   diagnostics: DiagnosticsSnapshot;
@@ -360,6 +406,13 @@ export interface OnboardingSnapshot {
   joinRequests: JoinRequestSnapshot[];
 }
 
+export interface OperatorRecheckResult {
+  state: string;
+  reason: string | null;
+  failed: boolean;
+  openRequests: number;
+}
+
 export interface ServerEvent {
   type: string;
   id: string;
@@ -418,7 +471,10 @@ export function clearSelectionId(): void {
   window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
 }
 
-export function normalizeSnapshot(input: Snapshot): Snapshot {
+/** A snapshot as a runtime may send it: one built before membership was added has none. */
+type SnapshotInput = Omit<Snapshot, "membership" | "agentRuns"> & {membership?: Partial<MembershipSnapshot>; agentRuns?: AgentRunSnapshot[]};
+
+export function normalizeSnapshot(input: SnapshotInput): Snapshot {
   const network = input.network ?? ({} as NetworkSnapshot);
   const overlay = network.overlay ?? ({} as OverlaySnapshot);
   const relay = network.relay ?? ({} as RelaySnapshot);
@@ -432,10 +488,18 @@ export function normalizeSnapshot(input: Snapshot): Snapshot {
     capabilities: input.capabilities ?? [],
     conversations: input.conversations ?? [],
     operatorRequests: input.operatorRequests ?? [],
+    agentRuns: input.agentRuns ?? [],
     tasks: input.tasks ?? [],
     disputes: input.disputes ?? [],
     trash: input.trash ?? [],
     ownerships: input.ownerships ?? [],
+    membership: {
+      shared: input.membership?.shared ?? false,
+      owner: input.membership?.owner ?? null,
+      self: input.membership?.self ?? null,
+      selfIsOwner: input.membership?.selfIsOwner ?? false,
+      members: input.membership?.members ?? [],
+    },
     onboarding: {
       pendingJoins: input.onboarding?.pendingJoins ?? [],
       joinRequests: input.onboarding?.joinRequests ?? [],
@@ -560,7 +624,7 @@ export class ControlPlaneClient {
 
   async snapshot(): Promise<Snapshot> {
     const response = await this.request(`${API_PREFIX}/snapshot`);
-    return normalizeSnapshot((await response.json()) as Snapshot);
+    return normalizeSnapshot((await response.json()) as SnapshotInput);
   }
 
   async invite(expectedPeer?: string, openRouterPort = false, project = false): Promise<InviteResponse> {
@@ -625,6 +689,36 @@ export class ControlPlaneClient {
     return this.command<Record<string, unknown>>("empty-trash", {laneId, epoch, confirmed: true});
   }
 
+  /** Asks Synesis to look again at what its operator requests wait for, and to integrate what was waiting. */
+  async recheckOperatorRequests(): Promise<OperatorRecheckResult> {
+    return this.command<OperatorRecheckResult>("recheck-operator-requests", {});
+  }
+
+  /** Closes a request an agent put to the operator; Synesis closes the ones it raised itself. */
+  async closeOperatorRequest(requestId: string): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("close-operator-request", {requestId});
+  }
+
+  /** Starts agents on providers installed in the project: with a task, or with none (task null) so they wait for one. */
+  async startAgents(agents: AgentChoice[], task: string | null): Promise<{runId: string; state: string}> {
+    return this.command<{runId: string; state: string}>("start-agents", task === null ? {agents, waitForTask: true} : {agents, prompt: task});
+  }
+
+  /** Stops a set of agents this page started. */
+  async stopAgents(runId: string): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("stop-agents", {runId});
+  }
+
+  /** Gives the agents that wait for a task their task, or replaces the task of those working. It is only text for them: it grants nothing. */
+  async sendAgentTask(text: string): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("send-agent-task", {text});
+  }
+
+  /** Removes a computer from the project (owner only); the person has confirmed it. */
+  async removeMember(nodeId: string): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("remove-member", {nodeId, confirmed: true});
+  }
+
   startEvents(handlers: {
     onSnapshot(snapshot: Snapshot): void;
     onEvent(event: ServerEvent): void;
@@ -669,7 +763,7 @@ export class ControlPlaneClient {
     };
   }
 
-  private async command<T>(name: string, body: Record<string, string | string[] | boolean | number>): Promise<T> {
+  private async command<T>(name: string, body: Record<string, unknown>): Promise<T> {
     const response = await this.request(`${API_PREFIX}/commands/${name}`, {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-Synesis-Control-CSRF": this.csrfToken},

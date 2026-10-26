@@ -1,0 +1,10 @@
+PackageIdentifier: Synesis.Synesis
+PackageVersion: "@VERSION@"
+PackageLocale: en-US
+Publisher: Synesis
+PackageName: Synesis
+PackageUrl: https://github.com/@REPO@
+License: AGPL-3.0-only
+ShortDescription: Coordination layer for AI coding agents working in one project.
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

@@ -739,6 +739,15 @@ public final class TaskCompletionProjection {
     }
 
     /**
+     * Returns every re-merge snapshot. They are in no task's history, so {@link #allSnapshots()} does not list them.
+     *
+     * @return the re-merge snapshots, in the order they were recorded
+     */
+    public synchronized List<TaskSnapshotRecord> remergeSnapshots() {
+        return remerges.keySet().stream().map(snapshotsById::get).filter(java.util.Objects::nonNull).toList();
+    }
+
+    /**
      * Returns every snapshot of one re-merge, in the order they were recorded.
      *
      * @param remergeId the re-merge

@@ -12,6 +12,7 @@ import org.synesis.coordination.domain.collaboration.CollaborationCodec;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.ReviewPolicy;
+import org.synesis.coordination.domain.collaboration.ReviewValidationPayload;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
@@ -64,9 +65,14 @@ final class RemergeReviewsOfferedTest {
 
     private static TaskSnapshotPayload snapshot(WorkIntent lane, ProviderSessionBindingService.Binding binding,
             String owner, String snapshotId, boolean reviewRequired) {
+        return snapshot(lane, binding, owner, snapshotId, reviewRequired, "node");
+    }
+
+    private static TaskSnapshotPayload snapshot(WorkIntent lane, ProviderSessionBindingService.Binding binding,
+            String owner, String snapshotId, boolean reviewRequired, String node) {
         return new TaskSnapshotPayload(lane.taskId(),
                 snapshotId,
-                "node",
+                node,
                 binding.supervisorId(),
                 binding.workerId(),
                 binding.sessionId(),
@@ -126,8 +132,9 @@ final class RemergeReviewsOfferedTest {
                         snapshot(lane, ownerBinding, owner, REMERGE, true)).encode(),
                 identity);
         AgentRunController.Observation before = new EventLogObserver(location).observe();
-        assertEquals(List.of(), before.reviewsOffered("codex", List.of("remerge-reviewer")),
-                "nothing is offered before a grant names the re-merge snapshot");
+        assertEquals(List.of(REMERGE), before.reviewsOffered("codex", List.of("remerge-reviewer")),
+                "a re-merge nobody holds a grant on is offered to an agent that did not write it, so a stopped one is resumed to take a session that can be granted it (ADR-0098 step 5, item 30)");
+        assertEquals(List.of(), before.reviewsOffered("codex", List.of("remerge-owner")), "and never to the agent that wrote it");
 
         LaneGrant grant = new LaneGrant(UUID.randomUUID(), groupId, lane.intentId(), reviewer, lane.version(), true,
                 REMERGE);
@@ -144,5 +151,55 @@ final class RemergeReviewsOfferedTest {
                 CollaborationCodec.encodeLaneGrant(grant), identity);
         AgentRunController.Observation consumed = new EventLogObserver(location).observe();
         assertEquals(List.of(), consumed.reviewsOffered("codex", List.of("remerge-reviewer")));
+    }
+
+    /**
+     * s5-run14: the run controller asks a reviewer again only for a grant on a snapshot that another computer's agent
+     * published, and only while the grant obliges (the projection's {@code grantUnresolved}): not once a verdict is
+     * recorded, and not for a snapshot of this computer.
+     */
+    @Test
+    void aGrantOnASnapshotAnotherComputerPublishedIsHeldUntilItsVerdictIsRecorded() throws Exception {
+        session("author");
+        session("reviewer");
+        ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        var authorBinding = bindings.find(location, "codex", "author").orElseThrow();
+        var reviewerBinding = bindings.find(location, "codex", "reviewer").orElseThrow();
+        String author = WorkspaceCollaborationService.participantHandle(authorBinding.sessionId());
+        String reviewer = WorkspaceCollaborationService.participantHandle(reviewerBinding.sessionId());
+        UUID groupId = UUID.randomUUID();
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        collaboration.createWorkGroup(controlRoot, groupId, "Build a board", "CRUD and persistence", ReviewPolicy.mandatoryIndependent());
+        WorkIntent lane = collaboration.announce(controlRoot, "codex", "author", "Implement board creation", "Publish the board creation lane",
+                List.of(ResourceSelector.pathExact("src/BoardCreate.java")), groupId).intent();
+        NodeIdentity identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(),
+                snapshot(lane, authorBinding, author, "snap_theirs", true, "another-computer").encode(), identity);
+        assertEquals(false, new EventLogObserver(location).observe().holdsReviewOfAnotherComputer("codex", "reviewer"), "no grant yet");
+
+        LaneGrant grant = new LaneGrant(UUID.randomUUID(), groupId, lane.intentId(), reviewer, lane.version(), true, "snap_theirs");
+        store.append(UUID.randomUUID(), PredictionEventType.LANE_GRANT_ISSUED, identity.nodeId(), CollaborationCodec.encodeLaneGrant(grant), identity);
+        assertEquals(true, new EventLogObserver(location).observe().holdsReviewOfAnotherComputer("codex", "reviewer"));
+        assertEquals(false, new EventLogObserver(location).observe().holdsReviewOfAnotherComputer("codex", "author"), "the grant names the reviewer");
+
+        store.append(UUID.randomUUID(), PredictionEventType.LANE_GRANT_CONSUMED, identity.nodeId(), CollaborationCodec.encodeLaneGrant(grant), identity);
+        assertEquals(true, new EventLogObserver(location).observe().holdsReviewOfAnotherComputer("codex", "reviewer"), "consumed is not given");
+
+        store.append(UUID.randomUUID(), PredictionEventType.REVIEW_VALIDATION_RECORDED, identity.nodeId(),
+                new ReviewValidationPayload(grant.grantId(), groupId, lane.intentId(), reviewer, lane.version(), lane.taskId(), "snap_theirs", "ACCEPTED", null, author).encode(),
+                identity);
+        assertEquals(false, new EventLogObserver(location).observe().holdsReviewOfAnotherComputer("codex", "reviewer"), "the verdict is given");
+
+        session("second-author");
+        var secondBinding = bindings.find(location, "codex", "second-author").orElseThrow();
+        WorkIntent secondLane = collaboration.announce(controlRoot, "codex", "second-author", "Implement board deletion", "Publish the board deletion lane",
+                List.of(ResourceSelector.pathExact("src/BoardDelete.java")), groupId).intent();
+        store.append(UUID.randomUUID(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(),
+                snapshot(secondLane, secondBinding, WorkspaceCollaborationService.participantHandle(secondBinding.sessionId()), "snap_ours", true, identity.nodeId()).encode(), identity);
+        LaneGrant ours = new LaneGrant(UUID.randomUUID(), groupId, secondLane.intentId(), reviewer, secondLane.version(), true, "snap_ours");
+        store.append(UUID.randomUUID(), PredictionEventType.LANE_GRANT_ISSUED, identity.nodeId(), CollaborationCodec.encodeLaneGrant(ours), identity);
+        assertEquals(false, new EventLogObserver(location).observe().holdsReviewOfAnotherComputer("codex", "reviewer"), "a snapshot of this computer needs no other computer's code");
     }
 }

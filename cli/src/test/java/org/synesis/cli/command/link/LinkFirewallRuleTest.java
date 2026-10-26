@@ -40,7 +40,8 @@ class LinkFirewallRuleTest {
         assertEquals("LINK_FIREWALL_RULE_PROGRAM=" + old, notes.get(1), notes.toString());
         assertTrue(notes.get(2).startsWith("NOTE=the Windows Firewall rule \"Synesis Link\" names another version's java.exe"), notes.toString());
         assertTrue(notes.get(2).contains("'synesis link answer'"), notes.toString());
-        assertTrue(notes.get(2).endsWith("netsh advfirewall firewall set rule name=\"Synesis Link\" new program=\"" + PROGRAM + "\""), notes.toString());
+        assertEquals("FIX=in an administrator terminal, run: netsh advfirewall firewall set rule name=\"Synesis Link\" new program=\"" + PROGRAM + "\"", notes.get(3), notes.toString());
+        assertEquals(4, notes.size(), notes.toString());
     }
 
     @Test
@@ -48,7 +49,8 @@ class LinkFirewallRuleTest {
         List<String> notes = notes(null);
 
         assertEquals("LINK_FIREWALL=MISSING", notes.get(0), notes.toString());
-        assertTrue(notes.get(1).endsWith("netsh advfirewall firewall add rule name=\"Synesis Link\" dir=in action=allow protocol=UDP profile=any program=\"" + PROGRAM + "\""), notes.toString());
+        assertEquals("FIX=in an administrator terminal, run: netsh advfirewall firewall add rule name=\"Synesis Link\" dir=in action=allow protocol=UDP profile=any program=\"" + PROGRAM + "\"", notes.get(2), notes.toString());
+        assertEquals(3, notes.size(), notes.toString());
     }
 
     @Test

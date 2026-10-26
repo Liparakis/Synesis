@@ -262,13 +262,15 @@ public final class WorkGroupProjection {
 
     /**
      * Returns whether a grant still obliges its holder: it is available, or consumed without a review decision,
-     * and it is neither superseded nor a continuation grant.
+     * and it is neither superseded, revoked, nor a continuation grant. A continuation grant restores a lane and
+     * can never take a verdict, so it obliges nobody; a revoked grant was released to another reviewer. This is the
+     * one rule for what a participant still owes, for lane completion and for the session's open authority alike.
      *
      * @param id typed grant identity
      * @return whether the grant is unresolved
      */
     public synchronized boolean grantUnresolved(LaneGrantId id) {
-        return !continuationGrant(id) && !grantSuperseded(id)
+        return !continuationGrant(id) && !grantSuperseded(id) && !grantRevoked(id)
                 && (grantAvailable(id) || (grantConsumed(id) && reviewValidationForGrant(id).isEmpty()));
     }
 

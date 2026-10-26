@@ -58,8 +58,8 @@ export const mockSnapshot: Snapshot = {
     ...additionalProjects,
   ],
   providers: [
-    {id: "claude", supportLevel: "SUPPORTED", status: "READY"},
-    {id: "codex", supportLevel: "SUPPORTED", status: "READY"},
+    {id: "claude", supportLevel: "SUPPORTED", status: "INSTALLED"},
+    {id: "codex", supportLevel: "SUPPORTED", status: "INSTALLED"},
   ],
   agents: [
     {
@@ -121,6 +121,7 @@ export const mockSnapshot: Snapshot = {
     }
   ],
   operatorRequests: [],
+  agentRuns: [],
   capabilities: [
     {
       handle: "cap-refactor-001",
@@ -149,6 +150,17 @@ export const mockSnapshot: Snapshot = {
   ownerships: [
     {capability: "code.refactor", taskId: "task-001", owner: "agent-planner-01", protectedScopes: ["src/parser"], intentVersion: 2},
   ],
+  membership: {
+    shared: true,
+    owner: "sl1-owner-this-computer",
+    self: "sl1-owner-this-computer",
+    selfIsOwner: true,
+    members: [
+      {nodeId: "sl1-owner-this-computer", self: true, owner: true, state: "SELF", since: null, lastReceived: null},
+      {nodeId: "peer_9x23a", self: false, owner: false, state: "CONNECTED", since: "2026-09-10T02:40:00Z", lastReceived: "2026-09-10T02:44:00Z"},
+      {nodeId: "peer_f120a", self: false, owner: false, state: "DISCONNECTED", since: "2026-09-10T02:28:00Z", lastReceived: "2026-09-10T02:29:00Z"},
+    ],
+  },
   network: {
     status: "CONFIGURED",
     peers: [

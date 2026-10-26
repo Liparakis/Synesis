@@ -209,6 +209,20 @@ public final class WorkIntentService {
     }
 
     /**
+     * Releases the lane of a combine that has published its result, so its agent is free to take another combine.
+     *
+     * @param lock     already-held project append lock
+     * @param snapshot the combine lane's result
+     * @return {@code true} when an active lane was released; {@code false} when it was released already
+     * @throws IOException              the snapshot is not a combine's result, or does not belong to the lane
+     * @throws GeneralSecurityException signing failure
+     */
+    public boolean releaseCombineResult(ProjectAppendLock lock, TaskSnapshotRecord snapshot)
+            throws IOException, GeneralSecurityException {
+        return laneCompletion.releaseCombineResult(lock, snapshot);
+    }
+
+    /**
      * Completes one explicitly requested no-change outcome and reevaluates its group.
      *
      * <p>This is the only coordination transition that may release an intent

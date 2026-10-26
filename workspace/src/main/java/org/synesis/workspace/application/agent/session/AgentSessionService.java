@@ -174,6 +174,14 @@ public final class AgentSessionService {
                         java.util.List.of(ex.getMessage().split(",")), "instruction",
                         "This session's lane has ended, but it still holds what openAuthority lists. Call get_next_action and finish that first; then call ensure_session again to start a fresh session for your next task."));
             }
+            if ("WORKSPACE_STALE_DIRTY".equals(ex.code())) {
+                // The refusal left the binding and its worktree exactly as they were, and the lane is still the
+                // agent's to finish. Sent to a person, the agent stopped (s5-run8).
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.WORKSPACE_STALE, AgentNextAction.RETRY, java.util.Map.of("reason", "WORKSPACE_STALE_DIRTY", "instruction",
+                        "Your worktree holds work that is not yet published, and this computer's main has moved where Synesis cannot carry that work across safely, "
+                                + "so your session, lane and worktree were left exactly as they were and nothing was lost. No person is needed. "
+                                + "Call get_next_action and follow the action it projects for your lane; call ensure_session again only once that lane has ended."));
+            }
             // The code alone left nothing to diagnose when a session could not be bound once in a real run.
             return AgentFailures.internal(request.projectRoot(), "session.bind", ex, java.util.Map.of("reason", ex.code()));
         } catch (Exception ex) {

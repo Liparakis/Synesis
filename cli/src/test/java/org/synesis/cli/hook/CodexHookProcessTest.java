@@ -75,7 +75,7 @@ final class CodexHookProcessTest {
         Path project = Files.createTempDirectory("synesis-codex-process-");
         try {
             git(project, "init");
-            assertEquals(0, run(project, "init", "--project", project.toString()).exit());
+            assertEquals(0, run(project, "init", "--no-agents", "--project", project.toString()).exit());
             assertEquals(0, run(project, "project", "create", "--project", project.toString(), "--peer", "sl1-" + "0".repeat(64)).exit());
             CommandResult constraint = run(project,
                     "constraint",

@@ -16,10 +16,12 @@ import java.util.Objects;
  * @param recommendation       recommended next action
  * @param evidenceFingerprint  evidence fingerprint SHA-256 hash
  * @param details              operator-level diagnostic details; the supplied map is not defensively copied
+ * @param group                the part of the setup the finding is about
+ * @param fix                  one command or step a person can take, never empty
  * @since 1.0
  */
 public record DoctorFinding(DoctorFindingCode code, DoctorSeverity severity, DoctorConfidence confidence, String summary, String explanation, String affectedResourceType, boolean repairSupported,
-                            DoctorRecommendation recommendation, String evidenceFingerprint, Map<String, String> details) {
+                            DoctorRecommendation recommendation, String evidenceFingerprint, Map<String, String> details, DoctorGroup group, String fix) {
 
     /**
      * Validates required finding values.
@@ -34,5 +36,7 @@ public record DoctorFinding(DoctorFindingCode code, DoctorSeverity severity, Doc
         Objects.requireNonNull(recommendation, "recommendation");
         Objects.requireNonNull(evidenceFingerprint, "evidenceFingerprint");
         Objects.requireNonNull(details, "details");
+        Objects.requireNonNull(group, "group");
+        Objects.requireNonNull(fix, "fix");
     }
 }

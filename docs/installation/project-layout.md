@@ -68,10 +68,11 @@ project re-ensures the attribute without changing `projectId`, node identity,
 membership, or metadata bytes. Diagnostics may show the metadata path when
 needed. Users should not edit Synesis metadata manually.
 
-`AGENTS.md` is intentionally visible because its managed section is a
-user-facing provider/integration contract, not internal bookkeeping. User,
-agent, build, test, and tooling output remains ordinary visible project
-content.
+Synesis writes no `AGENTS.md` and no provider rule file into a project: the agent
+instructions live in the installed `synesis-provider-manual` skill (ADR-0103
+decision 9; see the [agent instructions contract](../architecture/agent-instructions-contract.md)).
+An `AGENTS.md` in the project is the user's own source file. User, agent, build,
+test, and tooling output remains ordinary visible project content.
 
 `synesis init` is idempotent for valid existing state and returns exit code 0
 with `INIT_RESULT=ALREADY_INITIALIZED`. Conflicting or malformed state returns

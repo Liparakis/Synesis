@@ -1,5 +1,6 @@
 package org.synesis.cli.command;
 
+import org.synesis.cli.daemon.BuildInfo;
 import java.util.concurrent.Callable;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.exit.ExitCodes;

@@ -50,6 +50,49 @@ final class InitCommandTest {
         }
     }
 
+    /**
+     * ADR-0103 stage 1: init names the steps that make Synesis useful (connect an agent, start it, look at
+     * what happens), not the constraint command it named before, and writes no instruction file (decision 9).
+     */
+    @Test
+    void initPrintsTheRightNextStepsAndWritesNoInstructionFile() throws Exception {
+        org.synesis.workspace.lifecycle.process.GitProcessRunner.run(root, "init", "-q");
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        ConsoleTerminal terminal = new ConsoleTerminal(stream(output), stream(new ByteArrayOutputStream()));
+        CliRuntime runtime = new CliRuntime(new Onboarding(root.resolve("profile"), new StatusRenderer(terminal)), terminal);
+
+        int exitCode = SynesisCli.execute(new String[]{"init", "--no-agents", "--project", root.toString()}, runtime);
+
+        String text = output.toString(StandardCharsets.UTF_8);
+        assertEquals(ExitCodes.OK, exitCode, text);
+        assertTrue(text.contains("INIT_RESULT=SUCCESS"), text);
+        assertTrue(text.contains("NEXT_COMMAND=synesis provider install claude"), text);
+        assertTrue(text.contains("NEXT_STEP=Connect an agent to this project: synesis provider install claude (or: synesis provider install codex)"), text);
+        assertTrue(text.contains("NEXT_STEP=Start the agent in this folder (claude or codex) and tell it what to do"), text);
+        assertTrue(text.contains("synesis status"), text);
+        assertFalse(text.contains("constraint create"), text);
+        assertFalse(text.contains("INSTRUCTIONS_REMOVED"), text);
+        assertFalse(Files.exists(root.resolve("AGENTS.md")));
+    }
+
+    @Test
+    void initReportsTheOldSectionItRemovedFromAgentsMd() throws Exception {
+        org.synesis.workspace.lifecycle.process.GitProcessRunner.run(root, "init", "-q");
+        new org.synesis.workspace.application.ProjectApplicationService().init(root, false);
+        // A project initialized by an earlier version carries the section its init wrote.
+        Files.writeString(root.resolve("AGENTS.md"), "# Mine\n\n<!-- SYNESIS-BEGIN -->\nold\n<!-- SYNESIS-END -->\n");
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        ConsoleTerminal terminal = new ConsoleTerminal(stream(output), stream(new ByteArrayOutputStream()));
+        CliRuntime runtime = new CliRuntime(new Onboarding(root.resolve("profile"), new StatusRenderer(terminal)), terminal);
+
+        assertEquals(ExitCodes.OK, SynesisCli.execute(new String[]{"init", "--no-agents", "--project", root.toString()}, runtime));
+
+        String text = output.toString(StandardCharsets.UTF_8);
+        assertTrue(text.contains("INSTRUCTIONS_REMOVED=AGENTS.md"), text);
+        assertTrue(text.contains("NEXT_STEP=Commit the change to AGENTS.md"), text);
+        assertEquals("# Mine\n", Files.readString(root.resolve("AGENTS.md")));
+    }
+
     @Test
     void initFailsLoudlyBeforeCreatingSynesisStateOutsideGit() throws Exception {
         ByteArrayOutputStream output = new ByteArrayOutputStream();

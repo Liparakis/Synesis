@@ -52,14 +52,15 @@ public final class LeaderReplication implements AutoCloseable {
      */
     public static final String MEMBERS_FILE = "replication.members";
 
+    private static final long RECORD_INTERVAL_SECONDS = 2;
     private static final System.Logger LOGGER = System.getLogger(LeaderReplication.class.getName());
 
     /**
      * Whether a member has a live session to the leader.
      *
-     * @param state whether its session is attached now
-     * @param since when that session was attached or ended; for a member with no session yet, when the leader
-     *              started serving
+     * @param state whether its session is attached now and answers
+     * @param since when that session was attached, ended, stopped answering or answered again; for a member with no
+     *              session yet, when the leader started serving
      */
     public record MemberConnection(State state, Instant since) {
 
@@ -69,11 +70,12 @@ public final class LeaderReplication implements AutoCloseable {
          */
         public enum State {
             /**
-             * From the attach of its session until that session ends.
+             * From the attach of its session until that session ends or the pulls over it get no answer, and again
+             * from the first pull that is answered.
              */
             CONNECTED,
             /**
-             * No attached session.
+             * No attached session, or one whose pulls are not answered.
              */
             DISCONNECTED
         }
@@ -92,6 +94,7 @@ public final class LeaderReplication implements AutoCloseable {
     private final Map<String, PeerSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, MemberConnection> connections = new ConcurrentHashMap<>();
     private final Instant started = Instant.now();
+    private List<String> written = List.of();
     private final ScheduledExecutorService notices = Executors.newSingleThreadScheduledExecutor(
             daemon("synesis-replication-notice"));
 
@@ -154,8 +157,11 @@ public final class LeaderReplication implements AutoCloseable {
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.members = CoordinationNullException.requireNonNull(members, "members");
         this.admitted = CoordinationNullException.requireNonNull(admitted, "admitted");
-        this.exchange = new LogExchange(root, projectId, admitted, copied, this::afterArrivals);
+        this.exchange = new LogExchange(root, projectId, admitted, copied, this::afterMemberArrivals, this::afterPull);
+        exchange.watch((node, ignored) -> followExchange(node));
         notices.execute(this::writeConnections);
+        // Admission changes who the file names without any session event, so the file follows it.
+        notices.scheduleWithFixedDelay(this::writeConnections, RECORD_INTERVAL_SECONDS, RECORD_INTERVAL_SECONDS, TimeUnit.SECONDS);
     }
 
     /**
@@ -322,17 +328,14 @@ public final class LeaderReplication implements AutoCloseable {
     /**
      * Attaches an authenticated session, so logs are exchanged over it.
      *
-     * <p>A session of a node the settings do not name yet is kept by the exchange, which serves it nothing and pulls
-     * nothing from it until the settings name it: a joiner the owner accepts later, over the session it already
-     * holds, needs no redial (ADR-0098 step 4). Only a member's session is recorded as a member's connection.</p>
+     * <p>Every session is kept and recorded, whether or not the node is admitted yet. The exchange serves it nothing
+     * and pulls nothing from it until the node is admitted, and {@link #liveSessions} and {@value #MEMBERS_FILE} name
+     * only admitted nodes, so a joiner the owner accepts later, over the session it already holds, is used from the
+     * accept on exactly as a session made after it (ADR-0098 step 6, designer item 21).</p>
      *
      * @param session an authenticated, control-ready session
      */
     public void attach(PeerSession session) {
-        if (!isMember(session.remoteNodeId())) {
-            exchange.attach(session);
-            return;
-        }
         String node = session.remoteNodeId();
         // One lock over the session map and the record, so the end of an old session cannot be recorded after the
         // attach of its successor.
@@ -349,6 +352,25 @@ public final class LeaderReplication implements AutoCloseable {
                 }
             }
         });
+    }
+
+    /**
+     * Records a peer as not connected when the exchange over its session gets no answer, and as connected again when it
+     * does (ADR-0098 step 6, designer item 22). A session Link still holds open is not a connection that works: a path
+     * that went silent leaves it attached until Link's own expiry, if that ever ends it, and the end of the session is
+     * then the only thing that would have said so. The record follows what the pulls say, which every computer's side
+     * has, whichever side dialled. The state is read afresh, not taken from the notice, so notices that reach here out
+     * of order settle on the latest one.
+     */
+    private void followExchange(String node) {
+        MemberConnection.State seen = Sessions.live(sessions.get(node)) && exchange.state(node) != LogExchange.State.DISCONNECTED
+                ? MemberConnection.State.CONNECTED : MemberConnection.State.DISCONNECTED;
+        synchronized (connections) {
+            MemberConnection recorded = connections.get(node);
+            if (recorded == null || recorded.state() != seen) {
+                recordConnection(node, seen);
+            }
+        }
     }
 
     private void recordConnection(String node, MemberConnection.State state) {
@@ -371,9 +393,13 @@ public final class LeaderReplication implements AutoCloseable {
             MemberConnection connection = connections.getOrDefault(node, new MemberConnection(MemberConnection.State.DISCONNECTED, started));
             return node + " " + connection.state() + " " + connection.since();
         }).toList();
+        if (lines.equals(written)) {
+            return;
+        }
         try {
             if (lines.isEmpty()) {
                 Files.deleteIfExists(file);
+                written = lines;
                 return;
             }
             Path temporary = root.resolve(MEMBERS_FILE + ".tmp");
@@ -381,6 +407,7 @@ public final class LeaderReplication implements AutoCloseable {
             for (int attempt = 1; ; attempt++) {
                 try {
                     Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                    written = lines;
                     break;
                 } catch (java.nio.file.AccessDeniedException beingRead) {
                     // Windows refuses to replace a file another process has open for a moment; the next state must
@@ -436,9 +463,9 @@ public final class LeaderReplication implements AutoCloseable {
     }
 
     /**
-     * Tells {@code listener} after each pull that brought a member's entries, so this computer's code can take a
-     * newer copy of {@code main} that a member advanced (ADR-0098 step 5). It runs on the exchange thread and must
-     * return at once.
+     * Tells {@code listener} after each pull that reached a member, so this computer's code can take a newer copy
+     * of {@code main} that a member advanced (ADR-0098 step 5) however late its commit arrived. It runs on the
+     * exchange thread, at least every {@value LogExchange#PULL_INTERVAL_SECONDS} seconds, and must return at once.
      *
      * @param listener told after such a pull
      */
@@ -446,12 +473,12 @@ public final class LeaderReplication implements AutoCloseable {
         pulled = CoordinationNullException.requireNonNull(listener, "listener");
     }
 
-    private void afterArrivals() {
-        try {
-            afterMemberEntry.run();
-        } finally {
-            pulled.run();
-        }
+    private void afterMemberArrivals() {
+        afterMemberEntry.run();
+    }
+
+    private void afterPull() {
+        pulled.run();
     }
 
     /**

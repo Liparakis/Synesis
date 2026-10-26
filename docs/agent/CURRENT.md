@@ -1,3 +1,84 @@
+# 2026-10-26 — ADR-0098 step 5 DONE under a real Link cut; ADR-0103 stage 4 built
+
+**ADR-0098 step 5:** s5-run25 (remaster97 = b45415be) RESULT=PASS under a real 5-minute cut — diverged, re-merged
+through two combines, `main` equal on both computers, logs identical, goal complete, tests pass. Designer items 32–39,
+each found in a real run with the live stuck project and pinned by a scenario: one combine per conflicting change; a
+lane that has published nothing is shown none of the pump's waits; the combine wait shown only to a combine lane; a
+combine lane that keeps the other copy publishes that as its result; a lane in a closed group is told to end; a combine
+lane is released once its result is published; and a trace test of the whole two-combine path that fails on any answer
+an agent cannot act on. All seven ADR-0098 steps are now proven in real runs.
+
+**ADR-0103 stage 4:** "ready without a task" (`agents run --wait-for-task`, `agents task`; a task message carries no
+authority), UI start/stop of agents through one runner, OS package definitions and signing that turns on only with the
+owner's key. Real runs of stages 2–3 passed with defects D1–D9 fixed (D9: Synesis's JVM crash files now go to its own
+state folder, never the project). The unused project-record sync protocol was deleted (3,866 lines).
+
+**Lab:** the Linux gate starts its container inside the Podman WSL distro; scenarios run on the Linux gate only;
+the VM loses its network now and then and is reset.
+
+**Open:** the installer's admin-prompt check (needs the owner); adapters for further harnesses (owner's choice);
+ADR-0101 open; a late snapshot of a cancelled lane waits for review for ever (ADR-0098 step 5, noted).
+
+# 2026-10-20 — ADR-0098 step 7 proven under a real cut; step 5 PARTIAL; yesterday's cuts did not reach the Link
+
+**Correction to 2026-10-19.** The lab's Link cut (`~/accept/partition.sh` on the VM) blocked the PC's IPv6 addresses
+by name, and the PC had rotated to a temporary address it did not list, so s5-run14, s5-run15, s7-run1 (the "PASS after
+a 10-minute split"), s7-run3 and s7-run4 were connected runs, not split runs. The cut now blocks the LAN prefix
+(internet hosts are outside it, so agents keep their providers); every cut since logs `LIVENESS_EXPIRED` on both
+computers about 60 s in.
+
+**Real runs with a real cut (remaster86–88; PC `claude:sonnet:medium`, VM `codex:gpt-6-luna:high`).**
+- s7-run6: **RESULT=PASS**. The VM's agent stalled on an announced lane (`D:\SynesisAcceptance\lab\vm-stall.sh` cuts
+  the Link and stops it), the PC's idle agent took the lane over during the cut, the VM trashed its version after the
+  heal, the goal landed, `main` equal, logs identical. ADR-0098 step 7 DONE.
+- s5-run16, s5-run17, s5-run18: logs identical after the heal, the re-merge opened a combine, but the copies of
+  `main` did not end equal. ADR-0098 step 5 PARTIAL (owner's rule 16); designer items 30 and 31.
+
+**Fixed today:** the owner recorded a member as connected after the Link went silent, and the run controller now
+reads the same record (step 6 item 22); a stopped agent with no lane is woken for a takeover offer (ADR-0099 fix 15);
+a stopped agent is woken for a re-merge review it may take, an agent the controller resumes is recorded as its earlier
+session's successor, and a combine's holder may review as a last resort (fix 16). Lab: each Linux gate run has its own
+Gradle home (no more journal-lock timeouts); `build-and-copy.ps1` refuses a PC copy without the Windows QUIC jar.
+
+**ADR-0101** is open with its candidate rules and the owner's constraint (an agent's identity cannot be inferred from
+a provider's session). **Open:** step 5 under a real cut; `CombineUnderRunControllerScenarioTest` disabled (1 in 3).
+
+# 2026-10-19 — ADR-0098 steps 4 to 6 done, step 7 source-proven; ADR-0099 fixes 12 to 14; ADR-0102 built
+
+On `adr-0098-step3-code-over-link`. ADR-0102 (a fast loop) was built and used the same day: scripted multi-computer
+scenarios (`cli/src/test/.../coordination/*ScenarioTest`: S1 apart, S2 overlap and combine, S3 cross-computer review,
+S4 takeover and trash, producers reviewing each other, three computers with the owner down, member removal, a reboot,
+three-computer main meeting), `synesis log dump`, lab scripts in `D:\SynesisAcceptance\lab` (`build-and-copy.ps1`,
+`run.sh`, `evidence.sh`), a parallel-safe Linux gate, and the reviewer-notes guidance (item 10).
+
+**Defects found and fixed (each with a test that fails before it, unless noted).** A continuation grant held as
+`PENDING_REVIEW`; a run ending before the post-heal combine (`COPIES_MEETING`); the combine loser sent to a person; a
+re-merge review offered to no one after a reviewer's session was replaced (`SessionSuccessions`), given to the agent
+holding the combine, or owed to an agent that was not running; the lower computer not taking the re-merged `main` (now
+tried on every pull); a reviewer of another computer's snapshot never asked again after the heal (ADR-0099 fix 12); two
+producers waiting on each other's review with no reviewer (reviews across work groups, ADR-0098 step 6 item 20, ADR-0099
+fix 13); a lane with unpublished work shown another lane's review wait (fix 14; its test is a regression guard only);
+the owner never using or recording a session that predates its accept (step 6 item 21: the owner could not fetch code
+from, or judge away, a computer that joined); a returning agent never told its lane was taken over; the
+`ClaimLockTest` flake. Lab: the VM needs its own Linux-QUIC build (ADR-0102 item 4).
+
+**Real runs (PC: `claude:sonnet:medium`; VM users `synesis` and `synesis3`: `codex:gpt-6-luna:high`; no Git remote).**
+- s7-run1 (remaster83, `3666a4f8`): 10-minute Link split. **RESULT=PASS**: four packages and NOTES landed, `main` equal,
+  logs byte-identical, tests pass on both, both runs COMPLETED. Real current-build acceptance proven for: work apart
+  through a Link failure, re-merge, cross-computer review after the heal, copies of `main` meeting.
+- s6-run2 (remaster83): owner's Synesis stopped 10 minutes; the two members worked and reviewed each other through
+  member cards; all three mains and log sets equal afterwards; the owner removed the third computer and `MEMBER_REMOVED`
+  reached both members. The agents covered only part of the README goal (one package and NOTES) before ending
+  COMPLETED: Synesis tracks lanes, not the README's list. PARTIAL by the script (the PC ran no agents by design).
+- s5-run14, s5-run15 (remaster81, 82): PARTIAL, `main` equal and logs identical, one package missing each; both causes
+  fixed above.
+- Step 7 takeover in a real run: NOT REACHED (the VM finished its own lane). Source-proven by S4.
+
+**Open:** both claims refused once under heavy load (ADR-0098 Unresolved); `link answer` prints `LINK_STATE=FAILED`
+when the join already went direct; the Linux gate's shared Gradle cache causes journal-lock timeouts with parallel
+agents; a dispute stays source-level; on Windows two scenario tests are skipped (a three-way main check not met in
+180 s, and a @TempDir held open), so they run on the Linux gate only.
+
 # 2026-10-18 — ADR-0098 step 3: code moves over Link, and the PC + VM goal completes with no Git remote
 
 Built on `adr-0098-step3-code-over-link` (design in ADR-0098 "Build design", step 3, and the calls made while building

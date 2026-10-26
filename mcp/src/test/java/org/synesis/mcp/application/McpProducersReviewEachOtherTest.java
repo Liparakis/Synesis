@@ -27,6 +27,7 @@ import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.integration.IntegrationOrchestrationService;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
@@ -83,6 +84,42 @@ final class McpProducersReviewEachOtherTest {
         }
         // Review was taken through grants; no producer announced a second, reviewer, lane.
         assertEquals(MODULES.size(), store.events().stream().filter(event -> event.type() == PredictionEventType.WORK_INTENT_ANNOUNCED).count());
+    }
+
+    /**
+     * Real run s6-run1 (ADR-0098 step 6, designer item 3): two computers that announced at the same moment each opened a
+     * work group of their own, and the only agent of each held the only producer lane of its group. Each is offered the
+     * other's snapshot and reviews it without a reviewer lane, and neither reviews its own.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void twoProducersOfDifferentWorkGroupsReviewEachOtherWhileTheirOwnSnapshotsWait(@TempDir Path temp) throws Exception {
+        Path project = mandatoryReviewProject(temp.resolve("producers-of-two-groups"));
+        Producer first = producer(project, "group-a", MODULES.get(0));
+        Producer second = producer(project, "group-b", MODULES.get(1), java.util.UUID.randomUUID());
+        PredictionEventStore announced = store(project);
+        assertNotEquals(announced.collaborationProjection().intent(java.util.UUID.fromString(first.intentId())).orElseThrow().workGroupId(),
+                announced.collaborationProjection().intent(java.util.UUID.fromString(second.intentId())).orElseThrow().workGroupId(), "the lanes are in two work groups");
+        List<String> snapshots = List.of(publish(first), publish(second));
+
+        Map<String, Object> offered = result(first.handler().handleMessage(toolCall("get_next_action", Map.of())));
+        assertEquals("request_coordination", offered.get("nextProtocolAction"), offered.toString());
+        assertTrue(String.valueOf(offered.get("instruction")).startsWith("While your snapshot waits for review, review " + snapshots.get(1) + " for " + second.participant()), offered.toString());
+
+        boolean progressed = true;
+        for (int round = 0; round < 30 && progressed; round++) {
+            progressed = step(first, second.participant());
+            progressed |= step(second, first.participant());
+        }
+
+        PredictionEventStore store = store(project);
+        ReviewValidationPayload ofFirst = store.workGroupProjection().reviewValidationForSnapshot(snapshots.get(0)).orElseThrow(() -> new AssertionError("no review of " + snapshots.get(0)));
+        ReviewValidationPayload ofSecond = store.workGroupProjection().reviewValidationForSnapshot(snapshots.get(1)).orElseThrow(() -> new AssertionError("no review of " + snapshots.get(1)));
+        assertEquals(second.participant(), ofFirst.targetParticipant(), ofFirst.toString());
+        assertEquals(first.participant(), ofSecond.targetParticipant(), ofSecond.toString());
+        assertEquals("ACCEPTED", ofFirst.result());
+        assertEquals("ACCEPTED", ofSecond.result());
+        assertEquals(2, store.events().stream().filter(event -> event.type() == PredictionEventType.WORK_INTENT_ANNOUNCED).count(), "no reviewer lane was announced");
     }
 
     @Test
@@ -142,11 +179,12 @@ final class McpProducersReviewEachOtherTest {
      * roman.py, its own csvline.py was integrated meanwhile, and its review decision was refused at
      * the recovery fence (SESSION_RECOVERY_STATE_UNAVAILABLE). Nobody else could review roman.py,
      * since the grant held it, and the run stopped. A completed lane may still finish a review it
-     * holds.
+     * holds. Real run s5-run6 (PC and VM, Link down) then stopped one step earlier: the reads and
+     * test runs of that review met the same fence, so the reviewer could not reach a verdict.
      */
     @Test
     @SuppressWarnings("unchecked")
-    void aProducerWhoseOwnModuleWasIntegratedStillFinishesTheReviewItHolds(@TempDir Path temp) throws Exception {
+    void aProducerWhoseOwnModuleWasIntegratedStillReadsTestsAndFinishesTheReviewItHolds(@TempDir Path temp) throws Exception {
         Path project = mandatoryReviewProject(temp.resolve("finish-held-review"));
         List<Producer> producers = new ArrayList<>();
         List<String> snapshots = new ArrayList<>();
@@ -171,10 +209,75 @@ final class McpProducersReviewEachOtherTest {
         }
         assertEquals("COMPLETED", store(project).collaborationProjection().participantState(wrap.participant()).orElseThrow().name(), "wrap.py was integrated");
 
+        Map<String, Object> read = result(wrap.handler().handleMessage(toolCall("read_file", Map.of("path", "slug.py"))));
+        assertEquals("immutable_review_snapshot", read.get("workspace"), read.toString());
+        assertEquals(snapshots.get(0), read.get("reviewSnapshotId"), read.toString());
+        Map<String, Object> run = result(wrap.handler().handleMessage(toolCall("run_command", Map.of("argv", List.of("git", "rev-parse", "HEAD")))));
+        assertEquals("immutable_review_snapshot", run.get("workspace"), run.toString());
+        assertEquals(snapshots.get(0), run.get("reviewSnapshotId"), run.toString());
+        // The completed lane may only review: nothing it writes is admitted.
+        String patch = wrap.handler().handleMessage(toolCall("apply_patch", Map.of("path", "wrap.py", "create", true, "content", "x\n")));
+        assertTrue(patch.contains("SESSION_RECOVERY_STATE_UNAVAILABLE"), patch);
+
         slugReview.put("result", "accepted");
         String decided = wrap.handler().handleMessage(toolCall("respond_coordination", Map.of("kind", "review_validation", "payload", slugReview)));
         assertFalse(decided.contains("SESSION_RECOVERY_STATE_UNAVAILABLE"), decided);
         assertEquals("ACCEPTED", store(project).workGroupProjection().reviewValidationForSnapshot(snapshots.get(0)).orElseThrow().result());
+        // With its verdict recorded the completed lane holds no review, and no workspace is read for it.
+        Map<String, Object> afterVerdict = result(wrap.handler().handleMessage(toolCall("read_file", Map.of("path", "slug.py"))));
+        assertFalse(afterVerdict.containsKey("content"), afterVerdict.toString());
+        assertEquals("ensure_session", afterVerdict.get("nextAction"), afterVerdict.toString());
+    }
+
+    /**
+     * Real run s5-run6, the other half: the reviewer whose own module was integrated stopped without a verdict, its
+     * grant stayed consumed by a session that was gone, and nobody else was offered the review. Its computer judges the
+     * session gone once its connection closed, releases the review, and another producer that is not the author
+     * reviews it (ADR-0098 designer item 2).
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aReviewWhoseReviewerIsGoneIsOfferedToAnotherNonAuthor(@TempDir Path temp) throws Exception {
+        Path project = mandatoryReviewProject(temp.resolve("gone-reviewer"));
+        List<Producer> producers = new ArrayList<>();
+        List<String> snapshots = new ArrayList<>();
+        for (int index = 0; index < 3; index++) {
+            producers.add(producer(project, "gone-reviewer-" + index, MODULES.get(index)));
+            snapshots.add(publish(producers.get(index)));
+        }
+        Producer slug = producers.get(0);
+        Producer wrap = producers.get(1);
+        Producer roman = producers.get(2);
+        String workGroupId = String.valueOf(store(project).collaborationProjection().intent(java.util.UUID.fromString(slug.intentId())).orElseThrow().workGroupId());
+        answered(wrap.handler().handleMessage(toolCall("ensure_session", Map.of())));
+        reviewDecision(wrap, slug, snapshots.get(0), workGroupId);
+        Map<String, Object> wrapReview = reviewDecision(roman, wrap, snapshots.get(1), workGroupId);
+        wrapReview.put("result", "accepted");
+        answered(roman.handler().handleMessage(toolCall("respond_coordination", Map.of("kind", "review_validation", "payload", wrapReview))));
+        for (int look = 0; look < 3 && !"COMPLETED".equals(store(project).collaborationProjection().participantState(wrap.participant()).orElseThrow().name()); look++) {
+            wrap.handler().handleMessage(toolCall("get_next_action", Map.of("completionRequested", true)));
+        }
+        assertEquals("COMPLETED", store(project).collaborationProjection().participantState(wrap.participant()).orElseThrow().name(), "wrap.py was integrated");
+
+        // The reviewer stops without a verdict and its connection ends.
+        wrap.handler().close();
+        // The server's merge driver runs a pass, as it does at an interval: it releases the review of the reviewer
+        // whose session is gone, and the remaining non-author is offered it.
+        ProjectLocation location = new ProjectApplicationService().locate(project);
+        new IntegrationOrchestrationService().orchestrateIntegration(location.root(), location.openCoordinationStore(), location.loadOrCreateIdentity());
+        Map<String, Object> offer = result(roman.handler().handleMessage(toolCall("get_next_action", Map.of())));
+        assertTrue(offer.get("actionableReviewCandidates") instanceof List<?> candidates
+                && candidates.stream().anyMatch(candidate -> snapshots.get(0).equals(((Map<String, Object>) candidate).get("snapshotId"))), offer.toString());
+        Map<String, Object> slugReview = reviewDecision(roman, slug, snapshots.get(0), workGroupId);
+        slugReview.put("result", "accepted");
+        answered(roman.handler().handleMessage(toolCall("respond_coordination", Map.of("kind", "review_validation", "payload", slugReview))));
+
+        var workGroups = store(project).workGroupProjection();
+        var slugGrants = workGroups.grants().stream().filter(grant -> snapshots.get(0).equals(grant.snapshotId())).toList();
+        assertTrue(slugGrants.stream().anyMatch(grant -> grant.targetParticipant().equals(wrap.participant()) && workGroups.grantRevoked(grant.identity())),
+                "the gone reviewer's grant was released");
+        assertEquals("ACCEPTED", workGroups.reviewValidationForSnapshot(snapshots.get(0)).orElseThrow().result());
+        assertTrue(slugGrants.stream().anyMatch(grant -> grant.targetParticipant().equals(roman.participant())), "roman.py's producer reviewed slug.py");
     }
 
     /**
@@ -253,6 +356,10 @@ final class McpProducersReviewEachOtherTest {
     }
 
     private static Producer producer(Path project, String connection, String module) throws Exception {
+        return producer(project, connection, module, null);
+    }
+
+    private static Producer producer(Path project, String connection, String module, java.util.UUID workGroup) throws Exception {
         AgentSessionService sessions = new AgentSessionService();
         sessions.ensureSession(new SessionResolutionRequest(project, "codex", connection, null, false));
         ProjectLocation location = new ProjectApplicationService().locate(project);
@@ -260,7 +367,7 @@ final class McpProducersReviewEachOtherTest {
         var binding = bindings.find(location, "codex", connection).orElseThrow();
         Path worktree = Path.of(binding.worktreePath());
         bindings.verifyWorkspaceTrust(location, "codex", binding.sessionId(), worktree);
-        var claim = new WorkspaceCollaborationService().announce(project, "codex", connection, "Write " + module, "Reviewed by a non-author", List.of(ResourceSelector.pathExact(module)));
+        var claim = new WorkspaceCollaborationService().announce(project, "codex", connection, "Write " + module, "Reviewed by a non-author", List.of(ResourceSelector.pathExact(module)), workGroup);
         assertTrue(claim.acquired(), module);
         return new Producer(new McpProtocolHandler(sessions, project, "codex", connection), claim.intent().intentId().toString(), WorkspaceCollaborationService.participantHandle(binding.sessionId()), worktree, module);
     }

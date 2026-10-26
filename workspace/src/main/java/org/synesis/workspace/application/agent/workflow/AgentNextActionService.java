@@ -84,6 +84,13 @@ public final class AgentNextActionService {
     private static final String PROJECT_DESCRIPTOR = ".synesis/project.json";
 
     /**
+     * What the integration pump answers when it has nothing to say to a caller. The pump's wait for review is about snapshots
+     * of this computer's lanes and is shown to every caller; a producer that has not published has a step of its own instead
+     * (s5-run15: a lane with finished work was told to wait for another lane's review, stopped, and its work never landed).
+     */
+    private static final AgentResponse NO_PUMP_WAIT = new AgentResponse(AgentStatus.READY, null, AgentNextAction.RETRY, Map.of());
+
+    /**
      * Binding status of a session that has been terminalized.
      */
     private static final String STATUS_TERMINAL = "TERMINAL";
@@ -270,13 +277,30 @@ public final class AgentNextActionService {
 
         ReadinessResult readiness = inspection.readiness();
         if (!readiness.ready()) {
-            return notReadyResponse(request, inspection);
+            AgentResponse notReady = notReadyResponse(request, inspection);
+            // A stale workspace is the first answer a returning agent gets: it carries the notices too.
+            return inspection.exactBinding() == null ? notReady : notingDisputesAndTrash(notReady, inspection.location(), inspection.exactBinding());
         }
 
         AgentResponse durable = resolveDurableCoordination(request, root, inspection.location(), readiness.binding(), readiness.worktree());
         AgentResponse resolved = durable != null ? durable : LocalCoordinationFallback.resolveLocalCoordination(bindingService, request, inspection.location(), readiness.worktree());
         AgentResponse answered = notingDisputesAndTrash(notingRejection(resolved, inspection.location(), readiness.binding()), inspection.location(), readiness.binding());
-        return request.completionRequested() ? notingNothingToPublish(answered, inspection.location(), readiness.binding(), readiness.worktree()) : answered;
+        AgentResponse noted = request.completionRequested() ? notingNothingToPublish(answered, inspection.location(), readiness.binding(), readiness.worktree()) : answered;
+        return notingReviewNotes(noted, inspection.location(), readiness.binding());
+    }
+
+    /**
+     * Tells a reviewer that has recorded its verdict to write its review notes and finish (ADR-0102 item 10). It
+     * replaces the nothing-to-publish advice, which offered a reviewer the cancellation of the lane it must finish.
+     */
+    private static AgentResponse notingReviewNotes(AgentResponse response, ProjectLocation location, ProviderSessionBindingService.Binding binding) {
+        try {
+            Optional<PredictionEventStore> store = openEventStore(location);
+            return store.isEmpty() ? response : ReviewNotes.onceDecided(response, store.get(), WorkspaceCollaborationService.participantHandle(binding.sessionId()));
+        } catch (Exception failure) {
+            logSuppressed("review notes projection", failure);
+            return response;
+        }
     }
 
     /**
@@ -348,7 +372,7 @@ public final class AgentNextActionService {
         try {
             Optional<PredictionEventStore> store = openEventStore(location);
             Map<String, Object> notices = store.isEmpty() ? Map.of()
-                    : AnswerNotices.forParticipant(store.get(), WorkspaceCollaborationService.participantHandle(binding.sessionId()));
+                    : AnswerNotices.forParticipant(store.get(), location.root(), WorkspaceCollaborationService.participantHandle(binding.sessionId()));
             if (notices.isEmpty()) {
                 return response;
             }
@@ -601,6 +625,7 @@ public final class AgentNextActionService {
      *   <li>integration pump (terminal short-circuit when it completes the lane),</li>
      *   <li>review lane: review requests, reviewer wait, revision, review and grant waits,</li>
      *   <li>explicit completion, when the caller requested it,</li>
+     *   <li>for a caller that holds no lane, a recovery continuation, then a combine lane offered to it,</li>
      *   <li>integration visibility versus recovery continuation,</li>
      *   <li>claim gate for sessions without an own active intent,</li>
      *   <li>integration conflict / dependency wait,</li>
@@ -772,7 +797,13 @@ public final class AgentNextActionService {
             // so never admitted the reviewer the wait was for.
             return continuation;
         }
-        AgentResponse integrationOrContinuation = integrationOrContinuationAction(store, collaboration, integrationPump, continuation);
+        if (coordinationActivated && callerIntent.isEmpty() && !combineCandidates(store, lane.participantId(), location).isEmpty()) {
+            // So is a combine lane, and the run controller resumes a stopped agent for it (designer item 22). The pump's
+            // wait is for other lanes, and a combine's group never had a lane, so the project can look finished while
+            // it waits. In s5-run6 the agent resumed for a combine was told to wait for another lane's review, and stopped.
+            return claimRequiredResponse(store, lane.participantId(), collaboration, location);
+        }
+        AgentResponse integrationOrContinuation = integrationOrContinuationAction(store, collaboration, pumpShownTo(store, callerIntent, integrationPump), continuation);
         if (integrationOrContinuation != null) {
             return integrationOrContinuation;
         }
@@ -813,6 +844,36 @@ public final class AgentNextActionService {
     private AgentResponse exactBindingLifecycleResponse(NextActionRequest request, ProjectLocation location) throws Exception {
         Optional<ProviderSessionBindingService.Binding> exactBinding = bindingService.find(location, request.provider(), request.connectionInstanceId());
         return exactBinding.map(binding -> terminalOrCompletedBindingResponse(location, binding)).orElse(null);
+    }
+
+    /**
+     * What of the integration pump's answer the caller is shown. A producer that has published nothing yet is not shown a
+     * wait that is for other lanes or for the pass itself: the review wait, the combine wait, which names the unlanded
+     * snapshot of every combine lane, and another pass holding the integration lock ({@code integrationRunning}). Its own
+     * publication is its next step (ADR-0098 step 5 items 35 and 36). In s5-run20 the agent of a second combine lane was told
+     * the first lane's snapshot would land and that nothing more was needed from it; in s5-run21 it was told
+     * {@code integrationRunning} because another pass held the lock at that moment. Either way it stopped, nothing recorded
+     * in the log ends such a wait, so no wake came, and a re-merge of two combines cannot land before both have a result.
+     * The pump's waits on a dependency or a request of the lane itself stay shown.
+     *
+     * <p>The combine wait says that nothing more is needed from the lane. That is true of a combine lane that has published
+     * and of no other, so it is shown to no lane outside a combine's work group (item 37): a reviewer whose verdict was
+     * recorded was told so in s5-run22, kept its lane open, and so was never offered the second combine, which only a
+     * lane-less agent is.</p>
+     */
+    static AgentResponse pumpShownTo(PredictionEventStore store, Optional<WorkIntent> callerIntent, AgentResponse pump) {
+        Map<?, ?> result = pump.result() instanceof Map<?, ?> shown ? shown : Map.of();
+        boolean combineWait = pump.reason() == AgentReason.INTEGRATION_PENDING && result.containsKey("combinePending");
+        boolean otherLanesWait = pump.reason() == AgentReason.VALIDATION_REQUIRED || combineWait
+                || pump.reason() == AgentReason.INTEGRATION_PENDING && result.containsKey("integrationRunning");
+        boolean combineWaitForAnotherLane = combineWait && callerIntent.isPresent() && store.taskCompletionProjection().combineOfGroup(callerIntent.get().workGroupId()).isEmpty();
+        return (otherLanesWait && producerStillToPublish(store, callerIntent)) || combineWaitForAnotherLane ? NO_PUMP_WAIT : pump;
+    }
+
+    /** Whether the caller holds a producer lane that has published nothing yet: its own publication is its next step. */
+    private static boolean producerStillToPublish(PredictionEventStore store, Optional<WorkIntent> callerIntent) {
+        return callerIntent.filter(intent -> intent.role() == WorkIntent.Role.PRODUCER)
+                .filter(intent -> store.taskCompletionProjection().findSnapshotForTaskRevision(intent.taskId(), intent.intentId(), intent.version()).isEmpty()).isPresent();
     }
 
     /**
@@ -878,7 +939,7 @@ public final class AgentNextActionService {
         // unclaimed part, a fresh agent left a snapshot awaiting review unreviewed.
         String choice = AgentReviewActionProjection.reviewCandidatesFor(store, participantId).isEmpty() ? "choose a part that no listed participant claims, and announce it by calling "
                 : "either choose a part that no listed participant claims, or review a snapshot awaiting review: reviewCandidates[i].reviewerIntent holds its ensure_session arguments, "
-                        + "to which you add claims for your report or test path. Announce your choice by calling ";
+                        + "which already claim the file you write your review notes to. Announce your choice by calling ";
         // Run 6: a fresh agent read the README's "python -m unittest passes" as a part nobody
         // claimed and announced a lane for it, though every integration already runs that command.
         String validation = location.validation() == null ? "" : " Synesis runs this project's validation command (`" + String.join(" ", location.validation().argv())
@@ -902,7 +963,8 @@ public final class AgentNextActionService {
     private static List<Map<String, Object>> combineCandidates(PredictionEventStore store, String participantId, ProjectLocation location) {
         try {
             String node = location.loadOrCreateIdentity().nodeId();
-            return org.synesis.workspace.application.collaboration.CombineLaneJoin.offeredTo(store, List.of(participantId), node).stream()
+            return org.synesis.workspace.application.collaboration.CombineLaneJoin.offeredTo(store,
+                    org.synesis.workspace.application.collaboration.CombineLaneJoin.sessionsOfAgent(location.root(), participantId), node).stream()
                     .map(combine -> org.synesis.workspace.application.collaboration.CombineLaneJoin.describe(store, combine)).toList();
         } catch (Exception unreadable) {
             return List.of();

@@ -6,9 +6,14 @@
 repository cleanup is pushed, and this pass is reconciling active
 documentation with the implemented product.
 
+> Corrected 2026-10-20 (ADR-0103 stage 1): the MCP tool count (11, not 10) and
+> the agent-instructions note below. The rest of this snapshot is from the date
+> above and has not been reconciled since; the ADRs and
+> [`docs/agent/CURRENT.md`](../agent/CURRENT.md) are the newer record.
+
 Synesis is a local-first coordination and constraint-enforcement layer for
 independently running AI coding agents. The stdio MCP server exposes exactly
-10 raw tools. The supported provider IDs are `claude` and `codex`; both
+11 raw tools. The supported provider IDs are `claude` and `codex`; both
 integrations are currently `EXPERIMENTAL`, and MCP transport evidence is tracked
 separately from real provider-hook enforcement.
 
@@ -26,7 +31,7 @@ workspace/session authority remains isolated per provider connection.
   matching, and local record storage.
 - `:coordination` owns durable claims, lanes, work groups, inboxes, and
   completion semantics.
-- `:mcp-contract` owns the exact ten-tool catalog and wire schemas; `:mcp`
+- `:mcp-contract` owns the exact eleven-tool catalog and wire schemas; `:mcp`
   owns stdio JSON-RPC transport and dispatch.
 - Project discovery walks upward through `.synesis/project.json`; private
   identity, provider metadata, and runtime state remain under
@@ -34,8 +39,10 @@ workspace/session authority remains isolated per provider connection.
 - `.synesis/` is the canonical project-internal Synesis metadata root. Windows
   Hidden and the Unix dot-directory convention are presentation only; they do
   not participate in identity, authentication, authorization, or integrity.
-  The visible `AGENTS.md` integration section and ordinary user/agent output
-  remain outside that hidden-bookkeeping rule.
+  Ordinary user/agent output, and the user's own `AGENTS.md` if any, remain
+  outside that hidden-bookkeeping rule; Synesis writes no `AGENTS.md` section
+  (the installed `synesis-provider-manual` skill is the one place for agent
+  instructions, ADR-0103 decision 9).
 - `synesis provider` currently exposes the canonical IDs `claude` and `codex`.
   Both are experimental: installation and synthetic checks are not proof of
   real provider trust or universal hook enforcement.

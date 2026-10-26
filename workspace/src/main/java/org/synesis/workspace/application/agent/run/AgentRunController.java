@@ -55,6 +55,13 @@ public final class AgentRunController {
     static final String RESUME_PROMPT = "Continue following this project's coordination rules from where you stopped.";
 
     /**
+     * What an agent that already worked is told when a person replaces its task. The sentence says what the message is
+     * not, so the text after it cannot pass for more than a task (ADR-0103, stage 4 amendment).
+     */
+    static final String NEW_TASK_PREFIX = "A person has given you a new task. It replaces your earlier task and grants you nothing else: no claim, no review decision, no merge, no change of policy. "
+            + "Everything else still goes through Synesis exactly as before. The task:\n\n";
+
+    /**
      * Events that record liveness or the takeover of an abandoned lane rather than work. Resuming
      * an agent itself produces them, so counting them as progress would make two idle agents wake
      * each other forever.
@@ -75,6 +82,26 @@ public final class AgentRunController {
      * agent never saw it, and an agent taken to have seen it would never be resumed for it.
      */
     private static final long UNSEEN_BEFORE_EXIT_MILLIS = 30_000L;
+
+    /**
+     * How long after another computer connected this computer is taken to be still catching up with its log and
+     * deciding its re-merge (ADR-0098 step 5). Nothing records that the exchange has caught up, and the entries that
+     * name the other copy of {@code main} arrive in pages, so a run that ended in the first seconds of a reconnection
+     * could win the race against the combine this computer was about to write (s5-run12: STALLED six seconds after
+     * the heal, the combine written after). The exchange pulls on connecting and every
+     * {@code LogExchange.PULL_INTERVAL_SECONDS} (15) seconds, so two pulls fit in the window. A bounded settle, not a signal.
+     */
+    private static final long RECONNECT_SETTLE_MILLIS = 30_000L;
+
+    /**
+     * How long a stopped reviewer of another computer's snapshot is left before it is asked again while that computer
+     * is connected, doubled for each ask in a row that recorded nothing. The reviewer stopped because the snapshot's
+     * code was refused as unreachable. The wake for a computer coming back (the journal's newest session) fires once
+     * per session, and the first moments of a session are no proof that code can be had: s5-run14 resumed its reviewer
+     * at the heal, was refused again, and never woke it again (its journals recorded no reconnection at all). Two pulls
+     * fit in the first interval, as for {@link #RECONNECT_SETTLE_MILLIS}.
+     */
+    private static final long FOREIGN_REVIEW_RETRY_MILLIS = 30_000L;
 
     private final AgentProcesses processes;
     private final ProjectObserver observer;
@@ -135,14 +162,19 @@ public final class AgentRunController {
         try {
             int index = 0;
             long headAtStart = observer.observe().headSequence();
+            // A task a person left before this run is not this run's: only a later one gives or replaces a task.
+            String seenTask = request.tasks() == null ? null : request.tasks().newest().map(Task::id).orElse(null);
             for (AgentSpec spec : request.agents()) {
                 Agent agent = new Agent(++index, spec);
-                agent.startedAtSequence = headAtStart;
-                agent.startedAtMillis = clockMillis.getAsLong();
-                HeadlessOptions options = agent.connect(connections.open());
-                agent.process = processes.start(spec.session().startCommand(request.projectRoot(), options), request.projectRoot(), spec.session().environment(options), request.prompt(), agent.label(),
-                        spec.session()::sessionId);
                 agents.add(agent);
+                if (request.prompt() == null) {
+                    // Nothing is started: a headless provider needs a first prompt, and none is invented.
+                    agent.awaitingTask = true;
+                    agent.connectionEnded = true;
+                    listener.accept("AGENT_READY=" + agent.label());
+                    continue;
+                }
+                launch(agent, request, request.prompt(), headAtStart);
                 listener.accept("AGENT_STARTED=" + agent.label());
             }
             while (true) {
@@ -162,6 +194,28 @@ public final class AgentRunController {
                     }
                     keepOrEnd(agent, observation, request.maxResumesPerAgent(), listener, unrecordedEnds);
                 }
+                if (request.tasks() != null) {
+                    Task task = request.tasks().newest().orElse(null);
+                    if (task != null && (seenTask == null || task.id().compareTo(seenTask) > 0)) {
+                        seenTask = task.id();
+                        agents.forEach(agent -> agent.task = task.text());
+                    }
+                    for (Agent agent : agents) {
+                        if (agent.task == null || agent.process != null) {
+                            continue;
+                        }
+                        String text = agent.task;
+                        agent.task = null;
+                        if (agent.awaitingTask || agent.providerSessionId == null) {
+                            // The first task is the start prompt, as --prompt is; an agent that never learnt its provider session cannot be resumed.
+                            launch(agent, request, text, observation.headSequence());
+                            listener.accept("AGENT_STARTED=" + agent.label());
+                        } else {
+                            agent.idleResumes = 0;
+                            resume(agent, new Wake(Wake.Kind.RESUME, List.of(), OptionalLong.empty()), observation, now, NEW_TASK_PREFIX + text, request, listener);
+                        }
+                    }
+                }
                 boolean awaitingDeadline = false;
                 if (!observation.complete()) {
                     for (Agent agent : agents) {
@@ -174,17 +228,7 @@ public final class AgentRunController {
                         }
                         Wake wake = wakeFor(agent, observation, now, agents, unrecordedEnds);
                         if (wake.kind() == Wake.Kind.RESUME) {
-                            agent.markResumedFor(wake, observation);
-                            agent.fencedLaneToContinue = false;
-                            agent.heldLaneAtStop = false;
-                            agent.resumed = true;
-                            agent.resumes++;
-                            agent.startedAtSequence = observation.headSequence();
-                            agent.startedAtMillis = now;
-                            HeadlessOptions options = agent.connectionEnded ? agent.connect(connections.open()) : agent.spec.options().withConnection(agent.connectionId);
-                            agent.process = processes.start(agent.spec.session().resumeCommand(request.projectRoot(), agent.providerSessionId, options), request.projectRoot(),
-                                    agent.spec.session().environment(options), RESUME_PROMPT, agent.label(), agent.spec.session()::sessionId);
-                            listener.accept("AGENT_RESUMED=" + agent.label() + " resume=" + agent.resumes);
+                            resume(agent, wake, observation, now, RESUME_PROMPT, request, listener);
                         } else if (wake.kind() == Wake.Kind.AWAIT_DEADLINE) {
                             awaitingDeadline = true;
                         }
@@ -194,12 +238,14 @@ public final class AgentRunController {
                 // for its answer period to end (nothing in the log will announce that moment), or
                 // work can still move without any agent of this run.
                 Wait waiting = null;
-                if (agents.stream().noneMatch(agent -> agent.process != null)) {
+                if (agents.stream().anyMatch(agent -> agent.awaitingTask)) {
+                    waiting = Wait.TASK_WANTED;
+                } else if (agents.stream().noneMatch(agent -> agent.process != null)) {
                     if (awaitingDeadline) {
                         waiting = Wait.ANSWER_DEADLINE;
                     } else {
                         Outcome outcome = observation.complete() ? closedOutcome(observation) : stalledOutcome(agents, observation, request.maxResumesPerAgent());
-                        waiting = outcome == Outcome.STALLED ? progressElsewhere(agents, observation, request.maxResumesPerAgent()) : null;
+                        waiting = outcome == Outcome.STALLED ? progressElsewhere(agents, observation, request.maxResumesPerAgent(), now) : justMetAnotherComputer(agents, observation, request.maxResumesPerAgent(), now);
                         if (waiting == null) {
                             if (outcome == Outcome.NEEDS_OPERATOR) {
                                 observation.operatorRequests().forEach(open -> listener.accept("OPERATOR_REQUEST=" + open));
@@ -213,7 +259,7 @@ public final class AgentRunController {
                 }
                 reportedWait = waiting;
                 if (clockMillis.getAsLong() >= deadline) {
-                    return new Result(observation.complete() ? closedOutcome(observation) : Outcome.TIMED_OUT, resumes(agents));
+                    return new Result(observation.complete() && waiting != Wait.TASK_WANTED ? closedOutcome(observation) : Outcome.TIMED_OUT, resumes(agents));
                 }
                 pause.forMillis(request.pollInterval().toMillis());
             }
@@ -229,6 +275,31 @@ public final class AgentRunController {
             // Nothing offers them again once the run is over, so these wait for the project.
             unrecordedEnds.forEach(connections::ended);
         }
+    }
+
+    /** Starts an agent's first process, or a new one for an agent that cannot be resumed, on its own connection. */
+    private void launch(Agent agent, Request request, String prompt, long headSequence) throws IOException {
+        agent.startedAtSequence = headSequence;
+        agent.startedAtMillis = clockMillis.getAsLong();
+        HeadlessOptions options = agent.connect(agent.connectionId == null ? connections.open() : connections.open(agent.connectionId));
+        agent.awaitingTask = false;
+        agent.process = processes.start(agent.spec.session().startCommand(request.projectRoot(), options), request.projectRoot(), agent.spec.session().environment(options), prompt, agent.label(),
+                agent.spec.session()::sessionId);
+    }
+
+    /** Resumes a stopped agent's own provider session with a prompt, once for whatever it is resumed for. */
+    private void resume(Agent agent, Wake wake, Observation observation, long now, String prompt, Request request, Consumer<String> listener) throws IOException {
+        agent.markResumedFor(wake, observation);
+        agent.fencedLaneToContinue = false;
+        agent.heldLaneAtStop = false;
+        agent.resumed = true;
+        agent.resumes++;
+        agent.startedAtSequence = observation.headSequence();
+        agent.startedAtMillis = now;
+        HeadlessOptions options = agent.connectionEnded ? agent.connect(connections.open(agent.connectionId)) : agent.spec.options().withConnection(agent.connectionId);
+        agent.process = processes.start(agent.spec.session().resumeCommand(request.projectRoot(), agent.providerSessionId, options), request.projectRoot(), agent.spec.session().environment(options), prompt,
+                agent.label(), agent.spec.session()::sessionId);
+        listener.accept("AGENT_RESUMED=" + agent.label() + " resume=" + agent.resumes);
     }
 
     /**
@@ -249,12 +320,18 @@ public final class AgentRunController {
      * of the project connected after the agent stopped. A reviewer whose author's computer was cut off read nothing,
      * recorded no verdict and stopped; when the cable came back nothing was written anywhere, and the review waited
      * for ever. Each such connection resumes it once.</p>
+     *
+     * <p>That connection is no proof that the code can be had yet, and the journal may record no reconnection at all
+     * (s5-run14: the PC's reviewer was resumed twice at the heal, refused again, and never woken again, so neither run
+     * ended). So a reviewer of a snapshot another computer published, while that computer is connected, is also
+     * resumed again some time after it stopped, the time doubling for each such resume that recorded nothing
+     * ({@link #FOREIGN_REVIEW_RETRY_MILLIS}).</p>
      */
     private static Wake wakeFor(Agent agent, Observation observation, long now, List<Agent> agents, List<String> unrecordedEnds) {
         boolean holdsLane = agent.holdsOpenLane(observation);
         boolean laneEnded = agent.heldLaneAtStop && !holdsLane;
         // Records which reviews it is offered now (reviewsToTry forgets the ones taken since).
-        List<String> reviews = laneEnded || holdsLane ? List.of() : agent.reviewsToTry(observation.reviewsOffered(agent.spec.provider(), agent.connectionIds), agents);
+        List<String> reviews = laneEnded || holdsLane && !agent.laneAwaitsOnlyReview(observation) ? List.of() : agent.reviewsToTry(observation.reviewsOffered(agent.spec.provider(), agent.connectionIds), agents);
         boolean forItself = laneEnded || !reviews.isEmpty() || agent.answerWaiting(observation) || agent.disputeUnseen(observation);
         // A lane whose published work waits for an operator is not resumed for its lane: resumed, it took
         // its lane back, published the same work again and was refused again, eleven times in one real
@@ -268,7 +345,13 @@ public final class AgentRunController {
         // No entry says that another computer came back, yet what it holds was refused as unreachable while it was
         // away: a reviewer could not read the snapshot it holds the grant for, and stopped (ADR-0098 step 4, item 23).
         boolean computerCameBack = agent.computerCameBackUnseen(observation) && (laneMayMove || observation.holdsRequestOrGrant(agent.spec.provider(), agent.connectionId));
-        if (forItself || forItsLane || computerCameBack) {
+        // That wake is spent by a session's first moments, and a journal that records no reconnection never fires it.
+        // A reviewer of another computer's snapshot is asked again, with growing pauses, for as long as that computer is
+        // connected and the review is not given; the asks that record nothing are bounded by --max-resumes, after which
+        // its session ends and the review is released like any gone reviewer's.
+        boolean foreignReviewRetry = observation.otherComputerConnected() && observation.holdsReviewOfAnotherComputer(agent.spec.provider(), agent.connectionId)
+                && now - agent.stoppedAtMillis >= FOREIGN_REVIEW_RETRY_MILLIS << Math.min(agent.idleResumes, 6);
+        if (forItself || forItsLane || computerCameBack || foreignReviewRetry) {
             return new Wake(Wake.Kind.RESUME, reviews, deadlinePassed ? deadline : OptionalLong.empty());
         }
         return new Wake(deadline.isPresent() && now < deadline.getAsLong() ? Wake.Kind.AWAIT_DEADLINE : Wake.Kind.STAY, List.of(), OptionalLong.empty());
@@ -357,7 +440,7 @@ public final class AgentRunController {
      * computer's agents had claimed anything; the run ended STALLED although those agents went on
      * to review.</p>
      */
-    private static Wait progressElsewhere(List<Agent> agents, Observation observation, int maxResumes) {
+    private static Wait progressElsewhere(List<Agent> agents, Observation observation, int maxResumes, long now) {
         if (observation.foreignActiveLaneOpen(agents.stream()
                 .flatMap(agent -> agent.connectionIds.stream().map(identity -> new Observation.Connection(agent.spec.provider(), identity))).toList())) {
             return Wait.FOREIGN_LANE_OPEN;
@@ -365,7 +448,35 @@ public final class AgentRunController {
         if (observation.otherComputerConnected() && agents.stream().anyMatch(agent -> agent.mayComeBack(observation, maxResumes))) {
             return Wait.OTHER_COMPUTER_CONNECTED;
         }
+        // Known but away: the wake of ADR-0099 fix 11 continues the run when it comes back, and the run's own
+        // deadline bounds the wait (ADR-0102 item 6).
+        if (observation.otherComputerKnown() && agents.stream().anyMatch(agent -> agent.mayComeBack(observation, maxResumes))) {
+            return Wait.OTHER_COMPUTER_AWAY;
+        }
+        // The copies of main have not met: another computer's head is known here and not held (this computer or the
+        // other re-merges next, and a combine lane may follow that an agent here is woken for), or that computer
+        // connected moments ago and its log may not be here yet. Only agents that can be woken make it worth waiting.
+        if (observation.otherComputerKnown() && agents.stream().anyMatch(agent -> agent.resumable(maxResumes))
+                && (observation.mainMissesAnotherComputersHead() || justReconnected(observation, now))) {
+            return Wait.COPIES_MEETING;
+        }
         return null;
+    }
+
+    /**
+     * Why a run whose work is all closed still waits: another computer connected moments ago, and its log, with the
+     * head of its {@code main} that this copy does not hold yet, may not be here (s5-run16's scripted counterpart: a run
+     * that ended within a second of the heal, before the re-merge of the other copy opened a combine for its agents).
+     * {@code null} when it does not, so a run that nothing is joining ends as before.
+     */
+    private static Wait justMetAnotherComputer(List<Agent> agents, Observation observation, int maxResumes, long now) {
+        return observation.complete() && observation.otherComputerKnown() && justReconnected(observation, now) && agents.stream().anyMatch(agent -> agent.resumable(maxResumes)) ? Wait.COPIES_MEETING
+                : null;
+    }
+
+    private static boolean justReconnected(Observation observation, long now) {
+        OptionalLong since = observation.otherComputerConnectedSince();
+        return since.isPresent() && now - since.getAsLong() < RECONNECT_SETTLE_MILLIS;
     }
 
     /** Why a run whose agents have all stopped keeps waiting, as printed in {@code AGENT_RUN_WAITING}. */
@@ -375,7 +486,13 @@ public final class AgentRunController {
         /** A participant this controller did not start holds an open lane. */
         FOREIGN_LANE_OPEN,
         /** Another computer of the project is connected and an agent here can come back to its lane or its request. */
-        OTHER_COMPUTER_CONNECTED
+        OTHER_COMPUTER_CONNECTED,
+        /** Another computer of the project is known but has no open session with this one, and an agent here can come back to its lane or its request. */
+        OTHER_COMPUTER_AWAY,
+        /** Another computer's copy of main is not met yet, or that computer has only just connected: a combine may still be written. */
+        COPIES_MEETING,
+        /** Agents were started to wait for a task, and no person has given one. */
+        TASK_WANTED
     }
 
     /** The log head the controller observed at one moment. */
@@ -477,6 +594,18 @@ public final class AgentRunController {
          * @return identity the process's Synesis MCP server will use
          */
         String open();
+
+        /**
+         * Returns a new connection identity for an agent that had an earlier connection, which has ended. The agent's
+         * next session is the same agent as its earlier one, and a review it was owed or is barred from is owed or
+         * barred for the next as well, so a project that can tell must be told (ADR-0098 step 5, item 30).
+         *
+         * @param earlier the agent's previous connection, whose end was recorded
+         * @return identity the process's Synesis MCP server will use
+         */
+        default String open(String earlier) {
+            return open();
+        }
 
         /**
          * Records that a connection has ended: no process of this controller will use it again. Waits
@@ -676,6 +805,20 @@ public final class AgentRunController {
         boolean holdsOpenLane(String provider, String connectionInstanceId);
 
         /**
+         * Reports whether the lane behind one connection has nothing left to write: it is a producer lane whose
+         * snapshot is published and waits for review. Such an agent is idle, and a review it may take is offered to it
+         * as to an agent with no lane (s6-run1: the only agent of each computer held such a lane, neither was woken for
+         * the other's snapshot, and both runs waited until their time ran out).
+         *
+         * @param provider             provider identifier
+         * @param connectionInstanceId connection of one of the agent's processes
+         * @return {@code true} while that session's lane only waits for its review
+         */
+        default boolean laneAwaitsOnlyReview(String provider, String connectionInstanceId) {
+            return false;
+        }
+
+        /**
          * Reports whether the session behind one connection is fenced for recovery: its participant is
          * suspended or held for recovery, so the MCP server refuses its calls with
          * {@code SESSION_EPOCH_FENCED} and its lane can only be continued by a new session. A kept
@@ -725,6 +868,28 @@ public final class AgentRunController {
         }
 
         /**
+         * Reports whether the project has another computer at all, connected or away: for the leader its members,
+         * for a member its leader, as the project's replication settings name them. Empty or unreadable settings
+         * report {@code false}, so a single-computer project ends as it always did.
+         *
+         * @return {@code true} while another computer is a peer of the project
+         */
+        default boolean otherComputerKnown() {
+            return false;
+        }
+
+        /**
+         * Reports whether this copy of {@code main} lacks a head another computer advanced to, as this computer's logs
+         * name it (ADR-0098 step 5). Then a fast-forward or a re-merge is still to come, and a re-merge that Git cannot
+         * finish opens a combine lane for an agent here. Unreadable state reports {@code false}.
+         *
+         * @return {@code true} while another computer's advanced head is not in this copy
+         */
+        default boolean mainMissesAnotherComputersHead() {
+            return false;
+        }
+
+        /**
          * Returns when the newest session with another computer of this project began, for a computer that is
          * connected now. A computer coming back is written in no log, yet it is what an agent refused
          * {@code CODE_REMOTE_UNAVAILABLE} while it was away needs; a stopped agent with something to come back to is
@@ -770,7 +935,9 @@ public final class AgentRunController {
          * up, as {@code get_next_action} offers them to a session that holds no lane: review required,
          * its author active, no reviewer holding it, and authored in its lineage by none of the
          * current sessions behind these connections. A stopped agent with no lane of its own is
-         * resumed for such a snapshot, and for each one once while it stays offered (ADR-0099).
+         * resumed for such a snapshot, and for each one once while it stays offered (ADR-0099). The
+         * same holds for a lane of an away computer, by lane ID, offered to an agent with no lane
+         * while this computer is stalled (ADR-0098 step 7 item 10; ADR-0099 fix 15).
          *
          * @param provider              provider identifier
          * @param connectionInstanceIds every connection the agent's processes have had
@@ -809,6 +976,20 @@ public final class AgentRunController {
          * @return {@code true} while that session holds such a request, grant or verdict
          */
         default boolean holdsRequestOrGrant(String provider, String connectionInstanceId) {
+            return false;
+        }
+
+        /**
+         * Reports whether the session behind one connection holds a review grant it has not finished for a snapshot
+         * that another computer's agent published. Reading that snapshot is refused ({@code CODE_REMOTE_UNAVAILABLE})
+         * while the Link is down, and nothing in the log says when it has come back, so a reviewer that stopped
+         * without a verdict has to be asked again (ADR-0098 step 5, item 29).
+         *
+         * @param provider             provider identifier
+         * @param connectionInstanceId connection of the agent's current process
+         * @return {@code true} while that session holds such a grant
+         */
+        default boolean holdsReviewOfAnotherComputer(String provider, String connectionInstanceId) {
             return false;
         }
 
@@ -862,12 +1043,14 @@ public final class AgentRunController {
      *
      * @param projectRoot        control project root
      * @param agents             agents to start, in order
-     * @param prompt             the one prompt every agent starts with
+     * @param prompt             the one prompt every agent starts with, or {@code null} to start none until a person
+     *                           gives a task through {@code tasks}
      * @param timeout            overall time limit
      * @param pollInterval       time between observations
      * @param maxResumesPerAgent how many resumes in a row of one agent may record nothing in the log
+     * @param tasks              where a person gives or replaces the task later, or {@code null} for none
      */
-    public record Request(Path projectRoot, List<AgentSpec> agents, String prompt, Duration timeout, Duration pollInterval, int maxResumesPerAgent) {
+    public record Request(Path projectRoot, List<AgentSpec> agents, String prompt, Duration timeout, Duration pollInterval, int maxResumesPerAgent, TaskInbox tasks) {
 
         /**
          * Validates the request.
@@ -880,13 +1063,53 @@ public final class AgentRunController {
             if (agents.isEmpty()) {
                 throw new IllegalArgumentException("at least one agent is required");
             }
-            if (prompt == null || prompt.isBlank()) {
+            if (prompt == null ? tasks == null : prompt.isBlank()) {
                 throw new IllegalArgumentException("a prompt is required");
             }
             if (timeout.isZero() || timeout.isNegative() || pollInterval.isZero() || pollInterval.isNegative() || maxResumesPerAgent < 0) {
                 throw new IllegalArgumentException("limits must be positive");
             }
         }
+
+        /**
+         * A request whose agents start with a prompt and are never given another task.
+         *
+         * @param projectRoot        control project root
+         * @param agents             agents to start, in order
+         * @param prompt             the one prompt every agent starts with
+         * @param timeout            overall time limit
+         * @param pollInterval       time between observations
+         * @param maxResumesPerAgent how many resumes in a row of one agent may record nothing in the log
+         */
+        public Request(Path projectRoot, List<AgentSpec> agents, String prompt, Duration timeout, Duration pollInterval, int maxResumesPerAgent) {
+            this(projectRoot, agents, prompt, timeout, pollInterval, maxResumesPerAgent, null);
+        }
+    }
+
+    /**
+     * A task a person gave the agents after they started.
+     *
+     * @param id   orders tasks: a later task has a greater identifier
+     * @param text what the agents are to work on
+     */
+    public record Task(String id, String text) {
+    }
+
+    /**
+     * Where a person's tasks are left for the agents. A task is the text of a prompt and nothing more: it is not an
+     * entry of the coordination log, so it is no claim, review decision, approval, merge or policy
+     * (ADR-0103, stage 4 amendment).
+     */
+    @FunctionalInterface
+    public interface TaskInbox {
+
+        /**
+         * Returns the newest task.
+         *
+         * @return the task, or empty when none was given
+         * @throws IOException when it cannot be read
+         */
+        Optional<Task> newest() throws IOException;
     }
 
     /**
@@ -913,6 +1136,8 @@ public final class AgentRunController {
         private long startedAtMillis;
         /** When it is taken to have last looked at the project: as for {@link #stoppedAtSequence}, in time. */
         private long lastLookMillis;
+        /** When the controller saw its last process end. */
+        private long stoppedAtMillis;
         /** The start of the other computer's session it was last resumed for. */
         private long resumedForConnection = Long.MIN_VALUE;
         private long resumedForDeadline = Long.MIN_VALUE;
@@ -939,6 +1164,10 @@ public final class AgentRunController {
         private boolean sessionKept;
         /** Whether its last session was ended because it was fenced for recovery, its lane still to continue. */
         private boolean fencedLaneToContinue;
+        /** Whether it was registered to wait for its first task and has no process yet. */
+        private boolean awaitingTask;
+        /** A task a person gave that it has not been started or resumed with, because its process was running. */
+        private String task;
 
         private Agent(int index, AgentSpec spec) {
             this.index = index;
@@ -993,6 +1222,7 @@ public final class AgentRunController {
             long seen = seenBeforeExit.orElse(startedAtSequence);
             stoppedAtSequence = Math.max(startedAtSequence, lastActivity.isPresent() ? Math.min(lastActivity.getAsLong(), seen) : seen);
             lastLookMillis = Math.max(startedAtMillis, now - UNSEEN_BEFORE_EXIT_MILLIS);
+            stoppedAtMillis = now;
             process = null;
         }
 
@@ -1004,6 +1234,12 @@ public final class AgentRunController {
          */
         private boolean holdsOpenLane(Observation observation) {
             return connectionIds.stream().anyMatch(identity -> observation.holdsOpenLane(spec.provider(), identity));
+        }
+
+        /** Whether every lane it holds only waits for its review: it has nothing to write, and may review. */
+        private boolean laneAwaitsOnlyReview(Observation observation) {
+            return holdsOpenLane(observation) && connectionIds.stream().filter(identity -> observation.holdsOpenLane(spec.provider(), identity))
+                    .allMatch(identity -> observation.laneAwaitsOnlyReview(spec.provider(), identity));
         }
 
         /** The newest unread message, or operator answer, addressed to a lane any of this agent's connections holds. */

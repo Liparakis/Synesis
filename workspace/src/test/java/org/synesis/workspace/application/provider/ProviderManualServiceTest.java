@@ -68,6 +68,21 @@ class ProviderManualServiceTest {
           "A ready session without claims is not permission to mutate task files"));
       assertTrue(content.contains("managed Codex continuity is `MANAGED_CONTINUITY`"));
       assertTrue(content.contains("do not fall back to a different identity"));
+      // The rules that used to live only in the managed AGENTS.md section (ADR-0103 decision 9).
+      assertTrue(content.contains("Use Synesis tools for project reads, file changes, and commands."));
+      assertTrue(content.contains("synesis provider install claude"));
+      assertTrue(content.contains("synesis provider install codex"));
+      assertTrue(content.contains("do not rerun provider installation from the assigned isolated worktree"));
+      assertTrue(content.contains("Native provider hooks are optional"));
+      assertTrue(content.contains("stop native mutations and verify state through `read_file`"));
+      assertTrue(content.contains("Reads carry revisions; provide the matching revision when applying a patch."));
+      assertTrue(content.contains("stop mutation and inspect read-only state"));
+      assertTrue(content.contains("A mutating Synesis tool may return a required continuation"));
+      assertTrue(content.contains("the continuation is part of the durable protocol"));
+      assertTrue(content.contains("call `get_next_action` again before ending the turn"));
+      assertTrue(content.contains("The MCP surface contains exactly "
+          + org.synesis.mcp.contract.McpToolCatalog.rawNames().size() + " tools"));
+      assertFalse(content.contains("AGENTS.md"), "the manual must not send the agent to a project file");
       Files.writeString(manual, Files.readString(manual) + "tampered\n");
       assertFalse(service.attest("codex")
           .valid());

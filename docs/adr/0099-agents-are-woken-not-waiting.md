@@ -397,7 +397,11 @@ completed binding through to the tools whose policy already admits one (`request
 `respond_coordination`; the rule a managed connection had, `ManagedAdmissionState.REVIEW_ONLY`). Downstream only
 consuming a review grant and recording a review decision accept a completed binding, and both check the grant
 (`SessionAuthorityResolver.resolveReview`); every other coordination operation resolves a bound binding and fails
-closed as before.
+closed as before. The reads and test runs of that review were still fenced, so in the real PC + VM run s5-run6 two
+reviewers whose own lanes were integrated could not read what they reviewed and stopped without a verdict
+(ADR-0098, step 5 item 24). `read_file` and `run_command` now admit a completed binding at the fence too; downstream
+only the immutable review snapshot of a consumed grant without a verdict accepts one (`ReviewSnapshotAccessService`),
+and a completed lane holding no review is told to start a fresh session.
 
 ### Decision 5: one open lane per agent (documented, no new rule)
 
@@ -559,6 +563,72 @@ before it. The ADR stays Proposed. Source-level evidence only: none of these has
     `replication.log`), and once more for each later session. Contract line visible to agents: an agent may be resumed,
     with the same neutral prompt, when another computer of the project reconnects. Source-level evidence only. No real
     run has shown it yet.
+
+12. **A reviewer of another computer's snapshot is asked again** (s5-run14, 2026-10-19; ADR-0098 step 5, designer item
+    29). Fix 11 resumes an agent once for each session that began after it last looked, and a session's first moments
+    are no proof that code can be had; in the run the journal recorded no reconnection at all. A stopped agent whose
+    session holds an unfinished review grant for a snapshot another computer published is now also resumed again
+    while that computer is connected: 30 seconds after it stopped, then 60, 120 and so on for each resume in a row
+    that recorded nothing, bounded by `--max-resumes`.
+
+13. **An agent whose lane only waits for its review is offered reviews like an agent with no lane** (s6-run1, 2026-10-19;
+    ADR-0098 step 6, designer item 20). Fix 9 woke only agents that held no lane, and the only agent of each computer held
+    a producer lane whose snapshot waited for review. `Observation.laneAwaitsOnlyReview` is true for a producer lane
+    whose snapshot is `REVIEW_PENDING`; `wakeFor` treats such an agent as idle for the review wake, once for each
+    review offered, as fix 9 does. A lane with anything left to write still gets no review wake. The wake changes
+    nothing about the lane's own wait.
+14. **A producer with unpublished work is not shown another lane's review wait** (s5-run15, PC and VM, 2026-10-19).
+    The integration pass answers `WAITING / VALIDATION_REQUIRED, snapshotIds` while a snapshot of its computer's lanes
+    awaits review, and `get_next_action` returned it to every caller no review candidate could be offered to. A Codex
+    agent resumed after its `finish_lane` was refused as stale was shown that wait for the VM's `primes` snapshot (whose
+    author was held, so no candidate was offered), stopped, and its `NOTES.md` lane never published. A producer lane
+    with no snapshot of its own now gets its own step (`IMPLEMENT`, then publication) in place of the pump's review
+    wait (`AgentNextActionService.producerStillToPublish`); after it publishes, fix 13 offers it other lanes' snapshots.
+    The cause is proven from the agent transcript; the held-author condition is not reproduced in the scripted
+    scenario (`LaneWithWorkWaitsForNoOtherLaneScenarioTest` passes with and without the change). Same run, not fixed
+    here: the PC reviewer's reads of the VM's snapshot answered `CODE_PEER_UNREACHABLE` until its resumes ran out, its
+    session ended and its grant was revoked (code over Link); and `finish_lane` was refused as stale four times in a
+    row while the other computer's review entries (`COORDINATION_*`, `LANE_GRANT_*`, `REVIEW_VALIDATION_RECORDED`) arrived,
+    which `NOT_STALING_A_FINISH` does not list.
+
+15. **A takeover offer wakes an agent with no lane** (s7-run5, PC and VM, 2026-10-20, remaster86; ADR-0098 step 7, items
+    10 and 19). The run controller resumes a stopped agent for what it is offered: open reviews, re-merge reviews and combine
+    lanes (`Observation.reviewsOffered`, each once while it stays offered). The lane of an away computer, which step 7
+    offers to a lane-less agent when this computer is stalled, was not in that list. Whether a computer is away is
+    `replication.members`, which no entry announces, so nothing resumed a stopped agent when the record turned, and its next
+    `get_next_action` was never asked. The offer is now counted like a review: `EventLogObserver.reviewsOffered` adds the
+    lanes `AwayLanes.offered` gives, by lane ID, only when none of the agent's sessions holds a lane (a session holds one
+    lane, so a taker with a lane is refused: `CURRENT_PARTICIPANT_HOLDS_A_LANE`). The same once-per-offer rule applies, and
+    the offer is forgotten when the takeover makes the lane no longer offered. Proved by `AwayLanesTest` (the offer
+    appears with the record, not before, not while this computer is not stalled; it failed before the change). Not proved
+    in a real run. The wake is not what ended s7-run5: see ADR-0098 step 7 item 19.
+
+16. **A re-merge review owed to agents the run controller had closed** (s5-run16, PC and VM, 2026-10-20, remaster86;
+    ADR-0098 step 5, item 30, which has the evidence). One rule, the one of fixes 9, 13 and 15: *a stopped agent is resumed
+    for what it is offered, once for each offer*. What was missing is the offer. The merge pass offers a re-merge review
+    only to a session that exists, and the controller ends the session of an agent with nothing to come back to, so a
+    review owed to such an agent had no session to be offered to and nothing resumed it.
+    (a) `EventLogObserver.reviewsOffered` adds `CollaborationResponseMapper.remergeReviewsWaiting`: the re-merge snapshots
+    under review that hold no grant that is not released and that none of the agent's sessions wrote or authored in the lineage
+    of. The agent is resumed once for each, takes a session, and the next pass grants it the review.
+    (b) `AgentRunController.Connections.open(earlier)`: a resume on a new connection tells the project which connection it
+    continues (`SessionSuccessions.continueConnection`), and the binding service records the new session as the
+    earlier session's successor when it creates it (`ProviderSessionBindingService.recordContinuation`). Before this an agent
+    resumed on a new connection was no one's successor, so the pass could offer it a review of its own earlier work, and
+    `CombineLaneJoin` offered it a combine of its own earlier lane (now refused for every session of the agent,
+    `CombineLaneJoin.sessionsOfAgent`).
+    (c) The holder of an open combine lane is offered a re-merge review last, not never (`RemergeService.anotherReviewer`),
+    and is shown the grant (`AgentReviewActionProjection.reviewActions` shows a re-merge grant to the participant it names,
+    lane or none): with two agents on a computer it may be the only one that wrote neither snapshot.
+    Two things the scenario found: a run whose own work is closed no longer ends while another computer connected moments ago
+    (`AgentRunController.justMetAnotherComputer`, `COPIES_MEETING`; it ended within a second of the heal, before the re-merge
+    opened its combine), and `AwayLanes` judges live the session a connection has now (its binding), not the one its lease last
+    named, and releases a re-merge grant to a session of this computer that no entry introduced (a lane-less session) when it is
+    gone. Proved by scripted scenario `CombineUnderRunControllerScenarioTest` (two agents per computer started by a real
+    `AgentRunController` over real `ControllerConnections`, a third process standing for an agent still working at the heal): it
+    failed before the change with the combine written and no re-merge landing, failed twice more with the review granted to a
+    session its lease still named and its connection had left, and passed in 4 of 4 runs with the last change. Unit: `RemergeReviewsOfferedTest`,
+    `RemergeServiceTest`, `AgentRunControllerTest`, `SessionSuccessionsTest`. Not proved in a real run.
 
 ### Not done
 

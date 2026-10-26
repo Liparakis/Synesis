@@ -339,6 +339,8 @@ class AgentNextActionServiceTest {
             assertEquals("reviewer", reviewerTask.get("role"));
             assertEquals(groupId.toString(), reviewerTask.get("workGroupId"));
             assertFalse(((List<?>) reviewerTask.get("reviewTargets")).isEmpty());
+            assertEquals(List.of(Map.of("kind", "path_exact", "path", "reviews/" + candidate.get("snapshotId") + ".md")), reviewerTask.get("claims"),
+                    "the notes a reviewer ends its lane by publishing are claimed with no step of its own (ADR-0102 item 10)");
             Map<String, Object> claimRequirement = (Map<String, Object>) reviewerIntent.get("claimRequirement");
             assertEquals("task.claims", claimRequirement.get("field"));
             assertEquals(Boolean.TRUE, claimRequirement.get("required"));
@@ -434,6 +436,86 @@ class AgentNextActionServiceTest {
 
         collaboration.respond(controlRoot, "codex", "answer-author", request.requestId(), CoordinationRequest.Status.ACCEPTED, "admitted again");
         assertEquals(answeredAt, new EventLogObserver(location).observe().newestAnswerFor("codex", "answer-reviewer").orElseThrow(), "the same answer given again is not a new one");
+    }
+
+    /**
+     * A lane continued from a lost one holds the continuation grant that restored it. That grant takes no
+     * verdict, so once the lane has ended it is no open review: the session's open authority must not list it,
+     * and the ended lane must be closed so a fresh session can start. It was listed as PENDING_REVIEW while
+     * get_next_action projected CLOSE, which left the agent with nothing it could do (real run, 2026-10-19).
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aContinuedLaneThatEndedHoldsNoOpenReviewAndItsSessionCanBeReplaced() throws Exception {
+        prepareSessionAndTrust("codex", "ended-predecessor");
+        prepareSessionAndTrust("codex", "ended-successor");
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        var predecessor = collaboration.announce(controlRoot, "codex", "ended-predecessor", "Implement source", "Publish source", List.of(ResourceSelector.pathExact("src/Product.java")));
+        ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        var predecessorBinding = bindings.find(location, "codex", "ended-predecessor").orElseThrow();
+        var successorBinding = bindings.find(location, "codex", "ended-successor").orElseThrow();
+        String predecessorParticipant = WorkspaceCollaborationService.participantHandle(predecessorBinding.sessionId());
+        String successorParticipant = WorkspaceCollaborationService.participantHandle(successorBinding.sessionId());
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+
+        RecoverySnapshotService.Snapshot recovery = new RecoverySnapshotService().materialize(location, predecessorBinding.sessionId());
+        WorkIntentService intentService = new WorkIntentService(store, identity);
+        intentService.suspend(predecessorParticipant);
+        String recoveryReference = recovery.root().toString() + "#" + recovery.contentHash();
+        intentService.holdRecovery(predecessorParticipant, recoveryReference);
+        WorkIntent successor = new WorkIntent(UUID.randomUUID(), location.projectId(), successorParticipant, "codex", predecessor.intent().taskId(), predecessor.intent().goal(),
+                predecessor.intent().acceptance(), predecessor.intent().baseCommit(), predecessor.intent().selectors(), predecessor.intent().version() + 1, predecessor.intent().workGroupId(),
+                predecessor.intent().authorityLineageId(), WorkIntent.Status.ANNOUNCED, WorkIntent.Role.PRODUCER, predecessor.intent().reviewTargetSelectors(), predecessor.intent().knownDependencies());
+        UUID continuationGrantId = UUID.randomUUID();
+        new org.synesis.coordination.application.WorkGroupService(store, identity)
+                .issue(new LaneGrant(continuationGrantId, predecessor.intent().workGroupId(), successor.intentId(), successorParticipant, predecessor.intent().version(), true));
+        intentService.continueFromRecovery(new LaneContinuation(continuationGrantId, predecessor.intent().intentId(), successor, predecessorParticipant, successorParticipant,
+                predecessor.intent().version(), recoveryReference));
+        intentService.release(successor.intentId(), successorParticipant);
+        assertTrue(bindings.completeBySessionId(location, "codex", successorBinding.sessionId()));
+
+        var ended = bindings.find(location, "codex", "ended-successor").orElseThrow();
+        assertFalse(org.synesis.workspace.application.provider.session.ProviderSessionTerminalizationService.openAuthority(location, ended).contains("PENDING_REVIEW"));
+        assertFalse(new EventLogObserver(location).observe().holdsRequestOrGrant("codex", "ended-successor"));
+        Map<String, Object> workflow = (Map<String, Object>) ((Map<String, Object>) new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "ended-successor")).result())
+                .get("workflow");
+        assertEquals("CLOSE", workflow.get("type"));
+        assertNotEquals(successorBinding.sessionId(), bindings.ensure(location, "codex", "ended-successor").binding().sessionId(), "a session holding nothing open is replaced");
+    }
+
+    /**
+     * What the session's open authority lists, get_next_action must project the action that finishes: a reviewer
+     * whose lane ended while its review was still to be taken is shown that review, not told to close.
+     */
+    @Test
+    void anEndedLaneStillOwingAReviewIsShownTheReviewNotClose() throws Exception {
+        prepareSessionAndTrust("codex", "owing-author");
+        prepareSessionAndTrust("codex", "owing-reviewer");
+        ProjectLocation location = new ProjectApplicationService().locate(controlRoot);
+        UUID groupId = UUID.randomUUID();
+        WorkspaceCollaborationService collaboration = new WorkspaceCollaborationService();
+        collaboration.createWorkGroup(controlRoot, groupId, "Count words", "Review each module", ReviewPolicy.mandatoryIndependent());
+        var author = collaboration.announce(controlRoot, "codex", "owing-author", "Implement count", "Publish count", List.of(ResourceSelector.pathExact("count.py")), groupId);
+        var reviewerLane = collaboration.announce(controlRoot, "codex", "owing-reviewer", "Review count", "Independently review count", List.of(ResourceSelector.pathExact("review_count.md")), groupId,
+                WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathExact("count.py")));
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        PredictionEventStore store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        appendMandatorySnapshot(store, identity, bindings.find(location, "codex", "owing-author").orElseThrow(), author.intent(), "snap_owing", "count.py");
+        CoordinationRequest request = collaboration.request(controlRoot, "codex", "owing-reviewer", author.intent().intentId(), CoordinationRequest.Kind.REVIEW, "Review count", "snap_owing");
+        collaboration.respond(controlRoot, "codex", "owing-author", request.requestId(), CoordinationRequest.Status.ACCEPTED, "admitted");
+
+        var reviewerBinding = bindings.find(location, "codex", "owing-reviewer").orElseThrow();
+        new WorkIntentService(store, identity).release(reviewerLane.intent().intentId(), WorkspaceCollaborationService.participantHandle(reviewerBinding.sessionId()));
+        assertTrue(bindings.completeBySessionId(location, "codex", reviewerBinding.sessionId()));
+
+        assertTrue(org.synesis.workspace.application.provider.session.ProviderSessionTerminalizationService.openAuthority(location, bindings.find(location, "codex", "owing-reviewer").orElseThrow())
+                .contains("PENDING_REVIEW"));
+        AgentResponse response = new AgentNextActionService().getNextAction(new NextActionRequest(controlRoot, "codex", "owing-reviewer"));
+        assertFalse(response.toJson().contains("\"CLOSE\""), response.toJson());
+        assertEquals(AgentNextAction.REQUEST_COORDINATION, response.nextAction(), response.toJson());
     }
 
     private static final String VALIDATION_SENTENCE = " Synesis runs this project's validation command (`python -m unittest`) on every integration, so running or reporting it is not a part to claim.";

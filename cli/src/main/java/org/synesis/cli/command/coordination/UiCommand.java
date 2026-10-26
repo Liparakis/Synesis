@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.concurrent.Callable;
 import java.util.Map;
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ErrorShape;
 import org.synesis.cli.daemon.DaemonClient;
 import org.synesis.cli.exit.ExitCodes;
 import picocli.CommandLine.Command;
@@ -58,6 +59,9 @@ public final class UiCommand implements Callable<Integer> {
                     runtime.terminal().stdout("SYNESIS_UI_OPEN_FAILED");
                 }
                 return ExitCodes.OK;
+            } catch (org.synesis.cli.daemon.DaemonBuildMismatchException mismatch) {
+                ErrorShape.print(runtime.terminal()::stderr, "DAEMON_BUILD_MISMATCH", mismatch.userMessage(), mismatch.fix());
+                return ExitCodes.LOCAL_CONFIGURATION;
             } catch (java.io.IOException failure) {
                 runtime.terminal().stderr("SYNESIS_DAEMON_ERROR=" + failure.getMessage());
                 if ("NO_KNOWN_PROJECT".equals(failure.getMessage())) {

@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 import org.synesis.coordination.domain.collaboration.WorkIntent;
+import org.synesis.workspace.application.collaboration.CombineLaneJoin;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService.Binding;
@@ -69,6 +70,33 @@ final class ProviderSessionCoordinationFacts {
                     .anyMatch(intent -> projection.predecessorIntent(intent.intentId()).isPresent() && projection.participantState(participant)
                             .filter(state -> state == org.synesis.coordination.domain.collaboration.Participant.State.ACTIVE).isPresent());
         } catch (Exception failure) {
+            return false;
+        }
+    }
+
+    /**
+     * Reports whether a binding records the base its worktree is judged against: this computer's control head, or the
+     * base of the combine lane its session holds open. A combine lane's worktree is moved on purpose to the other copy
+     * of {@code main}, the commit the re-merge could not merge onto (ADR-0098 step 5, designer item 26); judged against
+     * this computer's {@code main} it would read as stale, and its conflict markers as work to refresh. Every other
+     * lane keeps the control-head rule, and unreadable coordination state answers "no". The log is read only when the
+     * base is not the control head, so an ordinary lane's check costs nothing more.
+     *
+     * @param location    initialized project location
+     * @param binding     exact provider binding
+     * @param controlHead this computer's current control head
+     * @return {@code true} when the binding's base is the control head or its session's open combine lane's base
+     */
+    static boolean atJudgedBase(ProjectLocation location, Binding binding, String controlHead) {
+        if (binding.baseCommit().equals(controlHead)) {
+            return true;
+        }
+        if (!Files.isDirectory(location.coordinationDirectory().resolve("events"))) {
+            return false;
+        }
+        try {
+            return CombineLaneJoin.heldBase(location.openCoordinationStore(), binding.sessionId()).filter(binding.baseCommit()::equals).isPresent();
+        } catch (Exception unreadable) {
             return false;
         }
     }

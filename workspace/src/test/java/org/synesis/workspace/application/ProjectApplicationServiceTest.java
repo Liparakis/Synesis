@@ -47,32 +47,9 @@ final class ProjectApplicationServiceTest {
         assertTrue(Files.exists(root.resolve(".synesis/project.json")));
         assertTrue(Files.exists(root.resolve(".synesis/local/profile/link/identity.bin")));
         assertTrue(Files.isDirectory(root.resolve(".synesis/shared/records")));
-        String agents = Files.readString(root.resolve("AGENTS.md"));
-        assertTrue(agents.startsWith("<!-- SYNESIS-BEGIN -->"));
-        assertTrue(agents.contains("This repository uses Synesis."));
-        assertTrue(agents.contains("synesis provider install claude"));
-        assertTrue(agents.contains("synesis provider install codex"));
-        assertTrue(agents.contains("Before the first MCP session after `synesis init`"));
-        assertTrue(agents.contains("in the control project directory"));
-        assertTrue(agents.contains("do not rerun provider installation from the assigned isolated worktree"));
-        assertTrue(agents.contains("use Synesis MCP for all reads, writes, and commands"));
-        assertTrue(agents.contains("Native provider hooks are optional"));
-        assertTrue(agents.contains("do not call finish_lane or another lifecycle tool merely because the coding appears complete"));
-        assertTrue(agents.contains("Execute lifecycle actions only when get_next_action projects the exact tool and arguments"));
-        assertTrue(agents.contains("A mutating Synesis tool may return a required continuation"));
-        assertTrue(agents.contains("the continuation is part of the durable protocol, not an optional suggestion"));
-        assertTrue(agents.contains("After any completed Synesis mutation, call get_next_action again before ending the turn"));
-        assertTrue(agents.contains("call get_next_action once with completionRequested:true"));
-        assertTrue(agents.contains("compare consecutive workflow.actionId values"));
-        assertTrue(agents.contains("workflow.retryAfterMs (default 5000 ms)"));
-        assertTrue(agents.contains("workflow.maxUnchangedPolls unchanged responses (default 3)"));
-        assertTrue(agents.contains("stop polling until a fresh state-change signal or human input"));
-        assertTrue(agents.contains("integrationCheck input only evaluates explicitly supplied compatibility facts"));
-        assertTrue(agents.contains("When get_next_action projects WAIT"));
-        assertTrue(agents.contains("Do not report success merely because your own lane is complete"));
-        assertTrue(agents.contains("A ready session is not yet an announced collaboration intent"));
-        assertTrue(agents.contains("task.claims containing the exact repository-relative files or subtrees"));
-        assertTrue(agents.contains("likelyScopes is descriptive only"));
+        // ADR-0103 decision 9: the installed manual is the one place for agent instructions, so init writes none.
+        assertFalse(Files.exists(root.resolve("AGENTS.md")));
+        assertEquals(List.of(), initialized.retiredInstructions());
         String metadata = Files.readString(root.resolve(".synesis/project.json"));
         assertTrue(metadata.contains("\"schemaVersion\": 2"));
         assertFalse(metadata.contains("identity.bin"));
@@ -82,9 +59,7 @@ final class ProjectApplicationServiceTest {
         ProjectLocation discovered = service.locate(root.resolve("nested/child"));
         assertEquals(root.toAbsolutePath().normalize(), discovered.root());
         assertEquals(initialized.location().projectId(), discovered.projectId());
-        String firstAgents = Files.readString(root.resolve("AGENTS.md"));
         assertEquals(ProjectInitStatus.ALREADY_INITIALIZED, service.init(root).status());
-        assertEquals(firstAgents, Files.readString(root.resolve("AGENTS.md")));
     }
 
     @Test
@@ -119,7 +94,7 @@ final class ProjectApplicationServiceTest {
             names = children.map(path -> path.getFileName().toString()).collect(java.util.stream.Collectors.toSet());
         }
         assertTrue(names.contains(".synesis"));
-        assertTrue(names.contains("AGENTS.md"));
+        assertFalse(names.contains("AGENTS.md"));
         assertTrue(names.contains("src"));
         assertTrue(Files.isRegularFile(root.resolve("src/CreatedByAgent.java")));
         assertTrue(names.stream().noneMatch(name -> name.matches("synesis-.*") || name.endsWith(".lock") || name.endsWith(".tmp") || name.contains(".tmp-")));
@@ -157,31 +132,53 @@ final class ProjectApplicationServiceTest {
     }
 
     @Test
-    void preservesUserTextAndReplacesOnlyManagedSection() throws Exception {
+    void removesOnlyTheManagedSectionAndKeepsTheUsersText() throws Exception {
         Path root = Files.createTempDirectory("synesis-agents-");
         String existing = "# Project rules\n\nKeep this text.\n\n" + "<!-- SYNESIS-BEGIN -->\nold managed text\n<!-- SYNESIS-END -->\n\n# End\n";
         Files.writeString(root.resolve("AGENTS.md"), existing);
 
-        new ProjectApplicationService().init(root);
+        ProjectInitResult result = new ProjectApplicationService().init(root);
 
-        String updated = Files.readString(root.resolve("AGENTS.md"));
-        assertTrue(updated.startsWith("# Project rules\n\nKeep this text."));
-        assertTrue(updated.endsWith("\n\n# End\n"));
-        assertTrue(updated.contains("This repository uses Synesis."));
-        assertFalse(updated.contains("old managed text"));
+        assertEquals("# Project rules\n\nKeep this text.\n\n# End\n", Files.readString(root.resolve("AGENTS.md")));
+        assertEquals(List.of("AGENTS.md"), result.retiredInstructions());
+        assertEquals(List.of(), new ProjectApplicationService().init(root).retiredInstructions());
     }
 
     @Test
-    void rejectsMalformedManagedMarkersWithoutOverwritingUserFile() throws Exception {
+    void deletesAnAgentsFileThatHoldsNothingButTheManagedSection() throws Exception {
+        Path root = Files.createTempDirectory("synesis-agents-only-section-");
+        Files.writeString(root.resolve("AGENTS.md"), "<!-- SYNESIS-BEGIN -->\nold managed text\n<!-- SYNESIS-END -->\n");
+
+        new ProjectApplicationService().init(root);
+
+        assertFalse(Files.exists(root.resolve("AGENTS.md")));
+    }
+
+    @Test
+    void leavesMalformedManagedMarkersAloneAndStillInitializes() throws Exception {
         Path root = Files.createTempDirectory("synesis-agents-malformed-");
         Path agents = root.resolve("AGENTS.md");
         String existing = "User instructions\n<!-- SYNESIS-BEGIN -->\n";
         Files.writeString(agents, existing);
 
-        ProjectApplicationService.ProjectApplicationException failure = assertThrows(ProjectApplicationService.ProjectApplicationException.class, () -> new ProjectApplicationService().init(root));
+        assertEquals(ProjectInitStatus.SUCCESS, new ProjectApplicationService().init(root).status());
 
-        assertEquals("CONFLICT", failure.code());
         assertEquals(existing, Files.readString(agents));
+    }
+
+    @Test
+    void initRemovesAnEarlierVersionsClaudeRuleFileButNotOneTheUserWrote() throws Exception {
+        Path root = Files.createTempDirectory("synesis-rule-file-");
+        Path rule = root.resolve(".claude/rules/synesis.md");
+        Files.createDirectories(rule.getParent());
+        Files.writeString(rule, org.synesis.workspace.provider.ProviderIntegration.RETIRED_INSTRUCTIONS_MARKER + "\n# Synesis\n\n@../../AGENTS.md\n");
+
+        assertEquals(List.of(".claude/rules/synesis.md"), new ProjectApplicationService().init(root).retiredInstructions());
+        assertFalse(Files.exists(rule));
+
+        Files.writeString(rule, "# My own rules\n");
+        assertEquals(List.of(), new ProjectApplicationService().init(root).retiredInstructions());
+        assertEquals("# My own rules\n", Files.readString(rule));
     }
 
     @Test
@@ -350,7 +347,7 @@ final class ProjectApplicationServiceTest {
         String head = git(root, "rev-parse", "--verify", "HEAD");
         assertTrue(head.matches("[0-9a-f]{40}"));
         assertTrue(git(root, "show", "--format=", "--name-only", "HEAD").contains(".synesis/project.json"));
-        assertTrue(git(root, "show", "--format=", "--name-only", "HEAD").contains("AGENTS.md"));
+        assertFalse(git(root, "show", "--format=", "--name-only", "HEAD").contains("AGENTS.md"));
 
         var second = service.init(root);
         assertEquals(ProjectInitStatus.ALREADY_INITIALIZED, second.status());

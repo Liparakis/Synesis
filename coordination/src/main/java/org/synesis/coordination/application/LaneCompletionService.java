@@ -77,6 +77,11 @@ final class LaneCompletionService {
         WorkIntent intent = exactIntent == null ? LaneCompletionRules.successorForSnapshot(current, snapshot)
                 : exactIntent;
         if (intent == null) {
+            // A combine lane released when it published its result has nothing left to release; the group it worked in
+            // closes once the re-merge has integrated that result (ADR-0098 step 5 item 39).
+            if (current.taskCompletionProjection().combineOfGroup(snapshot.provenance().workGroupId()).isPresent()) {
+                closeSettledWorkGroup(current, snapshot.provenance().workGroupIdentity());
+            }
             return false;
         }
         boolean successor = exactIntent == null;
@@ -96,6 +101,39 @@ final class LaneCompletionService {
                 signer);
         endOwnedContracts(current, intent.authorityLineageId(), true);
         closeSettledWorkGroup(current, intent.group());
+        return true;
+    }
+
+    /**
+     * Releases the lane of a combine that has published its result, while the caller holds the project append lock.
+     *
+     * <p>The result waits for the re-merge, which lands only when every combine of it has one, so the lane's agent cannot
+     * go on holding the lane: the other combine may be one only that agent may take (s5-run24). The snapshot stays unintegrated
+     * and the work group open; {@link #releaseAfterIntegration} closes the group when the re-merge lands.</p>
+     *
+     * @param lock     already-held project append lock
+     * @param snapshot the combine lane's result
+     * @return {@code true} when an active lane was released; {@code false} when it was released already
+     * @throws IOException              the snapshot is not a combine's result, or does not belong to the lane
+     * @throws GeneralSecurityException signing failure
+     */
+    boolean releaseCombineResult(ProjectAppendLock lock, TaskSnapshotRecord snapshot) throws IOException, GeneralSecurityException {
+        CoordinationNullException.requireNonNull(lock, "project append lock");
+        CoordinationNullException.requireNonNull(snapshot, "snapshot");
+        PredictionEventStore current = appends.freshUnder(lock);
+        if (current.taskCompletionProjection().combineOfGroup(snapshot.provenance().workGroupId()).isEmpty()) {
+            throw new CoordinationException("COMBINE_RESULT_REQUIRED");
+        }
+        WorkIntent intent = current.collaborationProjection().intent(snapshot.provenance().laneIdentity()).orElse(null);
+        if (intent == null) {
+            return false;
+        }
+        if (intent.status() != WorkIntent.Status.ANNOUNCED || !intent.taskId().equals(snapshot.taskId()) || !intent.workGroupId().equals(snapshot.provenance().workGroupId())
+                || !intent.participant().equals(snapshot.provenance().participant())) {
+            throw new CoordinationException("COMBINE_LANE_BINDING_MISMATCH");
+        }
+        current.append(intent.intentId(), PredictionEventType.WORK_INTENT_RELEASED, signer.nodeId(), CollaborationCodec.encodeRelease(intent.intentId()), signer);
+        endOwnedContracts(current, intent.authorityLineageId(), false);
         return true;
     }
 

@@ -14,7 +14,6 @@ import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationSettings;
-import org.synesis.coordination.replication.ReplicationJournal;
 import org.synesis.workspace.application.agent.workflow.CollaborationResponseMapper;
 import org.synesis.workspace.application.agent.workflow.DisputeNotice;
 import org.synesis.workspace.application.collaboration.ParticipantActivity;
@@ -107,8 +106,8 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         List<WorkGroup> groups = store.workGroupProjection().groups();
         // Done only once the work is on this copy's main too: a re-merge of two copies waits for its review with no lane
         // open (ADR-0098 step 5).
-        boolean complete = WorkIntentService.hasHadWork(store) && !WorkIntentService.hasOpenWork(store)
-                && org.synesis.workspace.application.control.MainMeeting.holdsEveryHead(location.root(), events);
+        boolean holdsEveryHead = org.synesis.workspace.application.control.MainMeeting.holdsEveryHead(location.root(), events);
+        boolean complete = WorkIntentService.hasHadWork(store) && !WorkIntentService.hasOpenWork(store) && holdsEveryHead;
         java.util.Set<String> openLaneProviders = store.collaborationProjection().activeIntents().stream().map(intent -> intent.provider()).collect(java.util.stream.Collectors.toUnmodifiableSet());
         // A proposal belongs to the lane whose authority lineage it carries; that lane's provider
         // is the one whose agent has to come back when the answer period ends.
@@ -141,6 +140,7 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         java.util.Set<String> laneRequests = store.operatorRequestProjection().all().stream().filter(request -> !request.raisedBySynesis())
                 .map(org.synesis.coordination.domain.operator.OperatorRequest::id).collect(java.util.stream.Collectors.toUnmodifiableSet());
         OptionalLong otherComputerConnectedSince = otherComputerConnectedSince(coordination);
+        boolean otherComputerKnown = !peersOfProject(coordination).isEmpty();
         // Where the operator closed each request, and where each coordination request was answered,
         // read once for every agent's question.
         Map<String, Long> operatorClosings = new HashMap<>();
@@ -163,6 +163,16 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             }
 
             @Override
+            public boolean otherComputerKnown() {
+                return otherComputerKnown;
+            }
+
+            @Override
+            public boolean mainMissesAnotherComputersHead() {
+                return !holdsEveryHead;
+            }
+
+            @Override
             public OptionalLong otherComputerConnectedSince() {
                 return otherComputerConnectedSince;
             }
@@ -181,6 +191,16 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             public boolean holdsOpenLane(String provider, String connectionInstanceId) {
                 String participant = participantOf(provider, connectionInstanceId);
                 return participant != null && WorkspaceCollaborationService.laneOf(store, participant).isPresent();
+            }
+
+            @Override
+            public boolean laneAwaitsOnlyReview(String provider, String connectionInstanceId) {
+                String participant = participantOf(provider, connectionInstanceId);
+                return participant != null && WorkspaceCollaborationService.laneOf(store, participant)
+                        .filter(lane -> lane.role() == org.synesis.coordination.domain.collaboration.WorkIntent.Role.PRODUCER)
+                        .flatMap(lane -> store.taskCompletionProjection().findSnapshotForTaskRevision(lane.taskId(), lane.intentId(), lane.version()))
+                        .flatMap(snapshot -> store.taskCompletionProjection().snapshotState(snapshot.snapshotId()))
+                        .filter(state -> state == org.synesis.coordination.domain.task.TaskCompletionState.REVIEW_PENDING).isPresent();
             }
 
             @Override
@@ -225,10 +245,15 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             @Override
             public List<String> reviewsOffered(String provider, List<String> connectionInstanceIds) {
                 List<String> sessions = connectionInstanceIds.stream().map(connection -> participantOf(provider, connection)).filter(Objects::nonNull).distinct().toList();
-                // A re-merge to review again is offered to its original reviewer alone, whatever it holds (ADR-0098 step 5).
-                // So is a combine lane, to the agents of this computer that wrote none of what it combines (designer item 22).
+                // A re-merge to review again is offered to its original reviewer, whatever it holds (ADR-0098 step 5), and
+                // while no grant on it is held to an agent that may review it, whose session the pass cannot offer it to
+                // before it has one (item 30).
+                // So is a combine lane, to the agents of this computer that wrote none of what it combines (designer item 22),
+                // and a lane of an away computer to an agent here with no lane while this computer is stalled (item 10).
                 return java.util.stream.Stream.of(CollaborationResponseMapper.openReviewSnapshots(store, sessions).stream(),
-                        CollaborationResponseMapper.remergeReviewsGranted(store, sessions).stream(), combinesOffered(store, location, sessions).stream())
+                        CollaborationResponseMapper.remergeReviewsGranted(store, sessions).stream(), CollaborationResponseMapper.remergeReviewsWaiting(store, sessions).stream(),
+                        combinesOffered(store, location, sessions).stream(),
+                        takeoversOffered(store, sessions).stream())
                         .flatMap(java.util.function.Function.identity()).distinct().toList();
             }
 
@@ -250,6 +275,12 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                 String participant = participantOf(provider, connectionInstanceId);
                 return participant != null && (ProviderSessionTerminalizationService.holdsRequestOrGrant(store, participant)
                         || DisputeNotice.verdictUnsettled(store, participant));
+            }
+
+            @Override
+            public boolean holdsReviewOfAnotherComputer(String provider, String connectionInstanceId) {
+                String participant = participantOf(provider, connectionInstanceId);
+                return participant != null && thisNode().map(node -> ProviderSessionTerminalizationService.holdsReviewOfAnotherComputer(store, participant, node)).orElse(false);
             }
 
             @Override
@@ -311,22 +342,33 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
     }
 
     /**
-     * When the newest session began with a peer that this computer's role file names (the leader's members, a
-     * member's leader) and that is connected according to the replication journal, or empty when none is. A journal
-     * line about a node that is no longer a peer of the project counts for nothing. An unreadable role file or
-     * journal reads as not connected: this only decides whether a run keeps waiting and whom it resumes, and must not
-     * end the run.
+     * When the newest connection began with a peer of the project that this computer's replication side records as
+     * connected, or empty when none is. This is the record {@code AwayLanes} judges a computer away by
+     * ({@code replication.members}, ADR-0098 step 6 item 22), so a run does not keep waiting for a computer that the
+     * takeover already counts as away: the replication journal says only that a session is open, and a session behind a
+     * silent path stays open. A record about a node that is no longer a peer of the project counts for nothing. A
+     * missing or unreadable record reads as not connected: this only decides whether a run keeps waiting and whom it
+     * resumes, and must not end the run.
      */
     private static OptionalLong otherComputerConnectedSince(java.nio.file.Path coordination) {
+        java.util.Set<String> peers = peersOfProject(coordination);
+        return org.synesis.coordination.replication.LeaderReplication.recordedMembers(coordination).orElse(java.util.Map.of()).entrySet().stream()
+                .filter(member -> peers.contains(member.getKey()) && member.getValue().state() == org.synesis.coordination.replication.LeaderReplication.MemberConnection.State.CONNECTED)
+                .mapToLong(member -> member.getValue().since().toEpochMilli()).max();
+    }
+
+    /**
+     * The computers the replication side records connections for: the other members since ADR-0098 step 6, or the
+     * leader. Empty for an unshared project and when the settings cannot be read, which fails closed to a run that does
+     * not wait for another computer.
+     */
+    private static java.util.Set<String> peersOfProject(java.nio.file.Path coordination) {
         try {
-            // The computers the replication side records connections for: the other members since ADR-0098 step 6.
-            java.util.Set<String> peers = ReplicationSettings.read(coordination).map(settings -> settings.isMember() ? java.util.Set.of(settings.leaderNodeId())
+            return ReplicationSettings.read(coordination).map(settings -> settings.isMember() ? java.util.Set.of(settings.leaderNodeId())
                     : settings.shared() ? org.synesis.coordination.replication.LeaderReplication.recordedMembers(coordination).map(java.util.Map::keySet)
                             .orElse(java.util.Set.of()) : settings.members()).orElse(java.util.Set.of());
-            return ReplicationJournal.connectedSince(coordination).entrySet().stream().filter(session -> peers.contains(session.getKey()))
-                    .mapToLong(session -> session.getValue().toEpochMilli()).max();
         } catch (IOException unreadable) {
-            return OptionalLong.empty();
+            return java.util.Set.of();
         }
     }
 
@@ -372,6 +414,29 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                     .stream().map(org.synesis.coordination.domain.task.CombinePayload::combineId).toList();
         } catch (Exception unreadable) {
             return List.of();
+        }
+    }
+
+    /**
+     * The lanes of computers that are away which these sessions' agent may take over now, by lane ID: the same offer
+     * {@code get_next_action} makes, and made only to an agent none of whose sessions holds a lane (a session holds one
+     * lane, so a taker with a lane is refused). Whether a computer is away is not an event, so nothing else resumes a
+     * stopped agent when the record of member sessions turns (ADR-0099 fix 15).
+     */
+    private List<String> takeoversOffered(PredictionEventStore store, List<String> sessions) {
+        if (sessions.isEmpty() || sessions.stream().anyMatch(session -> WorkspaceCollaborationService.laneOf(store, session).isPresent())) {
+            return List.of();
+        }
+        return thisNode().map(node -> org.synesis.workspace.application.collaboration.AwayLanes.offered(store, location.coordinationDirectory(), node).stream()
+                .map(lane -> lane.intentId().toString()).toList()).orElse(List.of());
+    }
+
+    /** This computer's node ID, or empty when its identity cannot be read: then no review counts as another computer's. */
+    private java.util.Optional<String> thisNode() {
+        try {
+            return java.util.Optional.of(location.loadOrCreateIdentity().nodeId());
+        } catch (Exception unreadable) {
+            return java.util.Optional.empty();
         }
     }
 

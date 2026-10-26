@@ -57,7 +57,7 @@ public final class ControlBranchAdvancementService {
                 return true;
             }
             String path = line.substring(3).replace('\\', '/');
-            return !(path.equals("AGENTS.md") || path.equals(".synesis") || path.startsWith(".synesis/") || path.equals(".mcp.json") || path.equals(".codex") || path.startsWith(".codex/") || path.equals(".claude")
+            return !(path.equals(".synesis") || path.startsWith(".synesis/") || path.equals(".mcp.json") || path.equals(".codex") || path.startsWith(".codex/") || path.equals(".claude")
                     || path.startsWith(".claude/"));
         }).toList();
     }

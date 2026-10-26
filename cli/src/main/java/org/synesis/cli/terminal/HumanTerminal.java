@@ -124,6 +124,11 @@ public final class HumanTerminal implements Terminal {
         return delegate.readLine();
     }
 
+    @Override
+    public boolean interactive() {
+        return delegate.interactive();
+    }
+
     String render(String line) {
         Matcher fact = line == null ? null : FACT.matcher(line);
         if (fact == null || !fact.matches()) {

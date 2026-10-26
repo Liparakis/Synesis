@@ -369,10 +369,21 @@ func TestInstallerWaitsForAnUnpackingBundleOnlyToInstall(t *testing.T) {
 	}
 }
 
-// No wizard test may read or change the real firewall or ask for elevation.
+// No wizard test may change the real firewall or ask for elevation.
 func init() {
-	linkRuleExists = func() bool { return false }
 	allowLinkSessions = func(string) error { return nil }
+}
+
+// The elevation prompt stays Windows's, answered by the person; the label above
+// says so and the rule is added through the injectable allowLinkSessions only.
+func TestTheFirewallRuleIsTickedByDefault(t *testing.T) {
+	w, err := newInstallerWizard(filepath.Join(t.TempDir(), "bundle"), "1.2.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !w.allowLink {
+		t.Fatal("a new wizard does not start with the firewall rule chosen")
+	}
 }
 
 func TestTheFirewallRuleIsAddedOnlyForAChosenInstallAndItsFailureIsAWarning(t *testing.T) {

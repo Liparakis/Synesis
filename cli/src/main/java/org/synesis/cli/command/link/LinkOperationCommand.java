@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ErrorShape;
 import org.synesis.cli.command.ProjectOptions;
 import org.synesis.cli.exit.ExitCodes;
 
@@ -86,35 +87,51 @@ abstract class LinkOperationCommand implements Callable<Integer> {
                 runtime.terminal().stdout("LINK_STATE=PENDING");
                 return ExitCodes.OK;
             }
-            return await(control, operation, before);
+            return await(control, root, operation, before);
         } catch (RuntimeControl.Rejected rejected) {
-            runtime.terminal().stderr("ERROR=" + rejected.code());
+            LinkCommand.refuse(runtime, rejected);
             return switch (rejected.code()) {
                 case "INVITE_INVALID" -> ExitCodes.INVITE_INVALID;
                 case "ANSWER_INVALID" -> ExitCodes.ANSWER_INVALID;
                 case "INCOMPATIBLE_VERSION" -> ExitCodes.INCOMPATIBLE_VERSION;
                 default -> ExitCodes.LOCAL_CONFIGURATION;
             };
-        } catch (ProjectApplicationException failure) {
-            runtime.terminal().stderr("ERROR=" + failure.code());
-        } catch (IOException failure) {
-            runtime.terminal().stderr("ERROR=PROJECT_RUNTIME_UNAVAILABLE");
+        } catch (ProjectApplicationException | IOException failure) {
+            LinkCommand.refuse(runtime, failure);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            runtime.terminal().stderr("ERROR=INTERRUPTED");
+            LinkCommand.refuse(runtime, interrupted);
         }
         return ExitCodes.LOCAL_CONFIGURATION;
     }
 
-    private int await(RuntimeControl control, String operation, Set<String> before) throws IOException, RuntimeControl.Rejected, InterruptedException {
+    /**
+     * Runs after a new session was reported connected, for a command that has more to do with the computer that
+     * connected. Nothing by default.
+     *
+     * @param control the runtime's control plane
+     * @param root    the project directory
+     * @param node    node ID of the computer that connected
+     * @throws IOException               when the runtime cannot be reached
+     * @throws RuntimeControl.Rejected when the runtime refuses
+     * @throws InterruptedException      when the wait is interrupted
+     */
+    void afterConnected(RuntimeControl control, Path root, String node) throws IOException, RuntimeControl.Rejected, InterruptedException {
+    }
+
+    long pollMillis() {
+        return pollMillis;
+    }
+
+    private int await(RuntimeControl control, Path root, String operation, Set<String> before) throws IOException, RuntimeControl.Rejected, InterruptedException {
         long deadline = System.nanoTime() + waitSeconds * 1_000_000_000L;
         while (true) {
-            if (reportNewPeer(control, before)) {
+            if (reportNewPeer(control, root, before)) {
                 return ExitCodes.OK;
             }
             if (!pendingOperations(control).contains(operation)) {
                 // It ended; a session that arrived between the two reads still counts.
-                if (reportNewPeer(control, before)) {
+                if (reportNewPeer(control, root, before)) {
                     return ExitCodes.OK;
                 }
                 reportFailure(control, operation);
@@ -122,17 +139,19 @@ abstract class LinkOperationCommand implements Callable<Integer> {
             }
             if (System.nanoTime() >= deadline) {
                 runtime.terminal().stdout("LINK_STATE=WAITING");
+                ErrorShape.print(runtime.terminal()::stderr, "LINK_WAIT_TIMEOUT");
                 return ExitCodes.COMMAND_FAILED;
             }
             Thread.sleep(pollMillis);
         }
     }
 
-    private boolean reportNewPeer(RuntimeControl control, Set<String> before) throws IOException, RuntimeControl.Rejected {
+    private boolean reportNewPeer(RuntimeControl control, Path root, Set<String> before) throws IOException, RuntimeControl.Rejected, InterruptedException {
         for (Map<String, Object> peer : peers(control)) {
             if (Boolean.TRUE.equals(peer.get("usable")) && peer.get("sessionId") instanceof String id && !before.contains(id)) {
                 runtime.terminal().stdout("LINK_STATE=CONNECTED");
                 runtime.terminal().stdout("PEER_NODE_ID=" + peer.get("nodeId"));
+                afterConnected(control, root, String.valueOf(peer.get("nodeId")));
                 return true;
             }
         }
@@ -160,6 +179,7 @@ abstract class LinkOperationCommand implements Callable<Integer> {
         runtime.terminal().stdout("LINK_STATE=FAILED");
         runtime.terminal().stdout("LINK_FAILURE=" + reason);
         runtime.terminal().stdout("LINK_FAILURE_DETAIL=" + detail);
+        ErrorShape.print(runtime.terminal()::stderr, ErrorShape.explains(reason) ? reason : "LINK_FAILED", detail);
     }
 
     /**

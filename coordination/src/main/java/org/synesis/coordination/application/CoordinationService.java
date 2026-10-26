@@ -63,6 +63,24 @@ public final class CoordinationService {
         this.appends = new ProjectAppends(store);
     }
 
+    private CoordinationService(PredictionEventStore store) {
+        this.store = CoordinationNullException.requireNonNull(store, "store");
+        this.coordinatorIdentity = null;
+        this.appends = new ProjectAppends(store, true);
+    }
+
+    /**
+     * A service that only reads: every view is replayed from the files as they are, without creating, moving or
+     * removing anything, so it may look at a project whose runtime is stopped. It has no identity and
+     * {@link #submit} refuses.
+     *
+     * @param store event store naming the project root and project identity
+     * @return the read-only service
+     */
+    public static CoordinationService readOnly(PredictionEventStore store) {
+        return new CoordinationService(store);
+    }
+
     /**
      * Finds the event a command already produced; older or non-command events are replayable but not idempotency keys.
      */
@@ -344,6 +362,15 @@ public final class CoordinationService {
      */
     public org.synesis.coordination.domain.trash.TrashProjection trashProjection() {
         return fresh().trashProjection();
+    }
+
+    /**
+     * Returns who belongs to the project, as the membership entries say (ADR-0098 step 6).
+     *
+     * @return membership projection
+     */
+    public org.synesis.coordination.domain.membership.MembershipProjection membershipProjection() {
+        return fresh().membershipProjection();
     }
 
     /**

@@ -5,7 +5,7 @@ import picocli.CommandLine.Command;
 /**
  * Parent command for running provider agents on a project.
  */
-@Command(name = "agents", description = "Run headless agents on this project and keep them moving.", mixinStandardHelpOptions = true)
+@Command(name = "agents", description = "Run headless agents on this project, keep them moving, and read what they did.", mixinStandardHelpOptions = true)
 public final class AgentsCommand {
 
     /**

@@ -1,6 +1,7 @@
 package org.synesis.workspace.transport.control;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -14,6 +15,12 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 
 import org.synesis.coordination.application.CoordinationService;
+import org.synesis.coordination.application.MembershipService;
+import org.synesis.coordination.domain.command.CoordinationCommand;
+import org.synesis.coordination.domain.ownership.OwnershipClaim;
+import org.synesis.coordination.domain.task.CoordinationTask;
+import org.synesis.coordination.domain.task.TaskClaim;
+import org.synesis.coordination.replication.LeaderReplication;
 import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.CollaborationCodec;
@@ -131,7 +138,7 @@ class ControlPlaneReadModelTest {
         assertEquals(ProviderJson.write(model.capabilities()), ProviderJson.write(model.capabilities()));
 
         Map<String, Object> parsed = object(ProviderJson.parse(first));
-        assertEquals(List.of("apiVersion", "runtime", "project", "knownProjects", "providers", "agents", "workgroups", "claims", "capabilities", "conversations", "operatorRequests", "tasks", "disputes", "trash", "ownerships", "network", "diagnostics"), List.copyOf(parsed.keySet()));
+        assertEquals(List.of("apiVersion", "runtime", "project", "knownProjects", "providers", "agents", "workgroups", "claims", "capabilities", "conversations", "operatorRequests", "tasks", "disputes", "trash", "ownerships", "membership", "network", "diagnostics"), List.copyOf(parsed.keySet()));
         Map<String, Object> network = object(parsed.get("network"));
         assertEquals(List.of("status", "peers", "routes", "overlay", "relay"), List.copyOf(network.keySet()));
         assertEquals(List.of("nodeId", "sessionId", "liveness", "usable", "establishedAt", "authenticated", "health"), List.copyOf(object(((List<?>) network.get("peers")).getFirst()).keySet()));
@@ -279,8 +286,113 @@ class ControlPlaneReadModelTest {
         Map<String, Object> ended = dispute(snapshot, "snap_ended");
         assertEquals("review_accepted", ended.get("state"));
         assertEquals(Map.of("agt-a", "ACCEPTED", "agt-b", "ACCEPTED"), ended.get("verdicts"));
-        assertEquals(List.of("snapshotId", "taskId", "author", "verdicts", "state"), List.copyOf(open.keySet()));
+        assertEquals(groupId.toString(), open.get("workGroupId"), "the dispute names the WorkGroup its task is worked in");
+        assertEquals(List.of("snapshotId", "taskId", "workGroupId", "author", "verdicts", "state"), List.copyOf(open.keySet()));
         assertEquals(disputes, model.snapshot().get("disputes"), "the record is stable between reads");
+    }
+
+    /** ADR-0103 stage 3: a task and its ownership name the WorkGroup of their lanes, and a task no lane works on names none. */
+    @Test
+    void tasksAndOwnershipsNameTheirWorkGroupWhenExactlyOneIsKnown() throws Exception {
+        Path root = temp.resolve("task-groups");
+        Path synesis = root.resolve(".synesis");
+        Path profile = synesis.resolve("local/profile");
+        Files.createDirectories(profile);
+        UUID projectId = UUID.randomUUID();
+        ProjectLocation location = new ProjectLocation(root, synesis, root.resolve("project.json"), profile, projectId, Instant.now());
+        NodeIdentity signer = NodeIdentity.generate();
+        PredictionEventStore writer = new PredictionEventStore(location.coordinationDirectory(), projectId);
+        UUID groupId = UUID.randomUUID();
+        new WorkGroupService(writer, signer).create(new WorkGroup(groupId, projectId, "goal", "acceptance", 1, WorkGroup.Status.ACTIVE));
+        UUID workedTask = UUID.randomUUID();
+        UUID idleTask = UUID.randomUUID();
+        UUID laneId = UUID.randomUUID();
+        new WorkIntentService(writer, signer).announce(new WorkIntent(laneId, projectId, "agt-lane", "codex", workedTask, "implement", "acceptance", "HEAD",
+                List.of(ResourceSelector.pathExact("src/T.java")), 1, groupId, WorkIntent.defaultAuthorityLineage(laneId), WorkIntent.Status.ANNOUNCED));
+        for (UUID task : List.of(workedTask, idleTask)) {
+            writer.append(task, PredictionEventType.TASK_CREATED, signer.nodeId(),
+                    CoordinationCommand.create(UUID.randomUUID(), projectId, task, PredictionEventType.TASK_CREATED, signer.nodeId(),
+                            new CoordinationTask(task, projectId, "title " + task, "cap-" + task, signer.nodeId(), "sup", "worker").encoded(), signer).encoded(), signer);
+        }
+        writer.append(workedTask, PredictionEventType.TASK_CLAIMED, signer.nodeId(),
+                CoordinationCommand.create(UUID.randomUUID(), projectId, workedTask, PredictionEventType.TASK_CLAIMED, signer.nodeId(),
+                        new TaskClaim(workedTask, signer.nodeId(), "sup", "worker").encoded(), signer).encoded(), signer);
+        writer.append(workedTask, PredictionEventType.OWNERSHIP_CLAIMED, signer.nodeId(),
+                CoordinationCommand.create(UUID.randomUUID(), projectId, workedTask, PredictionEventType.OWNERSHIP_CLAIMED, signer.nodeId(),
+                        new OwnershipClaim(workedTask, "cap-" + workedTask, signer.nodeId(), "sup", List.of("src/**"), 1).encoded(), signer).encoded(), signer);
+
+        Map<String, Object> snapshot = model(location, signer, projectId, root).snapshot();
+
+        @SuppressWarnings("unchecked") List<Map<String, Object>> tasks = (List<Map<String, Object>>) snapshot.get("tasks");
+        assertEquals(2, tasks.size());
+        for (Map<String, Object> task : tasks) {
+            assertEquals(workedTask.toString().equals(task.get("id")) ? groupId.toString() : null, task.get("workGroupId"), task.toString());
+        }
+        @SuppressWarnings("unchecked") List<Map<String, Object>> ownerships = (List<Map<String, Object>>) snapshot.get("ownerships");
+        assertEquals(1, ownerships.size());
+        assertEquals(groupId.toString(), ownerships.getFirst().get("workGroupId"));
+        assertEquals(List.of("capability", "taskId", "workGroupId", "owner", "protectedScopes", "intentVersion"), List.copyOf(ownerships.getFirst().keySet()));
+    }
+
+    /** ADR-0103 stage 3: members come from the one rule {@code synesis status} follows; connections are what the runtime recorded. */
+    @Test
+    void membershipNamesTheOwnerEachComputerAndItsConnection() throws Exception {
+        Path root = temp.resolve("members");
+        Path synesis = root.resolve(".synesis");
+        Path profile = synesis.resolve("local/profile");
+        Files.createDirectories(profile);
+        UUID projectId = UUID.randomUUID();
+        ProjectLocation location = new ProjectLocation(root, synesis, root.resolve("project.json"), profile, projectId, Instant.now());
+        NodeIdentity self = location.loadOrCreateIdentity();
+        ControlPlaneReadModel alone = model(location, self, projectId, root);
+        @SuppressWarnings("unchecked") Map<String, Object> single = (Map<String, Object>) alone.snapshot().get("membership");
+        assertEquals(false, single.get("shared"));
+        assertEquals(List.of(), single.get("members"));
+
+        String connected = NodeIdentity.generate().nodeId();
+        String away = NodeIdentity.generate().nodeId();
+        PredictionEventStore store = location.openCoordinationStore();
+        ProjectSharing.admit(root, location.coordinationDirectory(), new MembershipService(store, self), connected, null);
+        ProjectSharing.admit(root, location.coordinationDirectory(), new MembershipService(location.openCoordinationStore(), self), away, null);
+        Files.writeString(location.coordinationDirectory().resolve(LeaderReplication.MEMBERS_FILE), connected + " CONNECTED 2026-10-20T10:00:00Z\n");
+
+        @SuppressWarnings("unchecked") Map<String, Object> shared = (Map<String, Object>) model(location, self, projectId, root).snapshot().get("membership");
+
+        assertEquals(true, shared.get("shared"));
+        assertEquals(self.nodeId(), shared.get("owner"));
+        assertEquals(self.nodeId(), shared.get("self"));
+        assertEquals(true, shared.get("selfIsOwner"));
+        @SuppressWarnings("unchecked") List<Map<String, Object>> members = (List<Map<String, Object>>) shared.get("members");
+        assertEquals(3, members.size());
+        Map<String, Map<String, Object>> byNode = new java.util.HashMap<>();
+        members.forEach(member -> byNode.put((String) member.get("nodeId"), member));
+        assertEquals("SELF", byNode.get(self.nodeId()).get("state"));
+        assertEquals(true, byNode.get(self.nodeId()).get("owner"));
+        assertEquals("CONNECTED", byNode.get(connected).get("state"));
+        assertEquals("2026-10-20T10:00:00Z", byNode.get(connected).get("since"));
+        assertEquals("DISCONNECTED", byNode.get(away).get("state"));
+        assertEquals(false, byNode.get(away).get("owner"));
+        assertEquals(List.of("nodeId", "self", "owner", "state", "since", "lastReceived"), List.copyOf(byNode.get(away).keySet()));
+    }
+
+    /** ADR-0103 stage 3: the page groups the doctor's findings, so each carries its group, how sure it is and what to run. */
+    @Test
+    void diagnosticFindingsNameTheirGroupMarkAndFix() throws Exception {
+        Path root = temp.resolve("findings");
+        Path synesis = root.resolve(".synesis");
+        Path profile = synesis.resolve("local/profile");
+        Files.createDirectories(profile);
+        UUID projectId = UUID.randomUUID();
+        ProjectLocation location = new ProjectLocation(root, synesis, root.resolve("project.json"), profile, projectId, Instant.now());
+        Map<String, Object> diagnostics = model(location, NodeIdentity.generate(), projectId, root).diagnostics();
+
+        @SuppressWarnings("unchecked") List<Map<String, Object>> findings = (List<Map<String, Object>>) diagnostics.get("findings");
+        assertFalse(findings.isEmpty());
+        for (Map<String, Object> finding : findings) {
+            assertTrue(List.of("project", "environment", "network", "work_groups").contains(finding.get("group")), finding.toString());
+            assertTrue(List.of("confirmed", "suspected", "advice").contains(finding.get("mark")), finding.toString());
+            assertFalse(((String) finding.get("fix")).isBlank(), finding.toString());
+        }
     }
 
     @Test

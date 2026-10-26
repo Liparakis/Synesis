@@ -147,7 +147,9 @@ final class RemergeReviewGrantTest {
 
         assertEquals(List.of(), CollaborationResponseMapper.remergeReviewsGranted(store, List.of(REVIEWER)));
         assertEquals(List.of(), AgentReviewActionProjection.remergeGrants(store, List.of(REVIEWER)));
-        assertEquals(Set.of(), AgentReviewActionProjection.completedParticipantWorkGroups(store, REVIEWER));
+        // Consumed with no verdict, the review is still owed, so its work group stays the reviewer's to finish: the
+        // session's open authority lists it as PENDING_REVIEW, and the lane's answer must show the review (aaac272b).
+        assertEquals(Set.of(groupId), AgentReviewActionProjection.completedParticipantWorkGroups(store, REVIEWER));
 
         // Consumed, the grant is no longer a join but the verdict still owed.
         List<Map<String, Object>> owed = AgentReviewActionProjection.reviewActions(store, REVIEWER, null);

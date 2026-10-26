@@ -16,6 +16,7 @@ import (
 	"synesis/bootstrap/internal/install/embedded"
 	"synesis/bootstrap/internal/install/linkfirewall"
 	"synesis/bootstrap/internal/protocol"
+	"synesis/bootstrap/internal/releasemanifest"
 	"synesis/bootstrap/internal/wizard"
 )
 
@@ -114,6 +115,8 @@ func mustHex(value string) []byte {
 	return result
 }
 
-// This development public key is replaced by the project's protected CI key
-// before a public release. No private key belongs in this repository.
-var manifestPublicKeyHex = "d75a9801d7b3e3c7e8c8f6f5e4d6f6e4e4b8a7a7c8d9e0f1a2b3c4d5e6f70809"
+// The release trust root, hex. It is the development placeholder until the owner
+// pins the project release public key (docs/installation/packages.md). While the
+// placeholder is pinned the unsigned developmentOnly file:// path still works;
+// with any other key every manifest must be signed. No private key belongs here.
+var manifestPublicKeyHex = releasemanifest.PlaceholderTrustRootHex

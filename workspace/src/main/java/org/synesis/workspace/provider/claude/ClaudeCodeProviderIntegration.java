@@ -5,7 +5,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
+import org.synesis.workspace.provider.AgentLogEntry;
 import org.synesis.workspace.provider.ProviderIntegration;
+import org.synesis.workspace.provider.StreamEvents;
 import org.synesis.workspace.provider.ProviderMcpEvidenceTier;
 import org.synesis.workspace.provider.ProviderSupportLevel;
 
@@ -14,6 +16,7 @@ import org.synesis.workspace.provider.ProviderSupportLevel;
  */
 public final class ClaudeCodeProviderIntegration implements ProviderIntegration {
 
+    private static final java.util.regex.Pattern LOGGED_IN = java.util.regex.Pattern.compile("\"loggedIn\"\\s*:\\s*(true|false)");
     private static final String STOP_HOOK_ID = "synesis-claude-code-stop";
     // A long, as ProviderJson reads a written number back, so a written entry compares equal to this one.
     private static final long STOP_HOOK_TIMEOUT_SECONDS = 660L;
@@ -35,6 +38,24 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
     @Override
     public String id() {
         return "claude";
+    }
+
+    /**
+     * {@code claude auth status} answers with JSON that holds {@code "loggedIn": true|false} (checked
+     * against Claude Code 2.1, 2026-10-20); only that field is read, never the account it names.
+     */
+    @Override
+    public java.util.Optional<List<String>> signInStatusArguments() {
+        return java.util.Optional.of(List.of("auth", "status", "--json"));
+    }
+
+    @Override
+    public SignIn signInState(int exitCode, String output) {
+        java.util.regex.Matcher answer = LOGGED_IN.matcher(output == null ? "" : output);
+        if (!answer.find()) {
+            return SignIn.UNKNOWN;
+        }
+        return Boolean.parseBoolean(answer.group(1)) ? SignIn.SIGNED_IN : SignIn.SIGNED_OUT;
     }
 
     @Override
@@ -123,7 +144,64 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
                 // Claude Code starts a stdio MCP server with its own environment.
                 return options.connectionInstanceId() == null ? Map.of() : Map.of(CONNECTION_INSTANCE_VARIABLE, options.connectionInstanceId());
             }
+
+            @Override
+            public List<AgentLogEntry> logEntries(String outputLine) {
+                return claudeEntries(StreamEvents.parse(outputLine));
+            }
         });
+    }
+
+    /**
+     * Reads one {@code stream-json} event: the assistant's text and tool calls, the tool results the user turn carries
+     * back, and a failed run. The closing {@code result} event repeats the last message, so only its failure is read.
+     */
+    private static List<AgentLogEntry> claudeEntries(Map<?, ?> event) {
+        if (event == null) {
+            return List.of();
+        }
+        String type = StreamEvents.text(event, "type");
+        if ("result".equals(type)) {
+            return Boolean.TRUE.equals(event.get("is_error")) ? List.of(new AgentLogEntry(AgentLogEntry.Kind.FAILED, "", StreamEvents.text(event, "result"))) : List.of();
+        }
+        if (!(event.get("message") instanceof Map<?, ?> message) || !(message.get("content") instanceof List<?> blocks)) {
+            return List.of();
+        }
+        List<AgentLogEntry> entries = new java.util.ArrayList<>();
+        for (Object block : blocks) {
+            if (!(block instanceof Map<?, ?> part)) {
+                continue;
+            }
+            switch (StreamEvents.text(part, "type")) {
+                case "text" -> {
+                    if (type.equals("assistant")) {
+                        entries.add(new AgentLogEntry(AgentLogEntry.Kind.SAID, "", StreamEvents.text(part, "text")));
+                    }
+                }
+                case "tool_use" -> entries.add(new AgentLogEntry(AgentLogEntry.Kind.CALLED, StreamEvents.text(part, "name"), ProviderJson.write(part.get("input"))));
+                case "tool_result" -> entries.add(new AgentLogEntry(Boolean.TRUE.equals(part.get("is_error")) ? AgentLogEntry.Kind.FAILED : AgentLogEntry.Kind.RESULT, "", toolResultText(part.get("content"))));
+                default -> {
+                }
+            }
+        }
+        return entries;
+    }
+
+    /** A tool result is text, or a list of blocks of which the text ones and the names of loaded tools are read. */
+    private static String toolResultText(Object content) {
+        if (content instanceof String text) {
+            return text;
+        }
+        StringBuilder text = new StringBuilder();
+        if (content instanceof List<?> blocks) {
+            for (Object block : blocks) {
+                if (block instanceof Map<?, ?> part) {
+                    String piece = part.get("text") instanceof String words ? words : StreamEvents.text(part, "tool_name");
+                    text.append(text.isEmpty() || piece.isEmpty() ? "" : " ").append(piece);
+                }
+            }
+        }
+        return text.toString();
     }
 
     /** Reads an identifier from a JSON event line of the given type; any other line yields nothing. */
@@ -142,21 +220,16 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
     }
 
     /**
-     * Points Claude Code at the Synesis rules through a project rule file.
-     *
-     * <p>Claude Code loads every Markdown file under {@code .claude/rules} as project
-     * instructions and resolves {@code @} imports relative to the importing file; it does not read
-     * {@code AGENTS.md} itself. The rule file therefore imports the managed {@code AGENTS.md}
-     * block, and lives beside the other provider-local files that the control checkout and lane
-     * snapshots already exclude.</p>
+     * The rule file earlier versions wrote so that Claude Code, which does not read {@code AGENTS.md},
+     * would import the managed {@code AGENTS.md} block. Neither exists any more: Claude Code learns the
+     * rules from the {@code synesis-provider-manual} skill and the MCP server's instructions.
      *
      * @param projectRoot control project root
-     * @return the Claude Code rule file
+     * @return the retired Claude Code rule file
      */
     @Override
-    public java.util.Optional<ProjectInstructions> projectInstructions(Path projectRoot) {
-        String content = ProjectInstructions.OWNERSHIP_MARKER + "\n# Synesis\n\nThis project is coordinated through Synesis. The rules imported below apply to this session;\nfollow them before reading, changing, or running anything in the project.\n\n@../../AGENTS.md\n";
-        return java.util.Optional.of(new ProjectInstructions(projectRoot.resolve(".claude/rules/synesis.md").toAbsolutePath().normalize(), content));
+    public java.util.Optional<Path> retiredProjectInstructions(Path projectRoot) {
+        return java.util.Optional.of(projectRoot.resolve(".claude/rules/synesis.md").toAbsolutePath().normalize());
     }
 
     @Override

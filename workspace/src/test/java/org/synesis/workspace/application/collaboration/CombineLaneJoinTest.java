@@ -20,8 +20,14 @@ import org.synesis.coordination.domain.collaboration.ClaimResult;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.task.CombinePayload;
+import org.synesis.workspace.agent.AgentResponse;
+import org.synesis.workspace.agent.AgentStatus;
+import org.synesis.workspace.application.agent.session.AgentSessionService;
+import org.synesis.workspace.application.agent.session.SessionResolutionRequest;
 import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.application.workspace.ReadinessResult;
+import org.synesis.workspace.application.workspace.WorkspaceReadinessService;
 import org.synesis.workspace.test.TestGit;
 
 /**
@@ -44,6 +50,11 @@ final class CombineLaneJoinTest {
 
     private static String git(Path dir, String... args) throws IOException {
         return TestGit.output(dir, args);
+    }
+
+    private void materialize(IntegrationWorkspaceService integration, Path worktree, CombinePayload combine) throws Exception {
+        ProviderSessionBindingService.Binding binding = fixture.binding(COMBINER);
+        integration.materializeCombineRepresentation(fixture.root, worktree, binding.branch(), binding.baseCommit(), combine);
     }
 
     private ClaimResult join(String connection) throws Exception {
@@ -75,7 +86,7 @@ final class CombineLaneJoinTest {
         Path worktree = Path.of(fixture.session(COMBINER).worktreePath());
         IntegrationWorkspaceService integration = new IntegrationWorkspaceService();
 
-        integration.materializeCombineRepresentation(fixture.root, worktree, fixture.combine);
+        materialize(integration, worktree, fixture.combine);
 
         assertEquals(fixture.base, git(worktree, "rev-parse", "HEAD"));
         String content = Files.readString(worktree.resolve(CombineFixture.FILE)).replace("\r\n", "\n");
@@ -92,10 +103,10 @@ final class CombineLaneJoinTest {
     void materializingAgainLeavesTheAgentsEditsAlone() throws Exception {
         Path worktree = Path.of(fixture.session(COMBINER).worktreePath());
         IntegrationWorkspaceService integration = new IntegrationWorkspaceService();
-        integration.materializeCombineRepresentation(fixture.root, worktree, fixture.combine);
+        materialize(integration, worktree, fixture.combine);
         Files.writeString(worktree.resolve(CombineFixture.FILE), "resolved\n");
 
-        integration.materializeCombineRepresentation(fixture.root, worktree, fixture.combine);
+        materialize(integration, worktree, fixture.combine);
 
         assertEquals("resolved\n", Files.readString(worktree.resolve(CombineFixture.FILE)).replace("\r\n", "\n"));
         assertEquals(fixture.base, git(worktree, "rev-parse", "HEAD"));
@@ -108,7 +119,7 @@ final class CombineLaneJoinTest {
         Files.writeString(worktree.resolve("unowned.txt"), "must not be adopted\n");
         String before = git(worktree, "rev-parse", "HEAD");
 
-        IOException dirty = assertThrows(IOException.class, () -> new IntegrationWorkspaceService().materializeCombineRepresentation(fixture.root, worktree, fixture.combine));
+        IOException dirty = assertThrows(IOException.class, () -> materialize(new IntegrationWorkspaceService(), worktree, fixture.combine));
 
         assertTrue(dirty.getMessage().startsWith("COMBINE_TARGET_DIRTY"), dirty.getMessage());
         assertEquals(before, git(worktree, "rev-parse", "HEAD"));
@@ -120,11 +131,11 @@ final class CombineLaneJoinTest {
     void aWorktreeMaterializedForAnotherCombineIsRefused() throws Exception {
         Path worktree = Path.of(fixture.session(COMBINER).worktreePath());
         IntegrationWorkspaceService integration = new IntegrationWorkspaceService();
-        integration.materializeCombineRepresentation(fixture.root, worktree, fixture.combine);
+        materialize(integration, worktree, fixture.combine);
         CombinePayload other = new CombinePayload("cb-another", fixture.combine.remergeId(), fixture.combine.otherHead(), fixture.combine.ownHead(),
                 fixture.combine.base(), fixture.combine.theirs(), fixture.combine.snapshotIds());
 
-        IOException mismatch = assertThrows(IOException.class, () -> integration.materializeCombineRepresentation(fixture.root, worktree, other));
+        IOException mismatch = assertThrows(IOException.class, () -> materialize(integration, worktree, other));
 
         assertEquals("COMBINE_MATERIALIZATION_MARKER_MISMATCH", mismatch.getMessage());
     }
@@ -132,7 +143,7 @@ final class CombineLaneJoinTest {
     @Test
     void theControlCheckoutIsNeverMaterialized() {
         IOException refused = assertThrows(IOException.class,
-                () -> new IntegrationWorkspaceService().materializeCombineRepresentation(fixture.root, fixture.root, fixture.combine));
+                () -> new IntegrationWorkspaceService().materializeCombineRepresentation(fixture.root, fixture.root, "main", fixture.base, fixture.combine));
         assertEquals("COMBINE_WORKTREE_INVALID", refused.getMessage());
     }
 
@@ -211,10 +222,99 @@ final class CombineLaneJoinTest {
 
         assertEquals(Optional.empty(), CombineLaneJoin.openFor(fixture.store(), fixture.authorSnapshot.snapshotId(), fixture.binding("combine-late").sessionId()),
                 "the late session is shown no open combine");
-        assertThrows(Exception.class, () -> join("combine-late"));
+        IOException taken = assertThrows(IOException.class, () -> join("combine-late"));
+        assertEquals("COMBINE_TAKEN_OR_CLOSED", taken.getMessage(), "s5-run7: the refusal named the combined lane's intent as not found");
         assertEquals(List.of(), CombineLaneJoin.offeredTo(fixture.store(), List.of(fixture.participant("combine-late")), fixture.identity.nodeId()));
         assertNotEquals(Optional.empty(), CombineLaneJoin.openFor(fixture.store(), fixture.authorSnapshot.snapshotId(), fixture.binding(COMBINER).sessionId()),
                 "the taker still finds its own lane");
+    }
+
+    @Test
+    void anOrdinaryLaneNamingTheCombinesGroupIsRefusedAndTheCombineStillWaits() throws Exception {
+        fixture.session("combine-other");
+        int eventsBefore = fixture.store().events().size();
+
+        IOException refused = assertThrows(IOException.class, () -> fixture.collaboration.announce(fixture.root, CombineFixture.PROVIDER, "combine-other", "change g",
+                "g changed", List.of(ResourceSelector.pathExact("src/g.txt")), fixture.combine.workGroupId()));
+
+        assertEquals("COMBINE_GROUP_HOLDS_ONLY_ITS_COMBINE_LANE", refused.getMessage());
+        assertEquals(eventsBefore, fixture.store().events().size());
+        assertTrue(CombineLaneJoin.waiting(fixture.store(), fixture.combine));
+    }
+
+    @Test
+    void theCombineLanesWorktreeIsReadyAtTheCombinesBaseWhileThisComputersMainIsElsewhere() throws Exception {
+        String ownMain = fixture.divergeThisCopyOfMain();
+        ProviderSessionBindingService.Binding before = fixture.session(COMBINER);
+        assertEquals(ownMain, before.baseCommit());
+        assertTrue(join(COMBINER).acquired());
+
+        AgentResponse again = new AgentSessionService().ensureSession(new SessionResolutionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER, null, false));
+
+        assertEquals(AgentStatus.READY, again.status(), "s5-run8 answered WORKSPACE_STALE_DIRTY: " + again.toJson());
+        ProviderSessionBindingService.Binding after = fixture.binding(COMBINER);
+        assertEquals(before.sessionId(), after.sessionId());
+        assertEquals(before.worktreePath(), after.worktreePath());
+        assertEquals(before.branch(), after.branch());
+        assertEquals(fixture.base, after.baseCommit(), "the worktree is judged against the combine's base");
+        Path worktree = Path.of(after.worktreePath());
+        assertEquals("refs/heads/" + before.branch(), git(worktree, "symbolic-ref", "HEAD"), "the worktree stays on its session's branch");
+        assertEquals(fixture.base, git(worktree, "rev-parse", "HEAD"));
+        assertTrue(Files.readString(worktree.resolve(CombineFixture.FILE)).contains("<<<<<<<"), "the markers stay for the agent to resolve");
+        WorkspaceReadinessService readiness = new WorkspaceReadinessService();
+        ReadinessResult reads = readiness.assess(fixture.location, CombineFixture.PROVIDER, COMBINER);
+        assertTrue(reads.ready(), "reads and commands: " + reads.internalReason());
+        ReadinessResult edits = readiness.assessMutation(fixture.location, CombineFixture.PROVIDER, COMBINER, CombineFixture.FILE);
+        assertTrue(edits.ready(), "edits of the claimed file: " + edits.internalReason());
+        assertEquals(ownMain, git(fixture.root, "rev-parse", "HEAD"), "this computer's main did not move");
+    }
+
+    @Test
+    void aWorktreeWithCommitsOfItsOwnIsNotMovedAndNothingIsAnnounced() throws Exception {
+        Path worktree = Path.of(fixture.session(COMBINER).worktreePath());
+        Files.writeString(worktree.resolve("src/mine.txt"), "mine\n");
+        git(worktree, "add", "src/mine.txt");
+        git(worktree, "commit", "-q", "-m", "a commit of the session's own");
+        String head = git(worktree, "rev-parse", "HEAD");
+        int eventsBefore = fixture.store().events().size();
+
+        IOException refused = assertThrows(IOException.class, () -> join(COMBINER));
+
+        assertEquals("COMBINE_WORKTREE_HAS_COMMITS", refused.getMessage());
+        assertEquals(head, git(worktree, "rev-parse", "HEAD"));
+        assertEquals("refs/heads/" + fixture.binding(COMBINER).branch(), git(worktree, "symbolic-ref", "HEAD"));
+        assertEquals(eventsBefore, fixture.store().events().size());
+        assertTrue(CombineLaneJoin.waiting(fixture.store(), fixture.combine));
+    }
+
+    @Test
+    void aJoinRefusedForADirtyWorktreeLeavesTheSessionAsItWas() throws Exception {
+        String ownMain = fixture.divergeThisCopyOfMain();
+        Path worktree = Path.of(fixture.session(COMBINER).worktreePath());
+        Files.writeString(worktree.resolve("unowned.txt"), "must not be adopted\n");
+
+        IOException refused = assertThrows(IOException.class, () -> join(COMBINER));
+
+        assertTrue(refused.getMessage().startsWith("COMBINE_TARGET_DIRTY"), refused.getMessage());
+        assertEquals(ownMain, fixture.binding(COMBINER).baseCommit(), "the binding still names this computer's main");
+        AgentResponse again = new AgentSessionService().ensureSession(new SessionResolutionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER, null, false));
+        assertEquals(AgentStatus.READY, again.status(), again.toJson());
+        assertEquals(worktree.toString(), fixture.binding(COMBINER).worktreePath());
+        assertTrue(CombineLaneJoin.waiting(fixture.store(), fixture.combine));
+    }
+
+    @Test
+    void aSessionWhoseCombineLaneEndedIsJudgedAgainstThisComputersMainAgain() throws Exception {
+        String ownMain = fixture.divergeThisCopyOfMain();
+        fixture.session(COMBINER);
+        join(COMBINER);
+        fixture.collaboration.release(fixture.root, CombineFixture.PROVIDER, COMBINER);
+
+        AgentResponse again = new AgentSessionService().ensureSession(new SessionResolutionRequest(fixture.root, CombineFixture.PROVIDER, COMBINER, null, false));
+
+        assertEquals(AgentStatus.READY, again.status(), again.toJson());
+        assertEquals(ownMain, fixture.binding(COMBINER).baseCommit());
+        assertEquals(ownMain, git(Path.of(fixture.binding(COMBINER).worktreePath()), "rev-parse", "HEAD"));
     }
 
     @Test
@@ -223,8 +323,8 @@ final class CombineLaneJoinTest {
         fixture.session(COMBINER);
         join(COMBINER);
 
-        IOException taken = assertThrows(IOException.class, () -> CombineLaneJoin.join(fixture.store(), fixture.identity, fixture.location.projectId(), fixture.root,
-                Path.of(late.worktreePath()), fixture.participant("combine-late"), late.sessionId(), CombineFixture.PROVIDER, fixture.combine));
+        IOException taken = assertThrows(IOException.class, () -> CombineLaneJoin.join(fixture.store(), fixture.identity, fixture.location, late,
+                fixture.participant("combine-late"), fixture.combine));
 
         assertEquals("COMBINE_TAKEN_OR_CLOSED", taken.getMessage());
     }

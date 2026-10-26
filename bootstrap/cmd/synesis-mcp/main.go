@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 
+	installlayout "synesis/bootstrap/internal/install/layout"
 	"synesis/bootstrap/internal/payload"
 )
 
@@ -49,7 +50,11 @@ func run(args []string) error {
 		}
 		environment = withVersionedLauncher(environment, layout)
 	}
-	commandArgs := []string{"--enable-native-access=ALL-UNNAMED", "-cp", layout.classpath, synesisMainClass}
+	commandArgs := []string{"--enable-native-access=ALL-UNNAMED"}
+	if crashFile := installlayout.CrashFileOption(); crashFile != "" {
+		commandArgs = append(commandArgs, crashFile)
+	}
+	commandArgs = append(commandArgs, "-cp", layout.classpath, synesisMainClass)
 	commandArgs = append(commandArgs, args...)
 	command := exec.Command(java, commandArgs...)
 	command.Stdin = os.Stdin

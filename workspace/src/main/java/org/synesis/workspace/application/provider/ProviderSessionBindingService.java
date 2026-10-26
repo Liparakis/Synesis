@@ -14,6 +14,7 @@ import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.collaboration.WorkspaceCollaborationService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.session.ProviderSessionTerminalizationService;
+import org.synesis.workspace.lifecycle.lease.SessionSuccessions;
 import org.synesis.workspace.lifecycle.RepositoryPrivateStateService;
 
 import static org.synesis.workspace.application.provider.ProviderBindingFile.fallbackEvidence;
@@ -140,13 +141,15 @@ public final class ProviderSessionBindingService {
                     if (!open.isEmpty()) {
                         throw new BindingException("SESSION_AUTHORITY_OPEN", String.join(",", open));
                     }
-                    return new BindingResult(persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch()), fallback);
+                    return new BindingResult(replaceSession(location, bindingPath, binding, withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch()), fallback);
                 }
                 if (binding.state().resumesOnEnsure()) {
                     return new BindingResult(resumeBound(location, identity, provider, fingerprint, bindingPath, binding), fallback);
                 }
             }
-            return new BindingResult(persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint))), fallback);
+            Binding fresh = persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint)));
+            recordContinuation(location, provider, instanceEvidence, fresh);
+            return new BindingResult(fresh, fallback);
         } catch (BindingException failure) {
             throw failure;
         } catch (Exception failure) {
@@ -163,9 +166,43 @@ public final class ProviderSessionBindingService {
         }
     }
 
+    /**
+     * When a run controller started this connection to go on with an agent's earlier one
+     * ({@link SessionSuccessions#continueConnection}), its first session is that agent's next session: what the earlier
+     * session was owed, or barred from, passes to it, as when a session replaces another at one path. A connection
+     * that continues nothing, or whose earlier session cannot be read, records nothing.
+     */
+    private void recordContinuation(ProjectLocation location, String provider, String instanceEvidence, Binding fresh) throws IOException {
+        if (instanceEvidence == null || instanceEvidence.isBlank()) {
+            return;
+        }
+        java.util.Optional<String> earlier = SessionSuccessions.continuedFrom(location.root(), instanceEvidence);
+        if (earlier.isEmpty()) {
+            return;
+        }
+        java.util.Optional<Binding> previous;
+        try {
+            previous = find(location, provider, earlier.get());
+        } catch (BindingException unreadable) {
+            return;
+        }
+        if (previous.isPresent()) {
+            SessionSuccessions.record(location.root(), previous.get().sessionId(), fresh.sessionId());
+        }
+    }
+
     private static Binding persist(Path bindingPath, Binding binding) throws IOException {
         write(bindingPath, binding);
         return binding;
+    }
+
+    /**
+     * Puts a fresh session at the connection's path in place of {@code replaced}, recording first that the two are one
+     * agent's ({@link SessionSuccessions}): what the old session was owed, or barred from, passes to the new one.
+     */
+    private static Binding replaceSession(ProjectLocation location, Path bindingPath, Binding replaced, Binding fresh) throws IOException {
+        SessionSuccessions.record(location.root(), replaced.sessionId(), fresh.sessionId());
+        return persist(bindingPath, fresh);
     }
 
     private Binding resumeBound(ProjectLocation location, NodeIdentity identity, String provider, String fingerprint, Path bindingPath, Binding binding) throws Exception {
@@ -206,9 +243,38 @@ public final class ProviderSessionBindingService {
         // would leave the lane with a participant nobody speaks for, and a kept controller session is
         // resumed on this connection to continue exactly that lane (ADR-0099, amendment).
         if (!activeManagedAttachment && !authorizedContinuation && !activeNoChangeIntent && !hasActiveIntent(location, binding)) {
-            return persist(bindingPath, withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch());
+            return replaceSession(location, bindingPath, binding, withWorktree(location, newBinding(location, identity, provider, fingerprint)).touch());
         }
         return persist(bindingPath, binding.touch());
+    }
+
+    /**
+     * Records that a session's worktree was moved to the base of the combine lane it takes (ADR-0098 step 5, designer
+     * item 26): while the lane is open the worktree is judged against that base, the other copy of {@code main}, and
+     * not against this computer's control head. Written only once the worktree is there, so a refused move leaves the
+     * binding as it was; a repeated call changes nothing.
+     *
+     * @param location initialized project location
+     * @param binding  the session's binding
+     * @param base     the combine's base, where the worktree now is
+     * @throws BindingException when the binding is not bound to a worktree at {@code base}
+     */
+    public synchronized void recordCombineBase(ProjectLocation location, Binding binding, String base) throws BindingException {
+        try {
+            Path bindingPath = bindingPath(location, binding.provider(), binding.providerInstanceFingerprint());
+            Binding current = read(bindingPath);
+            if (!current.sessionId().equals(binding.sessionId()) || current.state() != ProviderBindingStatus.BOUND || current.worktreePath() == null
+                    || !base.equals(currentCommit(Path.of(current.worktreePath())))) {
+                throw new BindingException("COMBINE_BINDING_NOT_READY", "The session's worktree is not at the combine's base");
+            }
+            if (!current.baseCommit().equals(base)) {
+                persist(bindingPath, current.withBaseCommit(base));
+            }
+        } catch (BindingException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new BindingException("SESSION_BINDING_FAILED", "Could not record the combine's base", failure);
+        }
     }
 
     /**
@@ -811,6 +877,11 @@ public final class ProviderSessionBindingService {
         Binding withWorktreeVerification(String controlCheckoutPath, String gitCommonDir, boolean verified, String trustState) {
             return withWorkspace(SCHEMA_VERSION, worktreeId, worktreePath, controlCheckoutPath, branch, baseCommit, gitCommonDir, "ALLOCATED", verified ? "VERIFIED" : "UNVERIFIED",
                     verified ? "WORKTREE_VERIFIED" : "WORKTREE_NOT_REGISTERED", null, System.currentTimeMillis(), trustState);
+        }
+
+        Binding withBaseCommit(String newBaseCommit) {
+            return withWorkspace(schemaVersion, worktreeId, worktreePath, controlCheckoutPath, branch, newBaseCommit, gitCommonDir, creationState, verificationState, lastSeenState, lastSeenDetail,
+                    System.currentTimeMillis(), providerTrustState);
         }
 
         Binding withVerifiedWorkspaceTrust(long verifiedAt) {

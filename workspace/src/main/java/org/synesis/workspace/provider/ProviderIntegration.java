@@ -44,6 +44,63 @@ public interface ProviderIntegration {
     }
 
     /**
+     * Returns the name of the provider's executable as it is looked up on {@code PATH}.
+     *
+     * @return executable name without extension
+     */
+    default String executableName() {
+        return id();
+    }
+
+    /**
+     * Returns the arguments that make the provider print its own version.
+     *
+     * @return arguments after the executable name
+     */
+    default List<String> versionArguments() {
+        return List.of("--version");
+    }
+
+    /**
+     * Returns the provider's own non-secret command that reports whether someone is signed in.
+     *
+     * <p>Sign-in is judged only from what this command answers. Synesis never opens the provider's
+     * credential files, so a provider without such a command is reported as {@link SignIn#UNKNOWN}.</p>
+     *
+     * @return arguments after the executable name, or empty when the provider has no such command
+     */
+    default java.util.Optional<List<String>> signInStatusArguments() {
+        return java.util.Optional.empty();
+    }
+
+    /**
+     * Reads the answer of {@link #signInStatusArguments()}.
+     *
+     * <p>Anything this method does not recognise is {@link SignIn#UNKNOWN}: a harness that changes its
+     * wording degrades to "could not tell", never to a guess. The output may hold an account name, so the
+     * caller keeps only the returned state.</p>
+     *
+     * @param exitCode exit code of the status command
+     * @param output   everything the command printed
+     * @return the sign-in state the answer proves
+     */
+    default SignIn signInState(int exitCode, String output) {
+        return SignIn.UNKNOWN;
+    }
+
+    /**
+     * What the provider's own status command says about being signed in.
+     */
+    enum SignIn {
+        /** The provider says someone is signed in. */
+        SIGNED_IN,
+        /** The provider says nobody is signed in. */
+        SIGNED_OUT,
+        /** The provider has no status command, or its answer was not understood. */
+        UNKNOWN
+    }
+
+    /**
      * Resolves the provider configuration path.
      *
      * @param projectRoot project root
@@ -140,6 +197,18 @@ public interface ProviderIntegration {
          */
         default Map<String, String> environment(HeadlessOptions options) {
             return Map.of();
+        }
+
+        /**
+         * Reads what one line of the provider's output stream says the agent did, for {@code synesis agents log}.
+         * Lines that are not events, and events that are bookkeeping, yield nothing; a provider whose output this
+         * does not know shows no entries rather than its raw lines.
+         *
+         * @param outputLine one line the provider printed
+         * @return the entries of that line in the order they happened; empty by default
+         */
+        default List<AgentLogEntry> logEntries(String outputLine) {
+            return List.of();
         }
     }
 
@@ -404,43 +473,25 @@ public interface ProviderIntegration {
     SyntheticCheck syntheticCheck(Path profile, Path projectRoot);
 
     /**
-     * Names the project instruction file this provider's harness loads by itself, when it does
-     * not read {@code AGENTS.md}.
-     *
-     * <p>Synesis states its coordination rules once, in the managed block of {@code AGENTS.md}.
-     * A harness that never opens that file would start work without them, so its integration
-     * points the harness's own instruction mechanism at it rather than keeping a second copy.</p>
-     *
-     * @param projectRoot control project root
-     * @return the file to install, or empty when the harness already reads {@code AGENTS.md}
+     * First line of every instruction file an earlier Synesis wrote into a project. A file at the same
+     * path without it belongs to the user and is never removed.
      */
-    default java.util.Optional<ProjectInstructions> projectInstructions(Path projectRoot) {
-        return java.util.Optional.empty();
-    }
+    String RETIRED_INSTRUCTIONS_MARKER = "<!-- Managed by Synesis: replaced by `synesis provider install`, removed by uninstall. -->";
 
     /**
-     * A project-local instruction file owned entirely by Synesis.
+     * Names the project instruction file an earlier Synesis wrote for this provider's harness, if it
+     * wrote one.
      *
-     * @param path    absolute location of the file
-     * @param content complete file content, beginning with {@link #OWNERSHIP_MARKER}
+     * <p>Synesis no longer writes any instruction file into a project: the agent instructions live in
+     * the installed {@code synesis-provider-manual} skill, the one place for them (ADR-0103 decision 9).
+     * Installing the provider removes this file when it is Synesis's own, which only the
+     * {@link #RETIRED_INSTRUCTIONS_MARKER} on its first line shows.</p>
+     *
+     * @param projectRoot control project root
+     * @return the retired file, or empty when no earlier version wrote one for this harness
      */
-    record ProjectInstructions(Path path, String content) {
-
-        /**
-         * First line of every instruction file Synesis owns. A file at the same path without it
-         * belongs to the user and is never replaced or removed.
-         */
-        public static final String OWNERSHIP_MARKER = "<!-- Managed by Synesis: replaced by `synesis provider install`, removed by uninstall. -->";
-
-        /**
-         * Validates that the content declares Synesis ownership.
-         */
-        public ProjectInstructions {
-            java.util.Objects.requireNonNull(path, "path");
-            if (content == null || !content.startsWith(OWNERSHIP_MARKER)) {
-                throw new IllegalArgumentException("project instructions must begin with the ownership marker");
-            }
-        }
+    default java.util.Optional<Path> retiredProjectInstructions(Path projectRoot) {
+        return java.util.Optional.empty();
     }
 
     /**

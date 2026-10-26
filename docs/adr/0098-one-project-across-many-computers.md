@@ -876,8 +876,8 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     it as an ordinary advance, `CONTROL_BRANCH_ADVANCED` from the other head to the result naming the re-merge
     snapshots, so the other computer's audit follows it to its own head and fast-forwards. A re-merge whose basis
     moved (this copy advanced meanwhile, or the other head is not the other computer's last) is left, and the next
-    pass builds a new one. A rejected re-merge is left as it is and reported; another reviewer when the original one
-    cannot be reached (designer item 2) is NOT BUILT.
+    pass builds a new one. A rejected re-merge is left as it is and reported. Another reviewer when the original one
+    cannot be reached (designer item 2) is item 24's rule.
 16. **How the re-merge is built and found again.** Its ID follows from the two heads (`rm-` and a hash of the other
     head and this copy's head), so every pass on the same basis finds the same re-merge in the log and goes on to land
     it; a pass on a new basis builds a new one. Each re-merge snapshot is `refs/synesis/snapshots/rms-…` at its lane's
@@ -967,6 +967,459 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     - **Not done:** an older build that meets an entry type it does not know still reports `durable_state_ambiguous`
       and asks for a person; naming it "this Synesis is older than the project's log" would have shown the cause at
       once. `agents run` does not check that its agents' MCP server is its own build.
+24. **A combine nobody was shown** (s5-run6, 2026-10-18: PC and VM partitioned for 20 minutes right after the join,
+    agents started only once apart). Apart, the PC merged primes, fib and digits onto its `main` and the VM merged its
+    own primes. After the heal the PC, the higher node ID, re-merged onto the VM's copy; its oldest advance (primes,
+    `snap_19da…`) met the VM's primes, so it wrote `COMBINE_REQUIRED` and the combine's work group, and stopped, as
+    item 22 says. Of the four fresh agents, one PC agent continued the held gcd lane (offered and taken, lawfully). The
+    other PC agent held no lane and wrote none of the combined work, so the run controller resumed it for the combine,
+    but its next action said to wait: first because another call's pass held the integration lock, then because gcd's
+    snapshot waited for its review. The combine is offered only by the claim gate (`claimRequiredResponse`), which a
+    lane-less caller reached only when the merge pass had nothing to say; and a combine's group never had a lane, so
+    with every other group closed the project would have read as finished. **Rule:** a caller that holds no lane is
+    offered a combine it may take before the merge pass's wait and before "no open work", right after a continuation
+    (`AgentNextActionService.stagedAction`), so the next action shows what the run controller woke the agent for.
+    The VM's agents are rightly not offered it (a combine lane on another computer, NOT BUILT).
+    - **The held fib lane on the VM was never offered** to the VM's fresh agents. Both computers, apart, opened their
+      first lane in "the" default work group, whose ID was derived from the project alone; the step 4 table merged the
+      two creations into one group, the PC completed it after its own two lanes, and a held lane in a completed group
+      is offered to nobody (`RecoveryContinuationProjection`). **Rule:** the default group is the computer's own,
+      derived from the project and the node ID; a group open when a computer starts a lane is still joined as before.
+      Not covered: a group opened while connected that one computer completes while apart and the other still works
+      in (the same symptom, rarer; a group should not count as complete while a lane in it is open). NOT BUILT.
+    - **Why both computers stalled before the heal.** On each computer a reviewer consumed its grant (gcd on the PC,
+      fib on the VM), then the merge pass integrated the reviewer's own lane, and from then on every `read_file` and
+      `run_command` of its review answered `SESSION_RECOVERY_STATE_UNAVAILABLE` (`McpProtocolHandler.refuseFencedRecovery`:
+      a completed binding could record a verdict but not read what it reviewed). The reviewers stopped without a
+      verdict, the grants stayed consumed by participants that were gone, and no other agent was offered those reviews.
+      The re-merge's own reviews would have met the same wall: the original reviewers of primes and fib are sessions
+      that ended. **Rules (2026-10-18):**
+      - *A completed lane finishes the review it holds.* `read_file` and `run_command` admit a completed binding at
+        the fence, as `get_next_action`, `request_coordination` and `respond_coordination` already did (ADR-0099,
+        amendment), on a managed connection too. Downstream only the review snapshot access accepts a completed
+        binding (`ReviewSnapshotAccessService`, through `SessionAuthorityResolver.resolveReview`), and only while its
+        grant is consumed and has no verdict; it reads and runs in the disposable review worktree, never the lane's.
+        A completed lane that holds no review, or whose verdict is recorded, is told to start a fresh session
+        (`SESSION_NOT_ACTIVE`, `ensure_session`); `apply_patch`, `finish_lane` and every other tool still fail closed.
+      - *A reviewer that cannot be reached is replaced (designer item 2).* The merge pass releases (`LANE_REVOKED`) a
+        review grant on a snapshot still under review, with no verdict, whose reviewer holds no lane, when the
+        reviewer's own computer judges its session gone: no lease of that computer names the session as live
+        (`AwayLanes.goneHere`: closed cleanly, terminal, or unseen past the grace period, or the connection went on to
+        a fresh session). This needs no stall and runs at once, since only that computer can judge the session; a
+        quiet agent keeps a live lease and its review (ADR-0099). The away-computer release of step 7 (item 17) is the
+        same rule for a reviewer whose computer is away. A released ordinary review is a candidate again: an accepted
+        review request holds the review only until its grant is issued, then the grant does, in the candidates agents
+        are shown as at admission (`ReviewAdmissionRules.validateReviewSnapshotUnassigned`). A released grant holds
+        nothing for its former reviewer: its next action no longer asks for the verdict, its reads no longer reach the
+        snapshot, and it no longer holds its session open (`ProviderSessionTerminalizationService.openAuthority`), so
+        a session that comes back may start a fresh one. A released re-merge review
+        is offered by the next pass to another agent of the re-merging computer: an active participant whose session
+        it judges live, neither the author nor in its lineage, not released from it before, the lowest handle first
+        (`RemergeService.offerReview`); with none, the re-merge waits. Only this computer's agents are chosen, because
+        only their sessions can be judged here.
+      - *Not covered:* a reviewer that holds a lane is never released here; continuing its lane carries its grants. While
+        any lease of the computer cannot be read, or it has no leases folder, nobody of it is judged gone: the
+        unreadable lease may be the live one.
+25. **A combine taken by ordinary work** (s5-run7, 2026-10-18: PC and VM partitioned for 20 minutes right after the
+    join; apart, each computer finished the goal, PC `main` 7491f26 with 5 snapshots, VM `main` b276a5f with 2). After
+    the heal the VM, the higher node ID, re-merged onto the PC's copy; its first advance (primes, `snap_55baa9c2…`) met
+    the PC's primes, so it wrote `COMBINE_REQUIRED` and the combine's work group `5e4684e3` at 19:28:59 UTC, as item 22
+    says. Both fresh VM agents were offered the combine (`combineCandidates`). Before either took it, a fresh PC agent
+    announced ordinary work (digits) with no group named; every other group was completed, so the announcement joined
+    the first active group, the combine's (`WorkIntentAnnouncement`'s default group). From then on the combine read as
+    taken (`CombineLaneJoin.waiting`: its group holds a lane), so the VM agent's `ensure_session` with the offered
+    arguments fell through to the repair path and was refused `REPAIR_INTENT_NOT_FOUND` (the combined lane ended long
+    ago). Both VM agents then announced ordinary lanes, which joined the same group; the NOTES lane's snapshot
+    (`snap_844271e2…`) counted as the combine's result (`combinePending`), was never offered for review (a combine's
+    group requires none) and waited for a re-merge that never came, because the re-merge was still waiting for its
+    combine. No re-merge snapshot or re-merge review grant was ever written, so the release of a gone reviewer (item
+    24) had nothing to release; the "original reviewer" in the agents' wait was the combine-pending text. The PC
+    agents were rightly shown no open work: the combine is the VM's (a combine lane on another computer, NOT BUILT).
+    **Rule:** a combine's group holds only its combine lane. An announcement that names no group never joins one,
+    and one that names it is refused (`COMBINE_GROUP_HOLDS_ONLY_ITS_COMBINE_LANE`). A repair join that names a combined
+    snapshot whose combine is not open to the caller is refused `COMBINE_TAKEN_OR_CLOSED`, not sent down the repair
+    path.
+    - *Not covered:* a log already written with ordinary lanes in a combine's group (this run's) stays stuck; and an
+      ordinary lane merged onto this computer's `main` while its re-merge waits for a combine moves the head the
+      re-merge started from (untested).
+26. **A combine lane judged against the wrong `main`** (s5-run8, 2026-10-18: PC and VM partitioned for 20 minutes right
+    after the join; apart, each computer finished the goal, PC `main` 90570ed, VM `main` fefbe78). After the heal the
+    PC, the higher node ID, re-merged onto the VM's copy; its primes advance (`snap_7e60ae27…`) met the VM's primes,
+    so it wrote `COMBINE_REQUIRED` with base fefbe78. A fresh PC agent took the combine (item 22): the join moved its
+    worktree to fefbe78 with HEAD detached and left the markers in, but its binding still named the session's branch
+    and the PC's `main` (90570ed) as its base. Every later call was answered `workspace_stale` (no branch, a HEAD that
+    is not the binding's base, a base that is not this computer's `main`), and `ensure_session` tried to refresh a
+    dirty worktree onto 90570ed and refused `WORKSPACE_STALE_DIRTY`; the agent asked for a person after 68 s. The
+    s5-run7 combine never reached this: its join was refused (item 25) and the agent worked in an ordinary lane at the
+    VM's own `main`, so no worktree had been moved yet in a real run. **Rule:** a combine lane's worktree is judged
+    against the combine's base, not this computer's `main`. The join moves the session's own branch to that base
+    instead of detaching HEAD, and only a worktree still on its branch at its recorded base is moved
+    (`COMBINE_WORKTREE_HAS_COMMITS`); then it records that base in the session's binding, so a refused move leaves the
+    binding as it was, and the branch, ancestry and generation checks hold as for any lane. Where every other lane
+    must be based at this computer's control head, a session's binding may instead be based at the base of the
+    combine lane that session holds open (`ProviderSessionCoordinationFacts.atJudgedBase`); unreadable coordination
+    state answers with the control head alone. Its markers are then the lane's own uncommitted work, not a stale
+    worktree to refresh, and the agent reads, edits, runs commands and finishes there. Once the lane ends, the
+    session's next `ensure_session` gives it a fresh worktree at this computer's `main`.
+    - *Not covered:* a crash after the worktree is prepared and before its binding and lane are written leaves a
+      moved, dirty worktree with no lane, which `ensure_session` cannot refresh (as a crash before the announcement
+      did before this rule); a combine lane continued or taken over by another session; and the re-merge's use of a
+      combine snapshot whose base is the other copy's `main` is still untested in a real run.
+27. **A re-merge review owed to no one who can take it** (scripted scenarios S1 and S2, ADR-0102 item 1, 2026-10-19,
+    about a third of the runs; and s5-run13, where the original reviewer was a Claude agent on the PC whose run had
+    ended before the heal). Three ways the same invariant failed: *a re-merge review owed on this computer is
+    offered to an agent that is live, may review it, and can see it in its next action.* (a) A reviewer that
+    refreshed its stale workspace with `ensure_session` got a new session; the merge pass released the old session's
+    grant (item 24) and offered it to no one, since the only other agent wrote the snapshot and the refreshed agent
+    held no lane, so it was no participant on the log. (b) The released review went to the agent that had taken the
+    combine, whose lane waits for this very re-merge, so its next action said "wait" and the grant stayed available for
+    ever. (c) A reviewer on a connected computer whose agents had all ended is never judged gone by the computer that
+    re-merges, and its own computer ran no pass to release it. **Rule:** `RemergeService.anotherReviewer` chooses among
+    the live sessions of this computer (`AwayLanes.Agents`), whether or not they hold a lane; first the session that
+    replaced a released reviewer's on the same connection, then the lowest handle. It never chooses the author or any
+    session of the author's agent, a session that authored in the lane's lineage or in an earlier session of its own
+    agent, a participant that is not active, or the holder of an open lane of a combine of this re-merge. What makes two
+    sessions one agent's is `SessionSuccessions`: the binding service records, before it puts a fresh session at a
+    connection's path in place of another (`ensure_session` after a lane ended, or a stale refresh), which session
+    it replaced. It is local to this computer, and unreadable leases or successions choose no one (fail closed). A
+    review whose original reviewer another computer's log introduced is offered first to such a live session here and
+    to that reviewer only when there is none. The run controller already wakes the chosen session
+    (`EventLogObserver.reviewsOffered` takes the re-merge grants of the participant behind each connection).
+    - *Not covered:* an `ensure_session` refresh still replaces the session of a lane-less agent that holds an open
+      review grant (the grant is then released and offered again, to the same agent first); and an agent that is live
+      by its lease but never calls `get_next_action` holds the grant until its lease ends.
+
+28. **The lower computer takes the re-merged `main` on every pull, not only the pull that brought entries** (ADR-0102
+    scripted scenarios S1 and S2, defect 4: about 3 runs in 90, the lower computer held the new commit and every
+    entry, its checkout clean and behind, for good). Taking another computer's head (step 5's fast-forward) was
+    started only by a pull that placed entries. The attempt can end without a move for a reason that passes by itself:
+    the commit is not fetchable yet, or the computer's own pass holds the integration lock. The next pull places
+    nothing, so nothing tried again. The hook that starts it (`LeaderReplication.whenPulled`,
+    `MemberReplication.whenPulled`) now runs after every pull that reached its peer (`LogExchange`'s `afterPull`),
+    so at least every `PULL_INTERVAL_SECONDS`, and `CodeOverLink.mainMayHaveMoved` is idempotent: a head already
+    met costs a comparison. The merge pass's hook (`afterMemberEntry`) stays on pulls that brought entries. The
+    rules of item 5 are unchanged (only a fast-forward of a head the log names, after the audit). A refusal that waits
+    for the next pull (busy integration lock, detached checkout, head not fetched) is logged with its reason.
+
+29. **A reviewer of another computer's snapshot is asked again while that computer is connected** (s5-run14, PC and
+    VM, build remaster81 = `32d430a4`, 2026-10-19: both copies of `main` equal and the logs byte-identical, but the goal's
+    `gcd/` package never landed and neither run ended). *Proven from the evidence:* the PC's Claude agent consumed the
+    VM's grant `f3bdcc2f` for the VM's `gcd` snapshot, was refused `read_file` and `run_command` with
+    `CODE_PEER_UNREACHABLE` in four resumes between 01:01 and 01:11:36, and stopped without a verdict; its last resume,
+    at the heal, was refused again. After 01:12:25 no process of the PC's run started for 48 minutes, the log stayed at
+    50 entries, the grant stayed unresolved (it was revoked only when the run's end ended the connections), and the VM's
+    producer and its second Codex agent waited behind that grant, as the PC's second Claude agent waited behind it
+    ("another reviewer was admitted"). Both runs printed `AGENT_RUN_WAITING=FOREIGN_LANE_OPEN` until their time ran out.
+    The replication journals of both computers hold no line after the first `CONNECTED` of 00:59:51: no `DISCONNECT`
+    and no later `CONNECTED`, so the wake of item 23 (a session that began after the agent last looked) had nothing to
+    fire on, and the heal woke the reviewer only through log entries that arrived in two batches, the second while the
+    code was still unreachable. *Hypothesis, not proven:* the code became readable some seconds after the last
+    resume. *Rule:* a stopped agent whose session holds an unfinished review grant on a snapshot another computer's
+    agent published (`ProviderSessionTerminalizationService.holdsReviewOfAnotherComputer`, the same `grantUnresolved`
+    rule as the other grant checks) is resumed again while that computer is connected, 30 seconds after it stopped, and
+    after 60, 120 and so on for each resume in a row that recorded nothing (`AgentRunController.wakeFor`). The resumes
+    that record nothing count against `--max-resumes` as any others; once it is spent the connection is ended, the
+    reviewer is judged gone, and its review is released and offered to a live non-author by the rules of items 24 and
+    27. Nothing about the authority of the review changed: the reviewer still reads the snapshot over Link and gives
+    its own verdict. Scripted scenario S3 (`CrossComputerReviewScenarioTest`) fails without the rule (the controller
+    prints `FOREIGN_LANE_OPEN` and resumes nobody) and passes with it. *Not covered:* a run whose journal says the
+    other computer is away does not retry (it would spend the agent's resumes while nothing can be read), and the
+    wake keeps no memory of an earlier refusal, so a reviewer that stops for another reason is asked again too.
+
+30. **A re-merge review owed to agents the run controller had already closed** (s5-run16, PC owner with 2 Claude agents,
+    VM member with 2 Codex agents, build remaster86 = `3dbbbf92`, 2026-10-20; a real 5-minute cut, both journals
+    `LIVENESS_EXPIRED` after 60 s; FAIL: `main` PC `e523d3d5`, VM `ffd76e6e`; the fix is built, see below).
+    *Proven from the evidence* (`D:\SynesisAcceptance\evidence\s5-run16`; the VM's own log has timestamps):
+    - The PC's run ended `COMPLETED` after 128 s, while cut. Its log named no head of the VM's, so
+      `MainMeeting.holdsEveryHead` held for the one head it knew, and no agent had a lane or a grant to come back to, so
+      `progressElsewhere` had nothing to wait for (`OTHER_COMPUTER_AWAY` needs an agent that `mayComeBack`). That is the
+      rule working as written: a run cannot wait for a head it cannot learn of. The PC's agents were gone from then on,
+      which is lawful, since only the re-merging computer's agents review a re-merge (item 13).
+    - The VM, the higher node ID, re-merged after the heal (09:54:53): `COMBINE_REQUIRED` for primes and `NOTES.md`. The
+      run controller resumed codex#2 for it 25 s later and it took and finished the combine lane (09:56:13) as a new
+      session, `agt_20677c3f`, on a new connection (the old one had been closed, so `ensure_session` gave a fresh binding
+      and `SessionSuccessions` recorded nothing; it records only a replacement at one connection's path).
+    - The pass wrote the two re-merge snapshots and their grants (09:56:14.25 and .28) to the two original reviewers
+      `agt_723913f6` (codex#2's first session) and `agt_e4f2adeb` (codex#1), and **released both within 190 ms**
+      (`LANE_REVOKED`, .35 and .43). Both reviewers' leases were `CLOSED_CLEANLY` since 09:52:49 and 09:53:03, before the
+      heal: the controller ends the connection of an agent with no lane, request or grant to come back to
+      (`AgentRunController.keepOrEnd`), so `AwayLanes.goneHere` judged them gone at once, as item 24 says it should.
+    - `RemergeService.anotherReviewer` then chose among the live sessions of the VM, and the only one was `agt_20677c3f`,
+      the holder of the combine lane, which it never chooses (item 27). So no grant was written again ("waits for another
+      reviewer"), the combine lane stayed open for ever, and nothing was offered to either agent, so the controller had
+      nothing to resume them for: `wakeFor` resumes on grants, open reviews and combines that exist for a session,
+      and codex#1 had no session. The run printed `FOREIGN_LANE_OPEN`, `COPIES_MEETING`, `OTHER_COMPUTER_CONNECTED` and
+      timed out at 3000 s; the grants and the participants were closed by the run's end, not by any rule.
+    - With two agents a computer has no independent reviewer for both re-merge snapshots at all: the snapshot of the
+      combined lane (author codex#1) can only be reviewed by codex#2, who holds the combine lane, and the other (author
+      codex#2) only by codex#1, who has no session. Item 27's exclusion of the combine's holder and item 24's release of
+      closed sessions together leave no one, which scenarios with four or six agents per computer never meet.
+    *Hypothesis, not proven:* that the PC's stopped agents would have been resumed if the PC's run had still been running;
+    its run ended 4 minutes before the heal, so nothing tested it.
+    **Built 2026-10-20 as ADR-0099 fix 16** (a), (b) and (c) below, as named, plus two defects the scenario found: a run
+    whose own work is closed ends no sooner than 30 s after another computer connected (`COPIES_MEETING`; it ended within
+    a second of the heal, before the combine was written), and `AwayLanes.liveHere` reads the session a connection has now
+    from its binding, because a lease still names the session before the one a refresh or a combine join put at the same path
+    and a review offered to that name was never taken and, its lease live, never released (a re-merge grant to a lane-less
+    session of this computer that no entry introduced is now released when it is gone). The combine is also refused to every
+    session of its authors' agents (`CombineLaneJoin.sessionsOfAgent`), not only to the author's own handle: the fresh
+    session of a resumed author was offered it. `CombineUnderRunControllerScenarioTest` is enabled and passed 4 of 4 times
+    (Linux gate); the combine lands and both mains end equal with every re-merge grant consumed. Not proved in a real run.
+    *What the fix holds* (decided with the invariant of item 27, *a re-merge review owed on this computer is offered to
+    an agent that is live, may review it, and can see it in its next action*): (a) a stopped agent whose session was
+    closed, with a re-merge snapshot waiting for a reviewer that none of its sessions authored, is resumed for it (the
+    pass can only choose a session that exists; `reviewsOffered` names today only what exists for a session); (b) the
+    controller records, when it opens a new connection for an agent that had an earlier one, that the new session is the
+    old one's successor (`SessionSuccessions`), or the pass would offer a fresh session the review of its own earlier
+    work; (c) the holder of a combine lane whose snapshot is published is shown a re-merge grant addressed to it
+    (`AgentReviewActionProjection.reviewActions` shows it today only to a lane-less caller or an admitted reviewer) and the
+    pass may choose it, because the original reviewer can be the combiner and the combine snapshot is, by item 22, not
+    reviewed on its own. Scripted scenario `CombineUnderRunControllerScenarioTest` (two agents per computer started by a real
+    `AgentRunController`) reproduces the state: both original reviewers closed, their grants released within a second, the
+    combine holder the only live agent, and the other agent never woken ("waits for another reviewer").
+
+31. **A combine opened after every agent has stopped waits for the next agents run** (designer, 2026-10-20). Under a
+    real cut each computer can finish its own work and end its run before the heal (s5-run17: the VM's run ended
+    COMPLETED after 244 s, during the cut); the re-merge after the heal then opens a combine with no agent running on
+    either computer. It waits, as a merge conflict in Git waits for whoever works next; a run does not wait for a
+    computer that may stay away for days (the premise). The lab models later work with `run.sh --restart-after-heal`,
+    which now starts any ended run again after the heal. Still open (PARTIAL): with agents started again, s5-run18
+    ended with two combines for one snapshot and a reviewer lane open, and the copies did not meet within the run's
+    50 minutes.
+
+32. **One combine per conflicting snapshot, whatever this copy of `main` does meanwhile** (s5-run18, VM = the
+    re-merging computer). *Proven from the VM's log dump* (`log-dump.txt`, applied
+    order): after the heal the pass opened `cb-943defc8…` (re-merge `rm-db2b…`, own head `969da54`, `COMBINE_REQUIRED`
+    at pos 146). In the same moment an ordinary lane of the VM's codex agent (snapshot `snap_9a6d55d4…`, based on
+    `969da54`, reviewed and accepted, pos 144 to 153) landed on the VM's `main`, which moved to `e262142`. A re-merge's
+    ID is the digest of the other head and this copy's head (`RemergeService.remergeId`), so the move named a new
+    re-merge `rm-5b58…`; it was built again, met the same conflict on the same advance, and `openCombine` derived the
+    combine ID from the re-merge ID, so it wrote a second combine `cb-22126432…` (pos 159) for `snap_3e0a5e49…`. Both
+    combines hold the same other head (`339011f`), base and advance head. Neither was ever taken.
+    *Rule:* a combine is about the other copy's head and the advance, not about this copy's head. Its ID is derived from
+    those (`other`, advance head, base), and the pass, the build, and the choice of another reviewer look combines up by
+    the other head: a new re-merge caused by an ordinary advance finds the combine again, waits for it, and uses its
+    result. A combine that logs written before this rule hold under another ID is found the same way. Tests:
+    `RemergeServiceTest.anOrdinaryAdvanceOfThisCopyWhileACombineWaitsOpensNoSecondCombineAndTheNewReMergeUsesTheFirst`
+    fails without the rule (a second `COMBINE_REQUIRED`).
+    *Not changed (found, other responsibilities):* the reviewer lane `2bbb8861…` (agent `agt_3797…`, a REVIEWER lane of
+    the work group `3197bbd1…`) stayed `ACTIVE` because the PC, cut off, had completed that group (its pos 143) without
+    knowing a lane the VM had announced in it (pos 62); the lane's owner then wrote its verdict and review notes, but
+    every finish path refuses a group that is not `ACTIVE` (`NoChangeCompletionEligibility`,
+    `LaneCompletionRules.validateNoChangeGroup`: `WORK_GROUP_NOT_ACTIVE`), the transcript shows `IMPLEMENT` without a tool
+    after the completion request, and a caller with an open lane is never offered a combine
+    (`AgentNextActionService`, `callerIntent.isEmpty()`). Hypothesis: that holds codex#1 out of the combine and, with
+    `--max-resumes` spent, nobody took it. A group closed by one computer during a cut while another computer holds a
+    lane in it is a separate rule to decide. The scenario `CombineUnderRunControllerScenarioTest` also shared one leases
+    folder between its two computers (leases are per project ID under the JVM's home), so the higher computer's pass
+    offered a re-merge review to the lower computer's test agents; their leases are removed once they are done.
+    `CombineUnderRunControllerScenarioTest` is enabled again and passed 6 of 6 times in a row (Linux gate); one earlier
+    attempt failed only because the gate host was overloaded by parallel runs (the lab's invite expired). Not proved in a
+    real run.
+
+33. **A lane whose work group is no longer `ACTIVE` is told to end** (designer, 2026-10-26; the case item 32 recorded as
+    "found, not changed", s5-run18: reviewer lane `2bbb8861…` of group `3197bbd1…`, which the cut-off PC completed
+    without knowing the lane). A lane cannot complete into a group that is `COMPLETED` or `CANCELLED`, whichever computer
+    closed it and whichever role the lane has, and nothing is integrated into a closed group: every finish path already
+    refuses it with `WORK_GROUP_NOT_ACTIVE`. *Rule:* the lane's next action says so in plain words (state
+    `LANE_GROUP_CLOSED`, reason `WORK_GROUP_NOT_ACTIVE`, `BLOCKED`) and projects ending the lane with the existing
+    `cancel_lane`. Ending a lane keeps everything it wrote (verdicts, review notes, snapshots) as history and never
+    reopens the group, and the agent then holds no lane, so it is offered a combine like any other. It is one check at the
+    head of the review-lane stage (`ReviewLaneProjection.reviewLaneAction`), which the ordinary path and the
+    stale-workspace path both pass first, and it answers the same for an ordinary and a finish-asked call, so no role has
+    its own copy. The agent is told, never ended behind its back: the lane stays `ACTIVE` until it calls `cancel_lane`.
+    Tests: `ClosedGroupLaneTest` (a lane in a `COMPLETED` or `CANCELLED` group is told to end, then, ended, is offered the
+    open combine and the group stays closed) and the scenario `LaneInGroupClosedWhileApartScenarioTest` (the cut, one side
+    completes the group, the other's reviewer lane is ended after the heal). Source semantics proven; not proved in a
+    real run.
+
+34. **One combine per conflicting advance, whatever either copy's head does meanwhile** (s5-run19, 2026-10-26, build
+    remaster91; the VM is the re-merging computer, the PC the other copy). Result `TIME_BOUND`, `main` apart (PC
+    `a9accc1e`, VM `a44cfc92`). *Proven from both log dumps* (`D:\SynesisAcceptance\evidence\s5-run19`, applied order):
+    the VM wrote three combines for the one snapshot `snap_3e7f6f09…`: `cb-2eb0fbbb…` (other head `223fc5a2`, pos 134),
+    `cb-c6fe733e…` (`a0235c09`, pos 148), `cb-da5d997b…` (`a9accc1e`, pos 160). Each is the PC's next head after an ordinary
+    lane of the PC (pos 140 to 153): item 32 made the combine independent of *this* copy's head but still looked combines
+    up by the *other* head (`combinesOnto(store, other)`), and a copy that keeps integrating moves it each time. The VM's
+    own head `a44cfc92` was the same in all three, and so was the advance head they all combine.
+    *Why the lane and the snapshot stayed open, and why the copies never met:* the first combine was taken (lane
+    `7b166133…`, work group `832cb455…`) and its result `snap_b3864df2…` was written (pos 162, on base `223fc5a2`). The
+    build then looked only for the combines of the newest other head (`a9accc1e`), found the third, which nobody had
+    taken, and waited for it: the result of the first was never used, so the re-merge never landed, the snapshot stayed
+    `INTEGRATION_PENDING` (a combine lane's result is merged by the re-merge, nothing else integrates it) and its lane
+    stayed `ACTIVE` as a producer waiting for that landing. The other two groups (`1cfd28b2…`, `31814a29…`) stayed `ACTIVE`
+    with no lane. So the same missing invariant: one combine per conflicting advance. (`snap_a0e72df4…`
+    `REVIEW_REJECTED` is an ordinary rejected snapshot of the group `8c7dfc15…`, whose lane was re-done as `snap_a3ec2f8e…`;
+    it is not part of this.)
+    *Identity chosen:* the combine is about the advance of this computer that Git cannot merge, named by its head: its ID is
+    `cb-` + digest of the advance head (`RemergeService.openCombine`), and every lookup is by `CombinePayload.theirs`, the
+    same field, so combines logged under the earlier IDs are found as they are (no format change; `COMBINE_REQUIRED`
+    is as before). `CombinePayload.combineId` still names the combine's work group and task.
+    *Rule:* `openCombine` writes nothing when any combine names the advance; the build starts from the base of the last
+    combine that has a result (`combinesWithResult`) and, when that base lacks the other copy's newest head, merges that
+    head into the result last, so the result holds the combine lane's work and what the other copy took since; the
+    reviewer choice excludes the holders of the combines that name the snapshots the re-merge carries
+    (`anotherReviewer`). An advance whose combine has no result yet is merged by Git against the newest heads, so a
+    conflict the other copy resolved itself (an equivalent change) is gone and no lane is needed; once no other copy
+    diverges from this one, `closeCombines` cancels the work group of such a combine (`cancelWhenResolved`, this
+    computer's lanes only, a head not here yet stops it), and a lane in it is told to end by item 33. Where one advance
+    has several combines already (run 19), the one with a result is used and the others are cancelled the same way.
+    *Limit:* if the other copy's newest head conflicts with the combined result (it changed the same lines again),
+    the re-merge stops and is tried again when a head moves, and no second combine is opened for it. A combine lane that
+    finishes after the conflict went away is recorded integrated without its tree being used (both versions are on
+    `main` through Git's own merge).
+    Tests: `RemergeServiceTest.theOtherCopyMovingWhileACombineWaitsOpensNoSecondCombineAndTheResultIsMergedWithItsNewestHead`
+    and `aCombineWhoseConflictTheOtherCopyResolvedItselfIsMergedByGitAndItsGroupIsCancelled`, and the scenario
+    `OverlapAndCombineScenarioTest.theOtherComputerGoesOnIntegratingWhileTheCombineWaitsAndOneCombineIsOpenedAndMainEndsEqual`
+    (after the heal the lower computer integrates four more lanes while the combine waits: one `COMBINE_REQUIRED`, mains
+    equal, the later files on both). All three fail without the change. Source semantics proven; not proved in a real
+    run.
+35. **A combine lane that has published nothing is not shown another combine's wait** (s5-run20, 2026-10-26, build
+    remaster92; the PC re-merges, the VM is the other copy). Result `TIME_BOUND`, `main` apart (PC `b1ecfcd4`, VM
+    `75d3fad4`). *Proven from the log dumps and the PC agent transcripts* (`D:\SynesisAcceptance\evidence\s5-run20`): one
+    re-merge `rm-09be0f9f…` opened two combines, `cb-45df29d6…` for `snap_15bf4812…` (digits, base `5096b431`, the other
+    copy's head) and `cb-6d86a1c6…` for `snap_8af36a6d…` (primes and `NOTES.md`, base `a2647ff0`, the commit the build made
+    from the first combine's result). Both lanes were taken. The first agent published its result `snap_60707315…`
+    (`INTEGRATION_PENDING`, as designed: a combine lane's result is merged by the re-merge). The second agent
+    (`claude#2`, lane `6e34e895…`) resolved its files, ran the suite and asked to finish (`get_next_action` with
+    `completionRequested`), and was answered with the first lane's wait: `combinePending`, `snapshotIds` naming only
+    `snap_60707315…`, "nothing more is needed from this lane; wait". It stopped. No second combine result was ever
+    written (the log has one `TASK_SNAPSHOT_CREATED` after the combines), so the re-merge, which lands only when every
+    combine has a result, could not build, the first result stayed `INTEGRATION_PENDING`, and the two work groups stayed
+    `ACTIVE` until the run's time ran out (the log is flat from 12:31 to 13:19; the last four entries are the end-of-run
+    suspensions). Both agents were told the truth about the first lane; the second was told it about the wrong lane.
+    *The missing invariant:* the integration pump has no caller, and its combine wait lists the unlanded snapshot of every
+    combine lane of this computer (`IntegrationOrchestrationService`), so `AgentNextActionService.stagedAction` handed it
+    to whoever fell through the earlier stages, including a producer that had published nothing. The same stage already
+    withholds the pump's validation wait from such a producer (`NO_PUMP_WAIT`); the combine wait is the same kind of
+    answer and was missed.
+    *Rule:* `pumpShownTo` withholds both waits from a producer lane that has no snapshot yet, so its next action is its own
+    (publish, or keep resolving), not another lane's wait. A lane that has published still sees the combine wait.
+    *Not proved:* why the second lane's completion request offered no `finish_lane`. Every store-level condition
+    (`reviewRequired`, capability obligations, `owedOwnerReply`, `awaitedVerdict`, the group, the claims) was read back from
+    the PC's log dump and allows publication; what remains is the inspection of that lane's Windows worktree
+    (`hasScopedPublishableChanges`), which the log does not hold. The scripted scenario with two combines, both taken and
+    finished, the other computer integrating meanwhile, lands and ends with equal `main` on the unchanged code: the base of
+    the second combine is not unstable (a later build starts from the newest combine that has a result, so it meets that
+    base again). So this item fixes what the agent was told, not the unknown reason it was not offered publication; a
+    rerun will show it (the next transcript of a second combine lane will carry the answer to `completionRequested`).
+    *Wake:* unchanged: the run controller resumed `claude#2` for the second combine, and the lane was shown the right action
+    as soon as `pumpShownTo` stops hiding it.
+    Tests: `OverlapAndCombineScenarioTest.aCombineLaneThatHasPublishedNothingIsNotToldToWaitForAnotherCombinesSnapshot`
+    (fails without the change with the answer the agent got in the run), and
+    `twoCombinesOfOneReMergeAreBothTakenAndFinishedAndTheReMergeLandsAndMainEndsEqual` (passes with and without it; it holds
+    the two-combine landing). Source semantics proven for what the agent is told; not proved in a real run.
+36. **A lane that has published nothing is shown no wait of the integration pump** (s5-run21, 2026-10-26, build remaster93).
+    The second combine lane (`6d3580a9…`, group `67b1ec4e…`) never published. *Proven from the transcripts and the VM*
+    (`D:\SynesisAcceptance\evidence\s5-run21b`): the first run ended before the combines existed (`COMBINE_REQUIRED` and both
+    lanes are the last log entries before the end-of-run suspensions); the restart took both. `codex#1` took the first and
+    published `snap_c1cad1e3…` (`get_next_action` with `completionRequested` answered `snapshot_publication_required`,
+    `finish_lane` offered, so the Windows-worktree hypothesis of item 35 is not the cause). `codex#2` (`codex-2-3.log`) joined
+    the second (`ensure_session` answered `repairJoined`, `intentId 6d3580a9…`) and its only following `get_next_action` was
+    answered `{"status":"waiting","reason":"integration_pending","nextAction":"wait","result":{"pending":1,"integrationRunning":true}}`.
+    That answer exists only where another pass holds the integration lock (`IntegrationOrchestrationService.integrate`). The
+    agent said it would wait and stopped; it never read a file or asked to finish. The lane's worktree on the VM still holds
+    the unresolved `gcd/gcd.py` and `gcd/test_gcd.py`. Nothing recorded in the log ends that wait (the lock release is not an
+    event), so `LaneWake` had nothing to wake it on, and the log stayed flat. Item 35 hid only the combine wait
+    (`combinePending`) and the review wait; this wait of the same pump was missed.
+    *Rule:* `pumpShownTo` withholds from a producer that has published nothing the waits that are for other lanes or
+    for the pass (review, combine, `integrationRunning`); its own publication is its next step. (First written as every wait of
+    the pump; that hid a dependency wait of the lane itself and failed `AgentNextActionServiceTest`, found in item 37.)
+    *`snap_48308bf3…` waits for review with no reviewer:* it is the late snapshot of a primes continuation lane
+    (`9d015423…`, task `a0519681…`), created at log position 122 after that task was already integrated through
+    `snap_3631375…` and `snap_9b8e50c7…`; the task and its participant were cancelled at 123 to 128, the WorkGroup
+    `3a53d01c…` is `COMPLETED`, so no reviewer can be admitted. A snapshot of a cancelled task is not closed by the
+    cancellation, so `pendingReviewSnapshots()` lists it for ever and the pump tells every lane without a snapshot of its
+    own `validation_required`. Not fixed here: it does not stop a re-merge landing, and closing it is a decision about what
+    cancelling a lane does to its published snapshot (recorded, open).
+    Test: `OverlapAndCombineScenarioTest.aCombineLaneThatHasPublishedNothingIsNotToldThatAnotherPassIsRunning` (the lane
+    joins, another pass holds the lock; fails without the change with the s5-run21 answer). Source semantics proven; not
+    proved in a real run.
+37. **Only a combine lane is told "nothing more is needed from this lane"** (s5-run22, 2026-10-26, build remaster94). Result
+    `TIME_BOUND`, copies apart (PC `d2124194`, VM `d865d1e8`). *Proven from the log dumps and the PC transcripts*
+    (`D:\SynesisAcceptance\evidence\s5-run22`): one re-merge `rm-7b4f2e98…` opened two combines. Combine 1 (`cb-9c4d3e4a…`,
+    `snap_f1efaa7f…`) was taken by `claude#2`'s restart session `agt_acf3f761…` and published `snap_13f2fe22…`
+    (`INTEGRATION_PENDING`). Combine 2 (`cb-bb561676…`, `snap_57c895ea…`, its group `7ea467e8…` active) was opened at log
+    position 114 and **no lane was ever announced in it**, so the re-merge, which lands only when every combine has a result,
+    could not land. The only agent that may take it, `claude#1` (it wrote neither combine), was told otherwise: its restart
+    session `agt_7f54afd0…` had been resumed as a reviewer (`codex` snapshot `snap_64e59d17…`, lane `bb8d9ff2…`), recorded its
+    verdict (`respond_coordination` answered `ACCEPTED`), and its next `get_next_action` (`claude-1-3.log`, again in
+    `claude-1-6.log`) was answered `{"status":"waiting","reason":"integration_pending","nextAction":"wait","result":{"combinePending":true,"snapshotIds":["snap_13f2fe22…"],"instruction":"The combined version is merged with the re-merge of the two copies of main, which lands once the original reviewer accepts it again. Nothing more is needed from this lane; wait."}}`.
+    It ended its turn without finishing the reviewer lane, so the lane stayed `ACTIVE`; a session that holds a lane is never
+    offered a combine (`combineCandidates` is for lane-less callers), and nothing in the log changed afterwards. The other
+    agent, `claude#2`, wrote both combines' snapshots and may take neither.
+    *The missing invariant:* the combine wait (item 22) is for the owner of a combine lane that has published; the pump names
+    it to every caller, and item 35 withheld it only from a producer that had published nothing.
+    *Rule:* `pumpShownTo` shows the combine wait only to a caller whose lane is in a combine's work group. Any other lane is
+    shown its own next step (a reviewer after its verdict: finish the lane), which frees the agent to be offered the combine.
+    *Not fixed:* `claude#2`'s restart session took a combine whose snapshot its earlier session wrote (the agent link of
+    item 30 did not join `agt_acf3f761…` to `agt_67fb74a1…`); harmless here, noted. The `snap_13f2fe22…` wait for the
+    original reviewer is by design.
+    Test: `CombineWaitShownToTest.onlyACombineLaneIsToldToWaitForTheCombinesSnapshot` (fails without the change: a lane of
+    another group is shown the wait). Source semantics proven; not proved in a real run.
+38. **A combine lane that keeps the other copy publishes that as its result** (s5-run23, 2026-10-26, build remaster95). Result
+    `TIME_BOUND`, copies apart (PC `074035dd`, VM `fb3e9adf`). *Proven from the log dump and the PC transcripts*
+    (`D:\SynesisAcceptance\evidence\s5-run23`): one re-merge `rm-367bdd49…` opened two combines. Combine 1 (`cb-ec769f2b…`) was
+    resolved and published `snap_2f070a82…` (`INTEGRATION_PENDING`). Combine 2 (`cb-66941cf2…`, `snap_9c6e0fd0…`, the fib
+    snapshot) was taken by `claude#1`'s session `agt_96aedb10…` (`claude-2-3.log`), which resolved the conflict by keeping the
+    other copy's files; its worktree then equalled the combine's base. Its `get_next_action` with `completionRequested` was
+    answered `{"status":"ready",…,"nothingToPublish":true,"instruction":"This lane has changed none of its claimed files, so
+    there is nothing to publish. Change them, or if nothing needs to change call cancel_lane with the reason."}`; it called
+    `cancel_lane` (`{"status":"completed","result":{"task":"cancelled"}}`). The combine was left with no lane, no result and
+    a `CANCELLED` work group (log positions 134 to 140), and `RemergeService.openCombine` does not open a second lane for an
+    advance that has a combine, so nothing could ever take it again; the re-merge, which lands only when every combine has a
+    result, never landed. Items 35 to 37 were not involved: the agent was told something false by the product itself.
+    *The missing invariant:* for an ordinary lane "nothing changed" means nothing to publish; for a combine lane the
+    worktree equal to the other copy is a resolution, and the re-merge needs it recorded as the combine's result (the tree
+    of the combine's base).
+    *Rule:* a lane in a combine's work group is always publishable (`LaneCompletionProjection.isCombineLane`): it is offered
+    `finish_lane` and not `cancel_lane`, the scoped-change check of `finish_lane` does not apply, and a snapshot with no
+    changed paths is accepted for it. Source: `LaneCompletionProjection.nothingToPublish`, `snapshotPublicationAction`,
+    `AgentTaskCompletionService` (scope check and the `NO_CHANGES_TO_PUBLISH` refusal).
+    *General rule asked for: an agent is never told to wait on an event no log entry or wake will announce.* Every
+    blocker found in items 35 to 38 was an answer that ended an agent's turn on something that could not change (a wait for a
+    lock release, for another lane's snapshot, a cancel instruction that closed the only way forward). It cannot be enforced in
+    one place today: WAIT answers are built at about twenty sites (`IntegrationOrchestrationService`, `CapabilityActionProjection`,
+    `ContractConsumerService`, `AgentNextActionService`), and whether an event "will be announced" depends on the site's
+    own state. What one place can enforce is the weaker half: `LaneWake.noteWait` already records the lane view the agent
+    saw when told WAIT, so a wait whose view cannot change (the caller holds no open lane, or no entry of its view is
+    something the wait names) is detectable there, and could answer "no wait" instead of holding the agent. That is a design
+    change to the wake contract and is not made here.
+    Tests: `OverlapAndCombineScenarioTest.aCombineLaneThatKeepsTheOtherCopyPublishesThatAsItsResultAndTheCopiesMeet` (fails
+    without the change at the `cancel_lane` instruction, then at `NO_CHANGES_TO_PUBLISH`; with it both copies of `main`
+    meet). Source semantics proven; not proved in a real run.
+39. **A combine lane that has published its result is released, so its agent can take the other combine** (s5-run24,
+    2026-10-26, build remaster96). Result `TIME_BOUND`, copies apart (PC `ace60554`, VM `34c60197`). *Proven from the log
+    dumps and the transcripts of both computers* (`D:\SynesisAcceptance\evidence\s5-run24`; this time the VM is the
+    re-merging computer, its agents are `codex`): one re-merge `rm-ee9b2880…` opened two combines. Combine 1 (`cb-98823ac8…`,
+    `snap_87650305…` and `snap_3e1c56d3…`, written by `agt_74251eeb…` and `agt_a4f32e8d…`) was taken by `codex#1`'s restart
+    session `agt_4f7c327f…` (`codex-1-1.log`), which published `snap_aa6f846d…` (`{"status":"waiting","reason":"integration_pending",…,"combinePending":true,…"Nothing more is needed from this lane; wait."}`).
+    Combine 2 (`cb-338fb618…`, group `44a82d5a…`, `snap_fd280e2b…`) has no lane and appears in no transcript: it was never
+    offered. It was written by `agt_c63f9324…`, a session of `codex#2`, so `codex#2` may not take it; its restart session
+    `agt_650124df…` (`codex-2-4.log`) was answered, lane-less, `{"status":"waiting","nextAction":"wait",…"workflow":{"type":"WAIT","blockers":["none"],…}}`
+    and stopped. The only agent that may take combine 2, `codex#1`, held lane `815c3651…`, which stays active until the
+    re-merge lands, and the re-merge lands only when combine 2 has a result: `codex-1-3.log` and `codex-1-5.log` are the
+    same combine wait, three times. The two waits depend on each other and no log entry can end either. Nothing in items
+    35 to 38 caused it; `codex#2`'s session also looked like a stranger to the author check of combine 1 (the agent link of
+    item 30 did not join `agt_4f7c327f…` to `agt_a4f32e8d…`), which is why `codex#1` could take combine 1 at all.
+    *The missing invariant:* a combine lane exists to produce its result. Once that is published, holding the lane only
+    keeps the agent from the next combine (the re-merge, not the agent, lands it).
+    *Rule:* the pass that runs the re-merge (`RemergeService.closeCombines`) releases the lane of a combine whose result is
+    published and not yet landed, and completes its session (`WorkIntentService.releaseCombineResult`, one
+    `WORK_INTENT_RELEASED`). The snapshot stays unintegrated and the work group open; `releaseAfterIntegration` closes the
+    group when the re-merge lands, also when the lane is gone. `CombineLaneJoin.waiting` is false for a combine whose result
+    stands, so it is not offered again (a refused result is offered again). The run controller already offers a waiting
+    combine to the sessions of the stopped agent and resumes it on a new connection, which is then lane-less and is offered
+    it. The combine wait of the pump (item 22) is shown to no one who holds a combine lane any more.
+    *Not changed:* the author check stays; two agents that both wrote a combine's snapshots still cannot take it, and a
+    third agent is needed (the run controller starts agents; the product does not).
+    Tests: `OverlapAndCombineScenarioTest.theAgentThatPublishedTheFirstCombineIsOfferedTheSecondAndTheCopiesMeet` (one
+    combining agent takes both combines; fails without the change: the second combine is never offered) and
+    `theWholeTwoCombinePathNeverAnswersAnAgentWithSomethingNothingCanEnd` (the whole path with one combining agent, the
+    second combine resolved by keeping the other copy, the copies meet, and every `get_next_action` answer of the combining
+    agent is read back: no instruction to cancel a combine lane, no wait that names no blocker to a session that is not
+    complete). The second test is the regression net for the next dead end in this path: it records every answer
+    (`ScenarioAgent.answers`) and the list of dead-end shapes in it is where a new one is added. Source semantics proven; not
+    proved in a real run.
 
 ### Step 6: Membership in the owner's log
 
@@ -1062,6 +1515,83 @@ Decided while building step 6 (designer, 2026-10-18; each open to the owner):
     without a session, so a pair reachable in one direction only is still linked. A dial then redials on its own for
     as long as the member is one.
 
+Decided after the first real run of step 6 (designer, 2026-10-19; s6-run1, owner PC and two member computers, one Codex
+agent on each member, mandatory review; open to the owner):
+
+20. **A producer whose own lane only waits for review reviews the others', whatever work group they are in.** Both
+    members' agents announced a producer lane, published, and were told to wait. Neither could review: the only two
+    agents each held an open producer lane, and a session holds one lane, so neither could take a reviewer lane (the
+    runs printed `FOREIGN_LANE_OPEN` until their time ran out). Two computers that announce at the same moment each open
+    a work group of their own (`WorkIntentAnnouncement.defaultWorkGroupId`, step 5), so even the review a producer may
+    take without a reviewer lane (ADR-0089, amended 2026-10-17) did not reach across: both the offer
+    (`ReviewLaneProjection.reviewPendingAction`) and the admission (`ReviewAdmissionRules`, `REVIEW_WORK_GROUP_MISMATCH`)
+    were bound to the producer's own group. The rule now is: a participant that holds a producer lane and has published
+    a snapshot may be admitted to review a snapshot of any work group of the project. Independence is unchanged and is
+    not the group: never its own work, nor its authority lineage (`REVIEW_SELF_NOT_ALLOWED`), and a participant that
+    published nothing, or holds no producer lane, is still refused (`REVIEWER_INTENT_REQUIRED`). The review is a grant
+    for that one snapshot; the reviewer keeps its one lane, in its own group, and its own snapshot's wait is
+    untouched. A reviewer lane stays bound to its group. The answer says: "While your snapshot waits for review, review
+    snap_… for <participant>: …". The run controller wakes such an idle producer for a review it is offered
+    (ADR-0099 fix 13). Proved by `ProducersReviewEachOtherScenarioTest` (two computers, one agent each, both mains
+    equal), `McpProducersReviewEachOtherTest` (one computer, two groups) and `WorkIntentServiceTest`. Source semantics
+    only; no real run has shown it.
+21. **A session that predates the accept is used and recorded like one made after it** (scripted scenarios
+    `ThreeComputersMainMeetingScenarioTest` and `TakeoverScenarioTest`, 2026-10-19). A joiner dials, and its session is
+    attached before the owner accepts it; likewise a member's session with a computer that is admitted later. The
+    exchange kept such a session and used it for logs from the accept on, but `LeaderReplication` kept its own session
+    map and recorded only the sessions of nodes admitted at attach time. So the owner's code-over-Link peers
+    (`liveSessions`) lacked every session that predated its admission, the owner never fetched the others' newer `main`
+    (restarting it re-attached the sessions and cured it), and `replication.members` never named the joiner, so
+    `AwayLanes.away` judged nobody away and no lane could be taken over. The rule now is: `LeaderReplication` keeps and
+    records every attached session whatever the node's standing; admission is read afresh when the sessions are used
+    (`liveSessions`, the exchange's serve and pull, and the members file, which names only current members and is
+    re-evaluated every 2 seconds, written only when its lines change). A session of a computer that is not admitted
+    still carries nothing: it is served and pulled nothing, and is not offered to Code over Link. Source semantics
+    proven by the two scenario tests above (previously disabled); no real run has shown it.
+22. **A peer is recorded as not connected when its exchange goes unanswered, not only when its session ends**
+    (s7-run3, 2026-10-20, remaster84: PC owner, VM member; the VM cut the Link with a firewall that dropped every packet
+    in both directions at 10:08:37). Ten minutes later the PC's `replication.members` still read the VM `CONNECTED`
+    from before the cut, so the PC never judged the VM away and its idle agent was never offered the VM's stalled lane
+    (step 7 item 9). s5-run14 showed the same blind spot: no `DISCONNECT` in either computer's `replication.log` during
+    a five-minute split. `LeaderReplication` recorded a member only from the attach of its session until the end of that
+    session; the exchange's own verdict (a pull that gets no answer sets its peer `DISCONNECTED`) was kept in
+    `LogExchange` and never reached the record, and a session that Link still holds open is never judged by its end.
+    Whether Link ever ends such a session on the dialling side or the hosting side was not proven by this change (the
+    real runs show `LIVENESS_EXPIRED` after about 60 s in one run and no end in another); the record no longer depends on
+    it. The rule, the same on the owner and on every member, whichever side dialled: **a computer records a peer as not
+    connected within the liveness bound after traffic to it stops, and as connected again when a session to it works
+    again.** The bound is one pull interval plus the wait for its answer (`LogExchange.PULL_INTERVAL_SECONDS`, 15 s, then
+    Link's 5 s limit on an exchange, 8 s at the outside): at most about 25 s, with the file's own 2 s recheck, and it is
+    the same traffic that already keeps a path through a home router open. `replication.members` is therefore a function
+    of two things: a live attached session, and what the last pull over it said. A session's first pull is always
+    reported (the exchange forgets what the last session's pulls said when a new one is attached, except a diverged log,
+    which stays diverged until a person looks), so a session that is attached and silent from the start is recorded
+    `DISCONNECTED` after its first pull fails and a replaced zombie does not hide the new session. A node that is not
+    admitted is not pulled, so nothing is known of it and nothing is recorded as lost: a joiner accepted later keeps the
+    optimistic `CONNECTED` of its attach until its first pull says otherwise (item 21), instead of looking away for up
+    to a pull interval after the accept. The record reads the exchange's state afresh instead of trusting the order of
+    its notices. Nothing else changes: admission, serving and the claim lock still use the live-session test, so a
+    claim still waits at most five seconds for a peer that does not answer (item 4 of step 4). Proved by
+    `LinkReplicationTest` (a silent path on a session Link keeps open, both sides, and a new session while the silent
+    one is held open) and by `TakeoverScenarioTest` with the owner as the taker of a member's lane over a silent split
+    (`ScenarioLab.splitSilently`). The same scenario with the joiner as the taker of the owner's lane judges the owner
+    away and offers the lane, but then the joiner's agents fail to bind a session (`SESSION_BINDING_FAILED`, then
+    `SESSION_RECOVERY_STATE_UNAVAILABLE`) while its session to the owner is silent and open; that test is disabled,
+    OPEN, undiagnosed. Source semantics proven for the record; no real run has shown it. The run controller's wait (`EventLogObserver.otherComputerConnectedSince`) now reads the same record, not `replication.log`, so a run does not
+    keep waiting for a computer that the takeover already counts as away.
+    **s7-run4 (2026-10-20, remaster85, the build with this rule): the rule did not fire, and the evidence says why not here.** The
+    PC's record still read the VM `CONNECTED` from the join, and neither computer's `replication.log` shows a `DISCONNECT`, in a 10-minute
+    "cut" during which both computers' own checks (Link's 30 s expiry on each side, and the pulls every 15 s that the record now follows)
+    reported a healthy path. Both records had in fact moved once, at the join (the `since` of each is the first answered pull after
+    the accept, later than the attach), so the rule appears to be live in the product. A path that really dropped every datagram fails both checks in
+    under a minute (s5-run11, run12 and run13, 2026-10-18: `DISCONNECT ... LIVENESS_EXPIRED` on both sides after 60 s). On this evidence the
+    cut of s5-run14, run15, s7-run1, run3 and run4 did not reach the path Link used; that is a lab fault to check on the VM (the rule set
+    that `partition.sh` leaves, and the peer address of the QUIC flow during the cut), not proven here. The scripted scenarios cannot
+    drop datagrams, and the Linux gate's container has no `iptables`, so the silent path is simulated at the exchange (no answer on a
+    session that stays open); a pull has its own deadline whichever way the silence comes, so the verdict does not wait on Link. One
+    hardening came out of reading the exchange for a way it could stop reporting: the two periodic rounds (pull and notice) are now
+    kept alive after a round that throws, which `scheduleWithFixedDelay` would otherwise never run again.
+
 ### Step 7: Disputes, takeovers and the trash
 
 1. **Disputes:** both reviewers are told in their next answer and woken (ADR-0099); a reviewer's new verdict replaces
@@ -1100,7 +1630,7 @@ Decided while building step 7 (designer, 2026-10-18; each open to the owner):
    while such a group still has an open lane whose computer is not connected to this one now. "Connected" is this
    computer's record of its member sessions (`replication.members`, written whole by its replication side; not the
    rotating journal, which keeps 100 lines and can lose one): another computer is away when that record says its
-   session ended or names no session of it. With no readable record nobody is away, so a takeover of a computer that
+   session ended, its exchange gets no answer (step 6 item 22), or it names no session of it. With no readable record nobody is away, so a takeover of a computer that
    is in fact connected cannot follow from a missing file. A redial within Link's retained time changes nothing. No
    timer. The offer, the takeover and the release of reviews use the one test (`AwayLanes.stalled`). The taker's
    computer judges it again when the takeover is asked for, outside the append lock; a computer that connects in that
@@ -1128,7 +1658,11 @@ Decided while building step 7 (designer, 2026-10-18; each open to the owner):
     the ref first and then the entry, so a crash between them leaves a ref the next pass names. With no worktree left,
     the lane's newest snapshot is kept. A lane it had already integrated on its own `main` meets the taker's at the
     re-merge, as the ADR says. The takeover is found whether or not the taker's lane is still open: a taker that
-    finished before this computer came back still leaves the lane taken over.
+    finished before this computer came back still leaves the lane taken over. (Corrected, scripted scenario S4, DEFECT 5,
+    2026-10-19: "every answer" includes the stale-workspace answer a returning agent gets first, because `main` moved under
+    its worktree, and the first answers of the session that replaced the one that held the lane (`ensure_session`
+    gives the agent a new session): both notices, `laneTakenOver` with `trashRef` and `trashedWork`, are added in one
+    place, `AnswerNotices`, over the agent's whole session lineage (`SessionSuccessions`).)
 13. **The trash entries** (codes 90 to 92): `WORK_TRASHED` {lane, epoch, task, group, commit, reason},
     `TRASH_RESTORED` {lane, epoch, the new work group}, `TRASH_EMPTIED` {lane, epoch}. Each is written by the computer
     whose person or agent acted; `WORK_TRASHED` only by the computer that put the lane's owner on the log. Work is
@@ -1154,7 +1688,8 @@ Decided while building step 7 (designer, 2026-10-18; each open to the owner):
     does. A review held by a reviewer of an away computer that holds no lane (since ADR-0089 a producer reviews
     without one) is released instead: while this computer is stalled, its integration pass revokes that grant
     (`LANE_REVOKED`, judged again under the append lock) when no verdict is recorded and the snapshot is still under
-    review, and a reviewer here may then be admitted. A revoked grant holds no review. A verdict the away reviewer writes before the release reaches it
+    review, and a reviewer here may then be admitted. A reviewer of this computer is released by its own session,
+    stalled or not (step 5, item 24). A revoked grant holds no review. A verdict the away reviewer writes before the release reaches it
     stands beside the new reviewer's, and the two may meet as a dispute; one written after is refused
     (`REVIEW_GRANT_REVOKED`). NOT BUILT: a re-review offered to an away original reviewer alone, and a review request
     accepted on the away computer whose grant never reached this one.
@@ -1162,6 +1697,25 @@ Decided while building step 7 (designer, 2026-10-18; each open to the owner):
     is refused) keeps its work group open; step 7 does not change that rule (the owner decides). It touches it twice:
     such a lane is an open lane for the stall test of the computers that are not its own, and a report published after
     the group completed goes to the trash.
+
+19. **An agent whose only lane waits for its review cannot take a lane over** (s7-run5, 2026-10-20, remaster86: PC owner
+    with one `claude` agent, VM member with one `codex` agent; the VM cut the Link for 600 s the moment its agent announced a
+    lane). VERIFIED from the PC's evidence: Link ended the session at 09:12:57 (`DISCONNECT ... LIVENESS_EXPIRED`), the cut
+    was real; the PC's agent had published `primes` at 09:12:25 and held that lane, `REVIEW_PENDING`, for the whole cut;
+    the transcript shows no resume between 09:12:30 and the heal at 09:22:25, and the first answer after it was the
+    unchanged `waiting / validation_required`. So the PC was not stalled by item 9 (its one agent held an open lane, and
+    `AwayLanes.stalled` counts a lane that only waits for review as held), and its agent could not have taken a lane over
+    if it had been (a session holds one lane for its life; `RecoveryContinuationProjection.continuationBlock`
+    `CURRENT_PARTICIPANT_HOLDS_A_LANE`, and a takeover materialises the snapshot into the taker's one worktree). The
+    `STALLED` end of the PC's run followed the heal, not the cut. This is the design as written, not a missing offer: the
+    expected "owner's idle agent" did not exist. It is also the right outcome for one agent per computer: the taker's
+    own `fib` lane would need a reviewer that is not the taker, and none is on the PC. A takeover during a cut needs a
+    lane-less agent on the taker's computer, and a second one to review for the lane to land. The lab for step 7 therefore
+    runs two agents on the PC (the one that is lane-less reviews the other's lane; both are then lane-less and offered the
+    lane), or starts the PC's agent only after the cut has begun. NOT DECIDED, for the owner: letting an agent whose lane only waits for review end
+    that lane's session to take another (it would give up admitting its reviewer and any rework of the snapshot, and a
+    taker's lane would then wait on the same missing reviewer). The one defect found while reading the run controller for
+    this, and fixed, is ADR-0099 fix 15: a stopped lane-less agent was never woken for a takeover offer.
 
 ## Build order
 
@@ -1184,7 +1738,7 @@ losing their lanes.
      the repository over Link.
    - **Done when:** run 7 again with no Git remote: the WorkGroup completes on both computers and `main` is equal on
      both. A 450 MB history joins over Link in three or more pieces through an interruption. Compatibility 7.
-4. **Each computer writes its own log, and claims lock between connected computers.**
+4. **Each computer writes its own log, and claims lock between connected computers.** DONE 2026-10-20: under real Link cuts (s5-run16 to s5-run18, s7-run5, s7-run6; both computers logged `LIVENESS_EXPIRED` about 60 s in) each kept claiming, publishing and reviewing apart, and after the heal both held byte-identical logs. Correction: the cuts of 2026-10-19 (s5-run14, s5-run15, s7-run1) and s7-run3/s7-run4 did not reach the Link (the PC had rotated to an IPv6 address `partition.sh` did not block; fixed 2026-10-20 by blocking the LAN prefix), so they were connected runs.
    - **Built:** own `events/` plus `peers/<node>/events/`; the local applied order; notice and pull per log; the
      proposal path removed; a claim's answer waiting for connected computers (designer item 1). Every projection throw
      an arriving entry can reach becomes "both stand" or "counts for nothing, reported" (ADR-0100's table; the sites
@@ -1197,7 +1751,7 @@ losing their lanes.
      claiming, publishing and reviewing, and no agent sees `LEADER_UNREACHABLE`. Within one pull after reconnecting,
      both computers hold byte-identical copies of both logs and show the overlap and the dispute the same way. The
      disputed snapshot stays off `main`. Compatibility 8.
-5. **Each computer merges its own lanes, and the copies of `main` meet peer to peer.**
+5. **Each computer merges its own lanes, and the copies of `main` meet peer to peer.** DONE 2026-10-26: s5-run25 (remaster97 = b45415be) RESULT=PASS under a REAL 5-minute Link cut (both computers logged `LIVENESS_EXPIRED` about 60 s in): the copies diverged, re-merged with two combines, both combines were resolved, `main` ended equal on both computers (8cc6ff99), the logs byte-identical, the four packages and NOTES landed and the tests pass on both. It took designer items 32 to 39 (one combine per conflicting change; no agent told to wait or cancel on something nothing can end; a combine lane released once its result is published), each proven from a real run and pinned by a scenario, plus the end-to-end trace test of the two-combine path. Earlier statuses of this step (PARTIAL, s5-run16 to s5-run24) are history.
    - **Built:** the merge pass on every computer; sharing `main` over Link; the diverged-copy rule (designer item 5);
      one merge commit per integration; re-review of each re-merge by the original reviewer; the combine lane through the
      repair path; "on `main`" read from each copy; attribution with no exemption, and integration entries written only
@@ -1207,7 +1761,7 @@ losing their lanes.
      change) ends with a combine lane, reviewed and merged. S5 (the VM's server killed during a re-merge) ends the same
      as S1. Then S1 once more with a bare repository as a mirror, made unreachable halfway: the result is the same, and
      the mirror catches up when it is back. Compatibility 9.
-6. **Membership in the owner's log, and a third computer.**
+6. **Membership in the owner's log, and a third computer.** DONE 2026-10-19: s6-run2 (remaster83) with the owner's Synesis stopped 10 minutes: the two members worked and reviewed each other through member cards, all three mains and log sets equal after the owner came back; the owner removed the third computer and `MEMBER_REMOVED` reached both members. Overlap refusal while the owner is down, a removed member's late entry and a reboot reconnect are proven by scripted scenarios only.
    - **Built:** the membership entries above, durable join requests, the owner and recovery keys, `MEMBER_CARD` and
      dialing every member, `role=shared`.
    - **Done when:** a third computer (a Podman container on this PC if the VM reaches it, otherwise a clone of the VM)
@@ -1216,7 +1770,7 @@ losing their lanes.
      claims, an overlapping claim is refused, and their copies of `main` meet. With Synesis on the PC started again,
      all three copies of `main` become equal. The owner removes the third computer: its open work ends, and an entry it
      writes afterwards is copied and counts for nothing. Compatibility 10.
-7. **Disputes, taking over stalled work, and the trash.**
+7. **Disputes, taking over stalled work, and the trash.** DONE 2026-10-20: s7-run6 (remaster87) RESULT=PASS under a real 10-minute cut: the VM's agent stalled on an announced lane, the PC's idle agent took it over (`LANE_CONTINUATION_ACCEPTED`, written by the PC during the cut), after the heal the VM wrote `WORK_TRASHED` for its version, all four packages and NOTES landed, `main` equal, logs identical. The returning-agent notice is proven by `TakeoverScenarioTest` (in the run the stalled agent was replaced by a new one, which has no notice to receive). A dispute stays source-level.
    - **Built:** agents of a dispute told to settle it by messages, and a new verdict replacing a reviewer's own;
      the dispute and its end shown in the UI; the stall test (designer item 4) and takeover through lane continuation;
      the reconnecting agent told to stop, release and close; the trash (designer item 6) for late work and for a
@@ -1288,13 +1842,22 @@ The two-homes run with the friend's PC is repeated after step 5 as a check, not 
   it is checked, so a check that comes second finds it (`judgeClaim` reads the log) and exactly one stands, which
   `ofTwoAgentsClaimingAtTheSameMomentThroughTheServicesOnlyOneClaimStandsAndTheOtherIsReleased` covers through the
   services. Left as it is: the test could count a race in which both stood as one where the two checks did not
-  overlap, and require enough overlapping ones. (FLAKY, test only, step 4.)
+  overlap, and require enough overlapping ones. (FLAKY, test only, step 4.) Fixed on 2026-10-19 (293947ad): each
+  side registers its claim before the race, as `LaneClaimService` does through `ClaimLock.announce`; 200 races under
+  load passed.
+- **Both claims giving way, once, under load.** In one 200-race run on 2026-10-19 (several gate containers at once),
+  `ofTwoAgentsClaimingAtTheSameMomentThroughTheServicesOnlyOneClaimStandsAndTheOtherIsReleased` failed at race 140 with
+  neither claim standing, both refused `OVERLAPPING_CLAIM` by the lock. Safe (no overlap stands) but not live (both
+  agents are refused). Hypothesis, not proven: `ClaimLock.announce` swallows an `IOException` (2 s connect, 12 s request
+  on loopback), so a claim sits in the log unregistered until its check starts, and `judgeClaim` answers a question
+  arriving in that gap `OVERLAPPING_CLAIM` even on the higher node. Pinning it needs the order of register, append and
+  check per side logged, or a failing `announce` injected. (OPEN, step 4.)
 - **Two mcp tests that failed once in the Windows gate** on 85c85b82 (2026-10-18), while other checkouts ran tests:
   `McpSyn039SliceTest.dirtyReviewerReceivesDurableReviewDecisionAfterControlCheckoutAdvances`
   (`MANUAL_ATTESTATION_REQUIRED` in its own setup) and
   `SyntheticTwoProcessCollaborationTest.anUnchangedCommitPublishedAgainForANewContractRevisionReachesEveryReboundConsumer`
-  (a worktree under the shared test-state folder was not a Git repository). Both passed on Linux at the same commit, and alone on Windows with a state folder of their own
-  (`-PsynesisTestState`, 23 and 24 tests). Read as shared-state flakes: every checkout's Windows tests use
+  (a worktree under the shared test-state folder was not a Git repository). Both passed on Linux at the same commit,
+  and alone on Windows with a state folder of their own (`-PsynesisTestState`, 23 and 24 tests). Read as shared-state flakes: every checkout's Windows tests use
   `Temp\synesis-test-state` unless told otherwise. (FLAKY, environment.)
 - **A third computer for step 6:** whether QUIC from the VM reaches a Podman container on this PC.
   (REQUIRES-MEASUREMENT.)

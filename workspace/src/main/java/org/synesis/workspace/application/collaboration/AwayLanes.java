@@ -5,7 +5,9 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.domain.collaboration.LaneContinuation;
@@ -20,6 +22,11 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.replication.LeaderReplication;
 import org.synesis.coordination.replication.LeaderReplication.MemberConnection;
 import org.synesis.link.identity.NodeIdentity;
+import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseRecord;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
+import org.synesis.workspace.lifecycle.lease.SessionLeaseStore;
+import org.synesis.workspace.lifecycle.lease.SessionSuccessions;
 import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
@@ -28,7 +35,8 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
  * its sessions; no entry says a computer is away, and no timer decides it.
  *
  * <p>This computer is stalled when none of its agents holds an open lane in an active work group ({@link #stalled}),
- * the one test the offer, the takeover and the release of reviews share. Another computer is away when this
+ * the one test the offer, the takeover and the release of away reviewers' reviews share; a reviewer of this computer
+ * is released by its session alone ({@link #goneHere}, designer item 2). Another computer is away when this
  * computer's record of its member sessions ({@code replication.members}, written whole by its replication side, not
  * the rotating journal) says that member's session ended, or names no session of it since the record was written; a
  * redial within Link's retained time does not change it. With no readable record nobody is away: a takeover of a
@@ -92,38 +100,161 @@ public final class AwayLanes {
     }
 
     /**
-     * Releases the reviews that reviewers of away computers hold while this computer is stalled (ADR-0098 step 7,
-     * designer item 17): a review grant on a snapshot still under review, with no verdict, whose lane-less reviewer
-     * another computer put on the log, is revoked, so a reviewer here may be admitted. A reviewer that holds a lane
-     * needs no release: taking its lane over carries its grants to the taker. Each grant is revoked at most once; the
-     * revocation re-checks the grant under the append lock. It runs in the integration pass and never throws.
+     * Releases the reviews whose reviewer cannot be reached (ADR-0098 designer item 2, step 7 item 17): a review grant
+     * on a snapshot still under review, with no verdict, held by a reviewer that holds no lane, is revoked so another
+     * reviewer may be admitted. A reviewer this computer put on the log cannot be reached once {@link #goneHere} says
+     * its session is gone, and its review is released at once: nobody else can judge that session. A reviewer another
+     * computer put on the log cannot be reached while that computer is away and this one is stalled. A reviewer that
+     * holds a lane needs no release: continuing its lane carries its grants to the successor. Each grant is revoked at
+     * most once; the revocation re-checks the grant under the append lock. It runs in the integration pass and never
+     * throws.
      *
      * @param store        current projection
      * @param coordination this project's coordination folder
      * @param identity     this computer
+     * @param goneHere     which participants of this computer have sessions it judges gone
      */
-    public static void releaseStalledReviews(PredictionEventStore store, Path coordination, NodeIdentity identity) {
+    public static void releaseUnreachableReviews(PredictionEventStore store, Path coordination, NodeIdentity identity, Predicate<String> goneHere) {
         try {
             String thisNode = identity.nodeId();
-            if (!stalled(store, thisNode)) {
-                return;
-            }
+            boolean stalled = stalled(store, thisNode);
             Predicate<String> away = away(coordination, thisNode);
             var collaboration = store.collaborationProjection();
             var workGroups = store.workGroupProjection();
             var service = new WorkGroupService(store, identity);
             for (LaneGrant grant : workGroups.grants()) {
-                boolean stalledReview = grant.snapshot().isPresent() && ReviewAdmissionRules.holdsReview(store, grant)
+                String reviewer = grant.targetParticipant();
+                // A session no entry introduced is this computer's when this computer offered it a re-merge: the pass chooses among its
+                // own live sessions, a lane-less one is on no log, and its connection may go on to a fresh session (s5-run16, item 30).
+                boolean unreachable = collaboration.introducingNode(new ParticipantId(reviewer))
+                        .map(node -> node.equals(thisNode) ? goneHere.test(reviewer) : stalled && away.test(node))
+                        .orElseGet(() -> goneHere.test(reviewer) && ownReMerge(store, grant, thisNode));
+                boolean released = unreachable && grant.snapshot().isPresent() && ReviewAdmissionRules.holdsReview(store, grant)
                         && workGroups.reviewValidationForGrant(grant.identity()).isEmpty()
                         && store.taskCompletionProjection().snapshotState(grant.snapshot().get()).orElse(null) == TaskCompletionState.REVIEW_PENDING
-                        && collaboration.activeIntents().stream().noneMatch(intent -> intent.participant().equals(grant.targetParticipant()))
-                        && collaboration.introducingNode(new ParticipantId(grant.targetParticipant())).map(away::test).orElse(false);
-                if (stalledReview) {
+                        && collaboration.activeIntents().stream().noneMatch(intent -> intent.participant().equals(reviewer));
+                if (released) {
                     service.revokeStalledReview(grant.identity());
                 }
             }
         } catch (Exception failure) {
-            LOG.log(System.Logger.Level.WARNING, "stalled reviews not released; the next pass tries again", failure);
+            LOG.log(System.Logger.Level.WARNING, "unreachable reviewers' reviews not released; the next pass tries again", failure);
+        }
+    }
+
+    private static boolean ownReMerge(PredictionEventStore store, LaneGrant grant, String thisNode) {
+        var completion = store.taskCompletionProjection();
+        return grant.snapshot().filter(id -> completion.remergeOf(id).isPresent()).flatMap(completion::findSnapshotById).map(snapshot -> thisNode.equals(snapshot.nodeId())).orElse(false);
+    }
+
+    /**
+     * Which participants this computer put on the log have sessions it judges gone by {@link SessionLeasePolicy}: no
+     * lease of this computer names the participant's session as live. A session whose connection closed, ended, or
+     * stayed unseen past the grace period is gone, and so is one whose connection went on to a fresh session, since
+     * nothing can act for it again. A quiet session is not gone: an agent told to wait keeps a live lease (ADR-0099),
+     * and a lease whose process cannot be read counts as live. When the leases cannot all be read (no leases folder,
+     * a folder that cannot be listed, a lease that cannot be parsed) nobody is gone: the missing lease may be the live
+     * one, and releasing a review its reviewer still works on is the failure to avoid.
+     *
+     * @param controlRoot this computer's checkout, which holds its session leases
+     * @return a test of whether a participant's session is gone
+     */
+    public static Predicate<String> goneHere(Path controlRoot) {
+        Optional<Set<String>> live = liveHere(controlRoot);
+        if (live.isEmpty()) {
+            LOG.log(System.Logger.Level.WARNING, "session leases not all readable; no reviewer of this computer is judged gone");
+            return participant -> false;
+        }
+        return participant -> !live.get().contains(participant);
+    }
+
+    private static Optional<Set<String>> liveHere(Path controlRoot) {
+        Optional<List<SessionLeaseRecord>> recorded = new SessionLeaseStore().listAllComplete(controlRoot);
+        if (recorded.isEmpty()) {
+            return Optional.empty();
+        }
+        SessionLeaseService leases = new SessionLeaseService();
+        SessionLeasePolicy policy = new SessionLeasePolicy();
+        return Optional.of(recorded.get().stream()
+                .filter(lease -> switch (leases.evaluateLiveness(lease, policy)) {
+                    case ACTIVE, SUSPECTED_STALE, AMBIGUOUS -> true;
+                    default -> false;
+                })
+                .map(lease -> WorkspaceCollaborationService.participantHandle(currentSession(controlRoot, lease))).collect(Collectors.toSet()));
+    }
+
+    /**
+     * The session a live lease's connection has now. A lease names the session of the connection's last call, and a
+     * fresh session at the same path (a refresh, or a combine joined after the first {@code ensure_session}) replaces the
+     * binding before the next call renews the lease, so for that time the lease names a session nobody speaks as: a review
+     * offered to it is never taken and, with its lease live, never released (item 30). The binding is the authority; the
+     * lease's session stands where the binding cannot be read.
+     */
+    private static String currentSession(Path controlRoot, SessionLeaseRecord lease) {
+        try {
+            var location = new org.synesis.workspace.application.ProjectApplicationService().locate(controlRoot);
+            return new org.synesis.workspace.application.provider.ProviderSessionBindingService().find(location, lease.provider(), lease.connectionInstanceId())
+                    .map(org.synesis.workspace.application.provider.ProviderSessionBindingService.Binding::sessionId).orElse(lease.sessionId());
+        } catch (Exception unreadable) {
+            return lease.sessionId();
+        }
+    }
+
+    /**
+     * The agents of this computer as the review of a re-merge needs them: the participants whose sessions it judges live
+     * ({@link #goneHere}), and which sessions are one agent's, from the replacements the binding service recorded
+     * ({@link SessionSuccessions}). A session a connection was given in place of another is that agent's next session: it
+     * is owed what the old one was owed, and barred from what the old one was barred from.
+     *
+     * @param live         handles of the live sessions
+     * @param predecessors each handle with the handle of the session it replaced
+     */
+    public record Agents(Set<String> live, Map<String, String> predecessors) {
+
+        /**
+         * The agents of this computer, or empty when the leases or the recorded replacements cannot all be read: the
+         * missing one may be the proof that two sessions are one agent's.
+         *
+         * @param controlRoot this computer's checkout
+         * @return the agents, or empty
+         */
+        public static Optional<Agents> of(Path controlRoot) {
+            Optional<Set<String>> live = liveHere(controlRoot);
+            Optional<Map<String, String>> replaced = SessionSuccessions.predecessors(controlRoot);
+            if (live.isEmpty() || replaced.isEmpty()) {
+                return Optional.empty();
+            }
+            Map<String, String> predecessors = new java.util.HashMap<>();
+            replaced.get().forEach((successor, predecessor) -> predecessors.put(WorkspaceCollaborationService.participantHandle(successor),
+                    WorkspaceCollaborationService.participantHandle(predecessor)));
+            return Optional.of(new Agents(live.get(), Map.copyOf(predecessors)));
+        }
+
+        /**
+         * The session and every session it replaced, newest first.
+         *
+         * @param handle a session's participant handle
+         * @return the sessions of the one agent up to and including this one
+         */
+        public List<String> sessionsUpTo(String handle) {
+            List<String> sessions = new java.util.ArrayList<>();
+            for (String session = handle; session != null && !sessions.contains(session); session = predecessors.get(session)) {
+                sessions.add(session);
+            }
+            return sessions;
+        }
+
+        /**
+         * Whether two sessions are one agent's: one replaced the other, directly or through others, or they share the
+         * session both replaced.
+         *
+         * @param first  a session's participant handle
+         * @param second a session's participant handle
+         * @return whether one agent had both
+         */
+        public boolean sameAgent(String first, String second) {
+            List<String> earlier = sessionsUpTo(first);
+            return sessionsUpTo(second).stream().anyMatch(earlier::contains);
         }
     }
 

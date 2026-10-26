@@ -64,6 +64,17 @@ public interface Terminal {
     String readLine() throws IOException;
 
     /**
+     * Returns whether a person is at this terminal and may be asked a question: standard input and output are a
+     * terminal and output was not forced to the machine form ({@code --porcelain}, {@code SYNESIS_OUTPUT=porcelain}).
+     * A script, a pipe or a test never is, so a command that asks must otherwise refuse and name the flag that answers.
+     *
+     * @return {@code true} only when a prompt can be answered
+     */
+    default boolean interactive() {
+        return false;
+    }
+
+    /**
      * Returns whether the output encoding can represent every character of {@code text}.
      *
      * <p>A legacy console code page cannot represent every symbol, so decorations must ask.</p>

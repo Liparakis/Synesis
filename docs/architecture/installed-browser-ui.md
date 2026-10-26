@@ -40,9 +40,18 @@ telemetry, browser-side Link transport, or arbitrary filesystem endpoint.
 
 ## Product surfaces
 
-The shell exposes Dashboard, Projects, Agents, WorkGroups, Peers & network,
-and Diagnostics. The network surface includes real invite, join, and host
-answer controls over the existing onboarding commands. Empty collections are
+The shell lists the known projects; each project has six tabs (`projectTabs`
+in `web-ui/src/app/routes.ts`): Overview, Agents, Coordination, Trash, Network,
+and Diagnostics. (Corrected 2026-10-20: this section used to name tabs the UI
+does not have: Dashboard, Projects, WorkGroups, "Peers & network".) The UI
+cannot yet start or stop agents or show an agent's output (ADR-0103, stage 4).
+Since ADR-0103 stage 3 a project nobody has worked in opens on a first-run view
+(what Synesis is, the readiness checks, the next command), a Readiness entry in
+the project rail shows the same checks at any time, operators can recheck and
+close operator requests, and the Network tab lists the project's computers as
+connected or away, where the owner can remove one after confirming. The network surface includes
+real invite, join, and host answer controls over the existing onboarding
+commands. Empty collections are
 rendered as explicit empty states. With the current CLI authority boundary,
 the overlay is shown as `UNCONFIGURED`, relay as `DISABLED`, and physical
 peer/route collections remain empty rather than being filled with demo data.

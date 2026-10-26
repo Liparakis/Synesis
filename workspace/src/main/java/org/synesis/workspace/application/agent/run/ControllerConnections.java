@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import org.synesis.workspace.lifecycle.lease.SessionLeasePolicy;
 import org.synesis.workspace.lifecycle.lease.SessionLeaseService;
+import org.synesis.workspace.lifecycle.lease.SessionSuccessions;
 import org.synesis.workspace.lifecycle.reconciliation.ReconciliationService;
 
 /**
@@ -58,6 +59,18 @@ public final class ControllerConnections implements AgentRunController.Connectio
             leases.reserveKeeper(projectRoot, identity);
         } catch (IOException unwritable) {
             // The session is then kept from the controller's first look, as before.
+        }
+        return identity;
+    }
+
+    @Override
+    public String open(String earlier) {
+        String identity = open();
+        try {
+            SessionSuccessions.continueConnection(projectRoot, identity, Objects.requireNonNull(earlier, "earlier"));
+        } catch (IOException unwritable) {
+            // Unrecorded, the new session is no one's successor: it may be offered a review of its own agent's earlier work.
+            // The pass that offers reviews checks authorship by session, so this is the one place the gap shows.
         }
         return identity;
     }

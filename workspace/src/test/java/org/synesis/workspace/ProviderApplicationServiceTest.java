@@ -102,6 +102,10 @@ final class ProviderApplicationServiceTest {
     void codexLifecycleUsesProjectHookShapeAndPreservesUnrelatedConfiguration() throws Exception {
         Path root = Files.createTempDirectory("codex-provider-lifecycle-");
         Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
+        // An MCP launcher that cannot start keeps the result independent of a synesis-mcp installed on the machine.
+        Path mcpLauncher = Files.createTempFile("synesis-mcp-", ".exe");
+        String previousMcp = System.getProperty("synesis.mcp.launcher");
+        System.setProperty("synesis.mcp.launcher", mcpLauncher.toString());
         String previous = System.getProperty("synesis.launcher");
         System.setProperty("synesis.launcher", launcher.toString());
         try {
@@ -134,6 +138,7 @@ final class ProviderApplicationServiceTest {
             assertEquals(Boolean.TRUE, ((Map<?, ?>) after.get("unrelated")).get("value"));
             assertTrue(((Map<?, ?>) after.get("hooks")).containsKey("Stop"));
         } finally {
+            restoreProperty("synesis.mcp.launcher", previousMcp);
             if (previous == null) {
                 System.clearProperty("synesis.launcher");
             } else {
@@ -143,28 +148,50 @@ final class ProviderApplicationServiceTest {
     }
 
     @Test
-    void initializationRegistersCodexWithTheServerLauncherNotTheCommandLauncher() throws Exception {
+    void initializationWritesCodexsGlobalEntryOnlyOnceCodexIsConnectedAndThenKeepsItOnTheServerLauncher() throws Exception {
         Path root = Files.createTempDirectory("init-mcp-launcher-test-");
         Path mcpLauncher = Files.createTempFile("synesis-mcp-", ".exe");
+        Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
         String previousMcp = System.getProperty("synesis.mcp.launcher");
+        String previousLauncher = System.getProperty("synesis.launcher");
         System.setProperty("synesis.mcp.launcher", mcpLauncher.toString());
+        System.setProperty("synesis.launcher", launcher.toString());
         try {
             var location = new ProjectApplicationService().init(root).location();
             Path userMcp = ProviderRegistry.find("codex").mcpConfigurationPath(root);
             String expected = "command = '" + mcpLauncher.toAbsolutePath().normalize() + "'";
 
+            // ADR-0103 decision 2: initialization changes Codex's configuration only for a project in which Codex is connected.
+            assertFalse(Files.exists(userMcp), "no Codex configuration is written before Codex is connected");
+            new ProjectApplicationService().init(root);
+            assertFalse(Files.exists(userMcp));
+
+            new ProviderApplicationService().install(location, "codex");
             String afterInit = Files.readString(userMcp);
             assertTrue(afterInit.contains(expected), afterInit);
 
-            // Initializing again and installing the provider must leave the same entry in place:
-            // whichever of them ran last used to decide how every Codex session started its server.
+            // Initializing again must leave the same entry in place: whichever of init and
+            // provider install ran last used to decide how every Codex session started its server.
             new ProjectApplicationService().init(root);
             assertEquals(afterInit, Files.readString(userMcp));
-            new ProviderApplicationService().install(location, "codex");
-            assertTrue(Files.readString(userMcp).contains(expected));
         } finally {
             restoreProperty("synesis.mcp.launcher", previousMcp);
+            restoreProperty("synesis.launcher", previousLauncher);
         }
+    }
+
+    @Test
+    void anExistingCodexEntryIsLeftAloneByInitializationWhenCodexIsNotConnected() throws Exception {
+        Path root = Files.createTempDirectory("init-existing-codex-entry-");
+        Path userMcp = ProviderRegistry.find("codex").mcpConfigurationPath(root);
+        Files.createDirectories(userMcp.getParent());
+        String mine = "model = \"mine\"\n\n[mcp_servers.synesis]\ncommand = \"/somewhere/else\"\n";
+        Files.writeString(userMcp, mine);
+
+        new ProjectApplicationService().init(root);
+        new ProjectApplicationService().init(root);
+
+        assertEquals(mine, Files.readString(userMcp));
     }
 
     @Test
@@ -363,8 +390,13 @@ final class ProviderApplicationServiceTest {
         }
     }
 
+    /**
+     * ADR-0103 decision 9: Synesis writes no rule file for Claude Code. An earlier version's file is
+     * removed only when it carries Synesis's marker; a file the user wrote there is theirs.
+     * (Behaviour change: the previous test required the install to write {@code .claude/rules/synesis.md}.)
+     */
     @Test
-    void claudeInstallPointsClaudeCodeAtTheSynesisRulesAndUninstallRemovesOnlyItsOwnFile() throws Exception {
+    void claudeInstallWritesNoRuleFileAndRemovesOnlyAnEarlierVersionsOwnFile() throws Exception {
         Path root = Files.createTempDirectory("claude-instructions-test-");
         Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
         String previous = System.getProperty("synesis.launcher");
@@ -374,27 +406,18 @@ final class ProviderApplicationServiceTest {
             ProviderApplicationService service = new ProviderApplicationService();
             Path rule = root.resolve(".claude/rules/synesis.md");
 
-            var installed = service.install(location, "claude");
-            assertEquals("INSTALLED", installed.values().get("PROJECT_INSTRUCTIONS"));
-            String content = Files.readString(rule);
-            assertTrue(content.startsWith(ProviderIntegration.ProjectInstructions.OWNERSHIP_MARKER), content);
-            // Claude Code resolves the import relative to the rule file, two levels below the root.
-            assertTrue(content.lines().anyMatch("@../../AGENTS.md"::equals), content);
-            assertTrue(Files.isRegularFile(rule.getParent().resolve("../../AGENTS.md").normalize()), "the import must land on the managed rules");
-
-            assertEquals("UNCHANGED", service.install(location, "claude").values().get("PROJECT_INSTRUCTIONS"));
-            Files.writeString(rule, ProviderIntegration.ProjectInstructions.OWNERSHIP_MARKER + "\nstale wording\n");
-            assertEquals("INSTALLED", service.install(location, "claude").values().get("PROJECT_INSTRUCTIONS"));
-            assertEquals(content, Files.readString(rule));
-
-            assertEquals("SUCCESS", service.uninstall(location, "claude").values().get("PROVIDER_UNINSTALL_RESULT"));
+            assertEquals("ABSENT", service.install(location, "claude").values().get("PROJECT_INSTRUCTIONS"));
             assertFalse(Files.exists(rule));
 
-            // A file the user wrote at the same path is theirs: neither replaced nor removed.
+            Files.createDirectories(rule.getParent());
+            Files.writeString(rule, ProviderIntegration.RETIRED_INSTRUCTIONS_MARKER + "\n# Synesis\n\n@../../AGENTS.md\n");
+            assertEquals("REMOVED", service.install(location, "claude").values().get("PROJECT_INSTRUCTIONS"));
+            assertFalse(Files.exists(rule));
+
             Files.writeString(rule, "# My own rules\n");
             assertEquals("CONFLICT", service.install(location, "claude").values().get("PROJECT_INSTRUCTIONS"));
             assertEquals("# My own rules\n", Files.readString(rule));
-            service.uninstall(location, "claude");
+            assertEquals("SUCCESS", service.uninstall(location, "claude").values().get("PROVIDER_UNINSTALL_RESULT"));
             assertEquals("# My own rules\n", Files.readString(rule));
         } finally {
             restoreProperty("synesis.launcher", previous);
@@ -402,7 +425,7 @@ final class ProviderApplicationServiceTest {
     }
 
     @Test
-    void codexInstallWritesNoInstructionFileBecauseCodexReadsAgentsItself() throws Exception {
+    void codexHasNoRetiredInstructionFile() throws Exception {
         Path root = Files.createTempDirectory("codex-instructions-test-");
         Path launcher = Files.createTempFile("synesis-launcher-", ".bat");
         String previous = System.getProperty("synesis.launcher");

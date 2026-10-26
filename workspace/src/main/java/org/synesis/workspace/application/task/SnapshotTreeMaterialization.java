@@ -135,7 +135,7 @@ final class SnapshotTreeMaterialization {
             add.addAll(paths);
             runGitWithIndex(workdir, index, add.toArray(String[]::new));
         }
-        for (String managed : List.of(".synesis", ".codex", ".claude", "AGENTS.md", ".mcp.json", "__pycache__", ":(glob)**/__pycache__/**")) {
+        for (String managed : List.of(".synesis", ".codex", ".claude", ".mcp.json", "__pycache__", ":(glob)**/__pycache__/**")) {
             try {
                 runGitWithIndex(workdir, index, "reset", "--", managed);
             } catch (IOException ignored) {

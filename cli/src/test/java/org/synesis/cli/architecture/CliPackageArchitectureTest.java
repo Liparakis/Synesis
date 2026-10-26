@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
  */
 class CliPackageArchitectureTest {
 
-    private static final Set<String> FAMILIES = Set.of("identity", "sync", "provider", "hook", "project", "workspace", "coordination", "prediction", "ownership", "task", "speculation", "lifecycle");
+    private static final Set<String> FAMILIES = Set.of("identity", "provider", "hook", "project", "workspace", "coordination", "prediction", "ownership", "task", "speculation", "lifecycle");
 
     private static String familyOf(String source) {
         for (String family : FAMILIES) {

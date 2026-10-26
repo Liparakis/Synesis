@@ -145,16 +145,40 @@ public final class PredictionEventStore implements ProjectionView {
      * @throws GeneralSecurityException when an existing event signature is invalid
      */
     public PredictionEventStore(Path root, UUID projectId, Clock clock) throws IOException, GeneralSecurityException {
+        this(root, projectId, clock, true);
+    }
+
+    /**
+     * Opens a store that only reads: it creates, moves and removes nothing, so it may look at a project whose
+     * runtime is stopped. The caller has checked that {@code root} exists; a store opened this way is never
+     * appended to.
+     *
+     * @param root      an existing coordination folder
+     * @param projectId project identifier
+     * @return a store replaying the folder as it is
+     * @throws IOException              when a log or the applied order cannot be read
+     * @throws GeneralSecurityException when an existing event signature is invalid
+     */
+    public static PredictionEventStore openReadOnly(Path root, UUID projectId) throws IOException, GeneralSecurityException {
+        return new PredictionEventStore(root, projectId, Clock.systemUTC(), false);
+    }
+
+    private PredictionEventStore(Path root, UUID projectId, Clock clock, boolean mayWrite)
+            throws IOException, GeneralSecurityException {
         this.rootDirectory = CoordinationNullException.requireNonNull(root, "root");
         this.projectId = CoordinationNullException.requireNonNull(projectId, "project ID");
         this.clock = CoordinationNullException.requireNonNull(clock, "clock");
         this.projections = new Projections(new ProjectId(this.projectId));
         this.own = new LogFolder(root.resolve("events"), this.projectId, null);
         this.order = new AppliedOrder(root);
-        Step2Archive.openOnce(root);
-        Files.createDirectories(own.directory());
+        if (mayWrite) {
+            Step2Archive.openOnce(root);
+            Files.createDirectories(own.directory());
+        }
         this.role = ReplicationRole.of(root, this.projectId);
-        own.cleanupTemporaryFiles();
+        if (mayWrite) {
+            own.cleanupTemporaryFiles();
+        }
         refresh();
     }
 

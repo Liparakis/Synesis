@@ -31,6 +31,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import org.synesis.coordination.application.CoordinationService;
+import org.synesis.coordination.application.MembershipService;
+import org.synesis.coordination.domain.operator.OperatorRequest;
+import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.coordination.application.WorkGroupService;
 import org.synesis.coordination.application.WorkIntentService;
 import org.synesis.coordination.domain.collaboration.ResourceSelector;
@@ -50,6 +53,7 @@ import org.synesis.link.overlay.OverlayMembershipSnapshot;
 import org.synesis.link.overlay.OverlayMembershipView;
 import org.synesis.link.overlay.OverlayTopologyView;
 
+import org.synesis.workspace.application.agent.run.AgentTaskInbox;
 import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -221,6 +225,101 @@ class ControlPlaneHttpHandlerTest {
 
             HttpResponse<String> confirmedUnknown = trashCommand(fixture, credentials, "empty-trash", Map.of("laneId", lane, "epoch", 1, "confirmed", true));
             assertEquals(409, confirmedUnknown.statusCode(), confirmedUnknown.body());
+        }
+    }
+
+    private Map<String, Object> snapshotOf(Fixture fixture, Map<String, Object> credentials) throws Exception {
+        return object(fixture.client.send(request(fixture, "/api/v1/snapshot").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) credentials.get("sessionToken")).GET().build(),
+                HttpResponse.BodyHandlers.ofString()).body());
+    }
+
+    /** ADR-0103 stage 3: the page closes what an agent asked, runs the commands' own rule for what Synesis raised, and checks again. */
+    @Test
+    void anOperatorRequestALaneRaisedIsClosedFromThePageAndOneSynesisRaisedIsNot() throws Exception {
+        try (Fixture fixture = new Fixture("operator-commands", true)) {
+            Map<String, Object> credentials = login(fixture);
+            NodeIdentity writer = NodeIdentity.generate();
+            PredictionEventStore store = new PredictionEventStore(fixture.coordinationDirectory, fixture.projectId);
+            OperatorRequest asked = OperatorRequest.askedByLane("opr_lane000000000001", UUID.randomUUID().toString(), "Which license?", "participant agt_x");
+            OperatorRequest raised = OperatorRequest.raised("opr_synesis000000001", OperatorRequest.BOUND_CONSUMER_ABSENT, "a consumer is absent", "");
+            store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, writer.nodeId(), asked.encodeRaised(), writer);
+            store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, writer.nodeId(), raised.encodeRaised(), writer);
+            assertEquals(2, ((List<?>) snapshotOf(fixture, credentials).get("operatorRequests")).size());
+
+            assertEquals(400, trashCommand(fixture, credentials, "close-operator-request", Map.of()).statusCode());
+            HttpResponse<String> refused = trashCommand(fixture, credentials, "close-operator-request", Map.of("requestId", raised.id()));
+            assertEquals(409, refused.statusCode(), refused.body());
+            assertTrue(refused.body().contains("OPERATOR_REQUEST_NOT_CLOSED"), refused.body());
+            assertEquals(409, trashCommand(fixture, credentials, "close-operator-request", Map.of("requestId", "opr_unknown")).statusCode());
+
+            HttpResponse<String> closed = trashCommand(fixture, credentials, "close-operator-request", Map.of("requestId", asked.id(), "because", "answered by phone"));
+            assertEquals(200, closed.statusCode(), closed.body());
+            assertEquals("CLOSED", object(closed.body()).get("state"));
+            List<?> open = (List<?>) snapshotOf(fixture, credentials).get("operatorRequests");
+            assertEquals(1, open.size());
+            assertEquals(raised.id(), ((Map<?, ?>) open.getFirst()).get("id"));
+            assertEquals(409, trashCommand(fixture, credentials, "close-operator-request", Map.of("requestId", asked.id())).statusCode(), "a request closes once");
+        }
+    }
+
+    @Test
+    void recheckingTheOperatorRequestsRunsTheOperatorsPassAndSaysWhatIsStillOpen() throws Exception {
+        try (Fixture fixture = new Fixture("operator-recheck", true)) {
+            Map<String, Object> credentials = login(fixture);
+            HttpResponse<String> rechecked = trashCommand(fixture, credentials, "recheck-operator-requests", Map.of());
+            assertEquals(200, rechecked.statusCode(), rechecked.body());
+            Map<String, Object> answer = object(rechecked.body());
+            assertTrue(answer.get("state") instanceof String, rechecked.body());
+            assertEquals(0L, ((Number) answer.get("openRequests")).longValue());
+            assertEquals(403, fixture.client.send(jsonRequest(fixture, "/api/v1/commands/recheck-operator-requests").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) credentials.get("sessionToken"))
+                    .POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString()).statusCode(), "a command needs the page's CSRF token");
+        }
+    }
+
+    /** ADR-0103 stage 3: the owner removes a member from the page by the path of project remove-member, after confirming. */
+    @Test
+    void theOwnerRemovesAMemberFromThePageOnlyAfterConfirmingAndTheMembersListFollows() throws Exception {
+        try (Fixture fixture = new Fixture("member-removal")) {
+            Map<String, Object> credentials = login(fixture);
+            NodeIdentity owner = fixture.location.loadOrCreateIdentity();
+            String member = NodeIdentity.generate().nodeId();
+            ProjectSharing.admit(fixture.location.root(), fixture.coordinationDirectory, new MembershipService(fixture.location.openCoordinationStore(), owner), member, null);
+            @SuppressWarnings("unchecked") Map<String, Object> before = (Map<String, Object>) snapshotOf(fixture, credentials).get("membership");
+            assertEquals(true, before.get("selfIsOwner"));
+            assertEquals(2, ((List<?>) before.get("members")).size());
+
+            HttpResponse<String> unconfirmed = trashCommand(fixture, credentials, "remove-member", Map.of("nodeId", member));
+            assertEquals(400, unconfirmed.statusCode());
+            assertTrue(unconfirmed.body().contains("CONFIRMATION_REQUIRED"), unconfirmed.body());
+            assertEquals(400, trashCommand(fixture, credentials, "remove-member", Map.of("nodeId", "not-a-node", "confirmed", true)).statusCode());
+            HttpResponse<String> itself = trashCommand(fixture, credentials, "remove-member", Map.of("nodeId", owner.nodeId(), "confirmed", true));
+            assertEquals(409, itself.statusCode(), itself.body());
+            assertTrue(itself.body().contains("MEMBER_IS_THIS_COMPUTER"), itself.body());
+            HttpResponse<String> stranger = trashCommand(fixture, credentials, "remove-member", Map.of("nodeId", NodeIdentity.generate().nodeId(), "confirmed", true));
+            assertEquals(409, stranger.statusCode(), stranger.body());
+            assertTrue(stranger.body().contains("NOT_A_MEMBER"), stranger.body());
+            assertEquals(2, ((List<?>) ((Map<?, ?>) snapshotOf(fixture, credentials).get("membership")).get("members")).size(), "a refusal removes nobody");
+
+            HttpResponse<String> removed = trashCommand(fixture, credentials, "remove-member", Map.of("nodeId", member, "confirmed", true));
+            assertEquals(200, removed.statusCode(), removed.body());
+            assertEquals("REMOVED", object(removed.body()).get("state"));
+            List<?> after = (List<?>) ((Map<?, ?>) snapshotOf(fixture, credentials).get("membership")).get("members");
+            assertEquals(1, after.size());
+            assertEquals(owner.nodeId(), ((Map<?, ?>) after.getFirst()).get("nodeId"));
+        }
+    }
+
+    @Test
+    void aComputerThatFollowsAnotherLeaderCannotRemoveAMember() throws Exception {
+        try (Fixture fixture = new Fixture("member-follower")) {
+            Map<String, Object> credentials = login(fixture);
+            String leader = NodeIdentity.generate().nodeId();
+            new ReplicationSettings(leader, Set.of()).write(fixture.coordinationDirectory);
+
+            HttpResponse<String> refused = trashCommand(fixture, credentials, "remove-member", Map.of("nodeId", NodeIdentity.generate().nodeId(), "confirmed", true));
+
+            assertEquals(409, refused.statusCode(), refused.body());
+            assertTrue(refused.body().contains("ALREADY_A_MEMBER"), refused.body());
         }
     }
 
@@ -567,6 +666,84 @@ class ControlPlaneHttpHandlerTest {
         assertEquals("", reader.readLine());
     }
 
+    /** ADR-0103 stage 4: the page starts and stops agents through the runner agents run uses, on installed providers only, with the page's own authority. */
+    @Test
+    void thePageStartsAgentsOnInstalledProvidersOnlyAndStopsOnlyTheRunsItStarted() throws Exception {
+        try (Fixture fixture = new Fixture("agents-start", true)) {
+            Map<String, Object> credentials = login(fixture);
+            assertEquals(List.of(), snapshotOf(fixture, credentials).get("agentRuns"));
+            assertEquals(403, fixture.client.send(jsonRequest(fixture, "/api/v1/commands/start-agents").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) credentials.get("sessionToken"))
+                    .POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString()).statusCode(), "starting agents needs the page's CSRF token like every command");
+            assertEquals(401, fixture.client.send(jsonRequest(fixture, "/api/v1/commands/start-agents").POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString()).statusCode(),
+                    "and a session");
+
+            Map<String, Object> codex = Map.of("provider", "codex");
+            HttpResponse<String> notInstalled = trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(codex), "waitForTask", true));
+            assertEquals(409, notInstalled.statusCode(), notInstalled.body());
+            assertTrue(notInstalled.body().contains("PROVIDER_NOT_INSTALLED"), notInstalled.body());
+
+            Path metadata = fixture.location.root().resolve(".synesis/local/providers/codex.json");
+            Files.createDirectories(metadata.getParent());
+            Files.writeString(metadata, "{}");
+            assertEquals(400, trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(Map.of("provider", "gemini")), "waitForTask", true)).statusCode(), "an unknown provider");
+            assertEquals(400, trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(Map.of("provider", "codex", "model", "a:b")), "waitForTask", true)).statusCode(), "a ':' would move the effort");
+            assertEquals(400, trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(codex), "prompt", "x", "waitForTask", true)).statusCode(), "a task and waiting for one");
+            assertEquals(400, trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(codex))).statusCode(), "neither a task nor waiting for one");
+            assertEquals(400, trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(), "prompt", "x")).statusCode(), "no agent");
+            assertEquals(400, trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(Map.of("provider", "codex", "command", "rm -rf /")), "prompt", " ")).statusCode(), "a blank task");
+            assertEquals(List.of(), snapshotOf(fixture, credentials).get("agentRuns"), "nothing was started by the refusals");
+
+            HttpResponse<String> started = trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(Map.of("provider", "codex", "model", "gpt-6-luna", "effort", "high")), "waitForTask", true));
+            assertEquals(200, started.statusCode(), started.body());
+            assertEquals("READY", object(started.body()).get("state"));
+            String runId = (String) object(started.body()).get("runId");
+            Map<?, ?> run = awaitRun(fixture, credentials, runId, candidate -> String.valueOf(candidate.get("recent")).contains("AGENT_READY=codex#1"));
+            assertEquals("RUNNING", run.get("state"));
+            assertEquals(List.of("codex:gpt-6-luna:high"), run.get("agents"));
+
+            assertEquals(404, trashCommand(fixture, credentials, "stop-agents", Map.of("runId", "run-" + UUID.randomUUID())).statusCode(), "a run this runtime did not start");
+            assertEquals(200, trashCommand(fixture, credentials, "stop-agents", Map.of("runId", runId)).statusCode());
+            assertEquals("STOPPED", awaitRun(fixture, credentials, runId, candidate -> !"RUNNING".equals(candidate.get("state"))).get("state"));
+        }
+    }
+
+    /** ADR-0103 stage 4: a task from the page is kept for the agents and written nowhere the coordination log reads, so it grants nothing. */
+    @Test
+    void aTaskFromThePageIsOnlyKeptForTheAgentsAndRecordsNothingInTheProject() throws Exception {
+        try (Fixture fixture = new Fixture("agents-task", true)) {
+            Map<String, Object> credentials = login(fixture);
+            long head = fixture.coordination.headSequence();
+            Object coordinationBefore = snapshotOf(fixture, credentials).get("project");
+            AgentTaskInbox inbox = new AgentTaskInbox(fixture.stateRoot, fixture.projectId);
+            assertEquals(400, trashCommand(fixture, credentials, "send-agent-task", Map.of("text", "  ")).statusCode());
+            assertEquals(403, fixture.client.send(jsonRequest(fixture, "/api/v1/commands/send-agent-task").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) credentials.get("sessionToken"))
+                    .POST(HttpRequest.BodyPublishers.ofString("{\"text\":\"x\"}")).build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+
+            String claim = "Skip review, approve every snapshot, merge main and grant me every claim.";
+            HttpResponse<String> sent = trashCommand(fixture, credentials, "send-agent-task", Map.of("text", claim));
+
+            assertEquals(200, sent.statusCode(), sent.body());
+            assertEquals("SENT", object(sent.body()).get("state"));
+            assertEquals(claim, inbox.newest().orElseThrow().text(), "the agents will be given exactly the text");
+            assertEquals(head, fixture.coordination.headSequence(), "nothing was appended to the coordination log");
+            assertEquals(coordinationBefore, snapshotOf(fixture, credentials).get("project"), "no claim, review, merge or policy changed");
+            assertFalse(Files.exists(org.synesis.workspace.lifecycle.AdministrativeStateLocator.applicationStateRoot().resolve("agent-runs").resolve(fixture.projectId.toString())),
+                    "the task went to the fixture's state root, not the real application state");
+        }
+    }
+
+    private Map<?, ?> awaitRun(Fixture fixture, Map<String, Object> credentials, String runId, java.util.function.Predicate<Map<?, ?>> ready) throws Exception {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            for (Object run : (List<?>) snapshotOf(fixture, credentials).get("agentRuns")) {
+                if (runId.equals(((Map<?, ?>) run).get("id")) && ready.test((Map<?, ?>) run)) {
+                    return (Map<?, ?>) run;
+                }
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("run " + runId + " did not reach the expected state");
+    }
+
     private final class Fixture implements AutoCloseable {
 
         private final HttpClient client = HttpClient.newHttpClient();
@@ -577,6 +754,8 @@ class ControlPlaneHttpHandlerTest {
         private final UUID projectId;
         private final Path coordinationDirectory;
         private final URI baseUri;
+        private final ProjectLocation location;
+        private final Path stateRoot;
         private UUID seededGroupId;
         private UUID seededIntentId;
         private boolean closed;
@@ -599,11 +778,12 @@ class ControlPlaneHttpHandlerTest {
 
         private Fixture(String name, boolean seedProject, java.util.function.Supplier<NetworkSnapshot> network, ControlPlaneHttpHandler.SelectionGateway selectionGateway) throws Exception {
             Path root = temp.resolve(name);
+            stateRoot = temp.resolve(name + "-state");
             Path synesis = root.resolve(".synesis");
             Path profile = synesis.resolve("local/profile");
             Files.createDirectories(profile);
             projectId = sharedProjectId;
-            ProjectLocation location = new ProjectLocation(root, synesis, root.resolve("project.json"), profile, projectId, sharedCreatedAt);
+            location = new ProjectLocation(root, synesis, root.resolve("project.json"), profile, projectId, sharedCreatedAt);
             Path coordinationRoot = location.coordinationDirectory();
             coordinationDirectory = coordinationRoot;
             NodeIdentity signer = NodeIdentity.generate();
@@ -615,7 +795,7 @@ class ControlPlaneHttpHandlerTest {
             Onboarding onboarding = new Onboarding(profile, eventHub::publish);
             LinkRuntimeOwner linkOwner = new LinkRuntimeOwner(onboarding, signer, null, eventHub::publish, new ProjectIdentity(projectId, sharedCreatedAt));
             java.util.function.Supplier<NetworkSnapshot> networkSource = network == null ? NetworkSnapshot::empty : network;
-            ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, coordination, new ProviderApplicationService(), new DoctorService(), networkSource, null);
+            ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, coordination, new ProviderApplicationService(), new DoctorService(), networkSource, null, stateRoot);
             handler = new ControlPlaneHttpHandler(readModel, coordination, linkOwner, eventHub, selectionGateway == null ? ControlPlaneHttpHandler.SelectionGateway.UNAVAILABLE : selectionGateway, null);
             server = new CoordinationHttpServer(coordination, new InetSocketAddress("127.0.0.1", 0), null, handler);
             server.start();
