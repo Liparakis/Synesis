@@ -183,6 +183,35 @@ final class LaneCompletionProjection {
         return null;
     }
 
+    /**
+     * Tells a lane whose work group is no longer active to end itself (ADR-0098 step 5 item 33). Another computer may
+     * have closed the group while this one was cut off, so a lane can still be open in it. Nothing can be integrated
+     * into a closed group and every finish path refuses it, so the lane would wait for ever and keep its agent from
+     * other work. Ending it keeps its entries as history and never reopens the group. Asked first of every role, on the
+     * stale-workspace and finish-asked paths alike, because all of them pass the review-lane stage.
+     *
+     * @param store         current project projection
+     * @param participantId exact participant handle of the caller
+     * @return the instruction to end the lane, or {@code null} when the caller has no lane in a closed group
+     */
+    static AgentResponse closedGroupLaneAction(PredictionEventStore store, String participantId) {
+        WorkIntent intent = activeIntentOf(store, participantId).orElse(null);
+        if (intent == null) {
+            return null;
+        }
+        WorkGroup group = store.workGroupProjection().group(intent.workGroupId()).orElse(null);
+        if (group == null || group.status() == WorkGroup.Status.ACTIVE) {
+            return null;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put(NextActionKeys.STATE, NextActionProtocol.STATE_LANE_GROUP_CLOSED);
+        result.put(NextActionKeys.REASON, NextActionProtocol.REASON_WORK_GROUP_NOT_ACTIVE);
+        result.put(NextActionKeys.WORK_GROUP_ID, intent.workGroupId().toString());
+        result.put("instruction", "The work group of this lane was closed, by another computer or while this one was cut off, so nothing this lane does can be integrated into it. "
+                + "Call cancel_lane with the reason to end the lane: what it recorded stays as history. Then ask for your next action again; another lane may be waiting.");
+        return new AgentResponse(AgentStatus.BLOCKED, null, null, result);
+    }
+
     /** Builds the finish response for a snapshot that has already passed review. */
     private static Map<String, Object> publishedSnapshotCompletionResult(PredictionEventStore store,
             WorkIntent intent,

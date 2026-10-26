@@ -1217,6 +1217,22 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     attempt failed only because the gate host was overloaded by parallel runs (the lab's invite expired). Not proved in a
     real run.
 
+33. **A lane whose work group is no longer `ACTIVE` is told to end** (designer, 2026-10-26; the case item 32 recorded as
+    "found, not changed", s5-run18: reviewer lane `2bbb8861…` of group `3197bbd1…`, which the cut-off PC completed
+    without knowing the lane). A lane cannot complete into a group that is `COMPLETED` or `CANCELLED`, whichever computer
+    closed it and whichever role the lane has, and nothing is integrated into a closed group: every finish path already
+    refuses it with `WORK_GROUP_NOT_ACTIVE`. *Rule:* the lane's next action says so in plain words (state
+    `LANE_GROUP_CLOSED`, reason `WORK_GROUP_NOT_ACTIVE`, `BLOCKED`) and projects ending the lane with the existing
+    `cancel_lane`. Ending a lane keeps everything it wrote (verdicts, review notes, snapshots) as history and never
+    reopens the group, and the agent then holds no lane, so it is offered a combine like any other. It is one check at the
+    head of the review-lane stage (`ReviewLaneProjection.reviewLaneAction`), which the ordinary path and the
+    stale-workspace path both pass first, and it answers the same for an ordinary and a finish-asked call, so no role has
+    its own copy. The agent is told, never ended behind its back: the lane stays `ACTIVE` until it calls `cancel_lane`.
+    Tests: `ClosedGroupLaneTest` (a lane in a `COMPLETED` or `CANCELLED` group is told to end, then, ended, is offered the
+    open combine and the group stays closed) and the scenario `LaneInGroupClosedWhileApartScenarioTest` (the cut, one side
+    completes the group, the other's reviewer lane is ended after the heal). Source semantics proven; not proved in a
+    real run.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

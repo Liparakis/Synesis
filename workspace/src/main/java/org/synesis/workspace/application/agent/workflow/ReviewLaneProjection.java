@@ -65,6 +65,10 @@ final class ReviewLaneProjection {
      */
     static AgentResponse reviewLaneAction(TaskSnapshotService snapshotService, PredictionEventStore store, Map<String, Object> collaboration, LaneScope lane, boolean reviewOnly, boolean finishAsked) {
         String participant = lane.participantId();
+        AgentResponse closed = LaneCompletionProjection.closedGroupLaneAction(store, participant);
+        if (closed != null) {
+            return closed;
+        }
         // A review admission asked of this lane comes before anything the lane waits for itself.
         // A producer that reviews while its own snapshot waits is also a requester, and producers
         // that each wait for their own request to be answered never answer one another's.
