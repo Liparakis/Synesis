@@ -52,6 +52,9 @@ final class OperatorDecisions {
     static void printDecided(CliRuntime runtime, Decided decided) {
         decided.adopted().ifPresent(adopted -> {
             runtime.terminal().stdout("POLICY_BASELINE=SIGNED");
+            // The key the project now trusts for good: check it is the one you just made. A baseline written by anyone
+            // else shows another ID in 'synesis project policy show'.
+            runtime.terminal().stdout("OPERATOR_KEY=" + decided.operatorKeyId());
             if (adopted.validation() != null) {
                 runtime.terminal().stdout("POLICY_ADOPTED=validation");
             }

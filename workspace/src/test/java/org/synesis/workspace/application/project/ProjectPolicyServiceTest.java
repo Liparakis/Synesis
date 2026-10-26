@@ -124,8 +124,7 @@ final class ProjectPolicyServiceTest {
         try (var files = Files.list(events)) {
             Path entry = files.filter(Files::isRegularFile).sorted().findFirst().orElseThrow();
             byte[] bytes = Files.readAllBytes(entry);
-            bytes[bytes.length / 2] ^= 0x55;
-            Files.write(entry, bytes);
+            Files.write(entry, java.util.Arrays.copyOf(bytes, bytes.length / 2));
         }
 
         ProjectLocation unreadable = service.locate(root);
@@ -138,6 +137,40 @@ final class ProjectPolicyServiceTest {
         assertThrows(PolicyUnavailableException.class, unreadable::review);
         assertThrows(PolicyUnavailableException.class, unreadable::validationAlsoInLane);
         assertEquals("POLICY_UNAVAILABLE", assertThrows(ProjectApplicationException.class, () -> ProjectPolicyService.read(unreadable)).code());
+    }
+
+    @Test
+    void deletingTheLogOfAProjectWithASignedPolicyDoesNotFallBackToTheFile() throws Exception {
+        Path root = gitProject();
+        ProjectLocation start = service.locate(root);
+        ProjectPolicyService.decide(start, TYPES, validation(STATUS), Optional.empty());
+        commitFile(root, withPolicy(start, ""));
+        try (var walk = Files.walk(start.coordinationDirectory())) {
+            for (Path path : walk.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                if (!path.equals(start.coordinationDirectory())) {
+                    Files.delete(path);
+                }
+            }
+        }
+
+        ProjectLocation lost = service.locate(root);
+
+        assertThrows(PolicyUnavailableException.class, lost::validation);
+        assertThrows(PolicyUnavailableException.class, lost::review);
+    }
+
+    @Test
+    void aComputerThatJoinedAndHasReceivedNothingYetHasNoPolicyAndRunsNoGate() throws Exception {
+        Path root = gitProject();
+        ProjectLocation start = service.locate(root);
+        org.synesis.coordination.persistence.ReplicationPeers.rememberDialed(start.coordinationDirectory(), NodeIdentity.generate().nodeId(), "synesis://project/x");
+
+        ProjectLocation joiner = service.locate(root);
+
+        assertFalse(joiner.policyReceived(), "an empty log of a joiner means not synced, not a project of its own");
+        assertThrows(PolicyNotReceivedException.class, joiner::validation);
+        assertEquals("NOT_THE_OWNER", assertThrows(ProjectApplicationException.class,
+                () -> ProjectPolicyService.decide(joiner, TYPES, validation(STATUS), Optional.empty())).code());
     }
 
     @Test

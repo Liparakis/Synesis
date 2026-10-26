@@ -54,6 +54,7 @@ public final class ProjectPolicyShowCommand implements Callable<Integer> {
             ProjectValidationCommand.print(runtime, location);
             runtime.terminal().stdout("REVIEW=" + (location.review().mandatory() ? "MANDATORY" : "NONE"));
             if (signed.isPresent()) {
+                runtime.terminal().stdout("OPERATOR_KEY=" + signed.get().operatorKeyId());
                 runtime.terminal().stdout("POLICY_REVISION=" + signed.get().revision());
                 runtime.terminal().stdout("UNSANDBOXED_COMMANDS=" + (signed.get().unsandboxedAllowed() ? "ALLOW" : "DENY"));
                 if (ProjectPolicyService.fileDisagreement(location).isPresent()) {

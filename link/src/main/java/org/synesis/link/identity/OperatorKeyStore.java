@@ -46,6 +46,7 @@ public final class OperatorKeyStore {
 
     private static final int MAGIC = 0x534F4B31;
     private static final int FORMAT_VERSION = 1;
+    private static final int MINIMUM_NEW_PASSPHRASE = 8;
     private static final int MAX_FILE_BYTES = 4096;
     private static final int MAX_ITERATIONS = 10_000_000;
     private static final int SALT_BYTES = 16;
@@ -108,7 +109,7 @@ public final class OperatorKeyStore {
      * @throws GeneralSecurityException when the key cannot be generated or encrypted
      */
     public NodeIdentity create(char[] passphrase) throws IOException, GeneralSecurityException {
-        requirePassphrase(passphrase);
+        requireNewPassphrase(passphrase);
         if (Files.exists(file)) {
             throw new FileAlreadyExistsException(file.toString());
         }
@@ -144,7 +145,11 @@ public final class OperatorKeyStore {
         Stored stored = read();
         try {
             byte[] privateKey = cipher(Cipher.DECRYPT_MODE, passphrase, stored.iterations(), stored.salt(), stored.nonce(), stored.header()).doFinal(stored.sealed());
-            return NodeIdentity.fromEncoded(stored.publicKey(), privateKey);
+            try {
+                return NodeIdentity.fromEncoded(stored.publicKey(), privateKey);
+            } finally {
+                Arrays.fill(privateKey, (byte) 0);
+            }
         } catch (AEADBadTagException wrong) {
             throw new OperatorKeyException("OPERATOR_PASSPHRASE_WRONG");
         }
@@ -153,6 +158,13 @@ public final class OperatorKeyStore {
     private static void requirePassphrase(char[] passphrase) {
         if (passphrase == null || passphrase.length == 0) {
             throw new IllegalArgumentException("passphrase must not be empty");
+        }
+    }
+
+    private static void requireNewPassphrase(char[] passphrase) throws OperatorKeyException {
+        requirePassphrase(passphrase);
+        if (passphrase.length < MINIMUM_NEW_PASSPHRASE) {
+            throw new OperatorKeyException("OPERATOR_PASSPHRASE_TOO_SHORT");
         }
     }
 
@@ -228,9 +240,21 @@ public final class OperatorKeyStore {
         try {
             Files.write(temporary, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
             try {
-                Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException unsupported) {
-                Files.move(temporary, file);
+                // A hard link fails when the target exists, where a move would replace it: a lost key is lost for good,
+                // so two creators racing never overwrite each other's.
+                Files.createLink(file, temporary);
+            } catch (UnsupportedOperationException | java.nio.file.FileSystemException noLinks) {
+                if (noLinks instanceof FileAlreadyExistsException) {
+                    throw (FileAlreadyExistsException) noLinks;
+                }
+                if (Files.exists(file)) {
+                    throw new FileAlreadyExistsException(file.toString());
+                }
+                try {
+                    Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException unsupported) {
+                    Files.move(temporary, file);
+                }
             }
             try {
                 Files.setPosixFilePermissions(file, Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));

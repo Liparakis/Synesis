@@ -667,6 +667,32 @@ Source semantics proven on the Linux gate; no real-run acceptance yet. Each item
    test pins the actual behaviour. The minimum-version mechanism is `LinkCompatibility.CURRENT` (11 now); raising it to 12
    for this entry needs the signed golden vectors of `ProtocolWireCompatibilityTest` regenerated and is **not done**.
 
+**Residual risks and open points found in stage 1 (review of 2026-10-27; none is closed by the sandbox of stages 2 to 5
+unless it says so).**
+
+- **The first entry is trusted blindly.** Whoever writes the baseline first becomes the operator for good: the baseline is
+  checked only against the key it carries, `init` writes none, and the key file is never replaced. "Typed at a terminal"
+  stops a script and an agent's pipe, not a command run under a pseudo-terminal, and a holder of the node key can append
+  the entry directly. Until stage 2 hides the node key and `.synesis` from an agent's commands, an agent can pre-empt a
+  project that has no baseline yet. Mitigations built: the command prints `OPERATOR_KEY=<id>` for the person to check
+  and `policy show` prints it again; a computer that made a key but whose log has no baseline refuses every gate and
+  does not use the file. **Not built:** a baseline confirmed by a recovery key, and any recovery of a lost operator
+  key (a replacement signed by the recovery key, as this ADR's Decision describes, or a replacement after a new owner).
+- **An owner change leaves the new owner without the key.** `OWNER_CHANGED` moves the node key; the operator key file
+  stays on the old owner's computer, so the new owner gets `OPERATOR_KEY_MISSING` until the file is copied by hand.
+  Moving the operator key with the ownership is not designed.
+- **Gates and non-gate readers share the accessors.** `AgentNextActionService` and `WorkIntentAnnouncement` read policy
+  through the same accessors, so on a member that has no baseline yet `get_next_action` and announcing a lane refuse as
+  the gates do. That is the ADR's "no policy, no work" on a member, but it is wider than "refuses to integrate".
+- **The wire compatibility number is not raised** (item 9). Until it is, an older peer is not turned away at the
+  handshake; it fails when it reads a log that holds code 93.
+- **Structure left for a follow-up** (thermo-nuclear review): `ProjectPolicyService` does six jobs (lazy reading,
+  the reading model, doctor comparison, migration, the adoption operator request, signing) and should split into a
+  reader, an adoption class and a decision class; the policy has several representations (`PolicyProjection` fields,
+  `PolicyService.valueInForce`, `Snapshot`, `ProjectLocation.Policy`, `FilePolicy`) whose literals `MANDATORY`, `NONE`,
+  `ALLOW`, `DENY`, `true` are spelled in four places; a gate that reads the three accessors in turn can see two states
+  of the log.
+
 **The operator key (owner's decision 1).** `OperatorKeyStore` (module `link`) keeps an Ed25519 key in
 `.synesis/local/profile/operator/operator.key`: AES-256-GCM over the PKCS#8 private key, key derived by
 PBKDF2-HMAC-SHA-256 (600,000 iterations, 16-byte random salt) from the passphrase, header (version, cost, salt, nonce,

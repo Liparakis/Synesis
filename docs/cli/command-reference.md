@@ -483,7 +483,12 @@ because the file was the policy (ADR-0104, owner's decision 4).
 
 The first signed decision of a project writes its **baseline**: the operator key's
 public half, then the policy `.synesis/project.json` held (see `synesis project
-policy adopt`). Only the owner's computer can sign (`ERROR=NOT_THE_OWNER`
+policy adopt`). The command prints `OPERATOR_KEY=<sl1-...>`, the node ID derived
+from the key's public half, which the project trusts from then on: check that it is the one
+you just made, since `synesis project policy show` prints the same line and a
+baseline written by anyone else shows another one. A computer that made the key
+but whose log holds no baseline (the log was lost) refuses every gate
+(`POLICY_UNAVAILABLE`) and does not fall back to the file. Only the owner's computer can sign (`ERROR=NOT_THE_OWNER`
 elsewhere); on a project shared with other computers the entries travel in the
 owner's log like membership, and a member never writes one. A member computer
 that has not yet received the owner's baseline has no policy and runs no gate.

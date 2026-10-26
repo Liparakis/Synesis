@@ -92,6 +92,30 @@ class OperatorKeyStoreTest {
     }
 
     @Test
+    void aNewKeyNeedsAtLeastEightCharactersAndAShortOneCreatesNothing() {
+        OperatorKeyStore store = store();
+
+        OperatorKeyException refused = assertThrows(OperatorKeyException.class, () -> store.create("short".toCharArray()));
+
+        assertEquals("OPERATOR_PASSPHRASE_TOO_SHORT", refused.code());
+        assertFalse(store.exists());
+    }
+
+    @Test
+    void aCreatorThatLosesARaceNeverReplacesTheKey() throws Exception {
+        OperatorKeyStore first = store();
+        OperatorKeyStore racing = store();
+        NodeIdentity kept = first.create("correct horse".toCharArray());
+
+        assertThrows(FileAlreadyExistsException.class, () -> racing.create("battery staple".toCharArray()));
+
+        assertArrayEquals(kept.publicKeyEncoded(), racing.publicKey());
+        try (var files = Files.list(tmp.resolve("operator"))) {
+            assertEquals(1, files.count(), "the losing creator leaves no temporary file behind");
+        }
+    }
+
+    @Test
     void anEmptyPassphraseAndAMissingFileAreRefused() {
         OperatorKeyStore store = store();
 

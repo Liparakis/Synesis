@@ -150,6 +150,9 @@ class ProjectPolicyCommandTest {
         assertTrue(adopted.stdout().contains("POLICY_ADOPTED=validation"), adopted.toString());
         assertTrue(adopted.stdout().contains("POLICY_ADOPTED=review"), adopted.toString());
         assertEquals("SIGNED", policyBaseline());
+        String signedWith = adopted.stdout().stream().filter(line -> line.startsWith("OPERATOR_KEY=")).findFirst().orElseThrow();
+        assertTrue(signedWith.matches("OPERATOR_KEY=sl1-[0-9a-f]{64}"), "the key the project now trusts is shown to the person who made it: " + adopted);
+        assertTrue(run("project", "policy", "show", "--project", project).stdout().contains(signedWith), "policy show names the same key");
         Result again = run("project", "policy", "adopt", "--project", project);
         assertEquals(0, again.exit());
         assertTrue(again.stdout().contains("POLICY_ADOPTED=NONE"), "adopting again writes nothing: " + again);
@@ -180,11 +183,11 @@ class ProjectPolicyCommandTest {
     @Test
     void aLogThatCannotBeReadRefusesTheGateReadersInTheErrorShapeAndNeverFallsBackToTheFile() throws Exception {
         assertEquals(0, run("project", "validation", "set", "--project", project, "--", "git", "status").exit());
-        try (var files = Files.list(location.coordinationDirectory().resolve("events"))) {
-            Path entry = files.filter(Files::isRegularFile).sorted().findFirst().orElseThrow();
-            byte[] bytes = Files.readAllBytes(entry);
-            bytes[bytes.length / 2] ^= 0x55;
-            Files.write(entry, bytes);
+        try (var files = Files.walk(location.coordinationDirectory())) {
+            for (Path entry : files.filter(Files::isRegularFile).filter(path -> path.toString().contains("events")).toList()) {
+                byte[] bytes = Files.readAllBytes(entry);
+                Files.write(entry, java.util.Arrays.copyOf(bytes, bytes.length / 2));
+            }
         }
 
         Result shown = run("project", "validation", "show", "--project", project);

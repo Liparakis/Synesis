@@ -21,6 +21,8 @@ import org.synesis.coordination.domain.policy.PolicyProjection;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.persistence.PredictionEventStore;
+import org.synesis.coordination.persistence.ReplicationPeers;
+import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.identity.OperatorKeyException;
@@ -58,9 +60,10 @@ public final class ProjectPolicyService {
      * @param sandboxPaths       the extra sandbox folders, one {@code ro:} or {@code rw:} line each
      * @param revision           the owner-statement revision, the one the next decision is written at
      * @param statements         how many decisions are applied, the baseline included
+     * @param operatorKeyId      the registered operator key as a node ID derived from its public half, to compare by eye
      */
     public record Snapshot(ProjectCommandSpec validation, boolean validationAlsoInLane, ReviewPolicy review, boolean unsandboxedAllowed,
-                           String sandboxPaths, long revision, long statements) {
+                           String sandboxPaths, long revision, long statements, String operatorKeyId) {
     }
 
     /**
@@ -145,8 +148,9 @@ public final class ProjectPolicyService {
      * @param revision the owner-statement revision after the write
      * @param entry    the sequence of the last entry written in this computer's log, or zero when none
      * @param adopted  what the baseline adopted from the file, or empty when this command wrote no baseline
+     * @param operatorKeyId the operator key that signed, as a node ID derived from its public half
      */
-    public record Decided(int written, long revision, long entry, Optional<FilePolicy> adopted) {
+    public record Decided(int written, long revision, long entry, Optional<FilePolicy> adopted, String operatorKeyId) {
     }
 
     private ProjectPolicyService() {
@@ -197,8 +201,12 @@ public final class ProjectPolicyService {
             if (reading.snapshot().isPresent()) {
                 Snapshot signed = reading.snapshot().get();
                 policy = new ProjectLocation.Policy(signed.validation(), signed.review(), signed.validationAlsoInLane(), true);
-            } else if (reading.shared() && !reading.ownsTheProject()) {
+            } else if (!reading.ownsTheProject()) {
                 policy = new ProjectLocation.Policy(null, ReviewPolicy.none(), false, false);
+            } else if (Files.exists(file.operatorKeyFile())) {
+                // This computer made the project's operator key, so a baseline was meant to exist. A log without it has
+                // lost it, and the file an agent could have written is not the policy.
+                throw new PolicyUnavailableException(new IOException("an operator key exists on this computer but the log holds no baseline"));
             } else {
                 policy = new ProjectLocation.Policy(file.validation(), file.review(), file.validationAlsoInLane(), true);
             }
@@ -219,7 +227,7 @@ public final class ProjectPolicyService {
     public static Reading read(ProjectLocation location) throws ProjectApplicationException {
         Path coordination = location.coordinationDirectory();
         if (!Files.isDirectory(coordination) || PredictionEventStore.recordedEvents(coordination) == 0) {
-            return new Reading(Optional.empty(), false, true);
+            return new Reading(Optional.empty(), false, !joining(coordination));
         }
         try {
             return read(location, PredictionEventStore.openReadOnly(coordination, location.projectId()));
@@ -237,8 +245,25 @@ public final class ProjectPolicyService {
         }
         Snapshot snapshot = new Snapshot(ProjectMetadataCodec.parseValidationValue(policy.validation()), policy.validationAlsoInLane(),
                 policy.reviewMandatory() ? ReviewPolicy.mandatoryIndependent() : ReviewPolicy.none(), policy.unsandboxedAllowed(),
-                policy.sandboxPaths(), membership.revision(), policy.statements());
+                policy.sandboxPaths(), membership.revision(), policy.statements(), NodeIdentity.deriveNodeId(policy.operatorKey().orElseThrow()));
         return new Reading(Optional.of(snapshot), membership.shared(), owns);
+    }
+
+    /**
+     * Whether this computer has joined another's project and has not received a single entry yet, so that an empty log
+     * means "not synced" and not "a project of my own". Ambiguous settings count as joining: a computer that cannot say
+     * it owns the project does not decide for it.
+     */
+    private static boolean joining(Path coordination) {
+        if (!Files.isDirectory(coordination)) {
+            return false;
+        }
+        try {
+            return !ReplicationPeers.read(coordination).dialed().isEmpty()
+                    || ReplicationSettings.read(coordination).map(ReplicationSettings::isMember).orElse(false);
+        } catch (IOException | RuntimeException unreadable) {
+            return true;
+        }
     }
 
     /** This computer's node ID without creating anything; empty when the identity cannot be read, which owns nothing. */
@@ -330,19 +355,15 @@ public final class ProjectPolicyService {
             return false;
         }
         Optional<OperatorRequest> open = store.operatorRequestProjection().open(ADOPTION_CONDITION);
-        boolean needed;
+        Adoption found;
         try {
-            needed = !store.policyProjection().baselineApplied() && adoption(location).needsConfirmation();
+            found = adoption(location);
         } catch (ProjectApplicationException unreadable) {
+            // Nothing new is known about the file: a request that stands stands.
             return open.isPresent();
         }
+        boolean needed = !store.policyProjection().baselineApplied() && found.needsConfirmation();
         if (needed && open.isEmpty()) {
-            Adoption found;
-            try {
-                found = adoption(location);
-            } catch (ProjectApplicationException unreadable) {
-                return false;
-            }
             String evidence = "committed: " + found.head().map(ProjectPolicyService::describe).orElse("not committed") + "\nworking file: " + describe(found.working());
             OperatorRequest request = OperatorRequest.raised("opr_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16), ADOPTION_CONDITION,
                     "The policy in .synesis/project.json differs from the committed one, or is uncommitted, so no policy is signed. Pick one with 'synesis project policy adopt --from head' or '--from file'.", evidence);
@@ -385,7 +406,7 @@ public final class ProjectPolicyService {
             }
         }
         Reading reading = read(location);
-        if (reading.shared() && !reading.ownsTheProject()) {
+        if (!reading.ownsTheProject()) {
             throw new ProjectApplicationException("NOT_THE_OWNER", "Only the owner's computer decides the project's policy");
         }
         Map<PolicyName, String> wanted = new LinkedHashMap<>();
@@ -412,7 +433,7 @@ public final class ProjectPolicyService {
             NodeIdentity operator = creating ? keys.create(passphrase) : keys.unlock(passphrase);
             List<Decision> pending = wanted.entrySet().stream().map(entry -> new Decision(entry.getKey(), entry.getValue())).toList();
             PolicyService.Written written = new PolicyService(location.openCoordinationStore(), location.loadOrCreateIdentity()).decide(operator, pending);
-            return new Decided(written.written(), written.revision(), written.entry(), adopted);
+            return new Decided(written.written(), written.revision(), written.entry(), adopted, NodeIdentity.deriveNodeId(operator.publicKeyEncoded()));
         } catch (OperatorKeyException wrong) {
             throw new ProjectApplicationException(wrong.code(), "The operator key could not be used");
         } catch (CoordinationException refused) {
