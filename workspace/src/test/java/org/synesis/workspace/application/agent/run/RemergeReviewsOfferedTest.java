@@ -1,6 +1,7 @@
 package org.synesis.workspace.application.agent.run;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -142,7 +143,12 @@ final class RemergeReviewsOfferedTest {
                 CollaborationCodec.encodeLaneGrant(grant), identity);
 
         AgentRunController.Observation granted = new EventLogObserver(location).observe();
-        assertEquals(List.of(REMERGE), granted.reviewsOffered("codex", List.of("remerge-reviewer")));
+        // s5-run27: the controller resumes an agent once per offer. The wait for a grant resumed it to take a session; the pass then
+        // granted that session, after the agent had stopped. The grant is a new offer, or no one ever woke the agent for it.
+        List<String> grantedOffer = granted.reviewsOffered("codex", List.of("remerge-reviewer"));
+        assertEquals(1, grantedOffer.size());
+        assertNotEquals(before.reviewsOffered("codex", List.of("remerge-reviewer")), grantedOffer, "granted is not the offer the wait already made");
+        assertEquals("granted:" + REMERGE, grantedOffer.getFirst());
         assertEquals(List.of(), granted.reviewsOffered("codex", List.of("remerge-owner")),
                 "the grant names the reviewer, not the author");
         assertEquals(List.of(), granted.reviewsOffered("codex", List.of("never-connected")));

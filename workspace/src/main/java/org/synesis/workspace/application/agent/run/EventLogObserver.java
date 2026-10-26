@@ -28,7 +28,10 @@ import org.synesis.workspace.application.provider.session.ProviderSessionTermina
  */
 public final class EventLogObserver implements AgentRunController.ProjectObserver {
 
-    private static final AgentRunController.Observation NOTHING_RECORDED = new AgentRunController.Observation() {
+    /** Keys a re-merge review granted to one of the agent's sessions apart from the same re-merge waiting for a grant. */
+    private static final String GRANTED_OFFER = "granted:";
+
+    private static final AgentRunController.Observation NOTHING_RECORDED =new AgentRunController.Observation() {
 
         @Override
         public long headSequence() {
@@ -248,10 +251,14 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                 // A re-merge to review again is offered to its original reviewer, whatever it holds (ADR-0098 step 5), and
                 // while no grant on it is held to an agent that may review it, whose session the pass cannot offer it to
                 // before it has one (item 30).
-                // So is a combine lane, to the agents of this computer that wrote none of what it combines (designer item 22),
+                // A re-merge waiting and the same re-merge granted to a session are two offers (item 40): the controller resumes an
+                // agent once for each offer, and the pass grants a waiting re-merge only to a session that exists, so the agent
+                // resumed for the wait has stopped by the time the grant is made (s5-run27).
+                // So is a combine lane, to the agents of this computer (designer item 22, item 40),
                 // and a lane of an away computer to an agent here with no lane while this computer is stalled (item 10).
                 return java.util.stream.Stream.of(CollaborationResponseMapper.openReviewSnapshots(store, sessions).stream(),
-                        CollaborationResponseMapper.remergeReviewsGranted(store, sessions).stream(), CollaborationResponseMapper.remergeReviewsWaiting(store, sessions).stream(),
+                        CollaborationResponseMapper.remergeReviewsGranted(store, sessions).stream().map(snapshot -> GRANTED_OFFER + snapshot),
+                        CollaborationResponseMapper.remergeReviewsWaiting(store, sessions).stream(),
                         combinesOffered(store, location, sessions).stream(),
                         takeoversOffered(store, sessions).stream())
                         .flatMap(java.util.function.Function.identity()).distinct().toList();

@@ -481,7 +481,7 @@ final class OverlapAndCombineScenarioTest {
     }
 
     /** The computer's own passes hold the lock now and then; this is a pass of the test's own that holds it as long as it is open. */
-    private static ProjectIntegrationLock takenWhenFree(Path coordination) throws Exception {
+    static ProjectIntegrationLock takenWhenFree(Path coordination) throws Exception {
         long giveUp = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
         while (System.nanoTime() < giveUp) {
             ProjectIntegrationLock held = ProjectIntegrationLock.tryAcquire(coordination);

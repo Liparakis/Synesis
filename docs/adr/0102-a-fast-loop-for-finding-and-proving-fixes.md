@@ -114,8 +114,9 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
    let none of them take the combine: the controller's offer (`reviewsOffered`) shows it to the resumed connection, the agent's
    own next action shows no `combineCandidates`, the agent's process ends and is not woken again. The scenario assumes the
    two changes land one after the other, which depends on when the integration pump runs between the two review validations;
-   that, and the rule that a computer whose only agents all wrote the combined work can never combine it, are for a design
-   decision, not a test edit. Evidence: `D:\Podman\work\runs\1026-233409-3f44c8` and `1026-233409-576de0` (iter dirs).
+   that, and the rule that a computer whose only agents all wrote the combined work can never combine it, were for a design
+   decision, not a test edit; the decision (an author may take the combine) is ADR-0098 step 5 item 40, with a test that forces
+   the single advance. Evidence: `D:\Podman\work\runs\1026-233409-3f44c8` and `1026-233409-576de0` (iter dirs).
    Baseline on HEAD under that load never failed `ControlPlaneReplicationTest` (0 of 12), `NettyQuicLoopbackTest` (0 of 16 with and
    without the change) or `ClaimLockTest` (0 of 16), so those four fixes rest on the failures recorded in earlier gate runs of
    2026-10-26 (stack lines and messages), not on a reproduction. With the changes, under the same load: `ControlPlaneReplicationTest`

@@ -62,14 +62,15 @@ final class CombineLaneJoinTest {
     }
 
     @Test
-    void theCombineWaitsAndIsOfferedToAnAgentThatWroteNoneOfIt() throws Exception {
+    void theCombineWaitsAndIsOfferedToEveryAgentOfThisComputerAuthorsIncluded() throws Exception {
         var store = fixture.store();
         String node = fixture.identity.nodeId();
         assertTrue(CombineLaneJoin.waiting(store, fixture.combine));
         fixture.session(COMBINER);
         assertEquals(List.of(fixture.combine.combineId()), CombineLaneJoin.offeredTo(store, List.of(fixture.participant(COMBINER)), node).stream()
                 .map(CombinePayload::combineId).toList());
-        assertEquals(List.of(), CombineLaneJoin.offeredTo(store, List.of(fixture.participant(CombineFixture.AUTHOR)), node));
+        assertEquals(List.of(fixture.combine.combineId()), CombineLaneJoin.offeredTo(store, List.of(fixture.participant(CombineFixture.AUTHOR)), node).stream()
+                .map(CombinePayload::combineId).toList());
         assertEquals(List.of(), CombineLaneJoin.offeredTo(store, List.of(), node));
         assertEquals(List.of(fixture.participant(CombineFixture.AUTHOR)), CombineLaneJoin.authors(store, fixture.combine));
         var described = CombineLaneJoin.describe(store, fixture.combine);
@@ -147,17 +148,28 @@ final class CombineLaneJoinTest {
         assertEquals("COMBINE_WORKTREE_INVALID", refused.getMessage());
     }
 
+    /** ADR-0098 step 5 item 40: two changes integrated as one advance make every agent of a computer an author. */
     @Test
-    void theAuthorIsRefusedAndNothingIsAnnounced() throws Exception {
-        int intentsBefore = fixture.store().collaborationProjection().activeIntents().size();
+    void theAuthorMayTakeTheCombineAndItsResultIsReviewedByAnotherAgent() throws Exception {
+        assertEquals(Optional.empty(), CombineLaneJoin.refusal(fixture.store(), fixture.combine, fixture.identity.nodeId()));
 
-        IOException refused = assertThrows(IOException.class, () -> join(CombineFixture.AUTHOR));
+        fixture.authorLaneIntegrated();
+        ClaimResult taken = join(CombineFixture.AUTHOR);
 
-        assertEquals("COMBINE_BY_AUTHOR_NOT_ALLOWED", refused.getMessage());
-        assertEquals(intentsBefore, fixture.store().collaborationProjection().activeIntents().size());
-        assertTrue(CombineLaneJoin.waiting(fixture.store(), fixture.combine), "the combine still waits");
-        assertEquals(Optional.of("COMBINE_BY_AUTHOR_NOT_ALLOWED"),
-                CombineLaneJoin.refusal(fixture.store(), fixture.combine, fixture.participant(CombineFixture.AUTHOR), fixture.identity.nodeId()));
+        assertTrue(taken.acquired(), taken.toString());
+        assertEquals(fixture.combine.workGroupId(), taken.intent().workGroupId());
+        assertFalse(CombineLaneJoin.waiting(fixture.store(), fixture.combine), "the combine's group now holds a lane");
+    }
+
+    @Test
+    void anAgentThatHoldsALaneIsOfferedNoCombineByEitherTheControllerOrTheNextAction() throws Exception {
+        fixture.session(COMBINER);
+        String combiner = fixture.participant(COMBINER);
+        assertEquals(1, CombineLaneJoin.offeredTo(fixture.store(), List.of(combiner), fixture.identity.nodeId()).size());
+
+        fixture.collaboration.announce(fixture.root, CombineFixture.PROVIDER, COMBINER, "change g", "g changed", List.of(ResourceSelector.pathExact("src/g.txt")));
+
+        assertEquals(List.of(), CombineLaneJoin.offeredTo(fixture.store(), List.of(combiner), fixture.identity.nodeId()));
     }
 
     @Test
@@ -165,9 +177,9 @@ final class CombineLaneJoinTest {
         fixture.session(COMBINER);
 
         assertEquals(Optional.of("COMBINE_NOT_THIS_COMPUTERS"),
-                CombineLaneJoin.refusal(fixture.store(), fixture.combine, fixture.participant(COMBINER), "node-that-did-not-introduce-the-authors"));
+                CombineLaneJoin.refusal(fixture.store(), fixture.combine, "node-that-did-not-introduce-the-authors"));
         assertEquals(List.of(), CombineLaneJoin.offeredTo(fixture.store(), List.of(fixture.participant(COMBINER)), "node-that-did-not-introduce-the-authors"));
-        assertEquals(Optional.empty(), CombineLaneJoin.refusal(fixture.store(), fixture.combine, fixture.participant(COMBINER), fixture.identity.nodeId()));
+        assertEquals(Optional.empty(), CombineLaneJoin.refusal(fixture.store(), fixture.combine, fixture.identity.nodeId()));
     }
 
     @Test
@@ -175,7 +187,7 @@ final class CombineLaneJoinTest {
         fixture.session(COMBINER);
         CombinePayload unknown = new CombinePayload("cb-unknown", "r", "o", "w", fixture.base, fixture.combine.theirs(), List.of("snap-never-seen"));
 
-        assertEquals(Optional.of("COMBINE_SNAPSHOT_NOT_FOUND"), CombineLaneJoin.refusal(fixture.store(), unknown, fixture.participant(COMBINER), fixture.identity.nodeId()));
+        assertEquals(Optional.of("COMBINE_SNAPSHOT_NOT_FOUND"), CombineLaneJoin.refusal(fixture.store(), unknown, fixture.identity.nodeId()));
     }
 
     @Test

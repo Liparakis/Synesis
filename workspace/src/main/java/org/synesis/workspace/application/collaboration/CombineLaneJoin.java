@@ -68,17 +68,18 @@ public final class CombineLaneJoin {
     }
 
     /**
-     * Why a participant may not take a combine, or empty when it may: the combine must be this computer's, written for
-     * lanes it introduced (it closes the combine lane when the re-merge lands, and writes only for its own agents), and
-     * the participant must have written none of the combined snapshots.
+     * Why this computer may not offer a combine, or empty when it may: the combine must be this computer's, written for
+     * lanes it introduced (it closes the combine lane when the re-merge lands, and writes only for its own agents). An
+     * author of a combined snapshot may take it (ADR-0098 step 5 item 40): two changes integrated as one advance make
+     * every agent of a computer an author, so refusing authors left no one to combine. The safeguard is the review of the
+     * combine's result, the re-merge, which an agent other than its author must accept ({@code RemergeService}).
      *
-     * @param store       current projection
-     * @param combine     the combine
-     * @param participant the participant handle
-     * @param node        this computer
+     * @param store   current projection
+     * @param combine the combine
+     * @param node    this computer
      * @return the refusal code, or empty
      */
-    public static Optional<String> refusal(PredictionEventStore store, CombinePayload combine, String participant, String node) {
+    public static Optional<String> refusal(PredictionEventStore store, CombinePayload combine, String node) {
         List<TaskSnapshotRecord> combined = combine.snapshotIds().stream().map(id -> store.taskCompletionProjection().findSnapshotById(id))
                 .flatMap(Optional::stream).toList();
         if (combined.size() != combine.snapshotIds().size()) {
@@ -86,13 +87,7 @@ public final class CombineLaneJoin {
         }
         boolean thisComputers = combined.stream().allMatch(snapshot -> store.collaborationProjection().introducingNode(snapshot.provenance().participantIdentity())
                 .map(node::equals).orElse(false));
-        if (!thisComputers) {
-            return Optional.of("COMBINE_NOT_THIS_COMPUTERS");
-        }
-        if (combined.stream().anyMatch(snapshot -> snapshot.provenance().participant().equals(participant))) {
-            return Optional.of("COMBINE_BY_AUTHOR_NOT_ALLOWED");
-        }
-        return Optional.empty();
+        return thisComputers ? Optional.empty() : Optional.of("COMBINE_NOT_THIS_COMPUTERS");
     }
 
     /**
@@ -118,11 +113,9 @@ public final class CombineLaneJoin {
         if (existing.isPresent()) {
             return new ClaimResult(true, existing.get(), List.of());
         }
-        for (String session : sessionsOfAgent(location.root(), participant)) {
-            Optional<String> refused = refusal(store, combine, session, identity.nodeId());
-            if (refused.isPresent()) {
-                throw new IOException(refused.get());
-            }
+        Optional<String> refused = refusal(store, combine, identity.nodeId());
+        if (refused.isPresent()) {
+            throw new IOException(refused.get());
         }
         if (!waiting(store, combine)) {
             throw new IOException("COMBINE_TAKEN_OR_CLOSED");
@@ -173,8 +166,9 @@ public final class CombineLaneJoin {
     }
 
     /**
-     * The combines an agent may take: waiting for their lane, this computer's, and written by none of the agent's
-     * sessions.
+     * The combines an agent may take: waiting for their lane and this computer's, whoever wrote them. The one rule behind
+     * both the run controller's offer and the agent's next action, so the controller never shows a combine the next
+     * action will not: not to an agent one of whose sessions holds a lane, which is shown that lane.
      *
      * @param store        current projection
      * @param participants the agent's sessions' participant handles
@@ -182,11 +176,12 @@ public final class CombineLaneJoin {
      * @return the combines, oldest first
      */
     public static List<CombinePayload> offeredTo(PredictionEventStore store, java.util.Collection<String> participants, String node) {
-        if (participants.isEmpty()) {
+        var collaboration = store.collaborationProjection();
+        if (participants.isEmpty() || collaboration.activeIntents().stream().anyMatch(lane -> participants.contains(lane.participant()))) {
             return List.of();
         }
         return store.taskCompletionProjection().combines().stream().filter(combine -> waiting(store, combine))
-                .filter(combine -> participants.stream().allMatch(participant -> refusal(store, combine, participant, node).isEmpty())).toList();
+                .filter(combine -> refusal(store, combine, node).isEmpty()).toList();
     }
 
     /**

@@ -153,19 +153,17 @@ final class CombineOfferTest {
     }
 
     @Test
-    void theAuthorIsNotOfferedItsOwnWorkToCombine() throws Exception {
-        AgentResponse response = new AgentNextActionService().getNextAction(new NextActionRequest(fixture.root, CombineFixture.PROVIDER, CombineFixture.AUTHOR));
-
-        assertFalse(response.toJson().contains("combineCandidates"), response.toJson());
-        assertFalse(response.toJson().contains("two copies of main"), response.toJson());
+    void theAuthorIsOfferedItsOwnWorkToCombineBecauseItsResultIsReviewedByAnotherAgent() throws Exception {
+        fixture.authorLaneIntegrated();
+        assertOfferedTheCombine(new AgentNextActionService().getNextAction(new NextActionRequest(fixture.root, CombineFixture.PROVIDER, CombineFixture.AUTHOR)));
     }
 
     @Test
-    void theRunControllerIsOfferedTheCombineIdForTheAgentThatMayTakeItAndNotForTheAuthor() throws Exception {
+    void theRunControllerIsOfferedTheCombineIdForEveryAgentOfThisComputerAndTheNextActionShowsTheSameCombine() throws Exception {
         var observation = new EventLogObserver(fixture.location).observe();
 
         assertEquals(List.of(fixture.combine.combineId()), observation.reviewsOffered(CombineFixture.PROVIDER, List.of(COMBINER)));
-        assertEquals(List.of(), observation.reviewsOffered(CombineFixture.PROVIDER, List.of(CombineFixture.AUTHOR)));
+        assertEquals(List.of(fixture.combine.combineId()), observation.reviewsOffered(CombineFixture.PROVIDER, List.of(CombineFixture.AUTHOR)));
         assertEquals(List.of(), observation.reviewsOffered(CombineFixture.PROVIDER, List.of("never-connected")));
     }
 

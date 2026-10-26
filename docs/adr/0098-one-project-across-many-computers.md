@@ -1422,6 +1422,55 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     (`ScenarioAgent.answers`) and the list of dead-end shapes in it is where a new one is added. Source semantics proven; not
     proved in a real run.
 
+40. **An author of a combined snapshot may take the combine** (designer decision, 2026-10-27; the stall recorded in ADR-0102
+    item 1). *Proven by a deterministic reproduction:* under load the integration pass integrates both of the higher
+    computer's changes as ONE advance (`INTEGRATION_ATTEMPT_STARTED` names both snapshots), so every agent of that computer
+    is an author of the combined snapshots. `CombineLaneJoin.refusal` (`COMBINE_BY_AUTHOR_NOT_ALLOWED`, over the agent's
+    sessions up to the continuation) then let none of them take the combine, while the run controller's offer
+    (`reviewsOffered`) showed it to the resumed agent; the agent's own next action showed no `combineCandidates`, its process
+    ended and nothing resumed it. `CombineUnderRunControllerScenarioTest` failed 1 to 6 of 12 under load. The new
+    `theCombineLandsWhenBothOfTheHigherComputersChangesAreIntegratedAsOneAdvance` holds the higher computer's integration
+    lock until both changes are published, so it integrates them as one advance every time; it failed on the previous code
+    (60 s without progress, the combine never taken) and passes now.
+    *Decision:* the safeguard against an agent combining its own work is not who takes the combine but who reviews the
+    result: the re-merge's snapshot is accepted by an agent that is not its author, as the re-merge review rules
+    (`RemergeService.anotherReviewer`, `ReviewAdmissionRules`) already require. A computer whose agents all wrote the
+    combined work can therefore combine it. Item 39's "the author check stays" no longer holds.
+    *Rule:* `CombineLaneJoin.refusal(store, combine, node)` keeps `COMBINE_SNAPSHOT_NOT_FOUND` and
+    `COMBINE_NOT_THIS_COMPUTERS` and drops `COMBINE_BY_AUTHOR_NOT_ALLOWED` (a combine is not a review; the author rule for
+    reviews is unchanged). `CombineLaneJoin.offeredTo` is the one rule behind both the controller's offer and the agent's
+    next action: the combine waits, is this computer's, and no session of the agent holds a lane (the next action shows
+    that lane instead, so the controller must not wake the agent for a combine it will not be shown). Published contracts:
+    the refusal code is no longer produced; no wire format, tool schema or persisted form changes.
+    Tests: `CombineLaneJoinTest.theAuthorMayTakeTheCombineAndItsResultIsReviewedByAnotherAgent`,
+    `anAgentThatHoldsALaneIsOfferedNoCombineByEitherTheControllerOrTheNextAction`, `CombineOfferTest` (the controller's
+    offer and the next action agree for the author), and the harness case above. Source semantics proven; not proved in a
+    real run.
+41. **A re-merge review granted to a session is a new offer to the run controller** (s5-run27, 2026-10-26, build
+    remaster98, real cut). Result `TIME_BOUND` after 1500 s, copies apart. It is not the stall of item 40. *Proven from the
+    log dump, the leases and the transcripts of `D:\SynesisAcceptance\evidence\s5-run27\pc`, and by replaying the PC's
+    log through the projections:* the higher computer integrated its changes one advance at a time (every
+    `INTEGRATION_ATTEMPT_STARTED` names one snapshot), its agents took and published the three combines
+    (`snap_b946b998…`, `snap_913df5d8…`, `snap_366c7af8…`), and the re-merge `rm-4253b279…` was accepted for three of its
+    five snapshots. The last two, `rms-f893f457…` (original written by `agt_609b6dbf…`) and `rms-d04be64f…` (written by
+    `agt_ffafc487…`), stayed `REVIEW_PENDING`: the first reviewers' grants were revoked as unreachable, and the only agent
+    that may review them is `claude#2` (`claude#1`'s sessions wrote both originals; the replay gives `remergeReviewsWaiting`
+    for `claude#2`'s sessions = both and for `claude#1`'s = none). `claude#2` was resumed for the wait (`claude-2-12.log`: a
+    new session `agt_b1cf65af…`, `reviewCandidates` shows only the `gcd` snapshot, the agent stops). The pass then granted
+    both re-merges to that live session (`LANE_GRANT_ISSUED` seq 139 and 140), after the agent had stopped; the controller
+    never resumed it again (`AGENT_RESUMED=claude#2 resume=5` is its last), the session was judged gone and both grants were
+    revoked (seq 158, 159), and the log never moved again.
+    *The missing invariant (read from the controller's code; the run recorded no reason for a wake it did not make):* the run controller resumes an agent once for each review it is offered
+    (`Agent.reviewsToTry`), and `EventLogObserver.reviewsOffered` named a re-merge waiting for a grant and the same re-merge
+    granted to the agent's session by the same snapshot ID, so the grant was the offer the agent had already been resumed
+    for. The pass grants a waiting re-merge only to a session that exists, so the agent resumed for the wait can stop
+    before the grant is made, as `claude#2` did.
+    *Rule:* a re-merge granted to a session is offered as `granted:<snapshot ID>`, a different offer from the wait. When the
+    grant is revoked the offer is the wait again, a new offer too; the wakes stay bounded by `--max-resumes`.
+    Test: `RemergeReviewsOfferedTest.aSessionGrantedToReviewAReMergeAgainIsOfferedItAndOnlyUntilTheGrantIsConsumed` (the grant
+    is not the offer the wait already made; fails on the previous code, which returned the same ID for both). Source
+    semantics proven; not proved in a real run.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

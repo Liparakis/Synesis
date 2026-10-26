@@ -79,12 +79,29 @@ final class CombineUnderRunControllerScenarioTest {
 
     @Test
     void theCombineLandsAndMainEndsEqualWhenTheHigherComputersTwoAgentsAreRunByARunControllerThatEndsTheirConnections() throws Exception {
+        theCombineLands(false);
+    }
+
+    /**
+     * What a loaded machine did to the test above (ADR-0102 item 1, ADR-0098 step 5 item 40): both of the higher computer's
+     * changes are published before the integration pass runs, so it integrates them as ONE advance and both higher agents
+     * are authors of the combined snapshots. The pass is held off here until both have published, so this happens every time.
+     * An author takes the combine, and a lower agent, which did not write the result, reviews it.
+     */
+    @Test
+    void theCombineLandsWhenBothOfTheHigherComputersChangesAreIntegratedAsOneAdvance() throws Exception {
+        theCombineLands(true);
+    }
+
+    private void theCombineLands(boolean oneAdvance) throws Exception {
         Computer low = lab.lower();
         ScenarioAgent low1 = lab.agent(low, "low-1");
         ScenarioAgent low2 = lab.agent(low, "low-2");
         // As in s5-run16 the two changes are integrated one after the other, so the file both computers changed is an advance of its own.
         scripts.put("codex#1", agent -> {
-            lab.await("the second agent has published its change", () -> byLabel.containsKey("codex#2") && byLabel.get("codex#2").trace.stream().anyMatch(call -> call.startsWith("finish_lane")));
+            if (!oneAdvance) {
+                lab.await("the second agent has published its change", () -> byLabel.containsKey("codex#2") && byLabel.get("codex#2").trace.stream().anyMatch(call -> call.startsWith("finish_lane")));
+            }
             agent.claim("Change shared.txt on the higher computer", "shared.txt");
             agent.edit("shared.txt", "two", "two, by the higher computer");
             agent.publish();
@@ -103,6 +120,8 @@ final class CombineUnderRunControllerScenarioTest {
         low2.create("low.txt", "written by the lower computer\n");
         low1.publish();
         low2.publish();
+        // One advance: no pass of the higher computer integrates anything until both of its changes are published.
+        var heldPass = oneAdvance ? OverlapAndCombineScenarioTest.takenWhenFree(high.location.coordinationDirectory()) : null;
         AgentRunController controller = new AgentRunController(this::process, new EventLogObserver(high.location), new ControllerConnections(high.location.root()), System::currentTimeMillis, Thread::sleep);
         AgentRunController.Request request = new AgentRunController.Request(high.location.root(),
                 List.of(spec(), spec(), spec()), "go", Duration.ofMinutes(8), Duration.ofMillis(300), 8);
@@ -118,6 +137,11 @@ final class CombineUnderRunControllerScenarioTest {
         });
         lab.drive("the lower computer's two changes are on its main", () -> lab.hasOnBranch(low, "low.txt") && lab.onBranch(low, "shared.txt").contains("by the lower computer"), low1, low2);
         forgetTheLowerComputersSessions();
+        if (heldPass != null) {
+            lab.await("both of the higher computer's agents have published; events " + events,
+                    () -> byLabel.size() >= 2 && byLabel.values().stream().filter(agent -> agent.trace.stream().anyMatch(call -> call.startsWith("finish_lane"))).count() >= 2);
+            heldPass.close();
+        }
         lab.await("the higher computer's two changes are on its main; events " + events, () -> lab.hasOnBranch(high, "high.txt") && lab.onBranch(high, "shared.txt").contains("by the higher computer"));
         lab.await("the controller has ended both agents' first processes; events " + events,
                 () -> events.stream().anyMatch(event -> event.endsWith("AGENT_EXITED=codex#1 exitCode=0")) && events.stream().anyMatch(event -> event.endsWith("AGENT_EXITED=codex#2 exitCode=0")));

@@ -176,6 +176,17 @@ public final class CombineFixture {
     }
 
     /**
+     * The author's session as a real agent finds it once its lane was integrated: the published work is in main, so the
+     * worktree holds nothing unpublished, and the session is refreshed onto this computer's main.
+     *
+     * @throws Exception when Git or the session fails
+     */
+    public void authorLaneIntegrated() throws Exception {
+        TestGit.run(Path.of(session(AUTHOR).worktreePath()), "checkout", "--", ".");
+        ensureSession(root, AUTHOR);
+    }
+
+    /**
      * Moves this computer's {@code main} off the combine's base, as a real re-merge finds it (s5-run8): the two copies
      * of {@code main} diverged, and the combine's base is the other copy's, not this computer's control head.
      *
