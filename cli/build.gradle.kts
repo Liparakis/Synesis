@@ -361,6 +361,11 @@ tasks.test {
     useJUnitPlatform()
     jvmArgs("--enable-native-access=ALL-UNNAMED")
     dependsOn("testInstallDist")
+    // The multi-computer scenarios run on the Linux gate (ADR-0102 item 7): on Windows their Git-heavy steps outrun the
+    // bounds and their temporary folders stay held open at cleanup (2026-10-20, 2026-10-26).
+    if (System.getProperty("os.name").lowercase().contains("windows")) {
+        exclude("**/*ScenarioTest*")
+    }
 }
 
 // Process-level CLI tests exercise the generated Java launcher. Stage the

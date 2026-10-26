@@ -24,7 +24,7 @@ the render. `scripts/release-packages/render-packages-test.sh` checks this and r
   in `releasemanifest.Verify`.
 * **While the placeholder key is pinned** (`releasemanifest.PlaceholderTrustRootHex`, used by `bootstrap/main.go`),
   behaviour is what it was before: a signed manifest cannot verify (nobody holds that key's private half), and an
-  unsigned manifest is accepted only from a local `file://` URL that declares `developmentOnly`.
+  unsigned manifest is accepted only from a local file URL that declares `developmentOnly`.
 * **Once any other key is pinned**, every manifest must carry a valid signature from it. The unsigned development path
   is refused. Acceptance mode (`--acceptance`) is separate and unchanged.
 * **Without the signing secret**, the `package-release` job says so in its summary, signs nothing and publishes no
