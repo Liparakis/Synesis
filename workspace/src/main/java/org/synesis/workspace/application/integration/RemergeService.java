@@ -25,6 +25,7 @@ import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ReviewAdmissionRules;
 import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
+import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
@@ -82,6 +83,7 @@ final class RemergeService {
     private final ProjectApplicationService projectService;
     private final ProjectProcessExecutor processExecutor;
     private final LaneFinisher finisher;
+    private final org.synesis.workspace.application.provider.ProviderSessionBindingService bindingService = new org.synesis.workspace.application.provider.ProviderSessionBindingService();
 
     /** Ends lanes whose snapshot was recorded integrated, as the merge pass does for its own lanes. */
     @FunctionalInterface
@@ -375,13 +377,31 @@ final class RemergeService {
                 continue;
             }
             if (store.taskCompletionProjection().snapshotState(combined.get().snapshotId()).orElse(null) == TaskCompletionState.INTEGRATED
-                    || !IntegrationOrchestrationService.ownLane(store, identity, combined.get())
-                    || !GitProcessRunner.isAncestor(controlRoot, combine.base(), "HEAD") || !GitProcessRunner.isAncestor(controlRoot, combine.theirs(), "HEAD")) {
+                    || !IntegrationOrchestrationService.ownLane(store, identity, combined.get())) {
+                continue;
+            }
+            if (!GitProcessRunner.isAncestor(controlRoot, combine.base(), "HEAD") || !GitProcessRunner.isAncestor(controlRoot, combine.theirs(), "HEAD")) {
+                releasePublishedLane(lock, controlRoot, store, identity, combined.get());
                 continue;
             }
             ControlBranchAdvancementService.recordIntegrated(combined.get(), store, identity);
             finisher.finish(lock, controlRoot, List.of(combined.get()), new PredictionEventStore(store.rootDirectory(), store.projectId()), identity);
         }
+    }
+
+    /**
+     * Releases the lane of a combine that has published its result, and completes its session, so its agent is free. The
+     * result waits for the re-merge, which lands only when every combine has one; an agent that kept its lane until then
+     * could not take the other combine, which may be one that only it may take (s5-run24, ADR-0098 step 5 item 39). The
+     * combine is not offered again: it has a result ({@code CombineLaneJoin#waiting}). The caller holds the append lock.
+     */
+    private void releasePublishedLane(ProjectAppendLock lock, Path controlRoot, PredictionEventStore store, NodeIdentity identity, TaskSnapshotRecord result)
+            throws Exception {
+        WorkIntent lane = store.collaborationProjection().intent(result.provenance().laneIdentity()).orElse(null);
+        if (lane == null || !new org.synesis.coordination.application.WorkIntentService(store, identity).releaseCombineResult(lock, result)) {
+            return;
+        }
+        bindingService.completeBySessionId(projectService.locate(controlRoot), lane.provider(), result.providerSessionId(), lock);
     }
 
     /**

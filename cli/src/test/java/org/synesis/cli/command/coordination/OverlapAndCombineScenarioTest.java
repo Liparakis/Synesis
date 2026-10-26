@@ -252,6 +252,11 @@ final class OverlapAndCombineScenarioTest {
      * goes on integrating, as it did in the run, so the heads of the re-merge move while the second combine waits.
      */
     private TwoCombines toTheSecondCombine() throws Exception {
+        return toTheSecondCombine(false);
+    }
+
+    /** @param oneCombiner whether the only agent that combines is the one that took the first combine (s5-run24: the other agent wrote the second) */
+    private TwoCombines toTheSecondCombine(boolean oneCombiner) throws Exception {
         Computer high = lab.higher();
         Computer low = lab.lower();
         ScenarioAgent high1 = lab.agent(high, "high-1");
@@ -276,14 +281,27 @@ final class OverlapAndCombineScenarioTest {
                         && lab.hasOnBranch(low, "pair.txt"),
                 high1, high2, low1, low2);
         ScenarioAgent combiner1 = lab.agent(high, "high-combiner-1");
-        ScenarioAgent combiner2 = lab.agent(high, "high-combiner-2");
+        ScenarioAgent combiner2 = oneCombiner ? combiner1 : lab.agent(high, "high-combiner-2");
         combiner1.join();
-        combiner2.join();
+        if (!oneCombiner) {
+            combiner2.join();
+        }
         lab.heal();
 
         lab.drive("the first combine is offered", () -> !combiner1.combinesOffered().isEmpty(), high1, high2, low1, low2);
         takeResolveAndFinish(combiner1);
-        lab.drive("the second combine is offered", () -> !combiner2.combinesOffered().isEmpty(), high1, high2, low1, low2, combiner1);
+        ScenarioAgent second = combiner2;
+        if (oneCombiner) {
+            // The agent's lane is released once its result is published, and the run controller resumes the agent on a new connection
+            // for the combine that waits (the observer offers it to the sessions of the agent).
+            String firstLane = combiner1.participant();
+            lab.drive("the first combine's lane is released", () -> activeIntents(high).noneMatch(intent -> intent.participant().equals(firstLane)), high1, high2, low1, low2);
+            second = lab.agent(high, "high-combiner-1-resumed");
+            second.join();
+        }
+        ScenarioAgent offeredTo = second;
+        lab.drive("the second combine is offered", () -> !offeredTo.combinesOffered().isEmpty(), high1, high2, low1, low2, offeredTo);
+        combiner2 = second;
         ScenarioAgent low3 = lab.agent(low, "low-3");
         ScenarioAgent low4 = lab.agent(low, "low-4");
         long seen = lab.entriesWrittenUnchecked(high, low, PredictionEventType.CONTROL_BRANCH_ADVANCED);
@@ -301,7 +319,8 @@ final class OverlapAndCombineScenarioTest {
             high1.step();
             Thread.sleep(300);
         }
-        return new TwoCombines(high, low, new ScenarioAgent[] {high1, high2, low1, low2, low3, low4, combiner1, combiner2}, combiner1, combiner2);
+        return new TwoCombines(high, low, oneCombiner ? new ScenarioAgent[] {high1, high2, low1, low2, low3, low4, combiner2} : new ScenarioAgent[] {high1, high2, low1, low2, low3, low4, combiner1, combiner2},
+                combiner1, combiner2);
     }
 
     /**
@@ -349,6 +368,63 @@ final class OverlapAndCombineScenarioTest {
 
         assertFalse(answer.toString().contains("combinePending"), "told to wait for the first lane's snapshot: " + answer);
         assertNotEquals("waiting", answer.get("status"), answer.toString());
+    }
+
+    /**
+     * s5-run24 (2026-10-26): the agent that took the first combine published its result and kept its lane, which holds until
+     * the re-merge lands; the re-merge lands only when the second combine has a result, and the only other agent wrote the
+     * second combine's snapshot and may not take it. Nothing could end that wait. A combine lane that has published is
+     * released, so its agent is offered the second combine.
+     */
+    @Test
+    void theAgentThatPublishedTheFirstCombineIsOfferedTheSecondAndTheCopiesMeet() throws Exception {
+        TwoCombines scene = toTheSecondCombine(true);
+        ScenarioAgent combiner = scene.combiner2();
+
+        lab.drive("the agent is offered the second combine after publishing the first", () -> !combiner.combinesOffered().isEmpty(), scene.everyone());
+        takeResolveAndFinish(combiner);
+
+        lab.drive("both computers hold the same main", () -> lab.mainsEqual(), scene.everyone());
+        assertFalse(lab.onBranch(scene.high(), "pair.txt").contains("<<<<<<<"));
+    }
+
+    /**
+     * The whole two-combine path with one combining agent, each answer it is given read back: the first combine is resolved,
+     * the second keeps the other copy, and no answer on the way is one that nothing can end (ADR-0098 step 5 item 39, after
+     * items 35 to 38 were each a different dead end of this path found only by a real run).
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void theWholeTwoCombinePathNeverAnswersAnAgentWithSomethingNothingCanEnd() throws Exception {
+        TwoCombines scene = toTheSecondCombine(true);
+        ScenarioAgent combiner = scene.combiner2();
+
+        lab.drive("the agent is offered the second combine", () -> !combiner.combinesOffered().isEmpty(), scene.everyone());
+        Map<String, Object> offered = combiner.combinesOffered().getFirst();
+        assertEquals("ready", combiner.call("ensure_session", (Map<String, Object>) offered.get("ensureSession")).get("status"));
+        Map<String, String> lowers = Map.of("shared.txt", "one\ntwo, by the lower computer\nthree\n", "pair.txt", "pair, by the lower computer\n");
+        lowers.forEach((path, content) -> {
+            if (combiner.call("read_file", Map.of("path", path)).toString().contains("<<<<<<<")) {
+                combiner.rewrite(path, content);
+            }
+        });
+        combiner.finish();
+        lab.drive("both computers hold the same main", () -> lab.mainsEqual(), scene.everyone());
+
+        for (ScenarioAgent agent : java.util.stream.Stream.of(scene.combiner1(), scene.combiner2()).distinct().toList()) {
+            for (Map<String, Object> answer : agent.answers) {
+                Map<String, Object> inner = ScenarioAgent.inner(answer);
+                String shown = agent.name + " was answered " + answer;
+                assertFalse(String.valueOf(inner.get("instruction")).contains("cancel_lane") && Boolean.TRUE.equals(inner.get("nothingToPublish")) && agent.name.contains("combiner"),
+                        "told to cancel a combine lane: " + shown);
+                // A session that completed is told to wait for a review it may still be asked for, which a log entry announces; a session
+                // that is not complete and is told to wait with no blocker is s5-run24's idle agent, which stopped with a combine waiting.
+                boolean completed = inner.get("participants") instanceof List<?> listed && listed.stream().anyMatch(known -> known instanceof Map<?, ?> participant
+                        && String.valueOf(participant.get("id")).equals(String.valueOf(inner.get("currentParticipant"))) && "COMPLETED".equals(participant.get("state")));
+                assertFalse("waiting".equals(answer.get("status")) && !completed && ScenarioAgent.workflow(answer).get("blockers") instanceof List<?> blockers && blockers.equals(List.of("none")),
+                        "a wait that names no blocker: " + shown);
+            }
+        }
     }
 
     /**
@@ -415,6 +491,14 @@ final class OverlapAndCombineScenarioTest {
             Thread.sleep(20);
         }
         throw new AssertionError("the integration lock stayed taken for a minute");
+    }
+
+    private static java.util.stream.Stream<org.synesis.coordination.domain.collaboration.WorkIntent> activeIntents(Computer computer) {
+        try {
+            return computer.store().collaborationProjection().activeIntents().stream();
+        } catch (Exception unreadable) {
+            return java.util.stream.Stream.empty();
+        }
     }
 
     @SuppressWarnings("unchecked")

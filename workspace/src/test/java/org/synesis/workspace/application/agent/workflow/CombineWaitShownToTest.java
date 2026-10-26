@@ -21,7 +21,8 @@ import org.synesis.workspace.application.collaboration.CombineFixture;
 
 /**
  * s5-run22 (ADR-0098 step 5 item 37): the combine wait says that nothing more is needed from the lane. It is true of a
- * combine lane that has published and of no other lane. The lane that published nothing is shown no wait at all (item 36).
+ * combine lane that has published and of no other lane. The lane that published nothing is shown no wait at all (item 36). The combine lane is released once its result is published
+ * (item 39), so the lane is held here from before.
  */
 final class CombineWaitShownToTest {
 
@@ -40,14 +41,14 @@ final class CombineWaitShownToTest {
     void onlyACombineLaneIsToldToWaitForTheCombinesSnapshot() throws Exception {
         CombineFixture fixture = CombineFixture.create(temp);
         fixture.session("combine-combiner");
-        fixture.collaboration.joinRepair(fixture.root, CombineFixture.PROVIDER, "combine-combiner", fixture.authorLane.intentId(), fixture.authorSnapshot.snapshotId());
+        WorkIntent combineLane = fixture.collaboration.joinRepair(fixture.root, CombineFixture.PROVIDER, "combine-combiner", fixture.authorLane.intentId(), fixture.authorSnapshot.snapshotId()).intent();
         java.nio.file.Files.writeString(Path.of(fixture.binding("combine-combiner").worktreePath()).resolve(CombineFixture.FILE), "both\n");
         new AgentTaskCompletionService().completeTask(new CompleteTaskRequest(fixture.root, CombineFixture.PROVIDER, "combine-combiner", "combined both versions"));
         fixture.awaitingReview("combine-other", "src/g.txt", "combine-reviewer");
         PredictionEventStore store = fixture.store();
         AgentResponse wait = combineWait();
 
-        AgentResponse combiner = AgentNextActionService.pumpShownTo(store, Optional.of(laneOf(store, fixture.participant("combine-combiner"))), wait);
+        AgentResponse combiner = AgentNextActionService.pumpShownTo(store, Optional.of(combineLane), wait);
         AgentResponse other = AgentNextActionService.pumpShownTo(store, Optional.of(laneOf(store, fixture.participant("combine-other"))), wait);
 
         assertSame(wait, combiner, "the combine lane is shown the wait");

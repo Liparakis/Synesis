@@ -55,11 +55,16 @@ public final class CombineLaneJoin {
      *
      * @param store   current projection
      * @param combine the combine
-     * @return {@code true} while its work group is active and holds no lane
+     * @return {@code true} while its work group is active, holds no lane, and no result of it stands: a lane that published
+     *         its result is released at once (ADR-0098 step 5 item 39), and its combine is not offered again unless the
+     *         result is refused
      */
     public static boolean waiting(PredictionEventStore store, CombinePayload combine) {
         boolean active = store.workGroupProjection().group(combine.workGroupId()).filter(group -> group.status() == WorkGroup.Status.ACTIVE).isPresent();
-        return active && store.collaborationProjection().activeIntents().stream().noneMatch(intent -> intent.workGroupId().equals(combine.workGroupId()));
+        var completion = store.taskCompletionProjection();
+        boolean resultStands = completion.allSnapshots().stream().filter(snapshot -> snapshot.taskId().equals(combine.taskId()) && snapshot.baseCommit().equals(combine.base()))
+                .anyMatch(snapshot -> !completion.snapshotState(snapshot.snapshotId()).map(org.synesis.coordination.domain.task.TaskCompletionState::refused).orElse(false));
+        return active && !resultStands && store.collaborationProjection().activeIntents().stream().noneMatch(intent -> intent.workGroupId().equals(combine.workGroupId()));
     }
 
     /**

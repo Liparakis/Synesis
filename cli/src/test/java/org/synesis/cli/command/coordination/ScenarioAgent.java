@@ -51,6 +51,8 @@ final class ScenarioAgent {
     private final McpProtocolHandler handler;
     /** The tools this agent called, with what each answered, oldest first; a failure message carries it. */
     final List<String> trace = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** Every {@code get_next_action} answer this agent received, in order: what it was told, for tests that read the whole path. */
+    final List<Map<String, Object>> answers = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     ScenarioAgent(Computer computer, String name) {
         this.computer = computer;
@@ -70,6 +72,9 @@ final class ScenarioAgent {
         List<Map<String, Object>> content = (List<Map<String, Object>>) result.get("content");
         Map<String, Object> envelope = new LinkedHashMap<>((Map<String, Object>) ProviderJson.parse((String) content.getFirst().get("text")));
         envelope.put("isError", Boolean.TRUE.equals(result.get("isError")));
+        if ("get_next_action".equals(tool)) {
+            answers.add(envelope);
+        }
         if (!"get_next_action".equals(tool)) {
             trace.add(tool + " " + arguments.keySet() + " -> " + envelope.get("status") + " " + envelope.get("reason") + " " + envelope.get("nextAction") + " " + inner(envelope).get("reason"));
         }

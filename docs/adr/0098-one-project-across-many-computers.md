@@ -1387,6 +1387,39 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     Tests: `OverlapAndCombineScenarioTest.aCombineLaneThatKeepsTheOtherCopyPublishesThatAsItsResultAndTheCopiesMeet` (fails
     without the change at the `cancel_lane` instruction, then at `NO_CHANGES_TO_PUBLISH`; with it both copies of `main`
     meet). Source semantics proven; not proved in a real run.
+39. **A combine lane that has published its result is released, so its agent can take the other combine** (s5-run24,
+    2026-10-26, build remaster96). Result `TIME_BOUND`, copies apart (PC `ace60554`, VM `34c60197`). *Proven from the log
+    dumps and the transcripts of both computers* (`D:\SynesisAcceptance\evidence\s5-run24`; this time the VM is the
+    re-merging computer, its agents are `codex`): one re-merge `rm-ee9b2880…` opened two combines. Combine 1 (`cb-98823ac8…`,
+    `snap_87650305…` and `snap_3e1c56d3…`, written by `agt_74251eeb…` and `agt_a4f32e8d…`) was taken by `codex#1`'s restart
+    session `agt_4f7c327f…` (`codex-1-1.log`), which published `snap_aa6f846d…` (`{"status":"waiting","reason":"integration_pending",…,"combinePending":true,…"Nothing more is needed from this lane; wait."}`).
+    Combine 2 (`cb-338fb618…`, group `44a82d5a…`, `snap_fd280e2b…`) has no lane and appears in no transcript: it was never
+    offered. It was written by `agt_c63f9324…`, a session of `codex#2`, so `codex#2` may not take it; its restart session
+    `agt_650124df…` (`codex-2-4.log`) was answered, lane-less, `{"status":"waiting","nextAction":"wait",…"workflow":{"type":"WAIT","blockers":["none"],…}}`
+    and stopped. The only agent that may take combine 2, `codex#1`, held lane `815c3651…`, which stays active until the
+    re-merge lands, and the re-merge lands only when combine 2 has a result: `codex-1-3.log` and `codex-1-5.log` are the
+    same combine wait, three times. The two waits depend on each other and no log entry can end either. Nothing in items
+    35 to 38 caused it; `codex#2`'s session also looked like a stranger to the author check of combine 1 (the agent link of
+    item 30 did not join `agt_4f7c327f…` to `agt_a4f32e8d…`), which is why `codex#1` could take combine 1 at all.
+    *The missing invariant:* a combine lane exists to produce its result. Once that is published, holding the lane only
+    keeps the agent from the next combine (the re-merge, not the agent, lands it).
+    *Rule:* the pass that runs the re-merge (`RemergeService.closeCombines`) releases the lane of a combine whose result is
+    published and not yet landed, and completes its session (`WorkIntentService.releaseCombineResult`, one
+    `WORK_INTENT_RELEASED`). The snapshot stays unintegrated and the work group open; `releaseAfterIntegration` closes the
+    group when the re-merge lands, also when the lane is gone. `CombineLaneJoin.waiting` is false for a combine whose result
+    stands, so it is not offered again (a refused result is offered again). The run controller already offers a waiting
+    combine to the sessions of the stopped agent and resumes it on a new connection, which is then lane-less and is offered
+    it. The combine wait of the pump (item 22) is shown to no one who holds a combine lane any more.
+    *Not changed:* the author check stays; two agents that both wrote a combine's snapshots still cannot take it, and a
+    third agent is needed (the run controller starts agents; the product does not).
+    Tests: `OverlapAndCombineScenarioTest.theAgentThatPublishedTheFirstCombineIsOfferedTheSecondAndTheCopiesMeet` (one
+    combining agent takes both combines; fails without the change: the second combine is never offered) and
+    `theWholeTwoCombinePathNeverAnswersAnAgentWithSomethingNothingCanEnd` (the whole path with one combining agent, the
+    second combine resolved by keeping the other copy, the copies meet, and every `get_next_action` answer of the combining
+    agent is read back: no instruction to cancel a combine lane, no wait that names no blocker to a session that is not
+    complete). The second test is the regression net for the next dead end in this path: it records every answer
+    (`ScenarioAgent.answers`) and the list of dead-end shapes in it is where a new one is added. Source semantics proven; not
+    proved in a real run.
 
 ### Step 6: Membership in the owner's log
 
