@@ -9,6 +9,16 @@ ADR-0098 (membership entries signed by the owner). It closes the gap the owner p
 the gate via `run_command`; fix properly later, once the product works end to end"; memory note
 "Operator authorization deferred").
 
+**Accepted on 2026-10-26 by the repository owner**, with four more answers to the design's open questions
+(USER-STATED): (1) **a separate operator key** signs owner decisions — kept apart from the node key, protected by a
+passphrase a person types, used only by commands a person runs; the node key stays for the background server and still
+verifies older owner entries (an additive change to ADR-0098's "the owner key is the node key"); (2) **Windows uses a
+low-integrity process**, no admin prompts, with Synesis's keys and state marked unreadable to low integrity
+(no-read-up), not AppContainer; (3) **no Mac is available**: the macOS sandbox is written from the documentation, marked
+UNVERIFIED, and `run_command` on macOS refuses until it is tested (fail closed); (4) **agents lose `git commit` in
+lanes** (Synesis builds lane snapshots itself), and `synesis project validation` stops printing
+`PROJECT_FILE_CHANGED`/`PROJECT_FILE_COMMITTED` (the owner did not choose to keep them). Implementation is authorized.
+
 Claims are marked VERIFIED (read in code on branch `adr-0098-step3-code-over-link`, tip `c6c2c424`), USER-STATED,
 DERIVED (follows from verified facts), or ASSUMED (needs a spike or a test before it is relied on). Every ASSUMED claim
 that a stage depends on has a spike task in that stage.
