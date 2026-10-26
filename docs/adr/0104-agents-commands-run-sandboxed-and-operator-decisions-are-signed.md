@@ -649,6 +649,36 @@ Tests:
 Completion criteria: adversarial and positive tests green on Linux; the Podman gate's behaviour recorded; stage 5's
 refusal can be wired to the `Sandbox` result.
 
+**Built 2026-10-27 (Linux, source semantics proven on the Podman gate; Windows and macOS not built):**
+
+1. Spike: done. The Podman gate image (`synesis-test:25`, Ubuntu 26.04, container root) has user namespaces but no
+   `bwrap`; after `apt-get install bubblewrap` the probe and every adversarial test pass there. The gate image must
+   therefore get `bubblewrap` (a run without it skips the adversarial test with `SKIPPED, no sandbox`;
+   `SYNESIS_REQUIRE_SANDBOX=true` turns the skip into a failure). The Ubuntu 24.04 VM has no `bwrap` and
+   `kernel.apparmor_restrict_unprivileged_userns=1`: a `bwrap` unpacked into a scratch folder fails with
+   `setting up uid map: Permission denied`. `sudo apt install bubblewrap` (the package ships the AppArmor profile that
+   allows it) is untried there, a package change left to the owner.
+2. Built: `Sandbox`, `SandboxPolicy`, `SandboxAvailability`, `WrappedCommand`, `SandboxSetupException`
+   (`...project.execution.sandbox`); `ProjectProcessExecutor` applies it; outcomes `COMMAND_SANDBOX_UNAVAILABLE` and
+   `COMMAND_SANDBOX_SETUP_FAILED` (`AgentReason.SANDBOX_UNAVAILABLE`, `SANDBOX_SETUP_FAILED`); `LaneSandboxPolicy`
+   derives the policy from the request's worktree and control root, finding the lane's Git administrative directory
+   from the control side. `AgentCommandProcessArchitectureTest` lists every other process starter.
+3. Built: `LinuxBubblewrapSandbox` with the live probe, extended scrubbed environment, private home and temp,
+   `GIT_OBJECT_DIRECTORY` plus a read-only alternate, hidden areas remounted read-only, and the worktree's `.git` file,
+   provider configuration, `gitdir`, `commondir` and `config.worktree` read-only. `gitdir` and `commondir` are added
+   to the ADR's list because a rewritten `commondir` would redirect Synesis's own Git.
+4. Built: `GitWorktreeBinding` and `GitProcessRunner.trustControlRoot` (called from `ProjectApplicationService`): a
+   trusted control checkout names `GIT_DIR`, `GIT_COMMON_DIR` and `GIT_WORK_TREE` for the worktrees it lists, so a
+   rewritten `.git` file is ignored; plus `protocol.ext.allow=never` and `core.sshCommand=false` for local commands.
+   Gap: a worktree that no trusted control lists runs as before.
+5. Not built here: provider manual text (the manual is attested by version; a bump belongs with stage 5). The
+   behaviour is documented in `docs/providers/mcp.md`.
+
+Not covered by the adversarial test: the real `synesis project validation clear` binary (needs the CLI distribution;
+the same write is covered as a write to `project.json`) and the daemon loopback API (item 8; needs a running daemon).
+The refusal seam is `UnsandboxedAllowance` (`DENY` for now); the override is stage 5. Tests that run ordinary commands
+set the JVM property `synesis.sandbox.unconfinedForTests` (build file only).
+
 ### Stage 3 — Windows sandbox (about five to seven days; spike first)
 
 Tasks:

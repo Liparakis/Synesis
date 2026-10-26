@@ -148,6 +148,17 @@ public enum AgentReason {
     COMMAND_TERMINATED("command_terminated"),
 
     /**
+     * No sandbox is available on this computer for the command, and the project has not signed that commands may
+     * run without one. The command was not started.
+     */
+    SANDBOX_UNAVAILABLE("sandbox_unavailable"),
+
+    /**
+     * The sandbox could not be set up for the command. The command was not started and was not retried unconfined.
+     */
+    SANDBOX_SETUP_FAILED("sandbox_setup_failed"),
+
+    /**
      * A repeated typed request carried a different semantic digest.
      */
     COMMAND_IDEMPOTENCY_CONFLICT("command_idempotency_conflict"),

@@ -239,3 +239,21 @@ this as non-retryable recovery with no recommended MCP tool; it does not
 authorize rewriting or restoring the event log. The symbolic
 `request_human_help` action is not an MCP tool; stop and request operator
 intervention before retrying session operations.
+
+## `run_command` runs in a sandbox (ADR-0104)
+
+Every command Synesis starts for an agent, and the project's validation command, runs through one sandbox choke point
+(`ProjectProcessExecutor`). On Linux that is bubblewrap: the command reads the system and its toolchains, reads and
+writes its own lane worktree and a private temp folder, reads the control repository's Git directory, and writes only
+the lane's own Git administrative directory (`.git/worktrees/<lane>`) inside it. It cannot write the control checkout,
+`.synesis`, the shared Git refs, configuration or hooks, other lanes' worktrees or Synesis's application state, and it
+cannot see the keys or the daemon endpoint. The network stays open. The environment is scrubbed, `HOME` and `TMPDIR`
+point at the private folder, and new Git objects go to a private object folder with the control objects as a read-only
+alternate.
+
+An agent therefore cannot `git commit` (moving the lane's branch needs a ref write) and does not need to: Synesis builds
+the lane snapshot itself. `git status`, `git diff`, `git log` and `git add` work.
+
+When no sandbox is available the command is not started: the result is `command_sandbox_unavailable` with
+`ERROR=SANDBOX_UNAVAILABLE`, `MESSAGE` and `FIX` lines. A sandbox that probed as available but failed to set up for a
+run gives `command_sandbox_setup_failed` and is never retried unconfined.

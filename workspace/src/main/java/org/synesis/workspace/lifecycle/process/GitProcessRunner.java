@@ -40,6 +40,17 @@ public final class GitProcessRunner {
     }
 
     /**
+     * Declares a project's control checkout trusted, so that a linked worktree it lists is run with an explicit Git
+     * directory instead of the one the worktree's own {@code .git} file names (see {@link GitWorktreeBinding}).
+     * Call it with a project root Synesis was handed, never with a path read from a worktree.
+     *
+     * @param controlRoot control checkout of a project
+     */
+    public static void trustControlRoot(Path controlRoot) {
+        GitWorktreeBinding.trust(controlRoot);
+    }
+
+    /**
      * Runs a required Git command.
      *
      * @param workdir   Git working directory
@@ -190,6 +201,10 @@ public final class GitProcessRunner {
             if (index != null) {
                 environment.put("GIT_INDEX_FILE", index.toString());
             }
+            GitWorktreeBinding binding = GitWorktreeBinding.of(workdir);
+            if (binding != null) {
+                binding.applyTo(environment);
+            }
             command.add(1, "-c");
             command.add(2, "core.hooksPath=" + hooks);
             command.add(3, "-c");
@@ -202,6 +217,13 @@ public final class GitProcessRunner {
             command.add(10, "user.name=Synesis");
             command.add(11, "-c");
             command.add(12, "user.email=synesis@localhost");
+            command.add(13, "-c");
+            command.add(14, "protocol.ext.allow=never");
+            if (!systemConfig) {
+                // A remote command keeps the person's ssh setup; a local one has no use for a configured ssh program.
+                command.add(15, "-c");
+                command.add(16, "core.sshCommand=false");
+            }
             ProcessCommandRunner.Result result = ProcessCommandRunner.execute(command, workdir, environment, timeout, maxOutputBytes);
             if (required && result.exitCode() != 0) {
                 throw new IOException("Git command failed: command=" + command + ", directory=" + workdir + ", exit=" + result.exitCode() + ", output=" + result.output());

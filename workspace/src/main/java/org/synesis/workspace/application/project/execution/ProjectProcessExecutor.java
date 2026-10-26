@@ -9,12 +9,21 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
+
+import org.synesis.workspace.application.project.execution.sandbox.Sandbox;
+import org.synesis.workspace.application.project.execution.sandbox.SandboxAvailability;
+import org.synesis.workspace.application.project.execution.sandbox.SandboxPolicy;
+import org.synesis.workspace.application.project.execution.sandbox.SandboxSetupException;
+import org.synesis.workspace.application.project.execution.sandbox.Sandboxes;
+import org.synesis.workspace.application.project.execution.sandbox.WrappedCommand;
 
 /**
  * Executes one bounded direct argv process inside an authoritative worktree.
@@ -23,6 +32,11 @@ import java.util.function.Consumer;
  * process streams concurrently, retains bounded head/tail evidence, counts all raw bytes read, and
  * kills the complete process tree on timeout, cancellation, or termination. It is thread-safe
  * because each invocation owns its process and collectors.</p>
+ *
+ * <p>It is also the one sandbox choke point (ADR-0104): a command runs through the {@link Sandbox} with a policy
+ * derived from the request's worktree and control root. When the sandbox is unavailable the command is not
+ * started, unless the project's signed decision ({@link UnsandboxedAllowance}) allows an unsandboxed run. A failure
+ * to set the sandbox up is a refusal as well and is never retried unconfined.</p>
  *
  * @since 1.0
  */
@@ -54,9 +68,29 @@ public final class ProjectProcessExecutor {
     static final String TRUNCATION_MARKER = "\n...[output truncated; retained head and tail]...\n";
 
     /**
-     * Creates a stateless generic executor.
+     * Stable marker of a run that a signed project decision allowed without a sandbox.
+     */
+    static final String SANDBOX_NONE_ALLOWED = "NONE_ALLOWED_BY_DECISION";
+
+    private final Sandbox sandbox;
+    private final UnsandboxedAllowance allowance;
+
+    /**
+     * Creates an executor that confines commands with this computer's sandbox and never runs one unsandboxed.
      */
     public ProjectProcessExecutor() {
+        this(Sandboxes.platform(), UnsandboxedAllowance.DENY);
+    }
+
+    /**
+     * Creates an executor with an explicit sandbox and allowance.
+     *
+     * @param sandbox   the sandbox every command runs through
+     * @param allowance whether the project signed that commands may run unsandboxed when no sandbox is available
+     */
+    public ProjectProcessExecutor(Sandbox sandbox, UnsandboxedAllowance allowance) {
+        this.sandbox = Objects.requireNonNull(sandbox, "sandbox");
+        this.allowance = Objects.requireNonNull(allowance, "allowance");
     }
 
     private static Path resolveWorkingDirectory(Path root, String configured) {
@@ -89,10 +123,18 @@ public final class ProjectProcessExecutor {
         return candidate;
     }
 
+    /**
+     * Name prefixes of variables that carry the agent's own Synesis identity or the person's session and cloud
+     * credentials, which a command must not inherit. The name-contains filter below is a heuristic, not a boundary.
+     */
+    private static final List<String> SCRUBBED_PREFIXES = List.of("SYNESIS_", "DBUS_", "GPG_", "AWS_", "AZURE_", "GOOGLE_");
+    private static final List<String> SCRUBBED_NAMES = List.of("SSH_AUTH_SOCK", "XDG_RUNTIME_DIR", "PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE");
+
     static void filterEnvironment(Map<String, String> environment) {
         environment.keySet().removeIf(key -> {
             String upper = key.toUpperCase(Locale.ROOT);
-            return upper.contains("TOKEN") || upper.contains("SECRET") || upper.contains("KEY") || upper.contains("AUTH") || upper.equals("PYTHONPATH") || upper.equals("PYTHONHOME") || upper.equals("PYTHONUSERBASE");
+            return upper.contains("TOKEN") || upper.contains("SECRET") || upper.contains("KEY") || upper.contains("AUTH") || SCRUBBED_NAMES.contains(upper)
+                    || SCRUBBED_PREFIXES.stream().anyMatch(upper::startsWith);
         });
     }
 
@@ -122,7 +164,7 @@ public final class ProjectProcessExecutor {
         return Outcome.COMMAND_START_FAILED;
     }
 
-    private static ExecutionResult result(Outcome outcome, Integer exitCode, StreamCollector stdout, StreamCollector stderr, ExecutionRequest request) {
+    private static ExecutionResult result(Outcome outcome, Integer exitCode, StreamCollector stdout, StreamCollector stderr, ExecutionRequest request, String sandboxLabel) {
         Evidence out = stdout.evidence();
         Evidence err = stderr.evidence();
         return new ExecutionResult(outcome,
@@ -134,11 +176,39 @@ public final class ProjectProcessExecutor {
                 out.bytesRetained(),
                 err.bytesRetained(),
                 out.truncated(),
-                err.truncated());
+                err.truncated(),
+                sandboxLabel);
+    }
+
+    /**
+     * The refusal of a command that was never started, in the ERROR, MESSAGE and FIX shape of the CLI.
+     */
+    private static ExecutionResult refused(Outcome outcome, String error, String message, String fix) {
+        String text = String.join(System.lineSeparator(), "ERROR=" + error, "MESSAGE=" + message, "FIX=" + fix, "");
+        byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
+        return new ExecutionResult(outcome, null, "", text, 0, bytes.length, 0, bytes.length, false, false, "NONE");
     }
 
     private static ExecutionResult empty(Outcome outcome) {
         return new ExecutionResult(outcome, null, "", "", 0, 0, 0, 0, false, false);
+    }
+
+    private static void deleteTree(Path root) {
+        if (root == null) {
+            return;
+        }
+        try (Stream<Path> walk = Files.walk(root)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException ignored) {
+                    // A private folder under the system temporary directory; a leftover is harmless and is
+                    // not a command result.
+                }
+            });
+        } catch (IOException ignored) {
+            // Same: nothing to report for a folder that cannot be listed.
+        }
     }
 
     private static String sanitize(String text, Path controlRoot, Path worktreeRoot) {
@@ -212,15 +282,45 @@ public final class ProjectProcessExecutor {
             return empty(Outcome.COMMAND_START_FAILED);
         }
 
+        SandboxAvailability availability = sandbox.probe();
+        String sandboxLabel = sandbox.name();
+        if (!availability.available()) {
+            if (!allowance.allowedFor(request.controlRoot())) {
+                return refused(Outcome.COMMAND_SANDBOX_UNAVAILABLE, "SANDBOX_UNAVAILABLE",
+                        "Commands asked for by agents run in a sandbox on this computer, and none is available: " + availability.reason() + ".", availability.fix());
+            }
+            sandboxLabel = SANDBOX_NONE_ALLOWED;
+        }
+
+        Path privateTemp = null;
         Process process = null;
         StreamCollector stdout = new StreamCollector();
         StreamCollector stderr = new StreamCollector();
         boolean interrupted = false;
         Outcome terminalOutcome = null;
         try {
-            ProcessBuilder builder = new ProcessBuilder(argv);
+            Map<String, String> environment = new HashMap<>(System.getenv());
+            filterEnvironment(environment);
+            List<String> startArgv = argv;
+            if (availability.available()) {
+                try {
+                    privateTemp = Files.createTempDirectory("synesis-lane-").toRealPath();
+                    Files.createDirectories(privateTemp.resolve("home"));
+                    Files.createDirectories(privateTemp.resolve("objects"));
+                    SandboxPolicy policy = LaneSandboxPolicy.derive(worktreeRoot, request.controlRoot(), privateTemp);
+                    WrappedCommand wrapped = sandbox.wrap(policy, argv, environment);
+                    startArgv = wrapped.argv();
+                    environment = new HashMap<>(wrapped.environment());
+                } catch (SandboxSetupException | IOException setupFailure) {
+                    // The sandbox probed as available, so a failure here is a refusal, never an unconfined retry.
+                    return refused(Outcome.COMMAND_SANDBOX_SETUP_FAILED, "SANDBOX_SETUP_FAILED",
+                            "The sandbox could not be set up for this command: " + setupFailure.getMessage() + ".", "run 'synesis doctor'");
+                }
+            }
+            ProcessBuilder builder = new ProcessBuilder(startArgv);
             builder.directory(workingDirectory.toFile());
-            filterEnvironment(builder.environment());
+            builder.environment().clear();
+            builder.environment().putAll(environment);
             process = builder.start();
             ProcessHandle.Info processInfo = process.info();
             long processStart = processInfo.startInstant().map(java.time.Instant::toEpochMilli).orElse(System.currentTimeMillis());
@@ -235,7 +335,7 @@ public final class ProjectProcessExecutor {
                 closeQuietly(process.getErrorStream());
                 stdout.markComplete();
                 stderr.markComplete();
-                return result(terminalOutcome, null, stdout, stderr, request);
+                return result(terminalOutcome, null, stdout, stderr, request, sandboxLabel);
             }
             Thread stdoutThread = startCollector(process.getInputStream(), stdout, "synesis-command-stdout");
             Thread stderrThread = startCollector(process.getErrorStream(), stderr, "synesis-command-stderr");
@@ -266,7 +366,7 @@ public final class ProjectProcessExecutor {
             joinCollector(stdoutThread);
             joinCollector(stderrThread);
             Integer exitCode = finished ? process.exitValue() : null;
-            return result(terminalOutcome, exitCode, stdout, stderr, request);
+            return result(terminalOutcome, exitCode, stdout, stderr, request, sandboxLabel);
         } catch (IOException startFailure) {
             // I/O failures in this region occur before a process is available.
             // Report the empty streams as complete evidence alongside the
@@ -274,13 +374,14 @@ public final class ProjectProcessExecutor {
             stdout.markComplete();
             stderr.markComplete();
             Outcome outcome = classifyStartFailure(startFailure);
-            return result(outcome, null, stdout, stderr, request);
+            return result(outcome, null, stdout, stderr, request, sandboxLabel);
         } catch (RuntimeException failure) {
             if (process != null) {
                 killProcessTree(process);
             }
-            return result(Outcome.COMMAND_TERMINATED, null, stdout, stderr, request);
+            return result(Outcome.COMMAND_TERMINATED, null, stdout, stderr, request, sandboxLabel);
         } finally {
+            deleteTree(privateTemp);
             if (interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -326,7 +427,17 @@ public final class ProjectProcessExecutor {
         /**
          * The process tree was terminated before normal completion.
          */
-        COMMAND_TERMINATED("command_terminated");
+        COMMAND_TERMINATED("command_terminated"),
+        /**
+         * No sandbox is available on this computer and the project has not signed that commands may run without one.
+         * The command was not started.
+         */
+        COMMAND_SANDBOX_UNAVAILABLE("command_sandbox_unavailable"),
+        /**
+         * The sandbox was available but could not be set up for this run. The command was not started and was not
+         * retried unconfined.
+         */
+        COMMAND_SANDBOX_SETUP_FAILED("command_sandbox_setup_failed");
 
         private final String value;
 

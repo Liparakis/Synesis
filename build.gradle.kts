@@ -148,6 +148,9 @@ subprojects {
         environment("XDG_STATE_HOME", testHome.resolve(".local/state").absolutePath)
         environment("XDG_DATA_HOME", testHome.resolve(".local/share").absolutePath)
         systemProperty("user.home", testHome.absolutePath)
+        // Tests run ordinary commands in temporary folders; the sandbox has its own adversarial tests that pass a real
+        // sandbox explicitly. A JVM option is not something a sandboxed command can set for the server (ADR-0104).
+        systemProperty("synesis.sandbox.unconfinedForTests", "true")
         // Tests, and the CLI processes they start, must not ask a public STUN server.
         environment("SYNESIS_STUN_SERVER", "off")
         doFirst {

@@ -89,6 +89,7 @@ public final class ProjectApplicationService {
      * repository's Git {@code info/exclude} when they are missing.
      */
     private ProjectLocation readLocationAndRepairLocalState(Path root, Path synesis, Path metadata) throws ProjectApplicationException, IOException {
+        GitProcessRunner.trustControlRoot(root);
         ensureMetadataStorage(root);
         ProjectLocation location = readLocation(root, synesis, metadata);
         RepositoryPrivateStateService.ensure(location.root());
