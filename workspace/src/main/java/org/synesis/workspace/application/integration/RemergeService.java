@@ -246,8 +246,7 @@ final class RemergeService {
      */
     private Build build(Path controlRoot, PredictionEventStore store, String remergeId, String own, String other,
             List<MainMeeting.Advance> missing) throws IOException {
-        List<CombinePayload> combines = store.taskCompletionProjection().combines().stream()
-                .filter(combine -> combine.remergeId().equals(remergeId)).toList();
+        List<CombinePayload> combines = combinesOnto(store, other);
         String start = combines.isEmpty() ? other : combines.getLast().base();
         Path worktree = ExternalWorktrees.root(controlRoot, "remerge").resolve(remergeId).toAbsolutePath().normalize();
         // Left by a pass that died while building: its commits are named by nothing, so it is built again.
@@ -300,14 +299,14 @@ final class RemergeService {
      */
     private static void openCombine(Path controlRoot, PredictionEventStore store, NodeIdentity identity, String remergeId, String own,
             String other, MainMeeting.Advance advance, String base) throws IOException, GeneralSecurityException {
-        CombinePayload combine = new CombinePayload("cb-" + digest(remergeId + "\n" + advance.to() + "\n" + base), remergeId, other, own,
+        CombinePayload combine = new CombinePayload("cb-" + digest(other + "\n" + advance.to() + "\n" + base), remergeId, other, own,
                 base, advance.to(), advance.snapshotIds());
         try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
             if (!lock.isHeld()) {
                 throw new IOException("the append lock is not held");
             }
             PredictionEventStore current = new PredictionEventStore(store.rootDirectory(), store.projectId());
-            if (current.taskCompletionProjection().combines().stream().anyMatch(known -> known.combineId().equals(combine.combineId()))) {
+            if (combinesOnto(current, other).stream().anyMatch(known -> known.base().equals(base) && known.theirs().equals(advance.to()))) {
                 return;
             }
             GitProcessRunner.run(controlRoot, "update-ref", BASE_PREFIX + combine.combineId(), base);
@@ -324,6 +323,16 @@ final class RemergeService {
         }
         LOG.log(System.Logger.Level.WARNING, "Re-merge {0}: Git could not merge {1} onto {2}; combine lane {3} is open for an agent other than its authors.",
                 remergeId, advance.to(), base, combine.combineId());
+    }
+
+    /**
+     * The combines a re-merge onto {@code other} uses, whichever re-merge opened them. A combine is about the other head
+     * and the advance, not about this copy's head: an ordinary advance of this copy while a combine waits changes the
+     * re-merge's ID, and the new re-merge must find the combine again and not open a second one for the same advance
+     * (s5-run18: two combines for one snapshot).
+     */
+    private static List<CombinePayload> combinesOnto(PredictionEventStore store, String other) {
+        return store.taskCompletionProjection().combines().stream().filter(combine -> combine.otherHead().equals(other)).toList();
     }
 
     /**
@@ -481,8 +490,8 @@ final class RemergeService {
         boolean acceptedElsewhere = accepted.flatMap(handle -> store.collaborationProjection().introducingNode(new ParticipantId(handle)))
                 .map(node -> !node.equals(identity.nodeId())).orElse(false);
         Optional<String> reviewer = offered.isEmpty()
-                ? (acceptedElsewhere ? anotherReviewer(controlRoot, store, original, offered, remerge.remergeId()).or(() -> accepted) : accepted)
-                : anotherReviewer(controlRoot, store, original, offered, remerge.remergeId());
+                ? (acceptedElsewhere ? anotherReviewer(controlRoot, store, original, offered, remerge.otherHead()).or(() -> accepted) : accepted)
+                : anotherReviewer(controlRoot, store, original, offered, remerge.otherHead());
         if (reviewer.isEmpty()) {
             LOG.log(System.Logger.Level.WARNING, offered.isEmpty()
                     ? "Re-merge snapshot {0} has no reviewer to offer it to: no one other than its author accepted {1}."
@@ -508,7 +517,7 @@ final class RemergeService {
      * one is chosen.
      */
     private static Optional<String> anotherReviewer(Path controlRoot, PredictionEventStore store, TaskSnapshotRecord original,
-            List<LaneGrant> released, String remergeId) {
+            List<LaneGrant> released, String otherHead) {
         Optional<AwayLanes.Agents> known = AwayLanes.Agents.of(controlRoot);
         if (known.isEmpty()) {
             return Optional.empty();
@@ -517,7 +526,7 @@ final class RemergeService {
         Set<String> releasedFrom = released.stream().map(LaneGrant::targetParticipant).collect(Collectors.toSet());
         String author = original.provenance().participant();
         var collaboration = store.collaborationProjection();
-        Set<String> waiting = store.taskCompletionProjection().combines().stream().filter(combine -> combine.remergeId().equals(remergeId))
+        Set<String> waiting = combinesOnto(store, otherHead).stream()
                 .flatMap(combine -> collaboration.activeIntents().stream().filter(intent -> intent.workGroupId().equals(combine.workGroupId())))
                 .map(intent -> intent.participant()).collect(Collectors.toSet());
         return agents.live().stream()

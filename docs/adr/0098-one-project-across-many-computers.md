@@ -1187,6 +1187,36 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     ended with two combines for one snapshot and a reviewer lane open, and the copies did not meet within the run's
     50 minutes.
 
+32. **One combine per conflicting snapshot, whatever this copy of `main` does meanwhile** (s5-run18, VM = the
+    re-merging computer). *Proven from the VM's log dump* (`log-dump.txt`, applied
+    order): after the heal the pass opened `cb-943defc8…` (re-merge `rm-db2b…`, own head `969da54`, `COMBINE_REQUIRED`
+    at pos 146). In the same moment an ordinary lane of the VM's codex agent (snapshot `snap_9a6d55d4…`, based on
+    `969da54`, reviewed and accepted, pos 144 to 153) landed on the VM's `main`, which moved to `e262142`. A re-merge's
+    ID is the digest of the other head and this copy's head (`RemergeService.remergeId`), so the move named a new
+    re-merge `rm-5b58…`; it was built again, met the same conflict on the same advance, and `openCombine` derived the
+    combine ID from the re-merge ID, so it wrote a second combine `cb-22126432…` (pos 159) for `snap_3e0a5e49…`. Both
+    combines hold the same other head (`339011f`), base and advance head. Neither was ever taken.
+    *Rule:* a combine is about the other copy's head and the advance, not about this copy's head. Its ID is derived from
+    those (`other`, advance head, base), and the pass, the build, and the choice of another reviewer look combines up by
+    the other head: a new re-merge caused by an ordinary advance finds the combine again, waits for it, and uses its
+    result. A combine that logs written before this rule hold under another ID is found the same way. Tests:
+    `RemergeServiceTest.anOrdinaryAdvanceOfThisCopyWhileACombineWaitsOpensNoSecondCombineAndTheNewReMergeUsesTheFirst`
+    fails without the rule (a second `COMBINE_REQUIRED`).
+    *Not changed (found, other responsibilities):* the reviewer lane `2bbb8861…` (agent `agt_3797…`, a REVIEWER lane of
+    the work group `3197bbd1…`) stayed `ACTIVE` because the PC, cut off, had completed that group (its pos 143) without
+    knowing a lane the VM had announced in it (pos 62); the lane's owner then wrote its verdict and review notes, but
+    every finish path refuses a group that is not `ACTIVE` (`NoChangeCompletionEligibility`,
+    `LaneCompletionRules.validateNoChangeGroup`: `WORK_GROUP_NOT_ACTIVE`), the transcript shows `IMPLEMENT` without a tool
+    after the completion request, and a caller with an open lane is never offered a combine
+    (`AgentNextActionService`, `callerIntent.isEmpty()`). Hypothesis: that holds codex#1 out of the combine and, with
+    `--max-resumes` spent, nobody took it. A group closed by one computer during a cut while another computer holds a
+    lane in it is a separate rule to decide. The scenario `CombineUnderRunControllerScenarioTest` also shared one leases
+    folder between its two computers (leases are per project ID under the JVM's home), so the higher computer's pass
+    offered a re-merge review to the lower computer's test agents; their leases are removed once they are done.
+    `CombineUnderRunControllerScenarioTest` is enabled again and passed 6 of 6 times in a row (Linux gate); one earlier
+    attempt failed only because the gate host was overloaded by parallel runs (the lab's invite expired). Not proved in a
+    real run.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

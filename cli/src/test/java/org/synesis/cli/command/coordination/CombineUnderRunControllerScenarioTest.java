@@ -78,7 +78,6 @@ final class CombineUnderRunControllerScenarioTest {
     }
 
     @Test
-    @org.junit.jupiter.api.Disabled("OPEN 2026-10-20: passes 1 in 3 on the Linux gate; ADR-0098 step 5 is PARTIAL under a real cut (s5-run16 to s5-run18), see step 5 item 31")
     void theCombineLandsAndMainEndsEqualWhenTheHigherComputersTwoAgentsAreRunByARunControllerThatEndsTheirConnections() throws Exception {
         Computer low = lab.lower();
         ScenarioAgent low1 = lab.agent(low, "low-1");
@@ -118,6 +117,7 @@ final class CombineUnderRunControllerScenarioTest {
             }
         });
         lab.drive("the lower computer's two changes are on its main", () -> lab.hasOnBranch(low, "low.txt") && lab.onBranch(low, "shared.txt").contains("by the lower computer"), low1, low2);
+        forgetTheLowerComputersSessions();
         lab.await("the higher computer's two changes are on its main; events " + events, () -> lab.hasOnBranch(high, "high.txt") && lab.onBranch(high, "shared.txt").contains("by the higher computer"));
         lab.await("the controller has ended both agents' first processes; events " + events,
                 () -> events.stream().anyMatch(event -> event.endsWith("AGENT_EXITED=codex#1 exitCode=0")) && events.stream().anyMatch(event -> event.endsWith("AGENT_EXITED=codex#2 exitCode=0")));
@@ -129,11 +129,32 @@ final class CombineUnderRunControllerScenarioTest {
         long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MINUTES.toNanos(4);
         while (!(lab.mainsEqual() && COMBINED.strip().equals(lab.onBranch(low, "shared.txt")) && lab.hasOnBranch(low, "high.txt") && lab.hasOnBranch(high, "low.txt"))) {
             assertTrue(System.nanoTime() < deadline, "the copies never met; events " + events + System.lineSeparator() + grants() + System.lineSeparator() + "heads high " + lab.head(high) + " low " + lab.head(low) + " shared.txt high [" + lab.onBranch(high, "shared.txt") + "] low [" + lab.onBranch(low, "shared.txt") + "] "
-                    + System.lineSeparator() + "leases " + leaseFiles() + System.lineSeparator() + offers());
+                    + System.lineSeparator() + "leases " + leaseFiles() + System.lineSeparator() + offers() + System.lineSeparator() + logTail());
             Thread.sleep(200);
         }
         assertEquals(COMBINED.strip(), lab.onBranch(high, "shared.txt"));
         assertTrue(events.stream().anyMatch(event -> event.contains("AGENT_RESUMED=")), "the controller woke a stopped agent: " + events);
+    }
+
+    /**
+     * The lab's two computers share one JVM's local state, and a project's session leases live under its ID there, so the lower
+     * computer's agents show as live sessions of the higher computer: its re-merge pass offered a review to one of them (the
+     * lowest handle wins), which no run controller of the higher computer could wake. A real computer's leases are its own.
+     * The lower agents are done once their changes are on its main, so their leases are removed.
+     */
+    private void forgetTheLowerComputersSessions() throws IOException {
+        Path leases = org.synesis.workspace.lifecycle.lease.SessionLeaseStore.resolveLeasesDirectory(high.location.root());
+        for (String name : List.of("low-1", "low-2")) {
+            java.nio.file.Files.deleteIfExists(leases.resolve(name + ".json"));
+            java.nio.file.Files.deleteIfExists(leases.resolve(name + ".keeper"));
+        }
+    }
+
+    /** The last entries of the higher computer's log in applied order, to read a failure by. */
+    private String logTail() throws Exception {
+        var entries = org.synesis.coordination.persistence.LogDump.read(high.location.coordinationDirectory(), high.location.projectId()).entries();
+        return entries.subList(Math.max(0, entries.size() - 70), entries.size()).stream().map(Object::toString).map(line -> line.length() > 260 ? line.substring(0, 260) : line)
+                .collect(java.util.stream.Collectors.joining(System.lineSeparator()));
     }
 
     private String offers() throws Exception {

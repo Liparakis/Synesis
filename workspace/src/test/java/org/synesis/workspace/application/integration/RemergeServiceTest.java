@@ -343,10 +343,12 @@ class RemergeServiceTest {
         otherAdvance(other, otherHead, reviewerElsewhere);
         run();
         remergeId = RemergeService.remergeId(otherHead, own);
+        builtOtherHead = otherHead;
         return built(otherHead, own).snapshot().snapshotId();
     }
 
     private String remergeId;
+    private String builtOtherHead;
 
     private long grantsOn(String rms) throws Exception {
         return grants().stream().filter(grant -> rms.equals(grant.snapshotId())).count();
@@ -442,7 +444,7 @@ class RemergeServiceTest {
 
     /** Announces a combine lane of the re-merge for a live session and returns its participant handle. */
     private String combineHolder(String rms) throws Exception {
-        CombinePayload combine = new CombinePayload("cb-test", remergeId, "a".repeat(40), "b".repeat(40), base, "c".repeat(40), List.of("snap_a"));
+        CombinePayload combine = new CombinePayload("cb-test", remergeId, builtOtherHead, "b".repeat(40), base, "c".repeat(40), List.of("snap_a"));
         store.append(UUID.randomUUID(), PredictionEventType.COMBINE_REQUIRED, self.nodeId(), combine.encode(), self);
         String holderSession = "session-combiner";
         String holder = WorkspaceCollaborationService.participantHandle(holderSession);
@@ -586,6 +588,37 @@ class RemergeServiceTest {
 
         assertEquals(entries + 2, project.store().events().size(), "later runs write nothing more");
         assertEquals(conflict.own(), project.head());
+    }
+
+    /**
+     * s5-run18: while a combine waited, an ordinary lane landed on this copy, so the re-merge's ID changed and the next pass
+     * opened a second combine for the same snapshot. The combine is about the other head and the advance, so it is found again.
+     */
+    @Test
+    void anOrdinaryAdvanceOfThisCopyWhileACombineWaitsOpensNoSecondCombineAndTheNewReMergeUsesTheFirst() throws Exception {
+        Conflict conflict = conflict();
+        run();
+        CombinePayload combine = combine();
+        Lane combiner = combineLane(combine);
+        Lane ordinary = lane("snap_ordinary", "ordinary.txt", false);
+        String moved = commit("ordinary-advance", conflict.own(), "ordinary.txt", "an ordinary lane");
+        project.git("merge", "-q", "--ff-only", moved);
+        ownAdvance(conflict.own(), moved, ordinary.snapshotId());
+        int entries = project.store().events().size();
+
+        run();
+        run();
+
+        assertEquals(entries, project.store().events().size(), "the combine is waited for: nothing new is written, in particular no second COMBINE_REQUIRED");
+        assertEquals(combine, combine(), "still the one combine");
+        assertEquals(1, events(PredictionEventType.COMBINE_REQUIRED).size());
+
+        combineSnapshot(combine, combiner, "snap_combine", 1, false);
+        run();
+
+        assertEquals(1, project.store().taskCompletionProjection().remerge(RemergeService.remergeId(conflict.otherHead(), moved)).size(),
+                "the re-merge of the moved copy is built with the one combine's result, and its one lane needing review waits for its reviewer");
+        assertEquals(1, project.store().taskCompletionProjection().combines().size());
     }
 
     @Test
