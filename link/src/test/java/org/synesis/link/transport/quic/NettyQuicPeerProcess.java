@@ -49,7 +49,7 @@ final class NettyQuicPeerProcess {
    * Short bounded policy used only to keep the abrupt-process integration test deterministic.
    */
   private static final LivenessConfiguration PROCESS_LOSS_LIVENESS = new LivenessConfiguration(
-      Duration.ofMillis(250), Duration.ofSeconds(1), Duration.ofSeconds(2), true);
+      Duration.ofMillis(500), Duration.ofSeconds(3), Duration.ofSeconds(6), true);
 
   private NettyQuicPeerProcess() {
   }
@@ -266,7 +266,7 @@ final class NettyQuicPeerProcess {
   }
 
   private static void awaitHeartbeat(PeerSession session) {
-    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
     while (session.livenessMetrics()
         .heartbeatAcknowledgedCount() == 0 && System.nanoTime() < deadline) {
       LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(20));

@@ -126,11 +126,12 @@ final class CombineUnderRunControllerScenarioTest {
         // The Link comes back. The higher computer re-merges onto the lower one's main and the combine, and its reviews, must land.
         events.add(java.time.LocalTime.now().toString().substring(0, 8) + " HEAL");
         lab.heal();
-        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.MINUTES.toNanos(4);
-        while (!(lab.mainsEqual() && COMBINED.strip().equals(lab.onBranch(low, "shared.txt")) && lab.hasOnBranch(low, "high.txt") && lab.hasOnBranch(high, "low.txt"))) {
-            assertTrue(System.nanoTime() < deadline, "the copies never met; events " + events + System.lineSeparator() + grants() + System.lineSeparator() + "heads high " + lab.head(high) + " low " + lab.head(low) + " shared.txt high [" + lab.onBranch(high, "shared.txt") + "] low [" + lab.onBranch(low, "shared.txt") + "] "
-                    + System.lineSeparator() + "leases " + leaseFiles() + System.lineSeparator() + offers() + System.lineSeparator() + logTail());
-            Thread.sleep(200);
+        // Patience, not a fixed deadline: the wait goes on while the logs grow, so a slow machine is not a failure and a stall still is.
+        try {
+            lab.await("the copies of main meet with the combined file", () -> lab.mainsEqual() && COMBINED.strip().equals(lab.onBranch(low, "shared.txt")) && lab.hasOnBranch(low, "high.txt") && lab.hasOnBranch(high, "low.txt"));
+        } catch (AssertionError stalled) {
+            throw new AssertionError(stalled.getMessage() + System.lineSeparator() + "events " + events + System.lineSeparator() + grants() + System.lineSeparator() + "heads high " + lab.head(high) + " low " + lab.head(low) + " shared.txt high [" + lab.onBranch(high, "shared.txt") + "] low [" + lab.onBranch(low, "shared.txt") + "] "
+                    + System.lineSeparator() + "leases " + leaseFiles() + System.lineSeparator() + offers() + System.lineSeparator() + logTail(), stalled);
         }
         assertEquals(COMBINED.strip(), lab.onBranch(high, "shared.txt"));
         assertTrue(events.stream().anyMatch(event -> event.contains("AGENT_RESUMED=")), "the controller woke a stopped agent: " + events);

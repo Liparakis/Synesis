@@ -297,6 +297,14 @@ final class ControlPlaneReplicationTest {
         return computer.owner.get().sessions().stream().anyMatch(session -> !earlier.contains(session) && session.isUsable());
     }
 
+    private static boolean hostRecorded(Computer computer) {
+        try {
+            return !ReplicationPeers.read(computer.coordination).hosted().isEmpty();
+        } catch (java.io.IOException notWrittenYet) {
+            return false;
+        }
+    }
+
     private static boolean journaled(Computer computer, String event) {
         return ReplicationJournal.read(computer.coordination).stream().anyMatch(line -> line.contains(" " + event));
     }
@@ -348,6 +356,8 @@ final class ControlPlaneReplicationTest {
         Map<String, Object> invitation = member.post("invite", Map.of("expectedPeer", leaderNode.nodeId()));
         leader.post("join", Map.of("inviteUri", invitation.get("inviteUri")));
         await(() -> connectedOn(member, leaderNode));
+        // The host writes down whom it admitted just after the session is up, so the record can trail the CONNECTED state.
+        await(() -> hostRecorded(member));
         assertEquals(Set.of(leaderNode.nodeId()), ReplicationPeers.read(member.coordination).hosted().values().iterator().next());
         List<PeerSession> before = List.copyOf(leader.owner.get().sessions());
 
@@ -429,6 +439,8 @@ final class ControlPlaneReplicationTest {
         Files.writeString(leader.coordination.resolve(ReplicationPeers.FILE), "dial=not a record\n");
 
         Computer restarted = new Computer("leader", leaderNode, null);
+        // The stopped leader's session ends when its end is noticed, which a loaded machine delays; wait for that, then settle for what must not happen.
+        await(() -> member.owner.get().sessions().stream().noneMatch(PeerSession::isUsable));
         settle();
 
         assertTrue(restarted.owner.get().sessions().isEmpty());

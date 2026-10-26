@@ -92,6 +92,36 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
    `MEMBER_CARD`, no new invitation, it takes the main it missed, its claim holds). Each is 25 to 45 s of test time.
    Found one defect, kept as the disabled `ThreeComputersMainMeetingScenarioTest`: with the owner and two members
    running and linked, the owner never takes the other computers' newer `main` until it restarts.
+
+   Flaky scenario and Link tests, looked at 2026-10-26 (HEAD c6c2c424, Linux gate in a loop with `cleanTest --no-build-cache`,
+   several gates at once and, for the Link and claim-lock classes, 12 busy loops on the 16 CPUs). Test timing assumptions fixed:
+   `ControlPlaneReplicationTest.aPeersFileThatCannotBeReadResumesNothingAndTheServerStarts` waited a fixed 5 s (`settle`) and
+   then asserted that the stopped leader's session had ended (it now waits for that first, as its sibling tests do);
+   `aRestartedHostListensOnItsOldPortAndAdmitsTheNodeItAdmittedBefore` read the host's "admitted" record as soon as the member
+   showed CONNECTED, but the host writes it just after (it now waits for the record); `NettyQuicPeerProcess` used a 250 ms /
+   1 s / 2 s liveness policy and an 8 s wait for the first heartbeat acknowledgement, which a loaded machine misses (now 500 ms /
+   3 s / 6 s and 30 s; the policy is the test's own, `LivenessConfiguration.DEFAULT` and `RETAINED` are unchanged);
+   `ClaimLockTest.anAgentWhoseClaimGivesWayIsToldSoAndItsLogHoldsTheAnnouncementThenItsRelease` failed its assertion when the
+   owner's lane reached the member by a pull before the member's claim (the member's own log then refuses the append and holds
+   no announcement, which is not the lock under test); that attempt is now retried, up to 20 attempts instead of 5.
+   `CombineUnderRunControllerScenarioTest` waited for the copies to meet by a fixed 4 minutes; it now uses `ScenarioLab.await`
+   (no progress for 60 s fails). Not a timing assumption, left as product evidence: `CombineUnderRunControllerScenarioTest` failed
+   6 of 12 loop iterations on unmodified HEAD under load, `OwnerDownMembersScenarioTest` and
+   `ThreeComputersMainMeetingScenarioTest` 1 of 12 each (a stall: every log stops growing for 60 s with the copies of `main`
+   not met). In the Combine failures both of the higher computer's changes were integrated as one advance
+   (`INTEGRATION_ATTEMPT_STARTED` names both snapshots), so both higher agents are authors of the combined snapshots, and
+   `CombineLaneJoin.offeredTo` / `refusal` (`COMBINE_BY_AUTHOR_NOT_ALLOWED`, over the agent's sessions up to the continuation)
+   let none of them take the combine: the controller's offer (`reviewsOffered`) shows it to the resumed connection, the agent's
+   own next action shows no `combineCandidates`, the agent's process ends and is not woken again. The scenario assumes the
+   two changes land one after the other, which depends on when the integration pump runs between the two review validations;
+   that, and the rule that a computer whose only agents all wrote the combined work can never combine it, are for a design
+   decision, not a test edit. Evidence: `D:\Podman\work\runs\1026-233409-3f44c8` and `1026-233409-576de0` (iter dirs).
+   Baseline on HEAD under that load never failed `ControlPlaneReplicationTest` (0 of 12), `NettyQuicLoopbackTest` (0 of 16 with and
+   without the change) or `ClaimLockTest` (0 of 16), so those four fixes rest on the failures recorded in earlier gate runs of
+   2026-10-26 (stack lines and messages), not on a reproduction. With the changes, under the same load: `ControlPlaneReplicationTest`
+   11 of 11, `NettyQuicLoopbackTest` 8 of 8, `ClaimLockTest` 8 of 8, `OwnerDownMembersScenarioTest` 5 of 5, and the two stalling
+   classes still failed (`CombineUnderRunControllerScenarioTest` 1 of 5, `ThreeComputersMainMeetingScenarioTest` 1 of 5), now after 60 s
+   without progress instead of 4 minutes.
 2. **A decoded log dump and an evidence script.** `synesis log dump` prints every log this computer holds (its own and
    each copy) in local applied order, one entry per line with type, writer, sequence and the fields that matter, and
    with the state each projection derives (lanes, snapshots, grants, combines, membership). One evidence script copies

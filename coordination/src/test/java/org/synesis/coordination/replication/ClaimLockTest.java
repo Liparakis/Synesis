@@ -324,7 +324,7 @@ final class ClaimLockTest {
     void anAgentWhoseClaimGivesWayIsToldSoAndItsLogHoldsTheAnnouncementThenItsRelease() throws Exception {
         Computers computers = new Computers();
         computers.attach();
-        for (int attempt = 0; attempt < 5; attempt++) {
+        for (int attempt = 0; attempt < 20; attempt++) {
             String path = "src/e2e" + attempt + ".txt";
             // The member claims before the owner's lane reaches it, so only the lock between computers can refuse.
             leaderHolds("agt-a", path);
@@ -342,6 +342,10 @@ final class ClaimLockTest {
             List<PredictionEvent> own = store(memberRoot).events().stream()
                     .filter(event -> event.actorNodeId().equals(member.nodeId())).toList();
             int announced = indexOf(own, PredictionEventType.WORK_INTENT_ANNOUNCED);
+            if (announced < 0) {
+                // The pull brought the owner's lane in first, so the member's own log refused the append: not the lock between computers. A slow machine makes this likelier; try again.
+                continue;
+            }
             int released = indexOf(own, PredictionEventType.WORK_INTENT_RELEASED);
             assertTrue(announced >= 0 && released > announced, "announced " + announced + ", released " + released);
             assertEquals(released, own.size() - 1, "the release is the last entry of the member's log");
