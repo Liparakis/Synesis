@@ -5,6 +5,9 @@ secret containing base64-encoded PKCS-free 64-byte Ed25519 private-key bytes;
 it is never committed or written into an artifact. The bootstrapper pins the
 corresponding public key in `bootstrap/main.go`.
 
+The release workflow signs the manifest of a `v*` tag only when the secret exists, and the installer
+refuses unsigned manifests once a non-placeholder key is pinned; see `docs/installation/packages.md`.
+
 The checked-in key is a development placeholder and must be replaced with the
 project's protected public key before a public release. Authenticode, Apple
 Developer ID signing, and notarization are not implemented.

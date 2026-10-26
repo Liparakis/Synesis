@@ -10,6 +10,11 @@ import (
 	"synesis/bootstrap/internal/payload"
 )
 
+// PlaceholderTrustRootHex is the development public key a source build carries
+// until the owner pins the real release key in bootstrap/main.go. No private key
+// exists for it, so no signed manifest verifies against it.
+const PlaceholderTrustRootHex = "d75a9801d7b3e3c7e8c8f6f5e4d6f6e4e4b8a7a7c8d9e0f1a2b3c4d5e6f70809"
+
 // AcceptancePublicKeyEnv names the variable that carries the explicit local
 // acceptance trust root. It never weakens the release trust root.
 const AcceptancePublicKeyEnv = "SYNESIS_ACCEPTANCE_MANIFEST_PUBLIC_KEY_B64"

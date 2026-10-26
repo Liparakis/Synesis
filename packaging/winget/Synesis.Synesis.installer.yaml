@@ -1,0 +1,18 @@
+# Template: scripts/release-packages/render-packages.sh fills the names written between at-signs from the release files.
+# PackageIdentifier, Publisher and the silent switches are the owner's to confirm (docs/installation/packages.md).
+PackageIdentifier: Synesis.Synesis
+PackageVersion: "@VERSION@"
+InstallerType: exe
+Scope: user
+InstallerSwitches:
+  Silent: install
+  SilentWithProgress: install
+Installers:
+  - Architecture: x64
+    InstallerUrl: @BASE_URL@/synesis-windows-x64.exe
+    InstallerSha256: @SHA_EXE_WINDOWS_X64@
+  - Architecture: arm64
+    InstallerUrl: @BASE_URL@/synesis-windows-arm64.exe
+    InstallerSha256: @SHA_EXE_WINDOWS_ARM64@
+ManifestType: installer
+ManifestVersion: 1.6.0

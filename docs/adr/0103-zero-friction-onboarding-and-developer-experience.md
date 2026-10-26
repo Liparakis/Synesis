@@ -711,6 +711,17 @@ and maintainability decide when a stage is done, by its completion criteria belo
     start processes, so the authority of that route must be decided. (c) OS packages with signed manifests — needs a
     release signing key only the owner holds (`bootstrap/main.go`'s manifest key is a placeholder). (d) Adapters for
     further harnesses — which ones.
+  - **OS packages, built without the owner's key or accounts (2026-10-26):** `packaging/` holds winget, Homebrew and
+    Debian templates; `scripts/release-packages/render-packages.sh` fills versions and SHA-256 values from the release files and
+    writes the release `manifest.json`; the `release-artifacts` workflow now builds a `v*` tag at the tag's version,
+    publishes the platform archives, and runs a `package-release` job that signs the manifest only when the
+    `SYNESIS_MANIFEST_PRIVATE_KEY_B64` secret exists (it is absent today, so the job says so and publishes no manifest).
+    The installer refuses an unsigned manifest, even a `developmentOnly` one, as soon as a key other than the
+    placeholder is pinned; with the placeholder pinned behaviour is unchanged. Tests: Go tests for `Verify`, the
+    placeholder rule and the signer, and a shell test of the renderer. **Left for the owner:** create the Ed25519 key,
+    store the secret, pin the public key in `bootstrap/main.go`, and register winget, a Homebrew tap and an apt
+    repository; the winget silent switch, the formula and the `.deb` were not run. Steps are in
+    `docs/installation/packages.md`.
   - **Also left for the owner:** the `org.synesis.projectrecord.sync` protocol classes and `Onboarding.hostCompact` /
     `joinOnce` have no production caller after decision 4 (about 2,400 lines); deleting another module's public API is a
     separate, explicitly authorized change.

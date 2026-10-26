@@ -93,6 +93,13 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v5
+      # A v* tag builds that version, so the archives, the release manifest and the OS packages agree
+      # on it. Every other run keeps the development number.
+      - name: Choose the bundle version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then version="${GITHUB_REF_NAME#v}"; else version="0.1.0-dev.${GITHUB_RUN_NUMBER}"; fi
+          echo "BUNDLE_VERSION=${version}" >> "${GITHUB_ENV}"
       - uses: actions/setup-java@v5
         with:
           distribution: microsoft
@@ -104,9 +111,9 @@ jobs:
         with:
           go-version: '1.26.5'
           cache-dependency-path: bootstrap/go.mod
-      - run: ./gradlew.bat :cli:bundleSmokeTest -PbundlePlatform=${{ matrix.platform }} "-PsynesisVersion=0.1.0-dev.${{ github.run_number }}" --dependency-verification=strict --no-configuration-cache
+      - run: ./gradlew.bat :cli:bundleSmokeTest -PbundlePlatform=${{ matrix.platform }} "-PsynesisVersion=$env:BUNDLE_VERSION" --dependency-verification=strict --no-configuration-cache
         if: runner.os == 'Windows'
-      - run: ./gradlew :cli:bundleSmokeTest -PbundlePlatform=${{ matrix.platform }} "-PsynesisVersion=0.1.0-dev.${{ github.run_number }}" --dependency-verification=strict --no-configuration-cache
+      - run: ./gradlew :cli:bundleSmokeTest -PbundlePlatform=${{ matrix.platform }} "-PsynesisVersion=${BUNDLE_VERSION}" --dependency-verification=strict --no-configuration-cache
         if: runner.os != 'Windows'
         env:
           JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
@@ -152,3 +159,62 @@ jobs:
               fi
           done
           exit 1
+      # The release manifest names these archives, and the OS packages (Homebrew, apt) install them.
+      - name: Publish platform archive
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || inputs.release_tag || format('manual-{0}', github.run_number) }}
+          ARCHIVE_EXTENSION: ${{ startsWith(matrix.platform, 'windows') && 'zip' || 'tar.gz' }}
+        shell: bash
+        run: |
+          gh release upload "${RELEASE_TAG}" "cli/build/distributions/synesis-${BUNDLE_VERSION}-${{ matrix.platform }}.${ARCHIVE_EXTENSION}" --repo "${{ github.repository }}" --clobber
+
+  # Only a v* tag makes packages. The manifest is signed when the signing secret exists; without it
+  # the job says so and publishes no manifest, because an unsigned one is refused by every installer.
+  # docs/installation/packages.md lists what the owner provides.
+  package-release:
+    needs: bundles
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+      SYNESIS_MANIFEST_PRIVATE_KEY_B64: ${{ secrets.SYNESIS_MANIFEST_PRIVATE_KEY_B64 }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.5'
+          cache-dependency-path: bootstrap/go.mod
+      - name: Render the manifest and the package definitions
+        run: |
+          bash scripts/release-packages/render-packages-test.sh
+          gh release download "${RELEASE_TAG}" --repo "${{ github.repository }}" --dir assets --pattern 'synesis-*'
+          bash scripts/release-packages/render-packages.sh "${RELEASE_TAG#v}" "${RELEASE_TAG}" "${{ github.repository }}" assets out
+      - name: Sign the manifest
+        id: sign
+        run: |
+          if [[ -z "${SYNESIS_MANIFEST_PRIVATE_KEY_B64}" ]]; then
+              echo "::notice::SYNESIS_MANIFEST_PRIVATE_KEY_B64 is not set: the release manifest is not signed and is not published."
+              echo "Manifest not signed: no SYNESIS_MANIFEST_PRIVATE_KEY_B64 secret. The package definitions are in this run's artifacts." >> "${GITHUB_STEP_SUMMARY}"
+              exit 0
+          fi
+          pinned="$(grep -o 'manifestPublicKeyHex = "[0-9a-f]\{64\}"' bootstrap/main.go | grep -o '[0-9a-f]\{64\}' || true)"
+          if [[ -z "${pinned}" ]]; then
+              echo "::error::The signing secret is set but bootstrap/main.go still pins the placeholder key; a manifest signed now could not be verified by any installer."
+              exit 1
+          fi
+          (cd bootstrap && go run ./cmd/sign-manifest --manifest "${GITHUB_WORKSPACE}/out/manifest.json" --signature "${GITHUB_WORKSPACE}/out/manifest.json.sig" --public-key-hex "${pinned}")
+          echo "signed=true" >> "${GITHUB_OUTPUT}"
+          echo "Manifest signed with the key pinned in bootstrap/main.go." >> "${GITHUB_STEP_SUMMARY}"
+      - name: Publish the signed manifest
+        if: steps.sign.outputs.signed == 'true'
+        run: gh release upload "${RELEASE_TAG}" out/manifest.json out/manifest.json.sig --repo "${{ github.repository }}" --clobber
+      - name: Keep the package definitions with this run
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages
+          path: out/
+          if-no-files-found: error
+          retention-days: 30
