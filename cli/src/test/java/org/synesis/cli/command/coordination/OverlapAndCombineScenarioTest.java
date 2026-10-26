@@ -3,6 +3,7 @@ package org.synesis.cli.command.coordination;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.synesis.cli.command.coordination.TestComputers.Computer;
 
 import org.synesis.coordination.domain.prediction.PredictionEventType;
+import org.synesis.coordination.persistence.ProjectIntegrationLock;
 
 /**
  * Scenario S2 of ADR-0102 item 1: both computers change the same file while the Link is down. After the heal the higher
@@ -347,6 +349,44 @@ final class OverlapAndCombineScenarioTest {
 
         assertFalse(answer.toString().contains("combinePending"), "told to wait for the first lane's snapshot: " + answer);
         assertNotEquals("waiting", answer.get("status"), answer.toString());
+    }
+
+    /**
+     * s5-run21 (2026-10-26): the agent of the second combine lane joined and its first {@code get_next_action} was answered
+     * {@code waiting}, {@code integration_pending}, {@code integrationRunning}: another pass held the integration lock at that
+     * moment. That wait is for the pass, not for the lane, nothing recorded in the log ends it, so the agent stopped, no wake
+     * ever came, and the lane never published; the log stayed flat for 25 minutes. A lane that has published nothing is
+     * shown its own next step whatever the pump answers.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aCombineLaneThatHasPublishedNothingIsNotToldThatAnotherPassIsRunning() throws Exception {
+        TwoCombines scene = toTheSecondCombine();
+        ScenarioAgent combiner = scene.combiner2();
+        Map<String, Object> offered = combiner.combinesOffered().getFirst();
+        assertEquals("ready", combiner.call("ensure_session", (Map<String, Object>) offered.get("ensureSession")).get("status"));
+
+        Map<String, Object> answer;
+        try (ProjectIntegrationLock otherPass = takenWhenFree(scene.high().location.coordinationDirectory())) {
+            answer = combiner.call("get_next_action", Map.of());
+            assertNotNull(otherPass);
+        }
+
+        assertFalse(answer.toString().contains("integrationRunning"), "told that another pass runs: " + answer);
+        assertNotEquals("waiting", answer.get("status"), answer.toString());
+    }
+
+    /** The computer's own passes hold the lock now and then; this is a pass of the test's own that holds it as long as it is open. */
+    private static ProjectIntegrationLock takenWhenFree(Path coordination) throws Exception {
+        long giveUp = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(60);
+        while (System.nanoTime() < giveUp) {
+            ProjectIntegrationLock held = ProjectIntegrationLock.tryAcquire(coordination);
+            if (held != null) {
+                return held;
+            }
+            Thread.sleep(20);
+        }
+        throw new AssertionError("the integration lock stayed taken for a minute");
     }
 
     @SuppressWarnings("unchecked")

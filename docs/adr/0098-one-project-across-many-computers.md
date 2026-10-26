@@ -1308,6 +1308,31 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     (fails without the change with the answer the agent got in the run), and
     `twoCombinesOfOneReMergeAreBothTakenAndFinishedAndTheReMergeLandsAndMainEndsEqual` (passes with and without it; it holds
     the two-combine landing). Source semantics proven for what the agent is told; not proved in a real run.
+36. **A lane that has published nothing is shown no wait of the integration pump** (s5-run21, 2026-10-26, build remaster93).
+    The second combine lane (`6d3580a9…`, group `67b1ec4e…`) never published. *Proven from the transcripts and the VM*
+    (`D:\SynesisAcceptance\evidence\s5-run21b`): the first run ended before the combines existed (`COMBINE_REQUIRED` and both
+    lanes are the last log entries before the end-of-run suspensions); the restart took both. `codex#1` took the first and
+    published `snap_c1cad1e3…` (`get_next_action` with `completionRequested` answered `snapshot_publication_required`,
+    `finish_lane` offered, so the Windows-worktree hypothesis of item 35 is not the cause). `codex#2` (`codex-2-3.log`) joined
+    the second (`ensure_session` answered `repairJoined`, `intentId 6d3580a9…`) and its only following `get_next_action` was
+    answered `{"status":"waiting","reason":"integration_pending","nextAction":"wait","result":{"pending":1,"integrationRunning":true}}`.
+    That answer exists only where another pass holds the integration lock (`IntegrationOrchestrationService.integrate`). The
+    agent said it would wait and stopped; it never read a file or asked to finish. The lane's worktree on the VM still holds
+    the unresolved `gcd/gcd.py` and `gcd/test_gcd.py`. Nothing recorded in the log ends that wait (the lock release is not an
+    event), so `LaneWake` had nothing to wake it on, and the log stayed flat. Item 35 hid only the combine wait
+    (`combinePending`) and the review wait; this wait of the same pump was missed.
+    *Rule:* `pumpShownTo` withholds from a producer that has published nothing every wait of the pump (review, combine,
+    lock held, attempt running, pending requests), not a list of them; its own publication is its next step.
+    *`snap_48308bf3…` waits for review with no reviewer:* it is the late snapshot of a primes continuation lane
+    (`9d015423…`, task `a0519681…`), created at log position 122 after that task was already integrated through
+    `snap_3631375…` and `snap_9b8e50c7…`; the task and its participant were cancelled at 123 to 128, the WorkGroup
+    `3a53d01c…` is `COMPLETED`, so no reviewer can be admitted. A snapshot of a cancelled task is not closed by the
+    cancellation, so `pendingReviewSnapshots()` lists it for ever and the pump tells every lane without a snapshot of its
+    own `validation_required`. Not fixed here: it does not stop a re-merge landing, and closing it is a decision about what
+    cancelling a lane does to its published snapshot (recorded, open).
+    Test: `OverlapAndCombineScenarioTest.aCombineLaneThatHasPublishedNothingIsNotToldThatAnotherPassIsRunning` (the lane
+    joins, another pass holds the lock; fails without the change with the s5-run21 answer). Source semantics proven; not
+    proved in a real run.
 
 ### Step 6: Membership in the owner's log
 
