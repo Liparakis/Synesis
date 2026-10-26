@@ -674,10 +674,9 @@ and maintainability decide when a stage is done, by its completion criteria belo
      `TWO_MACHINE_TESTING.md`, `SYNESIS_LINK_V1.md`, `package-boundaries.md` and the command reference are migrated.
      `ProjectContextExchange` stays (the runtime owner uses it). **Consequence to know:** asking the router for a port
      (UPnP) was `host --open-router-port`; `link invite` has no such option, so it is now the browser's invitation
-     checkbox only. **Left, now without a production caller:** the `org.synesis.projectrecord.sync` protocol classes
+     checkbox only. **Left, then without a production caller:** the `org.synesis.projectrecord.sync` protocol classes
      (`ProjectRecordSync`, `ProjectReconciliationSync`, `ReconciliationClient`, `ReconciliationHost`, `InventorySnapshot`,
-     their `protocol` messages and tests) and `Onboarding.hostCompact`/`joinOnce`; they are another module's public API
-     and wire format, so deleting them is a separate, authorized change.
+     their `protocol` messages and tests) and `Onboarding.hostCompact`/`joinOnce`; deleted in stage 4 (see "Done 2026-10-26").
   2. **Help in depths (decision 5).** `synesis`, `synesis --help` and `synesis help` list the everyday commands
      (`init`, `status`, `ui`, `agents`, `link`, `doctor`, `help`) and name `synesis help --all`; `synesis help --all`
      and `synesis --help --all` list every command by group, as before without `host`, `join` and `sync`. Both are views
@@ -722,9 +721,11 @@ and maintainability decide when a stage is done, by its completion criteria belo
     store the secret, pin the public key in `bootstrap/main.go`, and register winget, a Homebrew tap and an apt
     repository; the winget silent switch, the formula and the `.deb` were not run. Steps are in
     `docs/installation/packages.md`.
-  - **Also left for the owner:** the `org.synesis.projectrecord.sync` protocol classes and `Onboarding.hostCompact` /
-    `joinOnce` have no production caller after decision 4 (about 2,400 lines); deleting another module's public API is a
-    separate, explicitly authorized change.
+  - **Done 2026-10-26 (owner: "lets do all"):** deleted the `org.synesis.projectrecord.sync` package of `:project-record`
+    (`ProjectRecordSync`, `ProjectReconciliationSync`, `ReconciliationClient`, `ReconciliationHost`, `InventorySnapshot`,
+    the `protocol` messages and their tests) and `Onboarding.hostCompact` / `joinOnce`, which had no production caller after
+    decision 4. Every other class of both modules stays: `link`, the runtime owner and `ProjectContextExchange` do not use
+    them. The record format and storage stay in `:project-record`.
 
 ## Acceptance tests and targets
 

@@ -246,49 +246,11 @@ public final class Onboarding {
   }
 
   /**
-   * Creates and serves one compact one-way invitation.
-   *
-   * <p>The method returns only after the bounded authenticated session has
-   * completed. The compact invitation is emitted before the wait through the
-   * normal {@link OnboardingEventType#SHARE_LINK} event.
-   *
-   * @param expectedPeer optional expected responder node ID
-   * @throws OnboardingFailure if setup, authentication, descriptor exchange,
-   *                           or bounded cleanup fails
-   */
-  public void hostCompact(String expectedPeer) throws OnboardingFailure {
-    hostCompact(expectedPeer, null, _ -> {
-    });
-  }
-
-  /**
-   * Creates and serves one compact one-way invitation with callbacks.
-   *
-   * @param expectedPeer       optional expected responder node ID
-   * @param applicationHandler optional handler for non-bootstrap application payloads
-   * @param sessionAction      callback invoked after authenticated descriptor exchange
-   * @throws OnboardingFailure if setup, authentication, descriptor exchange,
-   *                           or bounded cleanup fails
-   */
-  public void hostCompact(String expectedPeer,
-      PeerSession.ApplicationStreamHandler applicationHandler,
-      Consumer<PeerSession> sessionAction) throws OnboardingFailure {
-    try {
-      try (PreparedHost prepared = createCompactInvitation(expectedPeer, applicationHandler,
-          sessionAction)) {
-        prepared.awaitConnection();
-      }
-    } catch (OnboardingFailure failure) {
-      throw failure;
-    }
-  }
-
-  /**
    * Opens a compact host handle and returns after the invite has been emitted.
    *
    * <p>The returned handle owns the listener until {@link PreparedHost#awaitConnection()} or
    * {@link PreparedHost#close()} is called. This is the non-blocking seam used by the local
-   * control-plane owner; the terminal one-shot façade is {@link #hostCompact(String)}.
+   * control-plane owner; the caller then awaits or closes the handle.
    *
    * @param expectedPeer       optional expected responder node ID
    * @param applicationHandler optional handler for non-bootstrap application payloads
@@ -617,24 +579,6 @@ public final class Onboarding {
     Objects.requireNonNull(link, "link");
     try (PreparedJoin prepared = importInvitation(link, applicationHandler, sessionAction)) {
       prepared.connect();
-    }
-  }
-
-  /**
-   * Joins one invitation with a single round of attempts, for a caller that cannot show the
-   * answer link: without it the host never sends toward this side, so waiting longer cannot help.
-   *
-   * @param link               exact signed share link
-   * @param applicationHandler optional bounded application-stream handler
-   * @param sessionAction      callback invoked after control readiness
-   * @throws OnboardingFailure if setup, the attempts, the callback, or cleanup fails
-   */
-  public void joinOnce(String link, PeerSession.ApplicationStreamHandler applicationHandler,
-      Consumer<PeerSession> sessionAction) throws OnboardingFailure {
-    Objects.requireNonNull(sessionAction, "session action");
-    Objects.requireNonNull(link, "link");
-    try (PreparedJoin prepared = importInvitation(link, applicationHandler, sessionAction)) {
-      prepared.connect(false, Instant.now());
     }
   }
 
