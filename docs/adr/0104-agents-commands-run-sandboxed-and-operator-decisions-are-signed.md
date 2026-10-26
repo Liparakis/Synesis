@@ -784,6 +784,31 @@ containing a quote or a parenthesis cannot add a rule; test).
 Completion criteria: green on a Mac, or the stage is marked NOT BUILT in the ADR and macOS refuses (stage 5) with
 the fix text, which is a valid outcome and is stated to the owner.
 
+**Built (UNVERIFIED) 2026-10-27, written from the documentation; no Mac was available (owner's decision 3).**
+`MacSandboxExecSandbox` generates the Scheme profile from the `SandboxPolicy` and wraps the command with
+`/usr/bin/sandbox-exec -p <profile>`; it is registered in `Sandboxes.platform()` for macOS. Rules, in order (the last
+match wins): write denied under `/`; `/dev` pseudo-devices writable; `hidden` roots and `$HOME` denied for read and write;
+`readOnly` roots readable; `writable` roots read-write; `readOnlyWithin` and `emptyReadOnlyFiles` denied for write.
+Network, exec and fork stay allowed. A path is quoted as a Scheme string (quote and backslash escaped, control characters
+refused). Known gap: an `emptyReadOnlyFiles` entry cannot be made to read as empty (the caller creates it empty). **Fail
+closed:** `probe()` reports unavailable ("macOS sandbox not yet verified on a real Mac (ADR-0104 stage 4)"), so
+`run_command` refuses on macOS, unless the test-only JVM property `-Dsynesis.sandbox.macosUnverified=true` is set, which
+runs the real probe (same three facts as Linux). Tested anywhere: the profile text (ordering, quoting of quotes,
+parentheses, spaces, control characters) and the default refusal. **Must be checked on a real Mac before the switch and the
+refusal are removed:**
+
+1. `sandbox-exec -p` still exists and accepts this profile (no syntax error, no deprecation refusal on that macOS version).
+2. The probe returns available with the switch set.
+3. `SandboxAdversarialTest` with `SYNESIS_REQUIRE_SANDBOX=true`: every attack fails, and every positive fragment succeeds.
+4. `git status`, `git diff`, `git add` and `git log` work in a lane worktree whose administrative directory is under the
+   hidden control checkout (read-only `.git`, writable `.git/worktrees/<lane>`).
+5. A toolchain build (Gradle offline or Maven, Node) works with the toolchain folders in `readOnly`, and `$HOME` hidden
+   does not break it (the redirected `HOME` and temp are writable).
+6. Loopback and outbound network work; the sandbox does not touch them.
+7. Canonical paths: `/tmp` and `/var` are symlinks to `/private/...`; confirm the policy paths are the real ones, and that
+   `subpath` on a path below a hidden root is read-writable as the order intends.
+8. Then remove `UNVERIFIED_PROPERTY` handling from `probe()` and record the result here.
+
 ### Stage 5 — Refusal, the override, doctor, and the provider guards (about two to three days; needs stage 2)
 
 Tasks:

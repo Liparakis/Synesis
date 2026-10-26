@@ -46,6 +46,9 @@ public final class Sandboxes {
         if (operatingSystem.contains("windows")) {
             return new WindowsLowIntegritySandbox();
         }
+        if (operatingSystem.contains("mac")) {
+            return new MacSandboxExecSandbox();
+        }
         return new Missing(operatingSystem);
     }
 

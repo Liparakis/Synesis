@@ -29,6 +29,8 @@ class AgentCommandProcessArchitectureTest {
   private static final Map<String, String> OTHER_PROCESS_STARTERS = new TreeMap<>(Map.of(
       "workspace/application/project/execution/sandbox/LinuxBubblewrapSandbox.java",
       "the sandbox's own probe: a fixed script on fixed scratch folders",
+      "workspace/application/project/execution/sandbox/MacSandboxExecSandbox.java",
+      "the sandbox's own probe: a fixed script on fixed scratch folders, run only under the unverified-Mac switch",
       "workspace/lifecycle/process/ProcessCommandRunner.java",
       "Synesis's own Git (and fixed tools) with fixed arguments; the working folder is a worktree, hardened by GitProcessRunner",
       "workspace/application/agent/run/ProviderAgentProcesses.java",
