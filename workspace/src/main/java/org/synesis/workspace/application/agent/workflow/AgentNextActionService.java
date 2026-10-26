@@ -848,16 +848,26 @@ public final class AgentNextActionService {
 
     /**
      * What of the integration pump's answer the caller is shown. A producer that has published nothing yet is not shown a
-     * wait of the pump: every one of them is for other lanes or for the pass itself (the review wait, the combine wait that
-     * names the unlanded snapshot of every combine lane, another pass holding the integration lock, an attempt running), and
-     * its own publication is its next step (ADR-0098 step 5 items 35 and 36). In s5-run20 the agent of a second combine lane
-     * was told the first lane's snapshot would land and that nothing more was needed from it; in s5-run21 it was told
+     * wait that is for other lanes or for the pass itself: the review wait, the combine wait, which names the unlanded
+     * snapshot of every combine lane, and another pass holding the integration lock ({@code integrationRunning}). Its own
+     * publication is its next step (ADR-0098 step 5 items 35 and 36). In s5-run20 the agent of a second combine lane was told
+     * the first lane's snapshot would land and that nothing more was needed from it; in s5-run21 it was told
      * {@code integrationRunning} because another pass held the lock at that moment. Either way it stopped, nothing recorded
      * in the log ends such a wait, so no wake came, and a re-merge of two combines cannot land before both have a result.
+     * The pump's waits on a dependency or a request of the lane itself stay shown.
+     *
+     * <p>The combine wait says that nothing more is needed from the lane. That is true of a combine lane that has published
+     * and of no other, so it is shown to no lane outside a combine's work group (item 37): a reviewer whose verdict was
+     * recorded was told so in s5-run22, kept its lane open, and so was never offered the second combine, which only a
+     * lane-less agent is.</p>
      */
-    private static AgentResponse pumpShownTo(PredictionEventStore store, Optional<WorkIntent> callerIntent, AgentResponse pump) {
-        boolean waitOfThePump = pump.reason() == AgentReason.VALIDATION_REQUIRED || pump.status() == AgentStatus.WAITING && pump.reason() == AgentReason.INTEGRATION_PENDING;
-        return waitOfThePump && producerStillToPublish(store, callerIntent) ? NO_PUMP_WAIT : pump;
+    static AgentResponse pumpShownTo(PredictionEventStore store, Optional<WorkIntent> callerIntent, AgentResponse pump) {
+        Map<?, ?> result = pump.result() instanceof Map<?, ?> shown ? shown : Map.of();
+        boolean combineWait = pump.reason() == AgentReason.INTEGRATION_PENDING && result.containsKey("combinePending");
+        boolean otherLanesWait = pump.reason() == AgentReason.VALIDATION_REQUIRED || combineWait
+                || pump.reason() == AgentReason.INTEGRATION_PENDING && result.containsKey("integrationRunning");
+        boolean combineWaitForAnotherLane = combineWait && callerIntent.isPresent() && store.taskCompletionProjection().combineOfGroup(callerIntent.get().workGroupId()).isEmpty();
+        return (otherLanesWait && producerStillToPublish(store, callerIntent)) || combineWaitForAnotherLane ? NO_PUMP_WAIT : pump;
     }
 
     /** Whether the caller holds a producer lane that has published nothing yet: its own publication is its next step. */

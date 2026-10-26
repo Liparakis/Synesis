@@ -1321,8 +1321,9 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     the unresolved `gcd/gcd.py` and `gcd/test_gcd.py`. Nothing recorded in the log ends that wait (the lock release is not an
     event), so `LaneWake` had nothing to wake it on, and the log stayed flat. Item 35 hid only the combine wait
     (`combinePending`) and the review wait; this wait of the same pump was missed.
-    *Rule:* `pumpShownTo` withholds from a producer that has published nothing every wait of the pump (review, combine,
-    lock held, attempt running, pending requests), not a list of them; its own publication is its next step.
+    *Rule:* `pumpShownTo` withholds from a producer that has published nothing the waits that are for other lanes or
+    for the pass (review, combine, `integrationRunning`); its own publication is its next step. (First written as every wait of
+    the pump; that hid a dependency wait of the lane itself and failed `AgentNextActionServiceTest`, found in item 37.)
     *`snap_48308bf3…` waits for review with no reviewer:* it is the late snapshot of a primes continuation lane
     (`9d015423…`, task `a0519681…`), created at log position 122 after that task was already integrated through
     `snap_3631375…` and `snap_9b8e50c7…`; the task and its participant were cancelled at 123 to 128, the WorkGroup
@@ -1333,6 +1334,28 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     Test: `OverlapAndCombineScenarioTest.aCombineLaneThatHasPublishedNothingIsNotToldThatAnotherPassIsRunning` (the lane
     joins, another pass holds the lock; fails without the change with the s5-run21 answer). Source semantics proven; not
     proved in a real run.
+37. **Only a combine lane is told "nothing more is needed from this lane"** (s5-run22, 2026-10-26, build remaster94). Result
+    `TIME_BOUND`, copies apart (PC `d2124194`, VM `d865d1e8`). *Proven from the log dumps and the PC transcripts*
+    (`D:\SynesisAcceptance\evidence\s5-run22`): one re-merge `rm-7b4f2e98…` opened two combines. Combine 1 (`cb-9c4d3e4a…`,
+    `snap_f1efaa7f…`) was taken by `claude#2`'s restart session `agt_acf3f761…` and published `snap_13f2fe22…`
+    (`INTEGRATION_PENDING`). Combine 2 (`cb-bb561676…`, `snap_57c895ea…`, its group `7ea467e8…` active) was opened at log
+    position 114 and **no lane was ever announced in it**, so the re-merge, which lands only when every combine has a result,
+    could not land. The only agent that may take it, `claude#1` (it wrote neither combine), was told otherwise: its restart
+    session `agt_7f54afd0…` had been resumed as a reviewer (`codex` snapshot `snap_64e59d17…`, lane `bb8d9ff2…`), recorded its
+    verdict (`respond_coordination` answered `ACCEPTED`), and its next `get_next_action` (`claude-1-3.log`, again in
+    `claude-1-6.log`) was answered `{"status":"waiting","reason":"integration_pending","nextAction":"wait","result":{"combinePending":true,"snapshotIds":["snap_13f2fe22…"],"instruction":"The combined version is merged with the re-merge of the two copies of main, which lands once the original reviewer accepts it again. Nothing more is needed from this lane; wait."}}`.
+    It ended its turn without finishing the reviewer lane, so the lane stayed `ACTIVE`; a session that holds a lane is never
+    offered a combine (`combineCandidates` is for lane-less callers), and nothing in the log changed afterwards. The other
+    agent, `claude#2`, wrote both combines' snapshots and may take neither.
+    *The missing invariant:* the combine wait (item 22) is for the owner of a combine lane that has published; the pump names
+    it to every caller, and item 35 withheld it only from a producer that had published nothing.
+    *Rule:* `pumpShownTo` shows the combine wait only to a caller whose lane is in a combine's work group. Any other lane is
+    shown its own next step (a reviewer after its verdict: finish the lane), which frees the agent to be offered the combine.
+    *Not fixed:* `claude#2`'s restart session took a combine whose snapshot its earlier session wrote (the agent link of
+    item 30 did not join `agt_acf3f761…` to `agt_67fb74a1…`); harmless here, noted. The `snap_13f2fe22…` wait for the
+    original reviewer is by design.
+    Test: `CombineWaitShownToTest.onlyACombineLaneIsToldToWaitForTheCombinesSnapshot` (fails without the change: a lane of
+    another group is shown the wait). Source semantics proven; not proved in a real run.
 
 ### Step 6: Membership in the owner's log
 
