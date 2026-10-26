@@ -28,6 +28,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
+import org.synesis.cli.command.BuildInfo;
 import org.synesis.link.protocol.CompactAnswer;
 import org.synesis.link.protocol.CompactBootstrapInvitation;
 import org.synesis.link.protocol.ProjectInvitation;
@@ -550,13 +551,14 @@ final class DaemonServer implements AutoCloseable {
     private static Map<String, Object> response(String state, Map<String, Object> fields) {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("ok", true);
+        result.put("build", BuildInfo.identity());
         result.put("state", state);
         result.putAll(fields);
         return result;
     }
 
     private static Map<String, Object> error(String code) {
-        return Map.of("ok", false, "error", code);
+        return Map.of("ok", false, "build", BuildInfo.identity(), "error", code);
     }
 
     private static void write(BufferedWriter writer, Map<String, Object> value) throws IOException {

@@ -20,7 +20,7 @@ From the project root (a Git repository), run:
 
 <!-- WALKTHROUGH: GettingStartedWalkthroughTest runs this block in a disposable Git repository; a command that stops working fails the build -->
 ```powershell
-synesis init
+synesis init --agent claude      # or --agent codex; a script names the agent
 synesis provider status claude   # or codex: whichever init connected
 synesis doctor
 ```
@@ -34,7 +34,7 @@ to connect. In a script, say it yourself: `synesis init --agent claude`,
 repository first. At the end it lists every file it wrote, in the project and
 outside it, and prints the next steps: start the agent in the project folder
 (`claude` or `codex`) and tell it what to do, and look at what is happening
-(`synesis ui`, or `synesis coordination status`; what needs you:
+(`synesis status`, or `synesis ui` in the browser; what needs you:
 `synesis operator list`). Synesis starts no work of its own. To connect an
 agent installed later, run `synesis init` again or
 `synesis provider install claude` (or `codex`).

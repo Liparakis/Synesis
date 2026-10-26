@@ -1,8 +1,13 @@
 package org.synesis.cli.daemon;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+
+import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
 
 /**
  * Builds the command line for a child JVM that runs {@code org.synesis.cli.SynesisCli} on the
@@ -25,6 +30,23 @@ public final class CliChildJvm {
     }
 
     /**
+     * The JVM option that sends a crash report to Synesis's own state folder. Without it the JVM writes
+     * {@code hs_err_pid<N>.log} into its working directory, which is the person's project, where Synesis counts it as a
+     * change it did not make (D9, real run 2026-10-26). Absent when the folder cannot be created: the JVM then keeps
+     * its default and the child still starts.
+     *
+     * @return the {@code -XX:ErrorFile} option
+     */
+    static Optional<String> crashFileOption() {
+        try {
+            Path directory = Files.createDirectories(AdministrativeStateLocator.applicationStateRoot().resolve("crash"));
+            return Optional.of("-XX:ErrorFile=" + directory.resolve("hs_err_pid%p.log"));
+        } catch (IOException | RuntimeException unavailable) {
+            return Optional.empty();
+        }
+    }
+
+    /**
      * Prepares a child process whose standard input is the null device. Callers add their own
      * output redirects and start it.
      *
@@ -40,6 +62,7 @@ public final class CliChildJvm {
         if (forwardLoopbackSocketDirectory && !loopbackSocketDirectory.isBlank()) {
             command.add("-D" + LOOPBACK_SOCKET_DIRECTORY + "=" + loopbackSocketDirectory);
         }
+        crashFileOption().ifPresent(command::add);
         command.add("-cp");
         command.add(System.getProperty("java.class.path"));
         command.add("org.synesis.cli.SynesisCli");

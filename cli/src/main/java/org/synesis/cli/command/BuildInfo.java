@@ -8,9 +8,20 @@ import org.synesis.link.protocol.LinkCompatibility;
 /**
  * Reads the build metadata embedded in the application bundle.
  */
-final class BuildInfo {
+public final class BuildInfo {
 
     private BuildInfo() {
+    }
+
+    /**
+     * Names this build for comparing it with another process of the same installation: version, commit and build time.
+     * Two processes that report different identities are different builds and must not serve each other.
+     *
+     * @return the build identity
+     */
+    public static String identity() {
+        Properties values = properties();
+        return values.getProperty("version", "0.1.0-dev.local") + " " + values.getProperty("commit", "UNKNOWN") + " " + values.getProperty("time", "UNKNOWN");
     }
 
     static String version() {

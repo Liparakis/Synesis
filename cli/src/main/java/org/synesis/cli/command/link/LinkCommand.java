@@ -40,6 +40,7 @@ public final class LinkCommand implements Runnable {
             case RuntimeControl.Rejected rejected when rejected.detail() != null -> ErrorShape.print(runtime.terminal()::stderr, rejected.code(), rejected.detail());
             case RuntimeControl.Rejected rejected -> ErrorShape.print(runtime.terminal()::stderr, rejected.code());
             case ProjectApplicationException project -> ErrorShape.print(runtime.terminal()::stderr, project.code());
+            case org.synesis.cli.daemon.DaemonBuildMismatchException mismatch -> ErrorShape.print(runtime.terminal()::stderr, "DAEMON_BUILD_MISMATCH", mismatch.userMessage(), mismatch.fix());
             case IOException _ -> ErrorShape.print(runtime.terminal()::stderr, "PROJECT_RUNTIME_UNAVAILABLE");
             default -> ErrorShape.print(runtime.terminal()::stderr, "INTERRUPTED");
         }

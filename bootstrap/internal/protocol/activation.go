@@ -44,8 +44,12 @@ func RunActivation(args []string) error {
 	java := filepath.Join(payload, "runtime", "bin", "java.exe")
 	classpath := filepath.Join(payload, "app", "synesis-cli.jar") + string(os.PathListSeparator) +
 		filepath.Join(payload, "app", "lib", "*")
-	command := exec.Command(java, "--enable-native-access=ALL-UNNAMED", "-cp", classpath,
-		"org.synesis.cli.SynesisCli", "open", args[0])
+	javaArgs := []string{"--enable-native-access=ALL-UNNAMED"}
+	if crashFile := layout.CrashFileOption(); crashFile != "" {
+		javaArgs = append(javaArgs, crashFile)
+	}
+	javaArgs = append(javaArgs, "-cp", classpath, "org.synesis.cli.SynesisCli", "open", args[0])
+	command := exec.Command(java, javaArgs...)
 	command.Stdout = os.Stdout
 	command.Stderr = os.Stderr
 	command.Stdin = os.Stdin

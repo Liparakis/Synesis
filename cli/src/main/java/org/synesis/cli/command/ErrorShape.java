@@ -36,6 +36,8 @@ public final class ErrorShape {
             advice("GIT_HEAD_UNAVAILABLE", "The project's Git repository has no commit to build on.", "make a first commit in the repository, then repeat the command"),
             advice("CONFLICT", "The project is partly set up, or its state contradicts itself.", "run 'synesis doctor' and follow what it reports"),
             advice("PROJECT_RUNTIME_UNAVAILABLE", "The project's runtime is not running and could not be started.", "run 'synesis doctor --fix' to start it, or see REASON if that fails"),
+            advice("DAEMON_BUILD_MISMATCH", "The Synesis daemon that is running is another build than this command.", "stop that daemon, then repeat; the next command starts one of this build"),
+            advice("AGENT_NOT_INSTALLED", "The agent is not on this computer's PATH.", "install the agent or add its folder to the PATH, then run 'synesis init --agent <id>' again"),
             advice("DOCTOR_FAILED", "The diagnostics could not run.", "check that --project names a readable folder, then repeat 'synesis doctor'"),
             advice("INTERRUPTED","The command was interrupted before it finished.", "repeat the command"),
 

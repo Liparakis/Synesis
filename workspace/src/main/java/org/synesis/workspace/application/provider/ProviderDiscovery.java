@@ -34,6 +34,8 @@ public final class ProviderDiscovery {
     private static final Duration COMMAND_TIMEOUT = Duration.ofSeconds(15);
     private static final int OUTPUT_LIMIT = 16 * 1024;
     private static final int VERSION_LIMIT = 80;
+    /** A warning an agent prints before its version must not be taken for the version (D1, real run 2026-10-26). */
+    private static final java.util.function.Predicate<String> VERSION_LINE = java.util.regex.Pattern.compile("\\d+\\.\\d+").asPredicate();
 
     private final String pathVariable;
     private final boolean windows;
@@ -156,7 +158,7 @@ public final class ProviderDiscovery {
     }
 
     private static Optional<String> firstLine(Answer answer) {
-        return answer.output().lines().map(String::strip).filter(line -> !line.isEmpty()).findFirst().map(line -> line.replaceAll("\\p{Cntrl}", "")).map(line -> line.length() > VERSION_LIMIT ? line.substring(0, VERSION_LIMIT) : line);
+        return answer.output().lines().map(String::strip).map(line -> line.replaceAll("\\p{Cntrl}", "")).filter(VERSION_LINE).findFirst().map(line -> line.length() > VERSION_LIMIT ? line.substring(0, VERSION_LIMIT) : line);
     }
 
     private static Answer runProcess(List<String> command) throws IOException {

@@ -195,7 +195,8 @@ is the managed baseline) and then connects the agents installed on this computer
   versions printed (`ERROR_CODE=`, `REASON=`, `INIT_RESULT=CONFLICT` on standard
   output). Codes: `GIT_REQUIRED`, `GIT_INIT_FAILED`, `GIT_HEAD_UNAVAILABLE`,
   `PROJECT_INVALID`, `CONFLICT`, `MALFORMED`, the baseline failure codes,
-  `UNKNOWN_PROVIDER` and `OPTIONS_CONFLICT` (exit 2), `AGENT_SETUP_FAILED`, and,
+  `UNKNOWN_PROVIDER` and `OPTIONS_CONFLICT` (exit 2), `AGENT_SETUP_FAILED`, `AGENT_NOT_INSTALLED` (an agent named with `--agent` that is not
+  on the `PATH`, exit 10), and,
   for an agent that could not be connected, the `provider install` code
   (`LAUNCHER_MISSING`, `INVALID_CONFIG`, ...) with exit 10. Exit codes are
   unchanged.
@@ -603,6 +604,8 @@ still usage errors (`2`). `ExitCodes` lists every code the CLI returns, and
 | `CONFLICT` | The project is partly set up or contradicts itself. |
 | `PROJECT_RUNTIME_UNAVAILABLE` | The project's runtime is not running and could not be started. |
 | `INTERRUPTED` | The command was interrupted. |
+| `AGENT_NOT_INSTALLED` | `synesis init --agent <id>` named an agent that is not on this computer's `PATH`; nothing of it was written. |
+| `DAEMON_BUILD_MISMATCH` | The Synesis daemon that is running is another build than this command; `FIX=` names its process. The command never uses or restarts it. |
 | `DOCTOR_FAILED` | `synesis doctor` could not run. |
 
 ### Codes of `synesis provider`
@@ -684,15 +687,16 @@ still usage errors (`2`). `ExitCodes` lists every code the CLI returns, and
 
 ## Doctor
 
-`synesis doctor` keeps its summary lines and adds one section for each of three
+`synesis doctor` keeps its summary lines and adds one section for each of four
 groups. Each finding is marked `confirmed` (exact evidence), `suspected`
 (strong but not exact, or contradictory evidence) or `advice` (worth knowing,
 changes no health status) and carries a `FIX=`. Keys are `<GROUP>_STATUS`
 (`OK`, `ATTENTION`, or `NOT_APPLICABLE` for the network group of a project that is
 not shared), `<GROUP>_FINDINGS=<n>` and, for each finding,
 `<GROUP>_FINDING_<n>=<code>` with `_MARK`, `_MESSAGE`, `_FIX` and the finding's
-details. The groups are `ENVIRONMENT`, `NETWORK` and `WORK_GROUPS`; the summary
-lines above them are unchanged and `--json` gains `groups` and, on every
+details. The groups are `PROJECT` (the project's own state: identity, locks, journals; this is
+where a corrupt `project.json` shows its reason), `ENVIRONMENT`, `NETWORK` and
+`WORK_GROUPS`; the summary lines above them are unchanged and `--json` gains `groups` and, on every
 finding, `group`, `mark` and `fix`.
 
 | Group | Finding | Mark | Meaning |

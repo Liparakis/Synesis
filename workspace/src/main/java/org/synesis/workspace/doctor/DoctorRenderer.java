@@ -58,9 +58,10 @@ public final class DoctorRenderer {
     }
 
     /**
-     * The groups the report prints finding by finding; the project's own findings keep their counts above.
+     * The groups the report prints finding by finding. The project group is one of them: a finding that makes the result
+     * UNHEALTHY must say why and how to fix it in the default output, not only with {@code --verbose} (D6, real run 2026-10-26).
      */
-    private static final List<DoctorGroup> NAMED_GROUPS = List.of(DoctorGroup.ENVIRONMENT, DoctorGroup.NETWORK, DoctorGroup.WORK_GROUPS);
+    private static final List<DoctorGroup> NAMED_GROUPS = List.of(DoctorGroup.PROJECT, DoctorGroup.ENVIRONMENT, DoctorGroup.NETWORK, DoctorGroup.WORK_GROUPS);
 
     /**
      * Prints one group as {@code <GROUP>_STATUS} and, for each finding, its code, mark, message and fix. The network

@@ -32,7 +32,9 @@ interface RuntimeControl {
 
         private static final long serialVersionUID = 1L;
 
+        /** Stable error code. */
         private final String code;
+        /** One sentence saying what happened, or {@code null}. */
         private final String detail;
 
         Rejected(String code) {

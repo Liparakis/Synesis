@@ -83,14 +83,17 @@ public final class InitCommand implements Callable<Integer> {
      * into the project (ADR-0103 decision 9). Printed on a re-run too, because running {@code init} again is
      * how one learns the way back to connecting an agent.
      */
-    private void printNextSteps(ProjectInitResult result, List<String> connected, Set<String> signedOut) {
+    private void printNextSteps(ProjectInitResult result, List<String> connected, Set<String> signedOut, List<String> advice) {
         if (result.retiredInstructions().contains("AGENTS.md")) {
             runtime.terminal().stdout("NEXT_STEP=Commit the change to AGENTS.md if Git tracks it: Synesis removed its old section from your file and kept your text");
         }
+        advice.forEach(step -> runtime.terminal().stdout("NEXT_STEP=" + step));
         if (connected.isEmpty()) {
-            runtime.terminal().stdout("NEXT_COMMAND=synesis provider install claude");
-            runtime.terminal().stdout("NEXT_STEP=Connect an agent to this project: synesis provider install claude (or: synesis provider install codex)");
-            runtime.terminal().stdout("NEXT_STEP=Start the agent in this folder (claude or codex) and tell it what to do");
+            if (advice.isEmpty()) {
+                runtime.terminal().stdout("NEXT_COMMAND=synesis provider install claude");
+                runtime.terminal().stdout("NEXT_STEP=Connect an agent to this project: synesis provider install claude (or: synesis provider install codex)");
+                runtime.terminal().stdout("NEXT_STEP=Start the agent in this folder (claude or codex) and tell it what to do");
+            }
         } else {
             runtime.terminal().stdout("NEXT_COMMAND=" + connected.getFirst());
             for (String provider : connected) {
@@ -100,7 +103,7 @@ public final class InitCommand implements Callable<Integer> {
                 runtime.terminal().stdout("NEXT_STEP=Start " + name(provider) + " in this folder: " + provider + ", and tell it what to do; Synesis starts no work of its own");
             }
         }
-        runtime.terminal().stdout("NEXT_STEP=See what is happening: synesis ui (browser) or synesis coordination status; what needs you: synesis operator list");
+        runtime.terminal().stdout("NEXT_STEP=See what is happening: synesis status (or synesis ui in the browser); what needs you: synesis operator list");
     }
 
     /**
@@ -172,7 +175,7 @@ public final class InitCommand implements Callable<Integer> {
      *
      * @return the exit code of the first failed connection, or {@link ExitCodes#OK}
      */
-    private int connectAgents(ProjectLocation location, Set<String> requested, List<String> connected, Set<String> signedOut) throws IOException {
+    private int connectAgents(ProjectLocation location, Set<String> requested, List<String> connected, Set<String> signedOut, List<String> advice) throws IOException {
         if (noAgents) {
             runtime.terminal().stdout("AGENTS=NOT_REQUESTED");
             return ExitCodes.OK;
@@ -195,18 +198,25 @@ public final class InitCommand implements Callable<Integer> {
         if (!requested.isEmpty()) {
             chosen = List.copyOf(requested);
         } else if (found.isEmpty()) {
-            runtime.terminal().stdout("NEXT_STEP=No agent was found on this computer: install Claude Code (claude) or Codex (codex), then run synesis init again");
+            advice.add("No agent was found on this computer: install Claude Code (claude) or Codex (codex), then run synesis init again");
             chosen = List.of();
         } else if (found.size() == 1) {
             chosen = found;
         } else if (runtime.terminal().interactive()) {
             chosen = choose(found);
         } else {
-            runtime.terminal().stdout("NEXT_STEP=Several agents were found (" + String.join(", ", found) + "): run synesis init --agent <id> for each one to connect, or --no-agents");
+            advice.add("Several agents were found (" + String.join(", ", found) + "): run synesis init --agent <id> for each one to connect (several: --agent " + String.join(",", found) + "), or --no-agents");
             chosen = List.of();
         }
         int exit = ExitCodes.OK;
         for (String provider : chosen) {
+            if (!found.contains(provider)) {
+                runtime.terminal().stdout("AGENT_" + key(provider) + "_CONNECT=FAILED");
+                ErrorShape.print(runtime.terminal()::stderr, "AGENT_NOT_INSTALLED", name(provider) + " (" + provider + ") is not on this computer's PATH, so it cannot be connected",
+                        "install " + name(provider) + " or add its folder to the PATH, then run 'synesis init --agent " + provider + "' again");
+                exit = exit == ExitCodes.OK ? ExitCodes.LOCAL_CONFIGURATION : exit;
+                continue;
+            }
             ProviderResult result = runtime.providerService().install(location, provider);
             Map<String, String> values = result.values();
             String error = values.get("ERROR");
@@ -277,15 +287,16 @@ public final class InitCommand implements Callable<Integer> {
             }
             List<String> connected = new ArrayList<>();
             Set<String> signedOut = new LinkedHashSet<>();
+            List<String> advice = new ArrayList<>();
             int exit;
             try {
-                exit = connectAgents(location, requested, connected, signedOut);
+                exit = connectAgents(location, requested, connected, signedOut, advice);
             } catch (IOException | RuntimeException failure) {
                 ErrorShape.print(runtime.terminal()::stderr, "AGENT_SETUP_FAILED", "Finding or connecting the agents failed: " + failure.getClass().getSimpleName());
                 exit = ExitCodes.LOCAL_CONFIGURATION;
             }
             touched.changes().forEach(entry -> runtime.terminal().stdout("FILE_" + entry.kind() + "=" + entry.path()));
-            printNextSteps(result, connected, signedOut);
+            printNextSteps(result, connected, signedOut, advice);
             return exit;
         } catch (ProjectApplicationService.ProjectApplicationException failure) {
             return refuseProject(failure.code(), failure.getMessage());

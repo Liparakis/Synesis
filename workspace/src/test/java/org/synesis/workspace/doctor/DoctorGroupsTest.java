@@ -208,6 +208,22 @@ class DoctorGroupsTest {
   }
 
   @Test
+  void aProjectFindingIsPrintedWithItsReasonAndFixInTheDefaultReport() throws Exception {
+    Path root = project("project-group");
+    Path admin = Files.createDirectories(org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier.resolveWorkspaceRoot(root).resolve("admin"));
+    Files.writeString(admin.resolve("cleanup-execution.lock"), "{ \"pid\": 9999999 }");
+
+    DoctorReport report = doctor(() -> true, name -> true, NetworkProbe.UNKNOWN).diagnose(root);
+    List<String> lines = DoctorRenderer.renderConcise(report).lines().toList();
+
+    assertTrue(lines.contains("PROJECT_STATUS=ATTENTION"), lines.toString());
+    assertTrue(lines.contains("PROJECT_FINDING_1=stale_cleanup_lock"), lines.toString());
+    assertTrue(lines.stream().anyMatch(line -> line.startsWith("PROJECT_FINDING_1_MESSAGE=") && line.length() > "PROJECT_FINDING_1_MESSAGE=".length()), lines.toString());
+    assertTrue(lines.stream().anyMatch(line -> line.startsWith("PROJECT_FINDING_1_FIX=") && line.length() > "PROJECT_FINDING_1_FIX=".length()), lines.toString());
+    assertTrue(DoctorRenderer.renderJson(report).contains("\"project\":\"ATTENTION\""));
+  }
+
+  @Test
   void theConciseReportKeepsEveryEarlierLineAndAddsOneSectionPerGroup() throws Exception {
     Path root = project("render");
     ReplicationSettings.leader(Set.of("member-node")).write(Files.createDirectories(root.resolve(".synesis/coordination")));
@@ -260,7 +276,7 @@ class DoctorGroupsTest {
     assertTrue(json.contains("\"group\":\"environment\""), json);
     assertTrue(json.contains("\"mark\":\"confirmed\""), json);
     assertTrue(json.contains("\"fix\":\"install Git"), json);
-    assertTrue(json.contains("\"groups\":{\"environment\":\"ATTENTION\",\"network\":\"NOT_APPLICABLE\",\"work_groups\":\"OK\"}"), json);
+    assertTrue(json.contains("\"groups\":{\"project\":\"OK\",\"environment\":\"ATTENTION\",\"network\":\"NOT_APPLICABLE\",\"work_groups\":\"OK\"}"), json);
   }
 
   @Test

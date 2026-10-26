@@ -132,6 +132,8 @@ final class DaemonServerTest {
             DaemonEndpoint.Record endpoint = awaitEndpoint(endpointDirectory.resolve("endpoint.json"));
             assertEquals("RUNNING", object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "STATUS"))).get("state"));
             assertEquals("AUTH_REQUIRED", object(exchange(endpoint, Map.of("token", "wrong", "operation", "STATUS"))).get("error"));
+            assertEquals(org.synesis.cli.command.BuildInfo.identity(), object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "STATUS"))).get("build"), "every answer names the daemon's build");
+            assertEquals(org.synesis.cli.command.BuildInfo.identity(), object(exchange(endpoint, Map.of("token", "wrong", "operation", "STATUS"))).get("build"));
 
             Map<String, Object> unresolved = object(exchange(endpoint, Map.of("token", endpoint.token(), "operation", "OPEN_URI", "uri", validAnswer(), "openBrowser", false)));
             assertTrue(Boolean.TRUE.equals(unresolved.get("ok")));

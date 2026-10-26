@@ -46,6 +46,9 @@ final class GettingStartedWalkthroughTest {
         Path standIn = Files.createDirectories(tmp.resolve("agents")).resolve("claude");
         Files.writeString(standIn, "#!/bin/sh\necho 'claude 0.0.0-stand-in'\n");
         assertTrue(standIn.toFile().setExecutable(true));
+        // A computer with both agents: a plain `synesis init` connects none in a script (D7 of the 2026-10-26 real runs).
+        Path codexStandIn = Files.writeString(standIn.resolveSibling("codex"), "#!/bin/sh\necho 'codex-cli 0.0.0-stand-in'\n");
+        assertTrue(codexStandIn.toFile().setExecutable(true));
         Path launcher = DistributionLauncherTest.launcher();
 
         for (List<String> command : commands) {

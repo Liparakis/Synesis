@@ -309,11 +309,19 @@ public final class SynesisCli {
         return text.toString();
     }
 
+    private static final java.util.Set<String> REMOVED_LINK_COMMANDS = java.util.Set.of("host", "join", "sync");
+
     static void configureHandlers(CommandLine command, CliRuntime runtime) {
         command.setOut(runtime.terminal().out());
         command.setErr(runtime.terminal().err());
         command.setParameterExceptionHandler((exception, _) -> {
             CommandLine failed = exception.getCommandLine();
+            // Someone following an older document still types the commands that `link invite` / `link join` replaced.
+            boolean removedLinkCommand = exception instanceof CommandLine.UnmatchedArgumentException unmatched
+                    && failed.getParent() == null && !unmatched.getUnmatched().isEmpty() && REMOVED_LINK_COMMANDS.contains(unmatched.getUnmatched().getFirst());
+            if (removedLinkCommand) {
+                runtime.terminal().stderr("This command was replaced: use synesis link invite / link join");
+            }
             if (runtime.terminal() instanceof HumanTerminal) {
                 // A person can act on the parser's own explanation and on near-miss suggestions;
                 // the machine contract below stays a single stable line.

@@ -214,6 +214,41 @@ final class InitAgentSetupTest {
         assertTrue(listed(named).contains(home.resolve(".codex/config.toml").toAbsolutePath().normalize().toString()), named.out());
     }
 
+    /** D3 of the 2026-10-26 real runs: one coherent set of next steps, ending in {@code synesis status}. */
+    @Test
+    void theNextStepsDoNotContradictWhatWasFoundAndEndWithStatus() throws Exception {
+        install("claude", "codex");
+        String several = run(false, "").out();
+        assertTrue(several.contains("--agent claude,codex"), several);
+        assertFalse(several.contains("Connect an agent to this project"), several);
+        assertFalse(several.contains("NEXT_COMMAND="), several);
+        assertTrue(several.contains("NEXT_STEP=See what is happening: synesis status"), several);
+
+        for (String agent : new String[]{"claude", "codex"}) {
+            Files.delete(bin.resolve(agent));
+        }
+        String none = run(false, "").out();
+        assertTrue(none.contains("NEXT_STEP=No agent was found"), none);
+        assertFalse(none.contains("Connect an agent to this project"), none);
+        assertFalse(none.contains("Start the agent in this folder"), none);
+    }
+
+    /** D4: naming an agent that is not installed must not report a connection. */
+    @Test
+    void anAgentNamedButNotInstalledIsRefusedWithErrorMessageAndFix() throws Exception {
+        install("codex");
+
+        Run run = run(false, "", "--agent", "claude");
+
+        assertEquals(ExitCodes.LOCAL_CONFIGURATION, run.exit(), run.out() + run.err());
+        assertTrue(run.out().contains("AGENT_CLAUDE_CONNECT=FAILED"), run.out());
+        assertFalse(run.out().contains("AGENT_CLAUDE_CONNECT=SUCCESS"), run.out());
+        assertTrue(run.err().lines().anyMatch(line -> line.equals("ERROR=AGENT_NOT_INSTALLED")), run.err());
+        assertTrue(run.err().lines().anyMatch(line -> line.startsWith("MESSAGE=") && line.contains("not on this computer's PATH")), run.err());
+        assertTrue(run.err().lines().anyMatch(line -> line.startsWith("FIX=") && line.contains("synesis init --agent claude")), run.err());
+        assertFalse(Files.exists(project.resolve(".claude")), "nothing of the refused agent is written");
+    }
+
     @Test
     void severalAgentsOnATerminalAreAskedOnceAndEnterMeansAll() throws Exception {
         install("claude", "codex");

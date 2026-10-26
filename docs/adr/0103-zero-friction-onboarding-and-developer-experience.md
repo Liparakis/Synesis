@@ -834,6 +834,28 @@ token; a task that claims authority leaves the log's head and the project's snap
   waiting for a task, which spawns no process); the controller's connections and session leases were written for the CLI
   process and are used unchanged inside the runtime process.
 
+- **Real runs 2026-10-26: D1, D3, D4, D5, D6, D7, D8, D9 fixed** (defects of the stage 2 and 3 real runs; D2, D10 to D13
+  are information or lab findings and need no change).
+  - D1: discovery takes the version from the first line that looks like a version (digits, a dot, digits), and Codex's
+    sign-in answer from its last non-blank line, so a warning printed first is neither.
+  - D3: `init` prints one coherent set of next steps (none found: install one; several found in a script: `--agent a,b`
+    or `--no-agents`; no stray "connect an agent" or "start the agent" line), ending with `synesis status`.
+  - D4: `init --agent <id>` for an agent that is not on the PATH ends `AGENT_<ID>_CONNECT=FAILED` with
+    `ERROR=AGENT_NOT_INSTALLED`, MESSAGE and FIX, exit 10, and writes nothing of that agent.
+  - D5: the usage error for the removed `host`, `join` and `sync` adds `use synesis link invite / link join`.
+  - D6: the default `doctor` report prints the `project` group like the others (`PROJECT_STATUS`, and per finding code,
+    mark, message, fix); the JSON `groups` map gains `project`.
+  - D7: the decision is that a script names the agent (decision 2 already says so). The getting-started walkthrough and so
+    `measure-onboarding.ps1` run `synesis init --agent claude` (the script swaps in `-Agent`); `GettingStartedWalkthroughTest`
+    now has both agents on its PATH. A plain script `init` on a two-agent computer still connects none and says why.
+  - D8: every daemon answer carries the daemon's build (version, commit, build time). A command that meets a daemon of
+    another build, or of one that names none, refuses with `ERROR=DAEMON_BUILD_MISMATCH`, MESSAGE and FIX (end process N);
+    it never restarts or uses it. Where the refusal is printed: `ui`, the `link` commands; `agents run` shows it as
+    `REASON=daemon_build_mismatch`.
+  - D9: every JVM Synesis starts gets `-XX:ErrorFile=<state folder>/Synesis/crash/hs_err_pid%p.log`: the child JVMs
+    (`CliChildJvm`: daemon and runtime), the installed `synesis`/`synesis.cmd` launchers, the native MCP launcher and the
+    protocol activation helper. Gradle's generated development scripts (`installDist`) do not set it.
+
 ## Acceptance tests and targets
 
 ### Two onboarding times, measured apart

@@ -107,6 +107,18 @@ final class SynesisCliParsingTest {
     }
 
     @Test
+    void aRemovedLinkCommandNamesItsReplacementAndAnotherTypoDoesNot() throws Exception {
+        for (String[] arguments : new String[][]{{"host"}, {"join", "synesis://join/SLB3-x"}, {"sync", "host"}}) {
+            Invocation invocation = invocation();
+            assertEquals(ExitCodes.USAGE, SynesisCli.execute(arguments, invocation.runtime()));
+            assertTrue(invocation.stderr().contains("use synesis link invite / link join"), invocation.stderr());
+        }
+        Invocation other = invocation();
+        assertEquals(ExitCodes.USAGE, SynesisCli.execute(new String[]{"banana"}, other.runtime()));
+        assertFalse(other.stderr().contains("link invite"), other.stderr());
+    }
+
+    @Test
     void publicCoordinationSurfaceIsReachableFromRootHelp() throws Exception {
         Invocation invocation = invocation();
         assertEquals(0, SynesisCli.execute(new String[]{"help", "--all"}, invocation.runtime()));

@@ -76,6 +76,15 @@ class ProviderDiscoveryTest {
     }
 
     @Test
+    void aWarningPrintedBeforeTheVersionAndTheSignInAnswerIsNotTakenForThem() throws Exception {
+        String warning = "WARNING: proceeding, even though we could not create PATH aliases\n";
+        List<Finding> findings = new ProviderDiscovery(bin("codex").toString(), false, command -> String.join(" ", command).contains("--version")
+                ? new Answer(0, warning + "codex-cli 0.163.0\n") : new Answer(1, warning + "Not logged in\n")).discover();
+
+        assertEquals(new Finding("codex", true, Optional.of("codex-cli 0.163.0"), SignIn.SIGNED_OUT), of(findings, "codex"));
+    }
+
+    @Test
     void twoAgentsAreFoundAndEachAnswersForItself() throws Exception {
         List<Finding> findings = new ProviderDiscovery(bin("claude", "codex").toString(), false,
                 harness(new java.util.concurrent.CopyOnWriteArrayList<>(), new Answer(1, "{\"loggedIn\": false}"), new Answer(0, "Logged in using ChatGPT\n"))).discover();

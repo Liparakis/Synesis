@@ -66,7 +66,8 @@ public final class CodexProviderIntegration implements ProviderIntegration {
 
     @Override
     public SignIn signInState(int exitCode, String output) {
-        String answer = output == null ? "" : output.strip().toLowerCase(java.util.Locale.ROOT);
+        // Codex may print a warning before its answer, so the answer is the last non-blank line.
+        String answer = output == null ? "" : output.lines().map(String::strip).filter(line -> !line.isEmpty()).reduce((first, last) -> last).orElse("").toLowerCase(java.util.Locale.ROOT);
         if (answer.startsWith("not logged in")) {
             return SignIn.SIGNED_OUT;
         }

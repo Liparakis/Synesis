@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.synesis.cli.command.BuildInfo;
 import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
@@ -100,14 +101,14 @@ public final class DaemonClient {
      * Asks whether a daemon that is already running holds a runtime for the project. A daemon is never started for this.
      *
      * @param project project directory
-     * @return {@code false} when no daemon runs, it holds none for the project, or it cannot be asked
+     * @return {@code false} when no daemon runs, it holds none for the project, or it cannot be asked (a daemon of another build is not asked)
      */
     public static boolean holdsProjectRuntime(Path project) {
-        DaemonEndpoint.Record endpoint = connectExisting();
-        if (endpoint == null) {
-            return false;
-        }
         try {
+            DaemonEndpoint.Record endpoint = connectExisting();
+            if (endpoint == null) {
+                return false;
+            }
             Map<String, Object> status = exchange(endpoint, Map.of("token", endpoint.token(), "operation", "STATUS"));
             return status.get("projects") instanceof List<?> projects && projects.contains(Objects.requireNonNull(project, "project").toAbsolutePath().normalize().toString());
         } catch (IOException failure) {
@@ -150,13 +151,25 @@ public final class DaemonClient {
         return exchangeAllowError(endpoint, request);
     }
 
-    private static DaemonEndpoint.Record connectExisting() {
+    private static DaemonEndpoint.Record connectExisting() throws DaemonBuildMismatchException {
         try {
             DaemonEndpoint.Record endpoint = DaemonEndpoint.read();
             exchange(endpoint, Map.of("token", endpoint.token(), "operation", "STATUS"));
             return endpoint;
+        } catch (DaemonBuildMismatchException otherBuild) {
+            throw otherBuild;
         } catch (IOException failure) {
             return null;
+        }
+    }
+
+    /**
+     * Refuses an answer from a daemon of another build. A daemon that names no build (one older than this check) is another build.
+     */
+    static void requireSameBuild(Map<String, Object> reply, long daemonPid) throws DaemonBuildMismatchException {
+        String own = BuildInfo.identity();
+        if (!own.equals(reply.get("build"))) {
+            throw new DaemonBuildMismatchException(reply.get("build") instanceof String named ? named : null, own, daemonPid);
         }
     }
 
@@ -186,6 +199,7 @@ public final class DaemonClient {
                     throw new IOException("daemon response is malformed");
                 }
                 @SuppressWarnings("unchecked") Map<String, Object> typed = (Map<String, Object>) map;
+                requireSameBuild(typed, endpoint.pid());
                 return Map.copyOf(typed);
             }
         } catch (java.net.SocketTimeoutException failure) {

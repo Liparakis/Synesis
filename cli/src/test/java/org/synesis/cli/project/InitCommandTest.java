@@ -69,7 +69,7 @@ final class InitCommandTest {
         assertTrue(text.contains("NEXT_COMMAND=synesis provider install claude"), text);
         assertTrue(text.contains("NEXT_STEP=Connect an agent to this project: synesis provider install claude (or: synesis provider install codex)"), text);
         assertTrue(text.contains("NEXT_STEP=Start the agent in this folder (claude or codex) and tell it what to do"), text);
-        assertTrue(text.contains("synesis coordination status"), text);
+        assertTrue(text.contains("synesis status"), text);
         assertFalse(text.contains("constraint create"), text);
         assertFalse(text.contains("INSTRUCTIONS_REMOVED"), text);
         assertFalse(Files.exists(root.resolve("AGENTS.md")));
