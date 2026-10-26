@@ -65,6 +65,8 @@ public final class ProjectPolicyShowCommand implements Callable<Integer> {
             return ExitCodes.OK;
         } catch (ProjectApplicationException failure) {
             return OperatorDecisions.refuse(runtime, failure);
+        } catch (org.synesis.workspace.application.project.PolicyUnavailableException | org.synesis.workspace.application.project.PolicyNotReceivedException refused) {
+            return OperatorDecisions.refuse(runtime, refused);
         } catch (IOException | RuntimeException failure) {
             runtime.terminal().stderr("ERROR=PROJECT_STORAGE_FAILED");
             return ExitCodes.LOCAL_CONFIGURATION;

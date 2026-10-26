@@ -41,6 +41,18 @@ class McpToolCatalogTest {
             .size());
   }
 
+  /**
+   * ADR-0104 fitness function: a decision about policy, membership, the trash or an operator request's closing is
+   * signed by a person at a terminal, so no tool an agent can call may change one. The names are the whole surface.
+   */
+  @Test
+  void noToolChangesAPolicyAMembershipATrashOrAnOperatorRequest() {
+    for (String name : McpToolCatalog.rawNames()) {
+      assertFalse(name.matches(".*(policy|validation|review_policy|operator|decision|member|trash|owner|key).*"),
+          "an agent-callable tool must not decide what a person decides: " + name);
+    }
+  }
+
   @Test
   void runCommandUsesOnlyDirectArgvAndExposesCompleteEvidenceMetadata() {
     McpToolCatalog.Descriptor descriptor = McpToolCatalog.descriptors()

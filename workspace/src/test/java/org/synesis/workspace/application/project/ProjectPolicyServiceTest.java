@@ -128,10 +128,28 @@ final class ProjectPolicyServiceTest {
             Files.write(entry, bytes);
         }
 
-        ProjectApplicationException refused = assertThrows(ProjectApplicationException.class, () -> service.locate(root));
+        ProjectLocation unreadable = service.locate(root);
 
-        assertEquals("POLICY_UNAVAILABLE", refused.code());
-        assertThrows(ProjectApplicationException.class, () -> service.require(root));
+        // Everything that is not a gate still works, so doctor and the repair commands can open the project.
+        assertEquals(root.toAbsolutePath().normalize(), unreadable.root());
+        assertEquals(start.projectId(), unreadable.projectId());
+        // Every gate asks through these accessors and is refused: it neither runs nor is skipped, and the file is not used.
+        assertThrows(PolicyUnavailableException.class, unreadable::validation);
+        assertThrows(PolicyUnavailableException.class, unreadable::review);
+        assertThrows(PolicyUnavailableException.class, unreadable::validationAlsoInLane);
+        assertEquals("POLICY_UNAVAILABLE", assertThrows(ProjectApplicationException.class, () -> ProjectPolicyService.read(unreadable)).code());
+    }
+
+    @Test
+    void aLocationKeptForAWhileFollowsTheLogWhenAnEntryIsRecorded() throws Exception {
+        Path root = gitProject();
+        ProjectPolicyService.decide(service.locate(root), TYPES, validation(STATUS), Optional.empty());
+        ProjectLocation kept = service.locate(root);
+        assertEquals(STATUS, kept.validation());
+
+        ProjectPolicyService.decide(service.locate(root), TYPES, validation(LOG), Optional.empty());
+
+        assertEquals(LOG, kept.validation(), "a location held by a long-lived process is not a snapshot of the policy");
     }
 
     @Test

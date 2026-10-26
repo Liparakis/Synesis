@@ -2,6 +2,10 @@
 
 ## Status
 
+**Amended by ADR-0104 (built 2026-10-26/27):** the project's review policy is read from the owner's signed decision in the
+project's log (`synesis project review set mandatory|none`), not from `review` in `.synesis/project.json`, once the
+project has a signed baseline; the work group still keeps its own copy as announced.
+
 Accepted on 2026-10-11. Decided by the repository owner after the real runs
 recorded in `docs/agent/CURRENT.md` for that date. Made under ADR-0088: the
 persisted project metadata and the capability event sequence change, every

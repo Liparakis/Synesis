@@ -178,6 +178,22 @@ class ProjectPolicyCommandTest {
     }
 
     @Test
+    void aLogThatCannotBeReadRefusesTheGateReadersInTheErrorShapeAndNeverFallsBackToTheFile() throws Exception {
+        assertEquals(0, run("project", "validation", "set", "--project", project, "--", "git", "status").exit());
+        try (var files = Files.list(location.coordinationDirectory().resolve("events"))) {
+            Path entry = files.filter(Files::isRegularFile).sorted().findFirst().orElseThrow();
+            byte[] bytes = Files.readAllBytes(entry);
+            bytes[bytes.length / 2] ^= 0x55;
+            Files.write(entry, bytes);
+        }
+
+        Result shown = run("project", "validation", "show", "--project", project);
+
+        shown.assertIs(ExitCodes.LOCAL_CONFIGURATION, List.of(), CliHarness.shaped("POLICY_UNAVAILABLE", "~REASON=.*"));
+        assertEquals(ExitCodes.LOCAL_CONFIGURATION, run("project", "review", "show", "--project", project).exit());
+    }
+
+    @Test
     void anInvalidValidationCommandIsRefusedBeforeAnythingIsSigned() throws Exception {
         Result refused = run("project", "validation", "set", "--project", project, "--directory", "/abs", "--", "git", "status");
 

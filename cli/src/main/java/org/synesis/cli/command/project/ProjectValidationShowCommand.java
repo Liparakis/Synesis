@@ -43,6 +43,8 @@ public final class ProjectValidationShowCommand implements Callable<Integer> {
         } catch (ProjectApplicationService.ProjectApplicationException failure) {
             ProjectValidationCommand.printFailure(runtime, failure);
             return ExitCodes.LOCAL_CONFIGURATION;
+        } catch (org.synesis.workspace.application.project.PolicyUnavailableException | org.synesis.workspace.application.project.PolicyNotReceivedException refused) {
+            return OperatorDecisions.refuse(runtime, refused);
         } catch (RuntimeException failure) {
             runtime.terminal().stderr("ERROR=PROJECT_INVALID");
             return ExitCodes.LOCAL_CONFIGURATION;

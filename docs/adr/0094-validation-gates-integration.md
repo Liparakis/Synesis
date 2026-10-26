@@ -4,6 +4,12 @@
 
 Accepted on 2026-10-13 by the repository owner. Built on 2026-10-13; see "As built".
 
+**Amended by ADR-0104 (built 2026-10-26/27):** the validation command, `alsoInLane` and the review policy are no longer
+fields of `.synesis/project.json` that gates read. They are owner decisions signed with the operator key and kept in the
+project's log (`PROJECT_POLICY_SET`); once a project has a signed baseline, editing or committing the file changes
+nothing, and `synesis project validation set` and `clear` write signed entries instead of rewriting and committing the
+file. Everything below that says the command "is kept in `project.json`" describes the project before its baseline.
+
 It extends ADR-0042 (the project-owned command), ADR-0045 (the road a rejected
 snapshot takes back to its producer) and ADR-0091 (operator requests).
 

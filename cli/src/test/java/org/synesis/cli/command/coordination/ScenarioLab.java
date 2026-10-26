@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
@@ -15,12 +16,14 @@ import java.util.stream.Stream;
 import org.synesis.cli.command.coordination.TestComputers.Computer;
 import org.synesis.cli.command.coordination.TestComputers.Response;
 
+import org.synesis.coordination.domain.policy.PolicyEntries.PolicyName;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 
 import org.synesis.link.session.PeerSession;
 
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.application.project.ProjectPolicyService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.application.provider.ProviderManualService;
 import org.synesis.workspace.discovery.KnownProjectRegistry;
@@ -84,10 +87,10 @@ final class ScenarioLab implements AutoCloseable {
         GitProcessRunner.run(ownerRoot, "add", ".");
         GitProcessRunner.run(ownerRoot, "commit", "-m", "baseline");
         ProjectLocation ownerProject = service.initForRegistration(ownerRoot, false).location();
-        Files.writeString(ownerProject.metadataFile(), "{\"schemaVersion\":2,\"projectId\":\"" + ownerProject.projectId() + "\",\"createdAt\":\"" + ownerProject.createdAt()
-                + "\",\"review\":{\"mandatory\":true}}");
-        GitProcessRunner.run(ownerRoot, "add", "--", ownerRoot.relativize(ownerProject.metadataFile()).toString().replace('\\', '/'));
-        GitProcessRunner.run(ownerRoot, "commit", "-m", "require review");
+        // The owner signs the decision as a person would (ADR-0104): the baseline and review, in the owner's log, which the
+        // friend receives. A member that has not received a baseline runs no gate.
+        ProjectPolicyService.decide(ownerProject, newKey -> "a passphrase for the lab".toCharArray(),
+                Map.of(PolicyName.REVIEW, "MANDATORY"), Optional.empty());
         String branch = GitProcessRunner.run(ownerRoot, "symbolic-ref", "--short", "HEAD").strip();
 
         Path friendRoot = temp.resolve("beta");

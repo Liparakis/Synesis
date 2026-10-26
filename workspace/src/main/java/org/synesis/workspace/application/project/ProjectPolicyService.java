@@ -155,27 +155,57 @@ public final class ProjectPolicyService {
     // ---- reading ----
 
     /**
-     * Gives a location read from the file the policy of the signed log, once the log has a baseline.
+     * Gives a location read from the file the policy of the signed log, once the log has a baseline. The log is read
+     * when a gate first asks for policy, not when the location is made, so a command that never asks does not need a
+     * readable log, and a location kept for a long time follows the log: it is read again whenever an entry has been
+     * recorded since. A log that cannot be read refuses the gate ({@link PolicyUnavailableException}); a member that
+     * has not applied the owner's baseline refuses every policy accessor ({@link PolicyNotReceivedException}) while
+     * everything else on it works, so the baseline can arrive.
      *
      * @param file the location as the file reads
      * @return the same location with the policy in force
-     * @throws ProjectApplicationException {@code POLICY_UNAVAILABLE} when the log cannot be read or verified. A member
-     *                                     that has not applied the owner's baseline gets a location that refuses every
-     *                                     policy accessor with {@link PolicyNotReceivedException}
      */
-    public static ProjectLocation overlay(ProjectLocation file) throws ProjectApplicationException {
-        Reading reading = read(file);
-        if (reading.snapshot().isEmpty()) {
-            if (reading.shared() && !reading.ownsTheProject()) {
-                // Everything but a gate still works: the member has to be able to connect and receive the baseline.
-                return new ProjectLocation(file.root(), file.synesisDirectory(), file.metadataFile(), file.profile(), file.projectId(), file.createdAt(),
-                        null, ReviewPolicy.none(), false, false);
-            }
-            return file;
+    public static ProjectLocation overlay(ProjectLocation file) {
+        return file.withPolicySource(new LogPolicy(file));
+    }
+
+    /** The policy of one location, read from the log when asked and again when an entry has been recorded since. */
+    private static final class LogPolicy implements ProjectLocation.PolicySource {
+
+        private final ProjectLocation file;
+        private long recorded = -1;
+        private ProjectLocation.Policy cached;
+
+        LogPolicy(ProjectLocation file) {
+            this.file = file;
         }
-        Snapshot policy = reading.snapshot().get();
-        return new ProjectLocation(file.root(), file.synesisDirectory(), file.metadataFile(), file.profile(), file.projectId(), file.createdAt(),
-                policy.validation(), policy.review(), policy.validationAlsoInLane());
+
+        @Override
+        public synchronized ProjectLocation.Policy current() {
+            // Every change of the policy begins with an entry recorded in this computer's log or a copy of another's.
+            long now = PredictionEventStore.recordedEvents(file.coordinationDirectory());
+            if (cached != null && now == recorded) {
+                return cached;
+            }
+            Reading reading;
+            try {
+                reading = read(file);
+            } catch (ProjectApplicationException unreadable) {
+                throw new PolicyUnavailableException(unreadable);
+            }
+            ProjectLocation.Policy policy;
+            if (reading.snapshot().isPresent()) {
+                Snapshot signed = reading.snapshot().get();
+                policy = new ProjectLocation.Policy(signed.validation(), signed.review(), signed.validationAlsoInLane(), true);
+            } else if (reading.shared() && !reading.ownsTheProject()) {
+                policy = new ProjectLocation.Policy(null, ReviewPolicy.none(), false, false);
+            } else {
+                policy = new ProjectLocation.Policy(file.validation(), file.review(), file.validationAlsoInLane(), true);
+            }
+            recorded = now;
+            cached = policy;
+            return policy;
+        }
     }
 
     /**

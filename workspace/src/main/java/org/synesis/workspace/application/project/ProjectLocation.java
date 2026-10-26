@@ -30,13 +30,41 @@ import org.synesis.workspace.application.project.execution.ProjectCommandSpec;
  * @param validationAlsoInLane whether the validation command also runs in a lane alone before its finish is
  *                         published; it always runs on the combined tree before integration. A lane whose tests need
  *                         a sibling's code cannot pass the command alone, so a project opts in
- * @param policyReceived   whether this computer has the project's signed policy (ADR-0104). {@code false} only on a
- *                         member of a shared project that has not applied the owner's baseline; every accessor of
- *                         policy then refuses with {@link PolicyNotReceivedException}, so a gate cannot run on a
- *                         default and nothing needs to remember to ask
+ * @param policySource     where the policy is read from when it is the signed log (ADR-0104), or {@code null} when the
+ *                         three fields above are the policy, which is the project file's before a signed baseline. The
+ *                         accessors of policy ask the source, which resolves when first asked and fails closed:
+ *                         {@link PolicyUnavailableException} when the log cannot be read, {@link PolicyNotReceivedException}
+ *                         on a member that has not applied the owner's baseline. Nothing that never asks for policy reads
+ *                         the log, and no gate can run on a default because every gate asks through these accessors
  */
 public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId, Instant createdAt, ProjectCommandSpec validation,
-                              ReviewPolicy review, boolean validationAlsoInLane, boolean policyReceived) {
+                              ReviewPolicy review, boolean validationAlsoInLane, PolicySource policySource) {
+
+    /**
+     * The gating policy as one value.
+     *
+     * @param validation           the validation command, or {@code null} for none
+     * @param review               the review policy
+     * @param validationAlsoInLane whether the command also runs in each lane alone
+     * @param received             whether this computer has the policy; {@code false} only on a member that has not applied the owner's baseline
+     */
+    public record Policy(ProjectCommandSpec validation, ReviewPolicy review, boolean validationAlsoInLane, boolean received) {
+    }
+
+    /**
+     * Where a location's policy comes from when it is not the file's.
+     */
+    @FunctionalInterface
+    public interface PolicySource {
+
+        /**
+         * Returns the policy now.
+         *
+         * @return the policy in force
+         * @throws PolicyUnavailableException when the signed log cannot be read or verified
+         */
+        Policy current();
+    }
 
     /**
      * Constructs a project location whose policy is known: read from the project file before a baseline, or from the
@@ -54,7 +82,7 @@ public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFil
      */
     public ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId, Instant createdAt, ProjectCommandSpec validation,
                            ReviewPolicy review, boolean validationAlsoInLane) {
-        this(root, synesisDirectory, metadataFile, profile, projectId, createdAt, validation, review, validationAlsoInLane, true);
+        this(root, synesisDirectory, metadataFile, profile, projectId, createdAt, validation, review, validationAlsoInLane, null);
     }
 
     /**
@@ -108,8 +136,7 @@ public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFil
      */
     @Override
     public ProjectCommandSpec validation() {
-        requirePolicy();
-        return validation;
+        return received().validation();
     }
 
     /**
@@ -120,8 +147,7 @@ public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFil
      */
     @Override
     public ReviewPolicy review() {
-        requirePolicy();
-        return review;
+        return received().review();
     }
 
     /**
@@ -132,14 +158,49 @@ public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFil
      */
     @Override
     public boolean validationAlsoInLane() {
-        requirePolicy();
-        return validationAlsoInLane;
+        return received().validationAlsoInLane();
     }
 
-    private void requirePolicy() {
-        if (!policyReceived) {
+    /**
+     * Returns the policy, refusing where this computer does not have it.
+     */
+    private Policy received() {
+        Policy policy = policy();
+        if (!policy.received()) {
             throw new PolicyNotReceivedException();
         }
+        return policy;
+    }
+
+    /**
+     * Returns the policy and whether this computer has it, without refusing.
+     *
+     * @return the policy in force
+     * @throws PolicyUnavailableException when the signed log cannot be read or verified
+     */
+    public Policy policy() {
+        return policySource == null ? new Policy(validation, review, validationAlsoInLane, true) : policySource.current();
+    }
+
+    /**
+     * Returns whether this computer has the project's signed policy: {@code false} only on a member of a shared project
+     * that has not applied the owner's baseline, where every accessor of policy refuses.
+     *
+     * @return whether the policy is here
+     * @throws PolicyUnavailableException when the signed log cannot be read or verified
+     */
+    public boolean policyReceived() {
+        return policy().received();
+    }
+
+    /**
+     * Returns this location with its policy read from a source: the signed log.
+     *
+     * @param source where the policy comes from
+     * @return the same project with that policy
+     */
+    public ProjectLocation withPolicySource(PolicySource source) {
+        return new ProjectLocation(root, synesisDirectory, metadataFile, profile, projectId, createdAt, validation, review, validationAlsoInLane, source);
     }
 
     /**

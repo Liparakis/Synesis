@@ -85,6 +85,22 @@ final class OperatorDecisions {
         return ExitCodes.LOCAL_CONFIGURATION;
     }
 
+    /**
+     * Prints the refusal of a gate's policy accessor, which is unchecked because every gate reads policy through one
+     * door: the signed log cannot be read, or this member has not received the owner's baseline.
+     *
+     * @param runtime CLI runtime
+     * @param failure the refusal
+     * @return the exit code
+     */
+    static int refuse(CliRuntime runtime, IllegalStateException failure) {
+        String code = failure instanceof org.synesis.workspace.application.project.PolicyUnavailableException
+                ? org.synesis.workspace.application.project.PolicyUnavailableException.CODE : org.synesis.workspace.application.project.PolicyNotReceivedException.CODE;
+        ErrorShape.print(runtime.terminal()::stderr, code);
+        runtime.terminal().stderr("REASON=" + (failure.getCause() == null ? failure.getMessage() : failure.getCause().getMessage()));
+        return ExitCodes.LOCAL_CONFIGURATION;
+    }
+
     private static char[] askPassphrase(CliRuntime runtime, boolean newKey) throws IOException {
         // The explanation is part of the prompt, so it appears only where a person is there to read it.
         char[] first = runtime.terminal().readSecret(newKey

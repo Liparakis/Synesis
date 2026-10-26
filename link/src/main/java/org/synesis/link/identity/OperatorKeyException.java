@@ -7,8 +7,10 @@ import java.io.IOException;
  */
 public final class OperatorKeyException extends IOException {
 
+    /** Serialization version. */
     private static final long serialVersionUID = 1L;
 
+    /** The stable code. */
     private final String code;
 
     /**

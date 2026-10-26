@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed on 2026-10-26, at the owner's request. Nothing here is built. The owner decided the three points under
+Proposed on 2026-10-26, at the owner's request. Stage 1 (signed decisions, the operator key, gates reading the log) was
+built on 2026-10-26/27, see "Stage 1 as built"; nothing else here is built. The owner decided the three points under
 "Decisions made by the owner" the same day (USER-STATED); every other choice is the designer's and is marked so, open
 to the owner. It extends ADR-0089 (review policy), ADR-0091 (operator requests), ADR-0094 (validation gates) and
 ADR-0098 (membership entries signed by the owner). It closes the gap the owner parked on 2026-10-18 ("agents can bypass
@@ -599,6 +600,84 @@ Tests:
 
 Completion criteria: all of the above green on the Linux gate; the Windows gate once; no reader of policy bypasses
 `ProjectLocation`; `project validation set` no longer commits to Git; ADR-0094 and the CLI help updated.
+
+#### Stage 1 as built (Built 2026-10-26/27, branch `adr-0098-step3-code-over-link`; parts A and B, with the operator key)
+
+Source semantics proven on the Linux gate; no real-run acceptance yet. Each item:
+
+1. **Entry. Built 2026-10-26/27.** `PROJECT_POLICY_SET` is wire code 93. The payload (`PolicyEntries.ProjectPolicySet`,
+   magic `SPS1`) is `{revision, name, value, operatorSignature}`; `name` is the closed set `operator.key`, `validation`,
+   `validation.alsoInLane`, `review`, `sandbox.unsandboxed`, `sandbox.paths`, each with its own value check, and an
+   unknown name makes the entry unreadable (`POLICY_NAME_UNKNOWN`). Values are bounded at 16 KiB. Log dump prints
+   `decision`, `revision` and `value`, never the key.
+2. **Projection and validity. Built 2026-10-26/27.** `PolicyProjection` sits after `MembershipProjection` in the stage
+   list. **Owner's decision 1 changes the design of the signer:** every decision carries a second signature, by the
+   *operator key*, over `synesis/PROJECT_POLICY_SET/v1 | projectId | revision | name | value`. The baseline is the first
+   entry; it is `operator.key` carrying the key's public half and signed by that key. Later entries verify against the
+   registered key (`POLICY_SIGNATURE_INVALID`); a second `operator.key` verifies only if the current key signed it
+   (`POLICY_BASELINE_EXISTS` otherwise); a decision before the baseline is `POLICY_BASELINE_REQUIRED` on a write and
+   waits on arrival. The node key still signs the entry, as every entry. Policy and membership share one revision
+   counter: in a shared project `requireOwnerStatement` judges the entry, in an unshared one the same counter orders
+   it and only the baseline's node may write. `PROJECT_SHARED` from a node other than the baseline signer is refused
+   (`OWNER_NOT_THE_POLICY_BASELINE_SIGNER`). Recovery-key replacement of the operator key is **not** built (the
+   operator key is replaced only by a statement the current key signs).
+3. **`init` and `locate`. Partly built, with one deviation.** `synesis init` does **not** write the baseline: the
+   baseline needs the operator key, and the key needs a passphrase a person types, which a script, an agent's `init`
+   or the acceptance harness cannot give. Until a person signs a first decision (or `project policy adopt`), the file
+   is the policy, as before, and doctor says when the file and the committed file disagree. Once the baseline is applied
+   `ProjectApplicationService.locate` and `require` fill `validation`, `review` and `validationAlsoInLane` from the log
+   (`ProjectPolicyService.overlay`) and `project.json` is ignored. **Deviation: the log is read when a gate asks, not when
+   `locate` runs.** The location carries a policy source, and the three accessors (`validation()`, `review()`,
+   `validationAlsoInLane()`) resolve it, again whenever an entry has been recorded since. A log that cannot be read
+   throws `PolicyUnavailableException` (`POLICY_UNAVAILABLE`) from the accessor and never falls back to the file; every
+   gate already treated a failed policy read as "the command could not run" (checked in `IntegrationOrchestrationService`,
+   `RemergeService` and `ValidationFailureGuard`), so none runs and none is skipped. The reason: a `locate` that throws
+   would stop every command on a project with an unreadable log, `follow` and doctor included, and would replay the log
+   on each of the many calls that never ask for policy. **`POLICY_NOT_RECEIVED` is not raised by `locate` either:** a
+   member that has not applied the owner's baseline could then not even start its runtime and receive it. Its accessors
+   throw `PolicyNotReceivedException`, so each gate still fails closed through the one door and nothing else is blocked.
+   The consequence for existing projects is the ADR's own: **a shared project whose owner has not signed a baseline runs
+   no gate on its members** until the owner runs `synesis project policy adopt` (the cli scenario lab now signs the
+   owner's review decision as a person would).
+4. **Commands. Built 2026-10-26/27.** `project validation set|clear` sign entries, ask for the passphrase and write no
+   file and no Git commit; `show` reads the log. New `project review set mandatory|none|show`, `project policy show`
+   and `project policy adopt [--from head|file]`. Output adds `POLICY_REVISION=` and `DECISION_ENTRY=`, `POLICY_BASELINE=`
+   and `POLICY_ADOPTED=`; `VALIDATION_*` keys are kept. **`PROJECT_FILE_CHANGED` and `PROJECT_FILE_COMMITTED` are no
+   longer printed (owner's decision 4), and `CONTROL_CHECKOUT_FOREIGN_CHANGES` / `PROJECT_COMMIT_FAILED` no longer arise
+   from `project validation`.** `ProjectApplicationService.setValidation` / `clearValidation` remain as the unsigned file
+   writer for projects with no baseline (tests and fixtures use it) and are refused with `POLICY_IS_SIGNED` once there is
+   one. The sandbox names (`sandbox.unsandboxed`, `sandbox.paths`) are in the closed set and the projection, with no
+   command yet (stage 5).
+5. **Migration. Built 2026-10-26/27.** `ProjectPolicyService.adoption` reads the file as committed on the control head
+   (`git show HEAD:.synesis/project.json`) and the working file; they must be equal, or the file uncommitted and
+   declaring nothing, to adopt without a question. Otherwise `POLICY_ADOPTION_NEEDS_CONFIRMATION`, and the project's
+   runtime raises the operator request `policy_adoption_needs_confirmation` once at start (closed when a baseline is
+   signed or the copies agree). It is written by a person's command, not at runtime start, because it needs the
+   passphrase. The baseline plus one entry per non-default field go in one locked append sequence; adopting again writes
+   nothing.
+6. **Attempts record the policy revision. Not built.** It changes the integration attempt's payload, a persisted format.
+7. **Doctor. Built 2026-10-26/27.** `project_file_policy_ignored` (advice), `policy_not_received` and
+   `policy_adoption_needs_confirmation` (warnings).
+8. **Fitness tests. Built 2026-10-26/27.** A workspace test fails if code outside the codec, the policy service and the
+   application service reads the file; an `mcp-contract` test fails if an agent-callable tool name suggests
+   policy, validation, operator, member, trash, owner or key.
+9. **Old builds. Pinned 2026-10-26/27.** A build that does not know code 93 cannot resolve it
+   (`PredictionEventType.fromWireCode` throws, `invalid event type`), so it refuses the log that holds one: it fails
+   closed, it does not ignore the entry. The ADR's assumption "carried but not applied" is wrong for this build and a
+   test pins the actual behaviour. The minimum-version mechanism is `LinkCompatibility.CURRENT` (11 now); raising it to 12
+   for this entry needs the signed golden vectors of `ProtocolWireCompatibilityTest` regenerated and is **not done**.
+
+**The operator key (owner's decision 1).** `OperatorKeyStore` (module `link`) keeps an Ed25519 key in
+`.synesis/local/profile/operator/operator.key`: AES-256-GCM over the PKCS#8 private key, key derived by
+PBKDF2-HMAC-SHA-256 (600,000 iterations, 16-byte random salt) from the passphrase, header (version, cost, salt, nonce,
+public key) authenticated, public key in the clear, file mode owner-only where the file system has one. A wrong
+passphrase fails with `OPERATOR_PASSPHRASE_WRONG`; the passphrase comes only from `Terminal.readSecret`, which answers only
+for a real console (`Console.isTerminal()`), never a pipe, file or environment variable. Only the commands above use it;
+the MCP server and the daemon read policy and cannot sign. The node key keeps verifying every older owner entry
+(membership, join policy, owner change): ADR-0098's "the owner key is the node key" is unchanged for those, and
+unchanged for the node-key signature of a policy entry. Membership and owner statements were **not** moved to the
+operator key (question 10 is open). PBKDF2 was chosen over scrypt because the JDK has it and no dependency was added;
+its cost is time only, not memory, so a stronger KDF is a later change of the file's version field.
 
 ### Stage 2 — Linux sandbox, the choke point, and the adversarial test (about four to five days)
 

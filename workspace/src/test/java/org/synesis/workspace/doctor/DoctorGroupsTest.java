@@ -199,6 +199,8 @@ class DoctorGroupsTest {
     ProjectLocation location = new ProjectApplicationService().locate(root);
     org.synesis.workspace.application.project.ProjectPolicyService.decide(location, newKey -> "a passphrase for tests".toCharArray(),
         Map.of(org.synesis.coordination.domain.policy.PolicyEntries.PolicyName.REVIEW, "MANDATORY"), Optional.empty());
+    String head = "{\"schemaVersion\":2,\"projectId\":\"" + location.projectId() + "\",\"createdAt\":\"" + location.createdAt() + "\"";
+    Files.writeString(location.metadataFile(), head + ",\"review\":{\"mandatory\":true}}");
     DoctorReport agrees = doctor(() -> true, name -> true, NetworkProbe.UNKNOWN).diagnose(root);
     assertEquals(List.of(), in(agrees, DoctorGroup.PROJECT).stream().filter(finding -> finding.code() == DoctorFindingCode.PROJECT_FILE_POLICY_IGNORED).toList());
 
