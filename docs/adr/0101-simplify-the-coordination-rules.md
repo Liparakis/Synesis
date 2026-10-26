@@ -2,6 +2,9 @@
 
 ## Status
 
+**Deferred on 2026-10-26 by the repository owner**, for future work: not to be built now. The candidates below, and the
+leftovers other ADRs send here, stay recorded for when it is taken up.
+
 Open, not decided (2026-10-20). Reserved on 2026-10-17 for the simplification the owner planned after ADR-0098,
 ADR-0099 and ADR-0100 ("we are building a collaborative system, not a prison"). On 2026-10-20 the owner chose to leave
 it open for change rather than build it now, so as not to risk a state that had only just become stable in real runs.
