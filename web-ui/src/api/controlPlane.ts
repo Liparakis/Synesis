@@ -267,6 +267,21 @@ export interface MemberSnapshot {
 }
 
 /** Who belongs to the project; `members` is empty for a project on one computer. */
+/** A set of agents the project's runtime started for the page, with what it last printed. */
+export interface AgentRunSnapshot {
+  id: string;
+  state: string;
+  agents: string[];
+  recent: string[];
+}
+
+/** One agent to start: an installed provider, and optionally the model and effort to run it with. */
+export interface AgentChoice {
+  provider: string;
+  model?: string;
+  effort?: string;
+}
+
 export interface MembershipSnapshot {
   shared: boolean;
   owner: string | null;
@@ -292,6 +307,7 @@ export interface Snapshot {
   trash: TrashSnapshot[];
   ownerships: OwnershipSnapshot[];
   membership: MembershipSnapshot;
+  agentRuns: AgentRunSnapshot[];
   network: NetworkSnapshot;
   onboarding?: OnboardingSnapshot;
   diagnostics: DiagnosticsSnapshot;
@@ -456,7 +472,7 @@ export function clearSelectionId(): void {
 }
 
 /** A snapshot as a runtime may send it: one built before membership was added has none. */
-type SnapshotInput = Omit<Snapshot, "membership"> & {membership?: Partial<MembershipSnapshot>};
+type SnapshotInput = Omit<Snapshot, "membership" | "agentRuns"> & {membership?: Partial<MembershipSnapshot>; agentRuns?: AgentRunSnapshot[]};
 
 export function normalizeSnapshot(input: SnapshotInput): Snapshot {
   const network = input.network ?? ({} as NetworkSnapshot);
@@ -472,6 +488,7 @@ export function normalizeSnapshot(input: SnapshotInput): Snapshot {
     capabilities: input.capabilities ?? [],
     conversations: input.conversations ?? [],
     operatorRequests: input.operatorRequests ?? [],
+    agentRuns: input.agentRuns ?? [],
     tasks: input.tasks ?? [],
     disputes: input.disputes ?? [],
     trash: input.trash ?? [],
@@ -682,6 +699,21 @@ export class ControlPlaneClient {
     return this.command<Record<string, unknown>>("close-operator-request", {requestId});
   }
 
+  /** Starts agents on providers installed in the project: with a task, or with none (task null) so they wait for one. */
+  async startAgents(agents: AgentChoice[], task: string | null): Promise<{runId: string; state: string}> {
+    return this.command<{runId: string; state: string}>("start-agents", task === null ? {agents, waitForTask: true} : {agents, prompt: task});
+  }
+
+  /** Stops a set of agents this page started. */
+  async stopAgents(runId: string): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("stop-agents", {runId});
+  }
+
+  /** Gives the agents that wait for a task their task, or replaces the task of those working. It is only text for them: it grants nothing. */
+  async sendAgentTask(text: string): Promise<Record<string, unknown>> {
+    return this.command<Record<string, unknown>>("send-agent-task", {text});
+  }
+
   /** Removes a computer from the project (owner only); the person has confirmed it. */
   async removeMember(nodeId: string): Promise<Record<string, unknown>> {
     return this.command<Record<string, unknown>>("remove-member", {nodeId, confirmed: true});
@@ -731,7 +763,7 @@ export class ControlPlaneClient {
     };
   }
 
-  private async command<T>(name: string, body: Record<string, string | string[] | boolean | number>): Promise<T> {
+  private async command<T>(name: string, body: Record<string, unknown>): Promise<T> {
     const response = await this.request(`${API_PREFIX}/commands/${name}`, {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-Synesis-Control-CSRF": this.csrfToken},

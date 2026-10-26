@@ -96,6 +96,7 @@ integration gate               Evaluate the prediction integration gate.
 agents                         Run headless agents on this project, keep them moving, and read what they did.
 agents run                     Start headless agents on this project and resume any that stopped when another lane has made progress.
 agents log                     Show what the agents of a run did: what they said, the tools they called and the answers.
+agents task                    Give the agents that wait for a task their task, or replace the task of agents already working.
 status                         Show what is going on: the agents and their work, what needs you, and the other computers.
 operator                       See and re-check what a project is waiting on you for.
 operator list                  List what the project is waiting on an operator for.
@@ -207,7 +208,13 @@ output, which is the protocol's; a failure goes to standard error as
 `SYNESIS_MCP_RUNTIME=UNAVAILABLE`. A project on one computer is left alone.
 
 `synesis agents run` starts one headless session per `--agent`, gives each the
-same prompt on standard input, and waits. A headless agent ends its process when
+same prompt on standard input, and waits. With `--wait-for-task` instead of a
+prompt it starts no process: it prints `AGENT_READY=<agent>` for each agent and
+`AGENT_RUN_WAITING=TASK_WANTED`, and starts them with the task `synesis agents
+task` or the page gives (it takes neither `--prompt` nor `--prompt-file`:
+`ERROR=WAIT_FOR_TASK_CONFLICT`, exit 2). Without a task and without
+`--wait-for-task` it refuses as below, so a task is never invented. A run that
+no one gave a task to ends `TIMED_OUT` at `--timeout-minutes`. A headless agent ends its process when
 it has nothing left to do in one turn, including when it has polled its inbox
 unchanged as often as the protocol allows. When such an agent has stopped, a
 lane of its provider is still open, and other work has progressed since, the
@@ -344,6 +351,23 @@ it the status is drawn once and the command refuses with `ERROR=WATCH_NEEDS_RUNT
 `MESSAGE=...`, `FIX=synesis ui --no-browser` (exit 10). Changes of a computer's
 connection are not entries of the log, so they show at the next entry. The `ERROR`,
 `MESSAGE` and `FIX` lines are the error shape ADR-0103 introduces beside the older keys.
+
+## Agent task
+
+`synesis agents task <text>` (or `--file <file>`, UTF-8; `--project <dir>`) gives the
+project's agents a task after they started (ADR-0103, stage 4 amendment). Agents
+started with `synesis agents run --wait-for-task`, or with "Start without a task" on
+the page, have started no process yet and start with it as their prompt, as `--prompt`
+would give it. Agents already working are resumed with it when their process ends, and
+are told it replaces their task. It prints `AGENT_TASK_SENT=<id>`.
+
+The message is text for the agents and nothing else. It is kept in a file outside the
+project (`agent-runs/<project>/tasks/` of the Synesis state directory), never in the
+coordination log and never sent to another computer, so it cannot grant a claim, approve
+or skip a review, merge, or change policy, whatever it says; the agents still do all of
+that through Synesis. Text and `--file` together, neither, a blank task, or one longer
+than 20000 characters is `ERROR=AGENT_TASK_INVALID` (exit 2). A task given before a run
+started is not that run's.
 
 ## Agent log
 
@@ -638,12 +662,19 @@ still usage errors (`2`). `ExitCodes` lists every code the CLI returns, and
 | `LINK_WAIT_TIMEOUT` | Nobody opened the invitation before `--wait-seconds` ran out. |
 | `RUNTIME_REQUEST_REJECTED` | The runtime refused for a reason it did not name. |
 
+### Codes of `synesis agents task`
+
+| Code | When |
+| --- | --- |
+| `AGENT_TASK_INVALID` | Text and `--file` together or neither, a blank task, or one longer than 20000 characters. |
+
 ### Codes of `synesis agents run`
 
 | Code | When |
 | --- | --- |
 | `TASK_REQUIRED` | No task, a blank one, or an empty answer to the question. |
 | `PROMPT_CONFLICT` | `--prompt` and `--prompt-file` together. |
+| `WAIT_FOR_TASK_CONFLICT` | `--wait-for-task` with `--prompt` or `--prompt-file`. |
 | `AGENT_INVALID` | An `--agent` that is not `provider[:model[:effort]]`. |
 | `PROVIDER_NOT_INSTALLED` | The provider is not installed in this project. |
 | `AGENT_RUN_INVALID` | Another option is not valid. |

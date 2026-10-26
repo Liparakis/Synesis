@@ -121,6 +121,7 @@ export const mockSnapshot: Snapshot = {
     }
   ],
   operatorRequests: [],
+  agentRuns: [],
   capabilities: [
     {
       handle: "cap-refactor-001",

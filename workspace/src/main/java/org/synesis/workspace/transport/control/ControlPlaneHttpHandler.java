@@ -104,6 +104,11 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     private final OperatorEndpoints operator;
 
     /**
+     * Starting and stopping agents, and giving them a task: the page's use of the runner {@code agents run} uses.
+     */
+    private final AgentEndpoints agents;
+
+    /**
      * Server-sent-events stream.
      */
     private final ControlPlaneEventStream eventStream;
@@ -156,6 +161,7 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
         this.eventStream = new ControlPlaneEventStream(this.coordination, Objects.requireNonNull(eventHub, "event hub"));
         this.projects = new ControlPlaneProjectEndpoints(this.readModel, projectRegistry, Objects.requireNonNull(selectionGateway, "selection gateway"));
         this.operator = new OperatorEndpoints(this.readModel);
+        this.agents = new AgentEndpoints(this.readModel);
         this.projectLinks = new ProjectLinkEndpoints(this.readModel, projectRegistry, linkOperations, onboarding, Objects.requireNonNull(projectLinkGateway, "project link gateway"));
     }
 
@@ -318,6 +324,7 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
             return;
         }
         onboarding.close();
+        agents.close();
     }
 
     /**
@@ -490,6 +497,7 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
     private Map<String, Object> snapshot() {
         Map<String, Object> result = new LinkedHashMap<>(readModel.snapshot());
         result.put("onboarding", onboarding.pending());
+        result.put("agentRuns", agents.runs());
         return result;
     }
 
@@ -521,6 +529,9 @@ public final class ControlPlaneHttpHandler implements HttpHandler, AutoCloseable
             case "remove-member" -> projectLinks.removeMember(exchange, body);
             case "recheck-operator-requests" -> operator.recheck(exchange);
             case "close-operator-request" -> operator.close(exchange, body);
+            case "start-agents" -> agents.start(exchange, body);
+            case "stop-agents" -> agents.stop(exchange, body);
+            case "send-agent-task" -> agents.sendTask(exchange, body);
             case "answer" -> onboarding.answer(exchange, body);
             case "cancel" -> onboarding.cancel(exchange, body);
             case "select-project" -> projects.selectProject(exchange, body);

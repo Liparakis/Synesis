@@ -90,6 +90,8 @@ public final class ErrorShape {
 
             advice("TASK_REQUIRED", "agents run needs a task", "pass --prompt \"<task>\" or --prompt-file <file>"),
             advice("PROMPT_CONFLICT", "agents run takes either --prompt or --prompt-file, not both", "give only one of --prompt and --prompt-file"),
+            advice("WAIT_FOR_TASK_CONFLICT", "--wait-for-task starts the agents without a task, so it takes neither --prompt nor --prompt-file", "give a task with --prompt or --prompt-file, or give none and use --wait-for-task"),
+            advice("AGENT_TASK_INVALID", "A task is text, not blank, and at most 20000 characters.", "pass the task as text or with --file <file>"),
             advice("AGENT_INVALID", "an --agent must be provider[:model[:effort]]", "write it like claude, claude:sonnet or codex::medium"),
             advice("PROVIDER_NOT_INSTALLED", "the provider is not installed in this project", "run 'synesis provider install <provider>'"),
             advice("AGENT_RUN_INVALID", "An option of agents run is not valid.", "check the options with 'synesis agents run --help'"),

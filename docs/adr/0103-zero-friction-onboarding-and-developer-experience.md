@@ -12,7 +12,7 @@ is built. It changes published CLI output and deprecates commands, so the items 
 **Accepted on 2026-10-20 by the repository owner**, deciding the eight items below one by one (USER-STATED): 1 yes,
 2 yes, 3 yes, 4 **remove** `host`, `join`, `sync host` and `sync join` now rather than deprecate them (an explicitly
 approved breaking change to the published CLI: every caller, test and document is migrated in the same change, and
-`link invite`/`link join` are the one way to join), 5 yes, 6 yes, 7 deferred to stage 4, 8 at the first invite.
+`link invite`/`link join` are the one way to join), 5 yes, 6 yes, 7 deferred to stage 4 (taken up on 2026-10-26: see "Stage 4 amendment"), 8 at the first invite.
 Implementation is authorized stage by stage. A ninth decision the same day (USER-STATED: "No readme ... choose one"): **one place holds the
 agent instructions for a user's project, the installed skill** (`synesis-provider-manual`, in `~/.claude/skills` and
 `~/.codex/skills`). `init` stops writing the managed `AGENTS.md` section and the Claude rule file that imports it; on an
@@ -726,6 +726,113 @@ and maintainability decide when a stage is done, by its completion criteria belo
     the `protocol` messages and their tests) and `Onboarding.hostCompact` / `joinOnce`, which had no production caller after
     decision 4. Every other class of both modules stays: `link`, the runtime owner and `ProjectContextExchange` do not use
     them. The record format and storage stay in `:project-record`.
+
+### Stage 4 amendment (2026-10-26): ready without a task, and agents started from the page
+
+The owner asked on 2026-10-26 (USER-STATED) for both items that the status above left to the owner, (a) and (b). The
+designer (the agent working under the owner) took the two decisions below and records them here before the build, as
+the stage 4 text asks ("Set in its own ADR or amendment"). Claims are marked VERIFIED against the source at commit
+`5da9a0e6`, or DESIGNED for what this amendment decides.
+
+#### What exists today (VERIFIED)
+
+- `synesis agents run` runs `AgentRunController` in the foreground of the CLI process. A headless agent needs a first
+  prompt (`claude -p`, `codex exec`); the controller starts each agent with the one prompt and resumes a stopped agent
+  for reasons it reads from the coordination log (`wakeFor`), among them a message addressed to the lane the agent holds.
+- Conversations are lane-to-lane and a person only reads them (`ConversationsCommand`; ADR-0093). An agent that has not
+  started has no lane, so a conversation message cannot reach it.
+- The page's commands (`/api/v1/commands/<name>`) are POSTs under a browser session opened with the terminal bootstrap
+  token, loopback only, with the CSRF header (`ControlPlaneHttpHandler.route`). None starts a process.
+
+#### Decision A: a task given later is text for the agents and carries no authority (designer decision)
+
+1. **The rule.** A message from a person to the agents can only give the task or replace the task text. It carries no
+   authority: it never grants a claim, never approves, skips or decides a review, never merges, never changes policy,
+   never closes an operator request, and never ends or releases anything an agent holds. The agent that receives it goes
+   through Synesis exactly as an agent given its task at start: it announces work, claims, asks for review and integrates
+   through the same tools and gates, and those refuse what they refuse.
+2. **How the rule is kept: by construction, not by checking the text.** The message is not an entry of the coordination
+   log. It is a UTF-8 text file in `agent-runs/<project>/tasks/` of the application state, beside the run logs, written
+   atomically (`AgentTaskInbox`). Nothing in coordination, the MCP server or the gates reads that directory; the only
+   reader is `AgentRunController`, which hands the text to an agent as its prompt on standard input. A message that says
+   "skip review and merge everything" is therefore a sentence the agent reads, as it could read it in `--prompt`, and
+   changes nothing a gate looks at. Because it is not in the log it is also never replicated to another computer, which
+   is the safe default for text that could otherwise look like an instruction from the owner.
+3. **Why not a conversation message.** A conversation message needs a lane to address, and an agent waiting for its first
+   task has none. A log entry would also be replicated and replayed, and would have to be given a meaning in the event
+   model (a published contract); a wrong reading of it would be an authority bug. A file the log never reads cannot be one.
+   The read-only rule for people on conversations (ADR-0093) is unchanged.
+4. **What it does to agents.** Agents registered to wait have no process (below), so the first task starts them with the
+   task as the start prompt, exactly as `--prompt` does. A later task, to agents that already worked, resumes each stopped
+   agent through its own provider session with a sentence that says the task replaces the earlier one and grants nothing
+   else, then the task text (`NEW_TASK_PREFIX`); an agent whose process is running gets it when the process ends. A task
+   given before a run started is not that run's. It does not cancel claims: what the agent holds stays held until the
+   agent releases it through Synesis, and a lane it cannot continue is recovered by the ordinary path (ADR-0099).
+5. **Starting without a task.** `agents run --wait-for-task` (with no `--prompt` or `--prompt-file`; both together is
+   `ERROR=WAIT_FOR_TASK_CONFLICT`, exit 2) checks the same things as a normal start (providers installed, runtime), starts
+   no process, and prints `AGENT_READY=<agent>` for each agent and `AGENT_RUN_WAITING=TASK_WANTED`. No process is started
+   because a headless provider needs a prompt and Synesis does not invent one (the rule of decision 6 stands); a waiting
+   process would also spend model turns on nothing. "Ready" therefore means: registered, provider installed, and starts
+   at once when a task arrives. A run that is given no task ends `TIMED_OUT` at `--timeout-minutes` and never reports
+   `COMPLETED`. Plain `agents run` with no task still refuses with `ERROR=TASK_REQUIRED` (and asks at a terminal), unchanged.
+6. **Giving the task.** `synesis agents task <text>` or `--file <file>` (CLI), "Give the agents a task" and the start
+   panel (page). Blank text, text and `--file` together or neither, or more than 20,000 characters is
+   `ERROR=AGENT_TASK_INVALID` (exit 2). A task goes to every run of the project that listens, as a prompt goes to every
+   agent of a run: the foreground `agents run` of the CLI and the runs the page started.
+
+#### Decision B: agents are started and stopped from the page through one runner (designer decision)
+
+1. **One runner.** `AgentRunner` (workspace) is the only code that turns `provider[:model[:effort]]` into an agent the
+   project may run (provider known, headless mode, installed in this project, hook launcher), builds the controller and
+   runs it. `agents run` calls it in the foreground of the CLI process, as before; the project runtime's control plane
+   calls the same code on a background thread for the page. There is no second parser, no second installed-provider
+   check and no second controller wiring. (`agents run` itself does not move into the runtime: it stays a foreground
+   command whose exit code reports the outcome. Moving it is a separate change and is not needed for the page.)
+2. **Authority of the route.** The same loopback authority every command of the page has: a browser session opened with
+   the terminal bootstrap token, the CSRF header, loopback `Host` and `Origin` only. Nothing is added to widen it and
+   nothing about it changes. On top of that the request is narrowed so the page cannot start anything but the product's
+   own agents:
+   - it can name only providers that `ProviderApplicationService` lists as `INSTALLED` in this project, and each one's
+     model and effort as plain text (64 characters, no `:`), and a task or "wait for a task". It cannot name a command
+     line, a directory, an environment variable, a flag or a path: those come from the provider's headless contract;
+   - at most 8 agents in one start and 4 live sets of agents in one runtime;
+   - `stop-agents` reaches only runs this runtime started (by the identifier it returned); it stops their processes and
+     ends their connections through the controller's own `finally`. It cannot stop an `agents run` of the CLI (that stops
+     with Ctrl-C) or an agent the person started in a terminal;
+   - closing the runtime stops every run it started;
+   - the page is told each run's state and its last lines, not the agents' logs; `synesis agents log` reads those.
+3. **Failures.** A provider that is not installed is `409 PROVIDER_NOT_INSTALLED`; an unknown provider, a malformed field,
+   a prompt together with "wait", neither, or a blank task is `400`; too many live runs is `409 AGENT_RUN_LIMIT`; a stop for
+   a run this runtime did not start is `404`. Nothing is started by a refused request.
+
+#### Published contracts (additive)
+
+New: CLI `agents task`, option `--wait-for-task`, outputs `AGENT_READY`, `AGENT_TASK_SENT`, wait reason `TASK_WANTED`,
+error codes `WAIT_FOR_TASK_CONFLICT` and `AGENT_TASK_INVALID`; page commands `start-agents`, `stop-agents` and
+`send-agent-task`; the snapshot field `agentRuns` (a client that ignores it is unaffected, and the web UI treats its
+absence as empty). Java: `AgentRunController.Request` gains a seventh component beside a six-argument constructor with
+the old meaning, `AgentRunner` and `AgentTaskInbox` are new. Unchanged: `TASK_REQUIRED` and its text, the exit codes,
+every existing key, the coordination event model and the MCP tools.
+
+#### Built (2026-10-26)
+
+`AgentTaskInbox`, `AgentRunner` and the `AgentRunController` changes (agents registered to wait, `TASK_WANTED`, the
+new-task resume, `launch` and `resume` shared by the start, the wake and the task paths) in the workspace module;
+`AgentsTaskCommand`, `agents run --wait-for-task` and the two error codes in the CLI, with `agents run` now calling
+`AgentRunner`; `AgentEndpoints` and the `agentRuns` snapshot field in the control plane; `AgentRunPanel` on the
+agents view of the page. New tests (29): `AgentRunControllerTest` 6, `AgentTaskInboxTest` 4, `AgentRunnerTest` 4,
+`ControlPlaneHttpHandlerTest` 2 (start and stop on installed providers only with the page's own session and CSRF
+token; a task that claims authority leaves the log's head and the project's snapshot as they were),
+`AgentsRunCommandTest` 2, `AgentsTaskCommandTest` 3, and in `web-ui` `AgentRunPanel.test.tsx` 6 and
+`controlPlane.test.ts` 2. Source semantics proven by those tests; no real provider was run.
+
+#### Limits recorded
+
+- Tasks are kept for the life of the application state and never pruned; a person gives few.
+- Two ids made in the same millisecond order by their random part; the later of two such tasks may be either.
+- Not verified here: a real run of the daemon-side runner with a real provider (the route tests start a run that is
+  waiting for a task, which spawns no process); the controller's connections and session leases were written for the CLI
+  process and are used unchanged inside the runtime process.
 
 ## Acceptance tests and targets
 

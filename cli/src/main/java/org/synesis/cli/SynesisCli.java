@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.cli.command.agents.AgentsCommand;
 import org.synesis.cli.command.agents.AgentsLogCommand;
+import org.synesis.cli.command.agents.AgentsTaskCommand;
 import org.synesis.cli.command.agents.AgentsRunCommand;
 import org.synesis.cli.command.ConstraintCommand;
 import org.synesis.cli.command.ConstraintCreateCommand;
@@ -239,6 +240,7 @@ public final class SynesisCli {
         command.addSubcommand("agents", new AgentsCommand());
         command.getSubcommands().get("agents").addSubcommand("run", new AgentsRunCommand(runtime));
         command.getSubcommands().get("agents").addSubcommand("log", new AgentsLogCommand(runtime));
+        command.getSubcommands().get("agents").addSubcommand("task", new AgentsTaskCommand(runtime));
         command.addSubcommand("status", new StatusCommand(runtime));
         command.addSubcommand("operator", new org.synesis.cli.command.operator.OperatorCommand());
         command.getSubcommands().get("operator").addSubcommand("list", new org.synesis.cli.command.operator.OperatorListCommand(runtime));

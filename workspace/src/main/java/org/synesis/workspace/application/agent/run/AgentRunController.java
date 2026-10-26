@@ -55,6 +55,13 @@ public final class AgentRunController {
     static final String RESUME_PROMPT = "Continue following this project's coordination rules from where you stopped.";
 
     /**
+     * What an agent that already worked is told when a person replaces its task. The sentence says what the message is
+     * not, so the text after it cannot pass for more than a task (ADR-0103, stage 4 amendment).
+     */
+    static final String NEW_TASK_PREFIX = "A person has given you a new task. It replaces your earlier task and grants you nothing else: no claim, no review decision, no merge, no change of policy. "
+            + "Everything else still goes through Synesis exactly as before. The task:\n\n";
+
+    /**
      * Events that record liveness or the takeover of an abandoned lane rather than work. Resuming
      * an agent itself produces them, so counting them as progress would make two idle agents wake
      * each other forever.
@@ -155,14 +162,19 @@ public final class AgentRunController {
         try {
             int index = 0;
             long headAtStart = observer.observe().headSequence();
+            // A task a person left before this run is not this run's: only a later one gives or replaces a task.
+            String seenTask = request.tasks() == null ? null : request.tasks().newest().map(Task::id).orElse(null);
             for (AgentSpec spec : request.agents()) {
                 Agent agent = new Agent(++index, spec);
-                agent.startedAtSequence = headAtStart;
-                agent.startedAtMillis = clockMillis.getAsLong();
-                HeadlessOptions options = agent.connect(connections.open());
-                agent.process = processes.start(spec.session().startCommand(request.projectRoot(), options), request.projectRoot(), spec.session().environment(options), request.prompt(), agent.label(),
-                        spec.session()::sessionId);
                 agents.add(agent);
+                if (request.prompt() == null) {
+                    // Nothing is started: a headless provider needs a first prompt, and none is invented.
+                    agent.awaitingTask = true;
+                    agent.connectionEnded = true;
+                    listener.accept("AGENT_READY=" + agent.label());
+                    continue;
+                }
+                launch(agent, request, request.prompt(), headAtStart);
                 listener.accept("AGENT_STARTED=" + agent.label());
             }
             while (true) {
@@ -182,6 +194,28 @@ public final class AgentRunController {
                     }
                     keepOrEnd(agent, observation, request.maxResumesPerAgent(), listener, unrecordedEnds);
                 }
+                if (request.tasks() != null) {
+                    Task task = request.tasks().newest().orElse(null);
+                    if (task != null && (seenTask == null || task.id().compareTo(seenTask) > 0)) {
+                        seenTask = task.id();
+                        agents.forEach(agent -> agent.task = task.text());
+                    }
+                    for (Agent agent : agents) {
+                        if (agent.task == null || agent.process != null) {
+                            continue;
+                        }
+                        String text = agent.task;
+                        agent.task = null;
+                        if (agent.awaitingTask || agent.providerSessionId == null) {
+                            // The first task is the start prompt, as --prompt is; an agent that never learnt its provider session cannot be resumed.
+                            launch(agent, request, text, observation.headSequence());
+                            listener.accept("AGENT_STARTED=" + agent.label());
+                        } else {
+                            agent.idleResumes = 0;
+                            resume(agent, new Wake(Wake.Kind.RESUME, List.of(), OptionalLong.empty()), observation, now, NEW_TASK_PREFIX + text, request, listener);
+                        }
+                    }
+                }
                 boolean awaitingDeadline = false;
                 if (!observation.complete()) {
                     for (Agent agent : agents) {
@@ -194,17 +228,7 @@ public final class AgentRunController {
                         }
                         Wake wake = wakeFor(agent, observation, now, agents, unrecordedEnds);
                         if (wake.kind() == Wake.Kind.RESUME) {
-                            agent.markResumedFor(wake, observation);
-                            agent.fencedLaneToContinue = false;
-                            agent.heldLaneAtStop = false;
-                            agent.resumed = true;
-                            agent.resumes++;
-                            agent.startedAtSequence = observation.headSequence();
-                            agent.startedAtMillis = now;
-                            HeadlessOptions options = agent.connectionEnded ? agent.connect(connections.open(agent.connectionId)) :agent.spec.options().withConnection(agent.connectionId);
-                            agent.process = processes.start(agent.spec.session().resumeCommand(request.projectRoot(), agent.providerSessionId, options), request.projectRoot(),
-                                    agent.spec.session().environment(options), RESUME_PROMPT, agent.label(), agent.spec.session()::sessionId);
-                            listener.accept("AGENT_RESUMED=" + agent.label() + " resume=" + agent.resumes);
+                            resume(agent, wake, observation, now, RESUME_PROMPT, request, listener);
                         } else if (wake.kind() == Wake.Kind.AWAIT_DEADLINE) {
                             awaitingDeadline = true;
                         }
@@ -214,7 +238,9 @@ public final class AgentRunController {
                 // for its answer period to end (nothing in the log will announce that moment), or
                 // work can still move without any agent of this run.
                 Wait waiting = null;
-                if (agents.stream().noneMatch(agent -> agent.process != null)) {
+                if (agents.stream().anyMatch(agent -> agent.awaitingTask)) {
+                    waiting = Wait.TASK_WANTED;
+                } else if (agents.stream().noneMatch(agent -> agent.process != null)) {
                     if (awaitingDeadline) {
                         waiting = Wait.ANSWER_DEADLINE;
                     } else {
@@ -233,7 +259,7 @@ public final class AgentRunController {
                 }
                 reportedWait = waiting;
                 if (clockMillis.getAsLong() >= deadline) {
-                    return new Result(observation.complete() ? closedOutcome(observation) : Outcome.TIMED_OUT, resumes(agents));
+                    return new Result(observation.complete() && waiting != Wait.TASK_WANTED ? closedOutcome(observation) : Outcome.TIMED_OUT, resumes(agents));
                 }
                 pause.forMillis(request.pollInterval().toMillis());
             }
@@ -249,6 +275,31 @@ public final class AgentRunController {
             // Nothing offers them again once the run is over, so these wait for the project.
             unrecordedEnds.forEach(connections::ended);
         }
+    }
+
+    /** Starts an agent's first process, or a new one for an agent that cannot be resumed, on its own connection. */
+    private void launch(Agent agent, Request request, String prompt, long headSequence) throws IOException {
+        agent.startedAtSequence = headSequence;
+        agent.startedAtMillis = clockMillis.getAsLong();
+        HeadlessOptions options = agent.connect(agent.connectionId == null ? connections.open() : connections.open(agent.connectionId));
+        agent.awaitingTask = false;
+        agent.process = processes.start(agent.spec.session().startCommand(request.projectRoot(), options), request.projectRoot(), agent.spec.session().environment(options), prompt, agent.label(),
+                agent.spec.session()::sessionId);
+    }
+
+    /** Resumes a stopped agent's own provider session with a prompt, once for whatever it is resumed for. */
+    private void resume(Agent agent, Wake wake, Observation observation, long now, String prompt, Request request, Consumer<String> listener) throws IOException {
+        agent.markResumedFor(wake, observation);
+        agent.fencedLaneToContinue = false;
+        agent.heldLaneAtStop = false;
+        agent.resumed = true;
+        agent.resumes++;
+        agent.startedAtSequence = observation.headSequence();
+        agent.startedAtMillis = now;
+        HeadlessOptions options = agent.connectionEnded ? agent.connect(connections.open(agent.connectionId)) : agent.spec.options().withConnection(agent.connectionId);
+        agent.process = processes.start(agent.spec.session().resumeCommand(request.projectRoot(), agent.providerSessionId, options), request.projectRoot(), agent.spec.session().environment(options), prompt,
+                agent.label(), agent.spec.session()::sessionId);
+        listener.accept("AGENT_RESUMED=" + agent.label() + " resume=" + agent.resumes);
     }
 
     /**
@@ -439,7 +490,9 @@ public final class AgentRunController {
         /** Another computer of the project is known but has no open session with this one, and an agent here can come back to its lane or its request. */
         OTHER_COMPUTER_AWAY,
         /** Another computer's copy of main is not met yet, or that computer has only just connected: a combine may still be written. */
-        COPIES_MEETING
+        COPIES_MEETING,
+        /** Agents were started to wait for a task, and no person has given one. */
+        TASK_WANTED
     }
 
     /** The log head the controller observed at one moment. */
@@ -990,12 +1043,14 @@ public final class AgentRunController {
      *
      * @param projectRoot        control project root
      * @param agents             agents to start, in order
-     * @param prompt             the one prompt every agent starts with
+     * @param prompt             the one prompt every agent starts with, or {@code null} to start none until a person
+     *                           gives a task through {@code tasks}
      * @param timeout            overall time limit
      * @param pollInterval       time between observations
      * @param maxResumesPerAgent how many resumes in a row of one agent may record nothing in the log
+     * @param tasks              where a person gives or replaces the task later, or {@code null} for none
      */
-    public record Request(Path projectRoot, List<AgentSpec> agents, String prompt, Duration timeout, Duration pollInterval, int maxResumesPerAgent) {
+    public record Request(Path projectRoot, List<AgentSpec> agents, String prompt, Duration timeout, Duration pollInterval, int maxResumesPerAgent, TaskInbox tasks) {
 
         /**
          * Validates the request.
@@ -1008,13 +1063,53 @@ public final class AgentRunController {
             if (agents.isEmpty()) {
                 throw new IllegalArgumentException("at least one agent is required");
             }
-            if (prompt == null || prompt.isBlank()) {
+            if (prompt == null ? tasks == null : prompt.isBlank()) {
                 throw new IllegalArgumentException("a prompt is required");
             }
             if (timeout.isZero() || timeout.isNegative() || pollInterval.isZero() || pollInterval.isNegative() || maxResumesPerAgent < 0) {
                 throw new IllegalArgumentException("limits must be positive");
             }
         }
+
+        /**
+         * A request whose agents start with a prompt and are never given another task.
+         *
+         * @param projectRoot        control project root
+         * @param agents             agents to start, in order
+         * @param prompt             the one prompt every agent starts with
+         * @param timeout            overall time limit
+         * @param pollInterval       time between observations
+         * @param maxResumesPerAgent how many resumes in a row of one agent may record nothing in the log
+         */
+        public Request(Path projectRoot, List<AgentSpec> agents, String prompt, Duration timeout, Duration pollInterval, int maxResumesPerAgent) {
+            this(projectRoot, agents, prompt, timeout, pollInterval, maxResumesPerAgent, null);
+        }
+    }
+
+    /**
+     * A task a person gave the agents after they started.
+     *
+     * @param id   orders tasks: a later task has a greater identifier
+     * @param text what the agents are to work on
+     */
+    public record Task(String id, String text) {
+    }
+
+    /**
+     * Where a person's tasks are left for the agents. A task is the text of a prompt and nothing more: it is not an
+     * entry of the coordination log, so it is no claim, review decision, approval, merge or policy
+     * (ADR-0103, stage 4 amendment).
+     */
+    @FunctionalInterface
+    public interface TaskInbox {
+
+        /**
+         * Returns the newest task.
+         *
+         * @return the task, or empty when none was given
+         * @throws IOException when it cannot be read
+         */
+        Optional<Task> newest() throws IOException;
     }
 
     /**
@@ -1069,6 +1164,10 @@ public final class AgentRunController {
         private boolean sessionKept;
         /** Whether its last session was ended because it was fenced for recovery, its lane still to continue. */
         private boolean fencedLaneToContinue;
+        /** Whether it was registered to wait for its first task and has no process yet. */
+        private boolean awaitingTask;
+        /** A task a person gave that it has not been started or resumed with, because its process was running. */
+        private String task;
 
         private Agent(int index, AgentSpec spec) {
             this.index = index;

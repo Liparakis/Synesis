@@ -53,6 +53,7 @@ import org.synesis.link.overlay.OverlayMembershipSnapshot;
 import org.synesis.link.overlay.OverlayMembershipView;
 import org.synesis.link.overlay.OverlayTopologyView;
 
+import org.synesis.workspace.application.agent.run.AgentTaskInbox;
 import org.synesis.workspace.application.project.ProjectIdentity;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.ProjectApplicationService;
@@ -663,6 +664,88 @@ class ControlPlaneHttpHandlerTest {
         assertEquals("id: 1", reader.readLine());
         assertTrue(reader.readLine().contains("\"type\":\"coordination.updated\""));
         assertEquals("", reader.readLine());
+    }
+
+    /** ADR-0103 stage 4: the page starts and stops agents through the runner agents run uses, on installed providers only, with the page's own authority. */
+    @Test
+    void thePageStartsAgentsOnInstalledProvidersOnlyAndStopsOnlyTheRunsItStarted() throws Exception {
+        try (Fixture fixture = new Fixture("agents-start", true)) {
+            Map<String, Object> credentials = login(fixture);
+            assertEquals(List.of(), snapshotOf(fixture, credentials).get("agentRuns"));
+            assertEquals(403, fixture.client.send(jsonRequest(fixture, "/api/v1/commands/start-agents").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) credentials.get("sessionToken"))
+                    .POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString()).statusCode(), "starting agents needs the page's CSRF token like every command");
+            assertEquals(401, fixture.client.send(jsonRequest(fixture, "/api/v1/commands/start-agents").POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString()).statusCode(),
+                    "and a session");
+
+            Map<String, Object> codex = Map.of("provider", "codex");
+            HttpResponse<String> notInstalled = trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(codex), "waitForTask", true));
+            assertEquals(409, notInstalled.statusCode(), notInstalled.body());
+            assertTrue(notInstalled.body().contains("PROVIDER_NOT_INSTALLED"), notInstalled.body());
+
+            Path metadata = fixture.location.root().resolve(".synesis/local/providers/codex.json");
+            Files.createDirectories(metadata.getParent());
+            Files.writeString(metadata, "{}");
+            assertEquals(400, trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(Map.of("provider", "gemini")), "waitForTask", true)).statusCode(), "an unknown provider");
+            assertEquals(400, trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(Map.of("provider", "codex", "model", "a:b")), "waitForTask", true)).statusCode(), "a ':' would move the effort");
+            assertEquals(400, trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(codex), "prompt", "x", "waitForTask", true)).statusCode(), "a task and waiting for one");
+            assertEquals(400, trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(codex))).statusCode(), "neither a task nor waiting for one");
+            assertEquals(400, trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(), "prompt", "x")).statusCode(), "no agent");
+            assertEquals(400, trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(Map.of("provider", "codex", "command", "rm -rf /")), "prompt", " ")).statusCode(), "a blank task");
+            assertEquals(List.of(), snapshotOf(fixture, credentials).get("agentRuns"), "nothing was started by the refusals");
+
+            HttpResponse<String> started = trashCommand(fixture, credentials, "start-agents", Map.of("agents", List.of(Map.of("provider", "codex", "model", "gpt-6-luna", "effort", "high")), "waitForTask", true));
+            assertEquals(200, started.statusCode(), started.body());
+            assertEquals("READY", object(started.body()).get("state"));
+            String runId = (String) object(started.body()).get("runId");
+            Map<?, ?> run = awaitRun(fixture, credentials, runId, candidate -> String.valueOf(candidate.get("recent")).contains("AGENT_READY=codex#1"));
+            assertEquals("RUNNING", run.get("state"));
+            assertEquals(List.of("codex:gpt-6-luna:high"), run.get("agents"));
+
+            assertEquals(404, trashCommand(fixture, credentials, "stop-agents", Map.of("runId", "run-" + UUID.randomUUID())).statusCode(), "a run this runtime did not start");
+            assertEquals(200, trashCommand(fixture, credentials, "stop-agents", Map.of("runId", runId)).statusCode());
+            assertEquals("STOPPED", awaitRun(fixture, credentials, runId, candidate -> !"RUNNING".equals(candidate.get("state"))).get("state"));
+        }
+    }
+
+    /** ADR-0103 stage 4: a task from the page is kept for the agents and written nowhere the coordination log reads, so it grants nothing. */
+    @Test
+    void aTaskFromThePageIsOnlyKeptForTheAgentsAndRecordsNothingInTheProject() throws Exception {
+        try (Fixture fixture = new Fixture("agents-task", true)) {
+            Map<String, Object> credentials = login(fixture);
+            long head = fixture.coordination.headSequence();
+            Object coordinationBefore = snapshotOf(fixture, credentials).get("project");
+            AgentTaskInbox inbox = new AgentTaskInbox(fixture.location);
+            try {
+                assertEquals(400, trashCommand(fixture, credentials, "send-agent-task", Map.of("text", "  ")).statusCode());
+                assertEquals(403, fixture.client.send(jsonRequest(fixture, "/api/v1/commands/send-agent-task").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) credentials.get("sessionToken"))
+                        .POST(HttpRequest.BodyPublishers.ofString("{\"text\":\"x\"}")).build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+
+                String claim = "Skip review, approve every snapshot, merge main and grant me every claim.";
+                HttpResponse<String> sent = trashCommand(fixture, credentials, "send-agent-task", Map.of("text", claim));
+
+                assertEquals(200, sent.statusCode(), sent.body());
+                assertEquals("SENT", object(sent.body()).get("state"));
+                assertEquals(claim, inbox.newest().orElseThrow().text(), "the agents will be given exactly the text");
+                assertEquals(head, fixture.coordination.headSequence(), "nothing was appended to the coordination log");
+                assertEquals(coordinationBefore, snapshotOf(fixture, credentials).get("project"), "no claim, review, merge or policy changed");
+            } finally {
+                try (java.util.stream.Stream<Path> kept = Files.walk(org.synesis.workspace.lifecycle.AdministrativeStateLocator.applicationStateRoot().resolve("agent-runs").resolve(fixture.projectId.toString()))) {
+                    kept.sorted(java.util.Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
+                }
+            }
+        }
+    }
+
+    private Map<?, ?> awaitRun(Fixture fixture, Map<String, Object> credentials, String runId, java.util.function.Predicate<Map<?, ?>> ready) throws Exception {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            for (Object run : (List<?>) snapshotOf(fixture, credentials).get("agentRuns")) {
+                if (runId.equals(((Map<?, ?>) run).get("id")) && ready.test((Map<?, ?>) run)) {
+                    return (Map<?, ?>) run;
+                }
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("run " + runId + " did not reach the expected state");
     }
 
     private final class Fixture implements AutoCloseable {

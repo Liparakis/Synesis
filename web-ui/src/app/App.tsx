@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  type AgentRunSnapshot,
   type AgentSnapshot,
   consumeBootstrapToken,
   ControlPlaneClient,
@@ -34,6 +35,7 @@ import {
   type NetworkPeerSnapshot,
   type NetworkSnapshot,
   type ProjectFolderChoice,
+  type ProviderSnapshot,
   type ProjectSelection,
   type Snapshot,
   type TrashSnapshot,
@@ -43,6 +45,7 @@ import {
 } from "../api/controlPlane";
 import {capabilityKey, chosenRecord, claimKey, ownershipKey, recordsOfWorkGroup, taskKey, type WorkGroupRecords} from "./coordinationScope";
 import {parseRoute, projectTabs, routePath, type ProjectView, type Route} from "./routes";
+import {AgentRunPanel, type AgentRunClient} from "./AgentRunPanel";
 import {MembersPanel} from "./MembersPanel";
 import {OperatorRequests, type OperatorClient} from "./OperatorRequests";
 import {FirstRunView, ReadinessChecks, ReadinessEntry} from "./ProjectReadiness";
@@ -325,7 +328,7 @@ export function App() {
           <div className={cx("page-frame", (route.view === "coordination" || route.view === "network") && "is-wide")}>
             <ProjectHeader snapshot={snapshot} title={snapshot.project?.name ?? "Project"} onBack={() => navigate({kind: "projects"})}/>
             {route.view === "overview" && <ProjectOverviewView snapshot={snapshot} client={clientRef.current} onNavigate={openProjectView}/>}
-            {route.view === "agents" && <AgentsView agents={snapshot.agents}/>}
+            {route.view === "agents" && <AgentsView agents={snapshot.agents} providers={snapshot.providers} runs={snapshot.agentRuns} client={clientRef.current}/>}
             {route.view === "coordination" && <CoordinationView snapshot={snapshot} client={clientRef.current}/>}
             {route.view === "trash" && <TrashView trash={snapshot.trash} client={clientRef.current}/>}
             {route.view === "network" && <NetworkView network={snapshot.network} onboarding={snapshot.onboarding} membership={snapshot.membership} projectName={snapshot.project?.name} client={clientRef.current}/>}
@@ -785,7 +788,7 @@ function OverviewMetric({icon: Icon, label, value, detail, children}: {icon: Luc
   );
 }
 
-export function AgentsView({agents}: {agents: AgentSnapshot[]}) {
+export function AgentsView({agents, providers = [], runs = [], client = null}: {agents: AgentSnapshot[]; providers?: ProviderSnapshot[]; runs?: AgentRunSnapshot[]; client?: AgentRunClient | null}) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = selectedId ? agents.find((agent) => agent.id === selectedId) ?? null : null;
   useEffect(() => {
@@ -798,6 +801,7 @@ export function AgentsView({agents}: {agents: AgentSnapshot[]}) {
         <div><p className="eyebrow">Project participants</p><h2>Agents</h2><p>Verified participant state projected by the local control plane.</p></div>
         <span className="count-badge">{agents.length} participants</span>
       </div>
+      {client && <AgentRunPanel providers={providers} runs={runs} client={client}/>}
       {agents.length === 0 ? <EmptyState icon={Users} title="No agents yet" detail="Agent state will appear after a provider session is attached to this project."/> : (
         <section className="data-table-wrap panel" aria-label="Agents table">
           <table className="data-table">

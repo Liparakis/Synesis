@@ -246,6 +246,44 @@ final class AgentsRunCommandTest {
         assertFalse(out.toString(StandardCharsets.UTF_8).contains("What should"), output());
     }
 
+    /** ADR-0103 stage 4: waiting for a task is asked for by name; a task and waiting for one together are refused. */
+    @Test
+    void waitForTaskTakesNeitherAPromptNorAPromptFile() throws Exception {
+        installedCodex();
+        CliRuntime cli = new CliRuntime(new Onboarding(tmp.resolve("profile"), new StatusRenderer(terminal)), terminal);
+
+        assertEquals(ExitCodes.USAGE, new CommandLine(new AgentsRunCommand(cli, unavailable())).execute("--project", root.toString(), "--agent", "codex", "--wait-for-task", "--prompt", "work"), output());
+        ErrorShapeAssert.assertShaped(stderr(), "WAIT_FOR_TASK_CONFLICT");
+        err.reset();
+        assertEquals(ExitCodes.USAGE, new CommandLine(new AgentsRunCommand(cli, unavailable())).execute("--project", root.toString(), "--agent", "codex", "--wait-for-task", "--prompt-file", tmp.resolve("p.txt").toString()),
+                output());
+        ErrorShapeAssert.assertShaped(stderr(), "WAIT_FOR_TASK_CONFLICT");
+        assertEquals(List.of(), ensured, "no agent could start");
+    }
+
+    @Test
+    void waitForTaskRegistersTheAgentsAsReadyAsksNothingAndStartsNoProcess() throws Exception {
+        installedCodex();
+        CliRuntime cli = cliWithInput(true, "an answer that must not be read\n");
+        int[] exit = {Integer.MIN_VALUE};
+        Thread run = new Thread(() -> exit[0] = new CommandLine(new AgentsRunCommand(cli, unavailable())).execute("--project", root.toString(), "--agent", "codex:gpt-6-luna:high", "--wait-for-task"));
+        run.start();
+        long until = System.currentTimeMillis() + 20_000;
+        while (!out.toString(StandardCharsets.UTF_8).contains("AGENT_READY=codex#1") && System.currentTimeMillis() < until) {
+            Thread.sleep(50);
+        }
+        run.interrupt();
+        run.join(20_000);
+
+        String printed = out.toString(StandardCharsets.UTF_8);
+        assertTrue(printed.contains("AGENT_READY=codex#1"), output());
+        assertTrue(printed.contains("HINT=give the agents their task with: synesis agents task"), output());
+        assertFalse(printed.contains("What should"), "a person who asked to wait is not asked for a task");
+        assertFalse(printed.contains("AGENT_STARTED"), "no process was started");
+        assertEquals(ExitCodes.COMMAND_FAILED, exit[0], output());
+        assertTrue(printed.contains("AGENT_RUN_WAITING=TASK_WANTED") || stderr().contains("ERROR=AGENT_RUN_INTERRUPTED"), output());
+    }
+
     private CliRuntime cliWithInput(boolean interactive, String typed) {
         ConsoleTerminal person = new ConsoleTerminal(new PrintStream(out, true, StandardCharsets.UTF_8), new PrintStream(err, true, StandardCharsets.UTF_8),
                 new java.io.ByteArrayInputStream(typed.getBytes(StandardCharsets.UTF_8)), interactive);

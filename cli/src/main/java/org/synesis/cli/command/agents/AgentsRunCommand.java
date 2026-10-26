@@ -7,7 +7,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 
@@ -21,14 +20,9 @@ import org.synesis.cli.terminal.Terminal;
 import org.synesis.coordination.persistence.ReplicationSettings;
 
 import org.synesis.workspace.application.agent.run.AgentRunController;
-import org.synesis.workspace.application.agent.run.ControllerConnections;
-import org.synesis.workspace.application.agent.run.EventLogObserver;
-import org.synesis.workspace.application.agent.run.ProviderAgentProcesses;
+import org.synesis.workspace.application.agent.run.AgentRunner;
+import org.synesis.workspace.application.agent.run.AgentTaskInbox;
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
-import org.synesis.workspace.provider.ProviderIntegration;
-import org.synesis.workspace.provider.ProviderIntegration.HeadlessOptions;
-import org.synesis.workspace.application.provider.ProviderRegistry;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -54,6 +48,8 @@ public final class AgentsRunCommand implements Callable<Integer> {
     private String prompt;
     @Option(names = "--prompt-file", description = "File holding the prompt every agent starts with (UTF-8).")
     private Path promptFile;
+    @Option(names = "--wait-for-task", description = "Start no agent yet: register them as ready and start them with the task a person gives later through 'synesis agents task' or the page. Takes neither --prompt nor --prompt-file.")
+    private boolean waitForTask;
     @Option(names = "--project", description = "Initialized project directory (default: current directory).")
     private String project;
     @Option(names = "--timeout-minutes", defaultValue = "30", description = "Stop after this many minutes if work is unfinished (default: 30).")
@@ -116,17 +112,7 @@ public final class AgentsRunCommand implements Callable<Integer> {
      *                                  specification is malformed
      */
     static AgentRunController.AgentSpec parseAgent(String specification) {
-        String[] parts = specification == null ? new String[0] : specification.split(":", -1);
-        if (parts.length < 1 || parts.length > 3 || parts[0].isBlank()) {
-            throw new Refusal("AGENT_INVALID", "agent must be provider[:model[:effort]]: " + specification, null);
-        }
-        ProviderIntegration integration = ProviderRegistry.find(parts[0]);
-        if (integration == null) {
-            throw new Refusal("UNKNOWN_PROVIDER", "unknown provider: " + parts[0], null);
-        }
-        String model = parts.length > 1 && !parts[1].isBlank() ? parts[1] : null;
-        String effort = parts.length > 2 && !parts[2].isBlank() ? parts[2] : null;
-        return AgentRunController.AgentSpec.of(integration, new HeadlessOptions(model, effort));
+        return AgentRunner.parse(specification);
     }
 
     /**
@@ -139,32 +125,28 @@ public final class AgentsRunCommand implements Callable<Integer> {
         String startPrompt;
         try {
             if (prompt != null && promptFile != null) {
-                throw new Refusal("PROMPT_CONFLICT", null, null);
+                throw new AgentRunner.Refusal("PROMPT_CONFLICT", null, null);
+            }
+            if (waitForTask && (prompt != null || promptFile != null)) {
+                throw new AgentRunner.Refusal("WAIT_FOR_TASK_CONFLICT", null, null);
             }
             location = ProjectOptions.locate(runtime, project);
             startPrompt = prompt != null ? prompt : promptFile == null ? null : Files.readString(promptFile, StandardCharsets.UTF_8);
             // A person at a terminal who gave no task is asked once, after the rest is checked so the question is not wasted.
             // A task that was given but is blank, and any script, is refused: Synesis never invents the task.
-            boolean ask = startPrompt == null && runtime.terminal().interactive();
-            if (!ask && (startPrompt == null || startPrompt.isBlank())) {
-                throw new Refusal("TASK_REQUIRED", null, null);
+            boolean ask = startPrompt == null && !waitForTask && runtime.terminal().interactive();
+            if (!ask && !waitForTask && (startPrompt == null || startPrompt.isBlank())) {
+                throw new AgentRunner.Refusal("TASK_REQUIRED", null, null);
             }
+            AgentRunner agentRunner = new AgentRunner(runtime.providerService());
             for (String specification : agents) {
-                AgentRunController.AgentSpec agent = parseAgent(specification);
-                boolean installed = runtime.providerService().list(location).stream().anyMatch(row -> row.id().equals(agent.provider()) && "INSTALLED".equals(row.status()));
-                if (!installed) {
-                    throw new Refusal("PROVIDER_NOT_INSTALLED", "provider is not installed in this project: " + agent.provider(), "run 'synesis provider install " + agent.provider() + "'");
-                }
-                // A provider whose hooks are given per session (Codex) runs the launcher its installed hooks run.
-                Path hookLauncher = runtime.providerService().launcherPath();
-                specifications.add(Files.isRegularFile(hookLauncher)
-                        ? new AgentRunController.AgentSpec(agent.provider(), agent.session(), agent.options().withHookLauncher(hookLauncher)) : agent);
+                specifications.add(agentRunner.resolve(location, specification));
             }
             if (ask) {
                 startPrompt = askForTask();
             }
-        } catch (Refusal refused) {
-            refused.print(runtime.terminal()::stderr);
+        } catch (AgentRunner.Refusal refused) {
+            print(refused, runtime.terminal()::stderr);
             return ExitCodes.USAGE;
         } catch (Exception failure) {
             return ProjectOptions.refuse(runtime, failure);
@@ -172,14 +154,15 @@ public final class AgentsRunCommand implements Callable<Integer> {
         if (!ensureRuntime(location, projectRuntime, runtime.terminal())) {
             return ExitCodes.LOCAL_CONFIGURATION;
         }
-        Path logDirectory = AdministrativeStateLocator.applicationStateRoot().resolve("agent-runs").resolve(location.projectId().toString()).resolve("run-" + UUID.randomUUID());
+        Path logDirectory = AgentRunner.newLogDirectory(location);
         try {
-            AgentRunController.Request request = new AgentRunController.Request(location.root(), specifications, startPrompt, Duration.ofMinutes(timeoutMinutes), Duration.ofSeconds(pollSeconds), maxResumes);
+            AgentRunController.Request request = new AgentRunController.Request(location.root(), specifications, startPrompt, Duration.ofMinutes(timeoutMinutes), Duration.ofSeconds(pollSeconds), maxResumes, new AgentTaskInbox(location));
             runtime.terminal().stdout("AGENT_LOG_DIRECTORY=" + logDirectory);
+            if (waitForTask) {
+                runtime.terminal().stdout("HINT=give the agents their task with: synesis agents task \"<task>\"");
+            }
             long started = System.currentTimeMillis();
-            AgentRunController controller = new AgentRunController(new ProviderAgentProcesses(logDirectory), new EventLogObserver(location), new ControllerConnections(location.root()), System::currentTimeMillis,
-                    Thread::sleep);
-            AgentRunController.Result result = controller.run(request, runtime.terminal()::stdout);
+            AgentRunController.Result result = new AgentRunner(runtime.providerService()).run(location, request, logDirectory, runtime.terminal()::stdout);
             runtime.terminal().stdout("AGENT_RUN_RESULT=" + result.outcome());
             if (result.outcome() == AgentRunController.Outcome.NEEDS_OPERATOR) {
                 runtime.terminal().stdout("HINT=synesis operator list");
@@ -209,37 +192,20 @@ public final class AgentsRunCommand implements Callable<Integer> {
         runtime.terminal().stdoutRaw("What should the agents work on? ");
         String answer = runtime.terminal().readLine();
         if (answer == null || answer.isBlank()) {
-            throw new Refusal("TASK_REQUIRED", null, null);
+            throw new AgentRunner.Refusal("TASK_REQUIRED", null, null);
         }
         runtime.terminal().stdout("AGENT_TASK=" + answer.strip());
         return answer.strip();
     }
 
-    /**
-     * A usage refusal of {@code agents run}: its code, and a message and fix when the catalog's standard ones would not
-     * name what the person typed.
-     */
-    private static final class Refusal extends IllegalArgumentException {
-
-        private static final long serialVersionUID = 1L;
-
-        private final String code;
-        private final String fix;
-
-        Refusal(String code, String message, String fix) {
-            super(message);
-            this.code = code;
-            this.fix = fix;
-        }
-
-        void print(Consumer<String> line) {
-            if (getMessage() == null) {
-                ErrorShape.print(line, code);
-            } else if (fix == null) {
-                ErrorShape.print(line, code, getMessage());
-            } else {
-                ErrorShape.print(line, code, getMessage(), fix);
-            }
+    /** Prints a usage refusal: its code, and a message and fix when the catalog's standard ones would not name what the person typed. */
+    private static void print(AgentRunner.Refusal refusal, Consumer<String> line) {
+        if (refusal.getMessage() == null) {
+            ErrorShape.print(line, refusal.code());
+        } else if (refusal.fix() == null) {
+            ErrorShape.print(line, refusal.code(), refusal.getMessage());
+        } else {
+            ErrorShape.print(line, refusal.code(), refusal.getMessage(), refusal.fix());
         }
     }
 }

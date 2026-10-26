@@ -203,6 +203,15 @@ public final class ControlPlaneReadModel {
     }
 
     /**
+     * Returns the provider service the model lists providers from, so agents are started only on providers it shows installed.
+     *
+     * @return provider lifecycle service
+     */
+    ProviderApplicationService providerService() {
+        return providerService;
+    }
+
+    /**
      * Returns bounded discovery metadata for projects known to this installation.
      *
      * <p>Only the current control-plane project is marked live. Other entries are read from
