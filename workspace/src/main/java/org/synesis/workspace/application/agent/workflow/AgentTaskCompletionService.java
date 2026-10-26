@@ -450,7 +450,7 @@ public final class AgentTaskCompletionService {
                     .distinct().toList();
             boolean sharedProducerWorktree =
                     store.collaborationProjection().activeIntents().stream().filter(intent -> intent.participant().equals(participantHandle)).filter(intent -> intent.role() == WorkIntent.Role.PRODUCER).count() > 1;
-            boolean scopeToLane = laneIntent.isPresent() && (sharedProducerWorktree || !foreignClaims.isEmpty());
+            boolean scopeToLane = laneIntent.isPresent() && (sharedProducerWorktree || !foreignClaims.isEmpty()) && !LaneCompletionProjection.isCombineLane(store, laneIntent.get());
             String snapshotBaseCommit = laneIntent.map(WorkIntent::baseCommit).orElse(null);
             if (laneIntent.isPresent()) {
                 try {
@@ -566,8 +566,9 @@ public final class AgentTaskCompletionService {
         }
 
         // A completion transaction must publish a complete lane diff. A clean lane cannot create a
-        // useful implementation snapshot or release its authority without preserving any work.
-        if (snapshot.changedPaths().isEmpty()) {
+        // useful implementation snapshot or release its authority without preserving any work. A combine lane that keeps
+        // the other copy of main as it is changes nothing, and that is its result (ADR-0098 step 5 item 38).
+        if (snapshot.changedPaths().isEmpty() && store.taskCompletionProjection().combineOfGroup(snapshot.provenance().workGroupId()).isEmpty()) {
             if (!snapshotAlreadyExists) {
                 snapshotService.removeSnapshotRef(worktree, snapshot);
             }

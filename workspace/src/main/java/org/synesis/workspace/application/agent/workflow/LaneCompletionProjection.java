@@ -99,7 +99,18 @@ final class LaneCompletionProjection {
         List<ResourceSelector> participantClaims = own.stream().flatMap(intent -> intent.selectors().stream()).distinct().toList();
         List<ResourceSelector> foreignClaims = foreignClaims(store, participantId);
         return !own.isEmpty() && own.stream().allMatch(intent -> store.taskCompletionProjection().findSnapshotForTaskRevision(intent.taskId(), intent.intentId(), intent.version()).isEmpty()
+                && !isCombineLane(store, intent)
                 && inspectScopedPublishableChanges(snapshotService, lane.worktree(), intent, participantClaims, foreignClaims, lane.baseCommit()) == Publishability.NOT_PUBLISHABLE);
+    }
+
+    /**
+     * Whether the lane works in a combine's work group. Such a lane always has a result to publish: keeping the other copy
+     * of {@code main} as it is leaves the worktree equal to the combine's base, and that is a resolution the re-merge
+     * needs recorded, not a lane with nothing to do (s5-run23: told to cancel, the lane left its combine with no result,
+     * and the re-merge, which lands only when every combine has one, never landed; ADR-0098 step 5 item 38).
+     */
+    static boolean isCombineLane(PredictionEventStore store, WorkIntent intent) {
+        return store.taskCompletionProjection().combineOfGroup(intent.workGroupId()).isPresent();
     }
 
     /** Projects publication only after the owner explicitly declares its implementation complete. */
@@ -264,7 +275,7 @@ final class LaneCompletionProjection {
                 continue;
             }
             Publishability publishability = inspectScopedPublishableChanges(snapshotService, lane.worktree(), intent, participantClaims, foreignClaims, lane.baseCommit());
-            if (publishability != Publishability.PUBLISHABLE || !reviewRequirementSatisfied(store, intent, participantId) || CapabilityActionProjection.hasUnresolvedCapabilityObligation(store,
+            if (publishability != Publishability.PUBLISHABLE && !isCombineLane(store, intent) || !reviewRequirementSatisfied(store, intent, participantId) || CapabilityActionProjection.hasUnresolvedCapabilityObligation(store,
                     intent,
                     actor.nodeId(),
                     actor.supervisorId(),

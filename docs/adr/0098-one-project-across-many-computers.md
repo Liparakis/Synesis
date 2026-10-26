@@ -1356,6 +1356,37 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     original reviewer is by design.
     Test: `CombineWaitShownToTest.onlyACombineLaneIsToldToWaitForTheCombinesSnapshot` (fails without the change: a lane of
     another group is shown the wait). Source semantics proven; not proved in a real run.
+38. **A combine lane that keeps the other copy publishes that as its result** (s5-run23, 2026-10-26, build remaster95). Result
+    `TIME_BOUND`, copies apart (PC `074035dd`, VM `fb3e9adf`). *Proven from the log dump and the PC transcripts*
+    (`D:\SynesisAcceptance\evidence\s5-run23`): one re-merge `rm-367bdd49…` opened two combines. Combine 1 (`cb-ec769f2b…`) was
+    resolved and published `snap_2f070a82…` (`INTEGRATION_PENDING`). Combine 2 (`cb-66941cf2…`, `snap_9c6e0fd0…`, the fib
+    snapshot) was taken by `claude#1`'s session `agt_96aedb10…` (`claude-2-3.log`), which resolved the conflict by keeping the
+    other copy's files; its worktree then equalled the combine's base. Its `get_next_action` with `completionRequested` was
+    answered `{"status":"ready",…,"nothingToPublish":true,"instruction":"This lane has changed none of its claimed files, so
+    there is nothing to publish. Change them, or if nothing needs to change call cancel_lane with the reason."}`; it called
+    `cancel_lane` (`{"status":"completed","result":{"task":"cancelled"}}`). The combine was left with no lane, no result and
+    a `CANCELLED` work group (log positions 134 to 140), and `RemergeService.openCombine` does not open a second lane for an
+    advance that has a combine, so nothing could ever take it again; the re-merge, which lands only when every combine has a
+    result, never landed. Items 35 to 37 were not involved: the agent was told something false by the product itself.
+    *The missing invariant:* for an ordinary lane "nothing changed" means nothing to publish; for a combine lane the
+    worktree equal to the other copy is a resolution, and the re-merge needs it recorded as the combine's result (the tree
+    of the combine's base).
+    *Rule:* a lane in a combine's work group is always publishable (`LaneCompletionProjection.isCombineLane`): it is offered
+    `finish_lane` and not `cancel_lane`, the scoped-change check of `finish_lane` does not apply, and a snapshot with no
+    changed paths is accepted for it. Source: `LaneCompletionProjection.nothingToPublish`, `snapshotPublicationAction`,
+    `AgentTaskCompletionService` (scope check and the `NO_CHANGES_TO_PUBLISH` refusal).
+    *General rule asked for: an agent is never told to wait on an event no log entry or wake will announce.* Every
+    blocker found in items 35 to 38 was an answer that ended an agent's turn on something that could not change (a wait for a
+    lock release, for another lane's snapshot, a cancel instruction that closed the only way forward). It cannot be enforced in
+    one place today: WAIT answers are built at about twenty sites (`IntegrationOrchestrationService`, `CapabilityActionProjection`,
+    `ContractConsumerService`, `AgentNextActionService`), and whether an event "will be announced" depends on the site's
+    own state. What one place can enforce is the weaker half: `LaneWake.noteWait` already records the lane view the agent
+    saw when told WAIT, so a wait whose view cannot change (the caller holds no open lane, or no entry of its view is
+    something the wait names) is detectable there, and could answer "no wait" instead of holding the agent. That is a design
+    change to the wake contract and is not made here.
+    Tests: `OverlapAndCombineScenarioTest.aCombineLaneThatKeepsTheOtherCopyPublishesThatAsItsResultAndTheCopiesMeet` (fails
+    without the change at the `cancel_lane` instruction, then at `NO_CHANGES_TO_PUBLISH`; with it both copies of `main`
+    meet). Source semantics proven; not proved in a real run.
 
 ### Step 6: Membership in the owner's log
 

@@ -352,6 +352,34 @@ final class OverlapAndCombineScenarioTest {
     }
 
     /**
+     * s5-run23 (2026-10-26): the agent of the second combine lane resolved its conflict by keeping the other copy's files, so
+     * its worktree equalled the combine's base. It was told "nothing to publish; call cancel_lane", cancelled, and the combine
+     * was left with no lane, no result and a cancelled work group; the re-merge, which lands only when every combine has a
+     * result, never landed. Keeping the other copy is a resolution: the lane publishes it, and the copies meet.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aCombineLaneThatKeepsTheOtherCopyPublishesThatAsItsResultAndTheCopiesMeet() throws Exception {
+        TwoCombines scene = toTheSecondCombine();
+        ScenarioAgent combiner = scene.combiner2();
+        Map<String, Object> offered = combiner.combinesOffered().getFirst();
+        assertEquals("ready", combiner.call("ensure_session", (Map<String, Object>) offered.get("ensureSession")).get("status"));
+        Map<String, String> lowers = Map.of("shared.txt", "one\ntwo, by the lower computer\nthree\n", "pair.txt", "pair, by the lower computer\n");
+        lowers.forEach((path, content) -> {
+            if (combiner.call("read_file", Map.of("path", path)).toString().contains("<<<<<<<")) {
+                combiner.rewrite(path, content);
+            }
+        });
+
+        Map<String, Object> answer = combiner.call("get_next_action", Map.of("completionRequested", true));
+        assertFalse(answer.toString().contains("cancel_lane"), "told to cancel the lane: " + answer);
+        combiner.finish();
+
+        lab.drive("both computers hold the same main", () -> lab.mainsEqual(), scene.everyone());
+        assertFalse(lab.onBranch(scene.high(), "pair.txt").contains("<<<<<<<"));
+    }
+
+    /**
      * s5-run21 (2026-10-26): the agent of the second combine lane joined and its first {@code get_next_action} was answered
      * {@code waiting}, {@code integration_pending}, {@code integrationRunning}: another pass held the integration lock at that
      * moment. That wait is for the pass, not for the lane, nothing recorded in the log ends it, so the agent stopped, no wake
