@@ -1330,7 +1330,8 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     `3a53d01c…` is `COMPLETED`, so no reviewer can be admitted. A snapshot of a cancelled task is not closed by the
     cancellation, so `pendingReviewSnapshots()` lists it for ever and the pump tells every lane without a snapshot of its
     own `validation_required`. Not fixed here: it does not stop a re-merge landing, and closing it is a decision about what
-    cancelling a lane does to its published snapshot (recorded, open).
+    cancelling a lane does to its published snapshot (recorded, open). Closed on 2026-10-26 by step 7 item 14: the
+    author's computer trashes such a snapshot, and the trash entry closes it for review on every computer.
     Test: `OverlapAndCombineScenarioTest.aCombineLaneThatHasPublishedNothingIsNotToldThatAnotherPassIsRunning` (the lane
     joins, another pass holds the lock; fails without the change with the s5-run21 answer). Source semantics proven; not
     proved in a real run.
@@ -1672,8 +1673,11 @@ Decided while building step 7 (designer, 2026-10-18; each open to the owner):
     `trashedWork` in every answer.
 14. **What else goes to the trash.** The same sweep takes, for each lane of this computer whose work group is no
     longer active, its newest snapshot when it was not integrated: one still disputed or rejected was given up
-    (`DISPUTE_GIVEN_UP`); any other came after the goal was met (`LATE_FOR_MET_GOAL`). The snapshot's commit is kept
-    under the trash ref, and its agent is told.
+    (`DISPUTE_GIVEN_UP`); one of a cancelled group was cancelled with it (`GROUP_CANCELLED`); any other came after the
+    goal was met (`LATE_FOR_MET_GOAL`). The snapshot's commit is kept under the trash ref, and its agent is told. The
+    entry closes that snapshot (state `cancelled`): nothing can review or integrate it, and left open it waited for
+    review for ever and told every lane without a snapshot that a review was needed (s5-run21, `snap_48308bf3`; item 36
+    of step 5). A taken-over lane's worktree is a commit of its own, so the entry closes none of its snapshots.
 15. **Restore** is a person's action (the Trash tab, or `synesis trash restore`): it writes a work group of its own,
     with the original's review policy and goal, and `TRASH_RESTORED` naming it. The group's ID follows from the work
     and how often it was restored, so a repeat after a crash finds it. A producer lane announced in it starts with

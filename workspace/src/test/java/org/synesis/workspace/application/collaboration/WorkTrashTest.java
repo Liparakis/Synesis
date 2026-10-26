@@ -141,6 +141,25 @@ final class WorkTrashTest {
         assertEquals(1, trash().items().size());
     }
 
+    /** s5-run21, snap_48308bf3: a late snapshot of a group that completed waited for review for ever. */
+    @Test
+    void aLateSnapshotOnceTrashedNoLongerWaitsForReview() throws Exception {
+        fixture.publishSnapshot("snap_late_review");
+        assertEquals(List.of("snap_late_review"), pendingReviews());
+        fixture.collaboration.closeWorkGroup(fixture.root, fixture.groupId, WorkGroup.Status.COMPLETED, 1);
+
+        sweep();
+
+        assertEquals(List.of(), pendingReviews());
+        assertEquals(java.util.Optional.of(org.synesis.coordination.domain.task.TaskCompletionState.CANCELLED),
+                fixture.store().taskCompletionProjection().snapshotState("snap_late_review"));
+    }
+
+    private List<String> pendingReviews() throws Exception {
+        return fixture.store().taskCompletionProjection().pendingReviewSnapshots().stream()
+                .map(org.synesis.coordination.domain.task.TaskSnapshotRecord::snapshotId).toList();
+    }
+
     @Test
     void aRejectedSnapshotLeftInACompletedGroupIsGivenUp() throws Exception {
         fixture.publishSnapshot("snap_given_up");

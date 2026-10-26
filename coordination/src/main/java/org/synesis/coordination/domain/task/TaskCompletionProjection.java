@@ -174,6 +174,7 @@ public final class TaskCompletionProjection {
             case CONTROL_BRANCH_ADVANCED -> processBranchAdvanced(event);
             case TASK_INTEGRATED -> processTaskIntegrated(event);
             case SESSION_FINALIZED -> processSessionFinalized(event);
+            case WORK_TRASHED -> processWorkTrashed(event);
             default -> {
             }
         }
@@ -841,8 +842,9 @@ public final class TaskCompletionProjection {
         if (seen.size() > 1) {
             disputed.add(snapshot.snapshotIdentity());
         }
-        if (current == TaskCompletionState.INTEGRATED || current == TaskCompletionState.VALIDATION_REFUSED) {
-            // An integration and a validation refusal are facts no verdict takes back.
+        if (current == TaskCompletionState.INTEGRATED || current == TaskCompletionState.VALIDATION_REFUSED
+                || current == TaskCompletionState.CANCELLED) {
+            // An integration, a validation refusal and the trash are facts no verdict takes back.
             return;
         }
         TaskCompletionState reviewed = reviewState(given);
@@ -1132,6 +1134,24 @@ public final class TaskCompletionProjection {
                         || integrationPriorStates.get(snapshot.snapshotIdentity()) == TaskCompletionState.REVIEW_ACCEPTED,
                 "REJECTED_SNAPSHOT_CANNOT_INTEGRATE");
         integrated(snapshot);
+    }
+
+    /**
+     * Closes a snapshot that went to the trash as it was (ADR-0098 step 7, designer item 14): its lane's group is no
+     * longer active, so no reviewer can be admitted and nothing integrates it, and left as it was it would wait for
+     * review for ever and keep telling every lane without a snapshot that a review is needed (s5-run21,
+     * {@code snap_48308bf3}). Only the snapshot whose commit the entry keeps, of that lane and epoch: a taken-over
+     * lane's worktree is a commit of its own, and its snapshots still stand. An integrated snapshot stays integrated.
+     */
+    private void processWorkTrashed(PredictionEvent event) throws IOException {
+        var trashed = org.synesis.coordination.domain.trash.TrashEntries.WorkTrashed.decode(event.payload());
+        for (TaskSnapshotRecord snapshot : allSnapshots()) {
+            if (snapshot.commitSha().equals(trashed.commit()) && snapshot.provenance().laneId().equals(trashed.laneId())
+                    && snapshot.provenance().claimEpoch() == trashed.epoch()
+                    && snapshotStates.get(snapshot.snapshotIdentity()) != TaskCompletionState.INTEGRATED) {
+                snapshotStates.put(snapshot.snapshotIdentity(), TaskCompletionState.CANCELLED);
+            }
+        }
     }
 
     /**
