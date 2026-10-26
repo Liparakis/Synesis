@@ -41,7 +41,8 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
  */
 final class ScenarioLab implements AutoCloseable {
 
-    // Every step runs git processes, which cost about 30 times more on Windows, so the bound is scaled there.
+    // Every step runs git processes, which cost about 30 times more on Windows, so the bound is scaled there. It bounds the
+    // time without progress, not the wall time: a loaded gate slows the work, and a stall is what must still fail.
     private static final long STEP_TIMEOUT_SECONDS = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win") ? 180 : 60;
     private static final String BASELINE_SHARED = "one\ntwo\nthree\n";
 
@@ -302,7 +303,7 @@ final class ScenarioLab implements AutoCloseable {
      * must make progress before the timeout, or the failure says which condition was awaited.
      */
     void drive(String what, BooleanSupplier done, ScenarioAgent... agents) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STEP_TIMEOUT_SECONDS);
+        Patience patience = new Patience();
         while (!done.getAsBoolean()) {
             lookAtMemberLinks();
             boolean progressed = false;
@@ -312,8 +313,8 @@ final class ScenarioLab implements AutoCloseable {
                     return;
                 }
             }
-            if (System.nanoTime() > deadline) {
-                throw new AssertionError("not reached within " + STEP_TIMEOUT_SECONDS + " s: " + what + dump() + describe(agents));
+            if (patience.spent()) {
+                throw new AssertionError("not reached within " + STEP_TIMEOUT_SECONDS + " s without progress: " + what + dump() + describe(agents));
             }
             if (!progressed) {
                 pause();
@@ -322,13 +323,45 @@ final class ScenarioLab implements AutoCloseable {
     }
 
     void await(String what, BooleanSupplier condition) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STEP_TIMEOUT_SECONDS);
+        Patience patience = new Patience();
         while (!condition.getAsBoolean()) {
             lookAtMemberLinks();
-            if (System.nanoTime() > deadline) {
-                throw new AssertionError("not reached within " + STEP_TIMEOUT_SECONDS + " s: " + what + dump());
+            if (patience.spent()) {
+                throw new AssertionError("not reached within " + STEP_TIMEOUT_SECONDS + " s without progress: " + what + dump());
             }
             pause();
+        }
+    }
+
+    /** The entries every computer's log holds, summed: a wait that sees it grow is slow, not stalled. */
+    private long logEntries() {
+        long total = 0;
+        for (Computer computer : everyone) {
+            try {
+                total += computer.store().events().size();
+            } catch (Exception unreadable) {
+                // a stopped or mid-write computer adds nothing this time
+            }
+        }
+        return total;
+    }
+
+    /** The time a wait may go on without a log growing; it starts again each time one does. */
+    private final class Patience {
+        private long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STEP_TIMEOUT_SECONDS);
+        private long seen = logEntries();
+
+        boolean spent() {
+            if (System.nanoTime() <= deadline) {
+                return false;
+            }
+            long now = logEntries();
+            if (now == seen) {
+                return true;
+            }
+            seen = now;
+            deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(STEP_TIMEOUT_SECONDS);
+            return false;
         }
     }
 
