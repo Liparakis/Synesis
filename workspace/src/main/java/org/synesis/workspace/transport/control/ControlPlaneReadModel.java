@@ -42,6 +42,7 @@ import org.synesis.workspace.doctor.DoctorFinding;
 import org.synesis.workspace.doctor.DoctorRenderer;
 import org.synesis.workspace.doctor.DoctorReport;
 import org.synesis.workspace.doctor.DoctorService;
+import org.synesis.workspace.lifecycle.AdministrativeStateLocator;
 import org.synesis.workspace.transport.control.network.NetworkSnapshot;
 
 /**
@@ -96,6 +97,11 @@ public final class ControlPlaneReadModel {
     private final KnownProjectRegistry projectRegistry;
 
     /**
+     * Application state root that agent run logs and tasks live under.
+     */
+    private final Path stateRoot;
+
+    /**
      * Creates a read model over the current project's durable services and network view.
      *
      * @param location        current project location
@@ -111,6 +117,29 @@ public final class ControlPlaneReadModel {
             DoctorService doctorService,
             Supplier<NetworkSnapshot> network,
             KnownProjectRegistry projectRegistry) {
+        this(location, coordination, providerService, doctorService, network, projectRegistry, AdministrativeStateLocator.applicationStateRoot());
+    }
+
+    /**
+     * Creates a read model whose agent runs keep their state under an explicit root, so a test never touches the
+     * state of the person who runs it.
+     *
+     * @param location        current project location
+     * @param coordination    durable coordination service for the current project
+     * @param providerService provider lifecycle service for the current project
+     * @param doctorService   read-only diagnostic service for the current project
+     * @param network         authoritative network state source
+     * @param projectRegistry installation-local discovery index, or {@code null} to track only the current project
+     * @param stateRoot       application state root
+     */
+    public ControlPlaneReadModel(ProjectLocation location,
+            CoordinationService coordination,
+            ProviderApplicationService providerService,
+            DoctorService doctorService,
+            Supplier<NetworkSnapshot> network,
+            KnownProjectRegistry projectRegistry,
+            Path stateRoot) {
+        this.stateRoot = Objects.requireNonNull(stateRoot, "stateRoot");
         this.location = Objects.requireNonNull(location, "location");
         this.coordination = Objects.requireNonNull(coordination, "coordination");
         this.providerService = Objects.requireNonNull(providerService, "provider service");
@@ -207,6 +236,10 @@ public final class ControlPlaneReadModel {
      *
      * @return provider lifecycle service
      */
+    Path stateRoot() {
+        return stateRoot;
+    }
+
     ProviderApplicationService providerService() {
         return providerService;
     }

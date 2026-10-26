@@ -45,6 +45,7 @@ public final class AgentRunner implements AutoCloseable {
     private static final int MAX_LISTED_RUNS = 20;
 
     private final ProviderApplicationService providers;
+    private final Path stateRoot;
     private final Map<String, BackgroundRun> runs = new LinkedHashMap<>();
 
     /**
@@ -53,7 +54,19 @@ public final class AgentRunner implements AutoCloseable {
      * @param providers tells which providers are installed in a project and which launcher their hooks run
      */
     public AgentRunner(ProviderApplicationService providers) {
+        this(providers, AdministrativeStateLocator.applicationStateRoot());
+    }
+
+    /**
+     * Creates a runner that keeps run logs and tasks under an explicit application state root, so a test never
+     * touches the state of the person who runs it.
+     *
+     * @param providers tells which providers are installed in a project and which launcher their hooks run
+     * @param stateRoot the application state root
+     */
+    public AgentRunner(ProviderApplicationService providers, Path stateRoot) {
         this.providers = Objects.requireNonNull(providers, "providers");
+        this.stateRoot = Objects.requireNonNull(stateRoot, "stateRoot");
     }
 
     /**
@@ -147,8 +160,8 @@ public final class AgentRunner implements AutoCloseable {
      * @param location project
      * @return a directory that does not exist yet
      */
-    public static Path newLogDirectory(ProjectLocation location) {
-        return AdministrativeStateLocator.applicationStateRoot().resolve("agent-runs").resolve(location.projectId().toString()).resolve("run-" + UUID.randomUUID());
+    public Path newLogDirectory(ProjectLocation location) {
+        return stateRoot.resolve("agent-runs").resolve(location.projectId().toString()).resolve("run-" + UUID.randomUUID());
     }
 
     /**
@@ -189,7 +202,7 @@ public final class AgentRunner implements AutoCloseable {
             specifications.add(resolve(location, specification));
         }
         AgentRunController.Request request = new AgentRunController.Request(location.root(), specifications, prompt, Duration.ofMinutes(DEFAULT_TIMEOUT_MINUTES), Duration.ofSeconds(DEFAULT_POLL_SECONDS),
-                DEFAULT_MAX_RESUMES, new AgentTaskInbox(location));
+                DEFAULT_MAX_RESUMES, new AgentTaskInbox(stateRoot, location.projectId()));
         Path logDirectory = newLogDirectory(location);
         BackgroundRun run = new BackgroundRun("run-" + UUID.randomUUID(), agents);
         // The thread exists before the run is listed, so a stop that finds the run always has a thread to interrupt.

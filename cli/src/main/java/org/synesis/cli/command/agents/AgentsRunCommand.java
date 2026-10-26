@@ -123,6 +123,7 @@ public final class AgentsRunCommand implements Callable<Integer> {
         ProjectLocation location;
         List<AgentRunController.AgentSpec> specifications = new ArrayList<>();
         String startPrompt;
+        AgentRunner agentRunner = new AgentRunner(runtime.providerService());
         try {
             if (prompt != null && promptFile != null) {
                 throw new AgentRunner.Refusal("PROMPT_CONFLICT", null, null);
@@ -138,7 +139,6 @@ public final class AgentsRunCommand implements Callable<Integer> {
             if (!ask && !waitForTask && (startPrompt == null || startPrompt.isBlank())) {
                 throw new AgentRunner.Refusal("TASK_REQUIRED", null, null);
             }
-            AgentRunner agentRunner = new AgentRunner(runtime.providerService());
             for (String specification : agents) {
                 specifications.add(agentRunner.resolve(location, specification));
             }
@@ -154,7 +154,7 @@ public final class AgentsRunCommand implements Callable<Integer> {
         if (!ensureRuntime(location, projectRuntime, runtime.terminal())) {
             return ExitCodes.LOCAL_CONFIGURATION;
         }
-        Path logDirectory = AgentRunner.newLogDirectory(location);
+        Path logDirectory = agentRunner.newLogDirectory(location);
         try {
             AgentRunController.Request request = new AgentRunController.Request(location.root(), specifications, startPrompt, Duration.ofMinutes(timeoutMinutes), Duration.ofSeconds(pollSeconds), maxResumes, new AgentTaskInbox(location));
             runtime.terminal().stdout("AGENT_LOG_DIRECTORY=" + logDirectory);
@@ -162,7 +162,7 @@ public final class AgentsRunCommand implements Callable<Integer> {
                 runtime.terminal().stdout("HINT=give the agents their task with: synesis agents task \"<task>\"");
             }
             long started = System.currentTimeMillis();
-            AgentRunController.Result result = new AgentRunner(runtime.providerService()).run(location, request, logDirectory, runtime.terminal()::stdout);
+            AgentRunController.Result result = agentRunner.run(location, request, logDirectory, runtime.terminal()::stdout);
             runtime.terminal().stdout("AGENT_RUN_RESULT=" + result.outcome());
             if (result.outcome() == AgentRunController.Outcome.NEEDS_OPERATOR) {
                 runtime.terminal().stdout("HINT=synesis operator list");

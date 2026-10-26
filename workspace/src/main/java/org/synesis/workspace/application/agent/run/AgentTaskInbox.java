@@ -30,6 +30,8 @@ public final class AgentTaskInbox implements AgentRunController.TaskInbox {
 
     private static final String SUFFIX = ".txt";
 
+    private static final java.util.concurrent.atomic.AtomicLong LAST_STAMP = new java.util.concurrent.atomic.AtomicLong();
+
     private final Path directory;
 
     /**
@@ -68,10 +70,21 @@ public final class AgentTaskInbox implements AgentRunController.TaskInbox {
             throw new IllegalArgumentException("a task may hold at most " + MAX_TASK_CHARS + " characters");
         }
         Files.createDirectories(directory);
-        String id = String.format("%020d-%s", System.currentTimeMillis(), UUID.randomUUID());
+        String id = String.format("%020d-%s", nextStamp(), UUID.randomUUID());
         Path written = Files.writeString(directory.resolve(id + ".tmp"), text.strip(), StandardCharsets.UTF_8);
         Files.move(written, directory.resolve(id + SUFFIX), java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        // Only the newest task is ever read, so an older one can no longer matter and would otherwise stay for ever.
+        try (Stream<Path> files = Files.list(directory)) {
+            for (Path file : files.filter(candidate -> candidate.getFileName().toString().endsWith(SUFFIX) && candidate.getFileName().toString().compareTo(id + SUFFIX) < 0).toList()) {
+                Files.deleteIfExists(file);
+            }
+        }
         return id;
+    }
+
+    /** Strictly increasing within the process, so two tasks sent in the same millisecond still order as sent and pruning keeps the later one. */
+    private static long nextStamp() {
+        return LAST_STAMP.updateAndGet(last -> Math.max(last + 1, System.currentTimeMillis()));
     }
 
     @Override
@@ -87,6 +100,11 @@ public final class AgentTaskInbox implements AgentRunController.TaskInbox {
             return Optional.empty();
         }
         String name = newest.get().getFileName().toString();
-        return Optional.of(new AgentRunController.Task(name.substring(0, name.length() - SUFFIX.length()), Files.readString(newest.get(), StandardCharsets.UTF_8)));
+        try {
+            return Optional.of(new AgentRunController.Task(name.substring(0, name.length() - SUFFIX.length()), Files.readString(newest.get(), StandardCharsets.UTF_8)));
+        } catch (java.nio.file.NoSuchFileException superseded) {
+            // A newer task pruned this one between listing and reading; the newer one is what a reader wants.
+            return newest();
+        }
     }
 }

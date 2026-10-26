@@ -34,7 +34,7 @@ final class AgentEndpoints {
 
     AgentEndpoints(ControlPlaneReadModel readModel) {
         this.readModel = readModel;
-        this.runner = new AgentRunner(readModel.providerService());
+        this.runner = new AgentRunner(readModel.providerService(), readModel.stateRoot());
     }
 
     /**
@@ -106,7 +106,7 @@ final class AgentEndpoints {
         String text = requiredText(body, "text", AgentTaskInbox.MAX_TASK_CHARS);
         Map<String, Object> response = newResponse();
         try {
-            response.put("taskId", new AgentTaskInbox(readModel.location()).send(text));
+            response.put("taskId", new AgentTaskInbox(readModel.stateRoot(), readModel.location().projectId()).send(text));
         } catch (IOException failed) {
             throw failure(500, "AGENT_TASK_FAILED", "the task could not be kept");
         }

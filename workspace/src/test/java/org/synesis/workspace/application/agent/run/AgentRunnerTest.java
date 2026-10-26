@@ -15,7 +15,7 @@ import org.synesis.workspace.application.provider.ProviderApplicationService;
  */
 final class AgentRunnerTest {
 
-    private final AgentRunner runner = new AgentRunner(new ProviderApplicationService());
+    private final AgentRunner runner = new AgentRunner(new ProviderApplicationService(), java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "synesis-agent-runner-test"));
 
     @Test
     void agentSpecificationNamesProviderThenOptionalModelAndEffort() {

@@ -41,6 +41,18 @@ final class AgentTaskInboxTest {
     }
 
     @Test
+    void sendingATaskPrunesTheOlderOnesBecauseOnlyTheNewestIsRead() throws Exception {
+        AgentTaskInbox inbox = new AgentTaskInbox(state, project);
+        inbox.send("first task");
+        inbox.send("second task");
+        String third = inbox.send("third task");
+
+        try (Stream<Path> kept = Files.list(state.resolve("agent-runs").resolve(project.toString()).resolve("tasks"))) {
+            assertEquals(java.util.List.of(third + ".txt"), kept.map(file -> file.getFileName().toString()).toList());
+        }
+    }
+
+    @Test
     void aBlankOrTooLongTaskIsRefusedAndLeavesNothingBehind() throws Exception {
         AgentTaskInbox inbox = new AgentTaskInbox(state, project);
 

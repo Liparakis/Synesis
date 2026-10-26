@@ -714,25 +714,21 @@ class ControlPlaneHttpHandlerTest {
             Map<String, Object> credentials = login(fixture);
             long head = fixture.coordination.headSequence();
             Object coordinationBefore = snapshotOf(fixture, credentials).get("project");
-            AgentTaskInbox inbox = new AgentTaskInbox(fixture.location);
-            try {
-                assertEquals(400, trashCommand(fixture, credentials, "send-agent-task", Map.of("text", "  ")).statusCode());
-                assertEquals(403, fixture.client.send(jsonRequest(fixture, "/api/v1/commands/send-agent-task").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) credentials.get("sessionToken"))
-                        .POST(HttpRequest.BodyPublishers.ofString("{\"text\":\"x\"}")).build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+            AgentTaskInbox inbox = new AgentTaskInbox(fixture.stateRoot, fixture.projectId);
+            assertEquals(400, trashCommand(fixture, credentials, "send-agent-task", Map.of("text", "  ")).statusCode());
+            assertEquals(403, fixture.client.send(jsonRequest(fixture, "/api/v1/commands/send-agent-task").header(ControlPlaneHttpHandler.SESSION_HEADER, (String) credentials.get("sessionToken"))
+                    .POST(HttpRequest.BodyPublishers.ofString("{\"text\":\"x\"}")).build(), HttpResponse.BodyHandlers.ofString()).statusCode());
 
-                String claim = "Skip review, approve every snapshot, merge main and grant me every claim.";
-                HttpResponse<String> sent = trashCommand(fixture, credentials, "send-agent-task", Map.of("text", claim));
+            String claim = "Skip review, approve every snapshot, merge main and grant me every claim.";
+            HttpResponse<String> sent = trashCommand(fixture, credentials, "send-agent-task", Map.of("text", claim));
 
-                assertEquals(200, sent.statusCode(), sent.body());
-                assertEquals("SENT", object(sent.body()).get("state"));
-                assertEquals(claim, inbox.newest().orElseThrow().text(), "the agents will be given exactly the text");
-                assertEquals(head, fixture.coordination.headSequence(), "nothing was appended to the coordination log");
-                assertEquals(coordinationBefore, snapshotOf(fixture, credentials).get("project"), "no claim, review, merge or policy changed");
-            } finally {
-                try (java.util.stream.Stream<Path> kept = Files.walk(org.synesis.workspace.lifecycle.AdministrativeStateLocator.applicationStateRoot().resolve("agent-runs").resolve(fixture.projectId.toString()))) {
-                    kept.sorted(java.util.Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
-                }
-            }
+            assertEquals(200, sent.statusCode(), sent.body());
+            assertEquals("SENT", object(sent.body()).get("state"));
+            assertEquals(claim, inbox.newest().orElseThrow().text(), "the agents will be given exactly the text");
+            assertEquals(head, fixture.coordination.headSequence(), "nothing was appended to the coordination log");
+            assertEquals(coordinationBefore, snapshotOf(fixture, credentials).get("project"), "no claim, review, merge or policy changed");
+            assertFalse(Files.exists(org.synesis.workspace.lifecycle.AdministrativeStateLocator.applicationStateRoot().resolve("agent-runs").resolve(fixture.projectId.toString())),
+                    "the task went to the fixture's state root, not the real application state");
         }
     }
 
@@ -759,6 +755,7 @@ class ControlPlaneHttpHandlerTest {
         private final Path coordinationDirectory;
         private final URI baseUri;
         private final ProjectLocation location;
+        private final Path stateRoot;
         private UUID seededGroupId;
         private UUID seededIntentId;
         private boolean closed;
@@ -781,6 +778,7 @@ class ControlPlaneHttpHandlerTest {
 
         private Fixture(String name, boolean seedProject, java.util.function.Supplier<NetworkSnapshot> network, ControlPlaneHttpHandler.SelectionGateway selectionGateway) throws Exception {
             Path root = temp.resolve(name);
+            stateRoot = temp.resolve(name + "-state");
             Path synesis = root.resolve(".synesis");
             Path profile = synesis.resolve("local/profile");
             Files.createDirectories(profile);
@@ -797,7 +795,7 @@ class ControlPlaneHttpHandlerTest {
             Onboarding onboarding = new Onboarding(profile, eventHub::publish);
             LinkRuntimeOwner linkOwner = new LinkRuntimeOwner(onboarding, signer, null, eventHub::publish, new ProjectIdentity(projectId, sharedCreatedAt));
             java.util.function.Supplier<NetworkSnapshot> networkSource = network == null ? NetworkSnapshot::empty : network;
-            ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, coordination, new ProviderApplicationService(), new DoctorService(), networkSource, null);
+            ControlPlaneReadModel readModel = new ControlPlaneReadModel(location, coordination, new ProviderApplicationService(), new DoctorService(), networkSource, null, stateRoot);
             handler = new ControlPlaneHttpHandler(readModel, coordination, linkOwner, eventHub, selectionGateway == null ? ControlPlaneHttpHandler.SelectionGateway.UNAVAILABLE : selectionGateway, null);
             server = new CoordinationHttpServer(coordination, new InetSocketAddress("127.0.0.1", 0), null, handler);
             server.start();
