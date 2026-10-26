@@ -1,6 +1,7 @@
 package org.synesis.cli.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
@@ -18,9 +19,12 @@ import org.synesis.cli.exit.ExitCodes;
 import org.synesis.workspace.application.ProjectApplicationService;
 
 /**
- * What the operator sets, sees and clears of the command that gates integration.
+ * What the operator sets, sees and clears of the command that gates integration (ADR-0104): the decision is signed with
+ * the operator key, kept in the log, and the project file stops being where it is written.
  */
 class ProjectValidationCommandTest {
+
+    static final String PASSPHRASE = "a long enough passphrase";
 
     @TempDir
     Path tmp;
@@ -35,7 +39,7 @@ class ProjectValidationCommandTest {
     }
 
     private Result run(String... arguments) {
-        return CliHarness.run(tmp.resolve("cli-profile"), arguments);
+        return CliHarness.runTyping(tmp.resolve("cli-profile"), List.of(PASSPHRASE, PASSPHRASE), arguments);
     }
 
     @Test
@@ -43,13 +47,27 @@ class ProjectValidationCommandTest {
         Result set = run("project", "validation", "set", "--project", project, "--", "git", "status");
 
         assertEquals(0, set.exit(), set.toString());
-        assertTrue(set.stdout().contains("PROJECT_FILE_CHANGED=.synesis/project.json"), set.toString());
+        assertTrue(set.stdout().contains("VALIDATION=DECLARED"), set.toString());
+        assertTrue(set.stdout().contains("POLICY_BASELINE=SIGNED"), set.toString());
+        assertTrue(set.stdout().stream().anyMatch(line -> line.matches("POLICY_REVISION=\\d+")), set.toString());
+        assertTrue(set.stdout().stream().anyMatch(line -> line.matches("DECISION_ENTRY=\\d+")), set.toString());
 
         Result shown = run("project", "validation", "show", "--project", project);
 
         assertEquals(0, shown.exit(), shown.toString());
         shown.assertIs(0, java.util.List.of("VALIDATION=DECLARED", "~VALIDATION_ARGV=\\[\\s*\"git\",\\s*\"status\"\\s*\\]", "VALIDATION_DIRECTORY=.",
                 "VALIDATION_TIMEOUT_SECONDS=120", "VALIDATION_ALSO_IN_LANE=false"), java.util.List.of());
+    }
+
+    @Test
+    void settingNoLongerPrintsOrCausesAProjectFileChange() throws Exception {
+        String before = Files.readString(projectFile);
+
+        Result set = run("project", "validation", "set", "--project", project, "--", "git", "status");
+
+        assertEquals(0, set.exit(), set.toString());
+        assertTrue(set.stdout().stream().noneMatch(line -> line.startsWith("PROJECT_FILE_")), "the removed lines (ADR-0104, owner's decision 4): " + set);
+        assertEquals(before, Files.readString(projectFile), "the project file is no longer written");
     }
 
     @Test
@@ -78,7 +96,7 @@ class ProjectValidationCommandTest {
     }
 
     @Test
-    void aTimeoutOutOfRangeAndADirectoryOutsideTheProjectAreRefusedAndTheFileIsUnchanged() throws Exception {
+    void aTimeoutOutOfRangeAndADirectoryOutsideTheProjectAreRefusedAndNothingIsSigned() throws Exception {
         String before = Files.readString(projectFile);
 
         for (String[] invalid : new String[][] {
@@ -99,6 +117,7 @@ class ProjectValidationCommandTest {
             assertTrue(refused.exit() != 0, String.join(" ", invalid) + " " + refused);
             assertEquals(before, Files.readString(projectFile), String.join(" ", invalid));
         }
+        assertFalse(Files.exists(Path.of(project, ".synesis", "local", "profile", "operator", "operator.key")), "a refused command creates no key");
     }
 
     @Test
@@ -121,25 +140,27 @@ class ProjectValidationCommandTest {
     }
 
     @Test
-    void aCommittedSetPrintsTheShortCommitAndAnUnchangedSetPrintsNeitherLine() throws Exception {
+    void aSetInAGitProjectMakesNoCommitAndRepeatingItWritesNothing() throws Exception {
         Path root = Files.createDirectories(tmp.resolve("git-project"));
         git(root, "init");
         Files.writeString(root.resolve("README.md"), "base\n");
         git(root, "add", "README.md");
         git(root, "commit", "-m", "base");
         new ProjectApplicationService().init(root);
+        String head = git(root, "rev-parse", "HEAD");
         String git = root.toString();
 
         Result set = run("project", "validation", "set", "--project", git, "--", "git", "status");
 
         assertEquals(0, set.exit(), set.toString());
-        assertTrue(set.stdout().contains("PROJECT_FILE_COMMITTED=" + git(root, "rev-parse", "--short", "HEAD")), set.toString());
-        assertTrue(set.stdout().contains("PROJECT_FILE_CHANGED=.synesis/project.json"), set.toString());
+        assertEquals(head, git(root, "rev-parse", "HEAD"), "Synesis no longer commits the project file for a decision");
+        assertTrue(set.stdout().stream().noneMatch(line -> line.startsWith("PROJECT_FILE_")), set.toString());
+        assertEquals("", git(root, "status", "--porcelain", "--", ".synesis/project.json"), "the tracked project file is left untouched");
 
         Result again = run("project", "validation", "set", "--project", git, "--", "git", "status");
 
         assertEquals(0, again.exit(), again.toString());
-        assertTrue(again.stdout().stream().noneMatch(line -> line.startsWith("PROJECT_FILE_")), again.toString());
+        assertTrue(again.stdout().stream().noneMatch(line -> line.startsWith("DECISION_ENTRY=")), "an unchanged decision writes no entry: " + again);
         assertTrue(again.stdout().contains("VALIDATION=DECLARED"), again.toString());
     }
 }

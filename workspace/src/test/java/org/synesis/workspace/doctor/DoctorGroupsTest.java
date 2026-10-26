@@ -194,6 +194,25 @@ class DoctorGroupsTest {
   }
 
   @Test
+  void aProjectFileThatDisagreesWithTheSignedPolicyIsFlaggedAndTheSignedPolicyIsUsed() throws Exception {
+    Path root = project("signed");
+    ProjectLocation location = new ProjectApplicationService().locate(root);
+    org.synesis.workspace.application.project.ProjectPolicyService.decide(location, newKey -> "a passphrase for tests".toCharArray(),
+        Map.of(org.synesis.coordination.domain.policy.PolicyEntries.PolicyName.REVIEW, "MANDATORY"), Optional.empty());
+    DoctorReport agrees = doctor(() -> true, name -> true, NetworkProbe.UNKNOWN).diagnose(root);
+    assertEquals(List.of(), in(agrees, DoctorGroup.PROJECT).stream().filter(finding -> finding.code() == DoctorFindingCode.PROJECT_FILE_POLICY_IGNORED).toList());
+
+    // The file says no review; the signed policy says mandatory, and is the one used.
+    Files.writeString(location.metadataFile(), "{\"schemaVersion\":2,\"projectId\":\"" + location.projectId() + "\",\"createdAt\":\"" + location.createdAt() + "\"}");
+    DoctorReport report = doctor(() -> true, name -> true, NetworkProbe.UNKNOWN).diagnose(root);
+
+    DoctorFinding ignored = in(report, DoctorGroup.PROJECT).stream().filter(finding -> finding.code() == DoctorFindingCode.PROJECT_FILE_POLICY_IGNORED).findFirst().orElseThrow();
+    assertTrue(ignored.details().get("detail").contains("the signed policy is used"));
+    assertEquals(DoctorStatus.HEALTHY, report.overallStatus(), "an ignored edit is advice");
+    assertTrue(new ProjectApplicationService().locate(root).review().mandatory());
+  }
+
+  @Test
   void findingsFromBeforeTheGroupsAreGroupedAndEveryOneHasAFix() throws Exception {
     Path root = project("old");
     Path admin = Files.createDirectories(org.synesis.workspace.lifecycle.cleanup.inventory.LifecyclePathVerifier.resolveWorkspaceRoot(root).resolve("admin"));

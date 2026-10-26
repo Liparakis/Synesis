@@ -1,15 +1,19 @@
 package org.synesis.cli.command.project;
 
 import java.io.IOException;
-import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ProjectOptions;
 import org.synesis.cli.exit.ExitCodes;
 
+import org.synesis.coordination.domain.policy.PolicyEntries.PolicyName;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.project.ProjectValidationChange;
+import org.synesis.workspace.application.project.ProjectMetadataCodec;
 import org.synesis.workspace.application.project.execution.ProjectCommandSpec;
 
 import picocli.CommandLine.Command;
@@ -17,7 +21,8 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 /**
- * Declares the command that must pass on the combined work before it is integrated.
+ * Declares the command that must pass on the combined work before it is integrated, as a decision signed with the
+ * operator key (ADR-0104): it is the owner's, in the project's log, and no file an agent could write changes it.
  */
 @Command(name = "set", description = "Declare the command that must pass before work is integrated. Give it after `--`; no shell is used.", mixinStandardHelpOptions = true)
 public final class ProjectValidationSetCommand implements Callable<Integer> {
@@ -49,19 +54,21 @@ public final class ProjectValidationSetCommand implements Callable<Integer> {
     }
 
     /**
-     * Rewrites the project file with the command. @return stable exit code
+     * Signs the decision with the operator key. @return stable exit code
      */
     @Override
     public Integer call() {
         try {
             ProjectCommandSpec validation = new ProjectCommandSpec(argv, directory, timeout == null ? ProjectCommandSpec.DEFAULT_TIMEOUT_SECONDS : timeout);
-            ProjectValidationChange change = runtime.projectService().setValidation(Path.of(project), validation, alsoInLane);
-            ProjectValidationCommand.print(runtime, change.location());
-            ProjectValidationCommand.printChanged(runtime, change);
+            Map<PolicyName, String> decisions = new LinkedHashMap<>();
+            decisions.put(PolicyName.VALIDATION, ProjectMetadataCodec.validationValue(validation));
+            decisions.put(PolicyName.VALIDATION_ALSO_IN_LANE, Boolean.toString(alsoInLane));
+            var decided = OperatorDecisions.sign(runtime, ProjectOptions.locate(runtime, project), decisions, Optional.empty());
+            ProjectValidationCommand.print(runtime, ProjectOptions.locate(runtime, project));
+            OperatorDecisions.printDecided(runtime, decided);
             return ExitCodes.OK;
         } catch (ProjectApplicationService.ProjectApplicationException failure) {
-            ProjectValidationCommand.printFailure(runtime, failure);
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return OperatorDecisions.refuse(runtime, failure);
         } catch (RuntimeException failure) {
             runtime.terminal().stderr("ERROR=PROJECT_INVALID");
             runtime.terminal().stderr("REASON=" + failure.getMessage());

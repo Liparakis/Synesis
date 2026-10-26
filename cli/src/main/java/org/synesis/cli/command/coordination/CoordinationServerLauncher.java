@@ -113,6 +113,13 @@ final class CoordinationServerLauncher {
             if (org.synesis.coordination.application.SharedSettingsMigration.migrate(projectData, store, node)) {
                 runtime.terminal().stderr("COORDINATION_SETTINGS_MIGRATED=role=shared");
             }
+            // A project whose policy still sits in project.json asks its owner to sign it; when the committed file and the
+            // working file disagree, the person is told which choice is theirs (ADR-0104, Migration).
+            try {
+                org.synesis.workspace.application.project.ProjectPolicyService.reconcileAdoptionRequest(location, store, node);
+            } catch (java.io.IOException | java.security.GeneralSecurityException unreadable) {
+                runtime.terminal().stderr("POLICY_ADOPTION_REQUEST_FAILED=" + unreadable.getClass().getSimpleName());
+            }
             var membership = new org.synesis.coordination.application.MembershipService(store, node);
             var service = new CoordinationService(store, node);
             if (!isLoopback(host)) {

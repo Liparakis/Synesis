@@ -327,7 +327,25 @@ public enum DoctorFindingCode {
     /**
      * The project is waiting for a person to answer one or more operator requests.
      */
-    OPERATOR_REQUESTS_OPEN("operator_requests_open");
+    OPERATOR_REQUESTS_OPEN("operator_requests_open"),
+
+    /**
+     * {@code .synesis/project.json} still names a validation or review policy that differs from the signed one, which
+     * is the one in force (ADR-0104). How an edit by an agent or a tool shows up.
+     */
+    PROJECT_FILE_POLICY_IGNORED("project_file_policy_ignored"),
+
+    /**
+     * This computer belongs to a shared project and has not received the owner's signed policy, so it will not
+     * integrate or run a gate (ADR-0104).
+     */
+    POLICY_NOT_RECEIVED("policy_not_received"),
+
+    /**
+     * The policy in {@code .synesis/project.json} differs from the committed one, or is not committed, so nothing can
+     * be signed until a person picks which to adopt (ADR-0104).
+     */
+    POLICY_ADOPTION_NEEDS_CONFIRMATION("policy_adoption_needs_confirmation");
 
     private final String value;
 

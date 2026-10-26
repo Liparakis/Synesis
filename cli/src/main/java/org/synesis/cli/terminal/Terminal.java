@@ -64,6 +64,20 @@ public interface Terminal {
     String readLine() throws IOException;
 
     /**
+     * Reads a secret a person types at the console, with no echo, for the operator key's passphrase (ADR-0104). Only a
+     * real terminal answers: never standard input that is a pipe or a file, never an environment variable, so a script
+     * or an agent's command cannot supply it.
+     *
+     * @param prompt what to ask
+     * @return the typed characters, which the caller clears, or {@code null} when no person is at a terminal
+     * @throws IOException if the console cannot be read
+     */
+    default char[] readSecret(String prompt) throws IOException {
+        java.io.Console console = System.console();
+        return console == null || !console.isTerminal() ? null : console.readPassword("%s", prompt);
+    }
+
+    /**
      * Returns whether a person is at this terminal and may be asked a question: standard input and output are a
      * terminal and output was not forced to the machine form ({@code --porcelain}, {@code SYNESIS_OUTPUT=porcelain}).
      * A script, a pipe or a test never is, so a command that asks must otherwise refuse and name the flag that answers.

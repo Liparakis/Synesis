@@ -125,6 +125,11 @@ public final class HumanTerminal implements Terminal {
     }
 
     @Override
+    public char[] readSecret(String prompt) throws IOException {
+        return delegate.readSecret(prompt);
+    }
+
+    @Override
     public boolean interactive() {
         return delegate.interactive();
     }

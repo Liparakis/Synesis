@@ -40,6 +40,12 @@ project validation             Set, show or clear the command that must pass bef
 project validation set         Declare the command that must pass before work is integrated.
 project validation show        Show the command that must pass before work is integrated.
 project validation clear       Remove the command that must pass before work is integrated.
+project review                 Set or show whether every work group needs an independent review.
+project review set             Make independent review mandatory for every work group, or not: mandatory or none.
+project review show            Show whether every work group needs an independent review.
+project policy                 Show the project's signed policy, or sign the one kept in project.json.
+project policy show            Show the policy in force and whether it is signed.
+project policy adopt           Sign the policy kept in project.json as the project's baseline; --from head or file picks one when they differ.
 link                           Connect this project to another computer; the connection stays with the project's runtime.
 link invite                    Create a project invitation and wait for the other computer to open it.
 link join                      Join an invitation from the other computer.
@@ -439,8 +445,20 @@ problem codes and `SUMMARY_*` lines may be added.
 ## Project validation
 
 A project can declare one command that must pass before its work is integrated.
-It is project policy, kept as `validation` in `.synesis/project.json`, and it is
-set here by whoever has authority over the project, never by an agent.
+It is project policy: a decision of the project's owner, signed with the
+**operator key** and kept in the project's log (ADR-0104), not a field of
+`.synesis/project.json`. Editing that file, or committing to it, changes nothing
+once the project has a signed policy.
+
+The operator key is an Ed25519 key kept apart from the computer's node key. It is
+created on the owner's computer by the first command that signs a decision,
+stored encrypted (AES-256-GCM under a PBKDF2-HMAC-SHA-256 key) in
+`.synesis/local/profile/operator/operator.key`, and opened with a passphrase you
+type at a terminal. No environment variable, file or pipe supplies the
+passphrase, and the MCP server and the daemon never use the key. A command that
+signs a decision asks for the passphrase (twice, at least 8 characters, when it
+creates the key). Where nobody can type it, the command stops with
+`ERROR=OPERATOR_KEY_UNAVAILABLE` and signs nothing.
 
 - `synesis project validation set [--timeout <seconds>] [--directory <dir>] [--also-in-lane] -- <argv>...`
   declares the command, replacing any the project declared. Everything after
@@ -452,23 +470,53 @@ set here by whoever has authority over the project, never by an agent.
 
 Each prints `VALIDATION=DECLARED` with `VALIDATION_ARGV` (a JSON array),
 `VALIDATION_DIRECTORY`, `VALIDATION_TIMEOUT_SECONDS` and
-`VALIDATION_ALSO_IN_LANE`, or `VALIDATION=NONE`. `set` and `clear` rewrite the
-project file, keep its identity and review policy, and print
-`PROJECT_FILE_CHANGED=.synesis/project.json`. When the project already declares
-what was asked they change nothing and do not print that line.
+`VALIDATION_ALSO_IN_LANE`, or `VALIDATION=NONE`. `set` and `clear` then print
+`POLICY_REVISION=<n>`, the owner-statement revision the next decision is written
+at, and `DECISION_ENTRY=<sequence>` of the entry they wrote in this computer's
+log. When the project already declares what was asked they write nothing and do
+not print `DECISION_ENTRY`. They write no file and make no Git commit.
 
-Where Git tracks the project file, `set` and `clear` also commit it, that one
-file alone, and print `PROJECT_FILE_COMMITTED=<short commit>`: nothing is
-integrated into a checkout that holds an uncommitted change. They are refused
-with `ERROR=CONTROL_CHECKOUT_FOREIGN_CHANGES` when the checkout already holds
-changes Synesis did not make, by the rule integration itself uses, so the
-untracked files a provider installs (`.claude/`, `.codex/`, `.mcp.json`) do
-not count; an untracked `AGENTS.md` is the user's and does count (ADR-0103 decision 9). When the commit fails, the file is put back as it
-was and the command reports `ERROR=PROJECT_COMMIT_FAILED`. Outside a Git
-repository, or where Git does not track the file, the file is rewritten and
-nothing is committed. Both commands wait for an integration attempt that is
-running, for at most two seconds, and are refused when it runs longer: run them
-again when it has ended.
+`set` and `clear` no longer print `PROJECT_FILE_CHANGED` or
+`PROJECT_FILE_COMMITTED`, and no longer refuse with
+`CONTROL_CHECKOUT_FOREIGN_CHANGES` or `PROJECT_COMMIT_FAILED`: those existed only
+because the file was the policy (ADR-0104, owner's decision 4).
+
+The first signed decision of a project writes its **baseline**: the operator key's
+public half, then the policy `.synesis/project.json` held (see `synesis project
+policy adopt`). Only the owner's computer can sign (`ERROR=NOT_THE_OWNER`
+elsewhere); on a project shared with other computers the entries travel in the
+owner's log like membership, and a member never writes one. A member computer
+that has not yet received the owner's baseline has no policy and runs no gate.
+
+## Project review
+
+`synesis project review set mandatory|none` signs whether every work group
+announced in the project needs an independent review; `synesis project review
+show` prints `REVIEW=MANDATORY` or `REVIEW=NONE`. It was a field of
+`.synesis/project.json` that only a hand edit set. `set` prints `REVIEW=`,
+`POLICY_REVISION=` and `DECISION_ENTRY=`.
+
+## Project policy
+
+`synesis project policy show` prints which policy is in force:
+`POLICY_BASELINE=SIGNED` (`POLICY_SOURCE=LOG`, `POLICY_REVISION=`,
+`UNSANDBOXED_COMMANDS=DENY|ALLOW`, and `POLICY_FILE=IGNORED` when the project
+file disagrees), `POLICY_BASELINE=NOT_ADOPTED` (`POLICY_SOURCE=FILE`, the policy
+the project file holds, with `POLICY_ADOPTION=READY` or
+`POLICY_ADOPTION=CONFIRMATION_NEEDED`) or `POLICY_BASELINE=NOT_RECEIVED` on a
+member that has not received the owner's baseline.
+
+`synesis project policy adopt [--from head|file]` signs the policy a project kept
+in `.synesis/project.json` as its baseline, and prints `POLICY_BASELINE=SIGNED`
+and one `POLICY_ADOPTED=<field>` for each non-default field it adopted. It adopts
+the file as committed on the control branch's head, because only integration moves
+that branch. When the working file differs from the committed one, or the file is
+not committed and declares something, nothing is adopted silently: the command
+stops with `ERROR=POLICY_ADOPTION_NEEDS_CONFIRMATION`, the project's runtime
+raises an operator request with the condition `policy_adoption_needs_confirmation`
+showing both, and `--from head` or `--from file` signs the one you pick. Adopting
+a project that already has a baseline prints `POLICY_ADOPTED=NONE` and writes
+nothing.
 
 The command runs on the combined work: the snapshots of an integration attempt
 applied to the project's head in a separate worktree, before the project's
@@ -665,6 +713,27 @@ still usage errors (`2`). `ExitCodes` lists every code the CLI returns, and
 | `LINK_WAIT_TIMEOUT` | Nobody opened the invitation before `--wait-seconds` ran out. |
 | `RUNTIME_REQUEST_REJECTED` | The runtime refused for a reason it did not name. |
 
+### Codes of the signed decisions
+
+The commands that sign a decision (`project validation set` and `clear`, `project
+review set`, `project policy adopt`) print these in the error shape; `REASON=` says
+more.
+
+| Code | When |
+| --- | --- |
+| `OPERATOR_KEY_UNAVAILABLE` | No terminal could be asked for the passphrase (a script, a pipe, an agent's command). Nothing is signed. |
+| `OPERATOR_PASSPHRASE_WRONG` | The passphrase does not open the operator key. |
+| `OPERATOR_PASSPHRASE_MISMATCH` | The two passphrases typed for a new key differ. |
+| `OPERATOR_PASSPHRASE_TOO_SHORT` | A new key's passphrase is shorter than 8 characters. |
+| `OPERATOR_KEY_MISSING` | The project has a signed policy but its operator key is not on this computer. |
+| `OPERATOR_KEY_MISMATCH` | The key on this computer is not the one the project registered. |
+| `POLICY_ADOPTION_NEEDS_CONFIRMATION` | The policy in `project.json` differs from the committed one, or is not committed; pick with `project policy adopt --from head\|file`. |
+| `POLICY_UNAVAILABLE` | The signed policy could not be read from the log, so no gate runs and none is skipped. |
+| `POLICY_NOT_RECEIVED` | A member computer has not received the owner's signed policy, so it runs no gate. |
+| `POLICY_IS_SIGNED` | The unsigned file writer was asked to change a policy that is a signed decision. |
+| `POLICY_WRITE_FAILED` | The decision could not be written. |
+| `NOT_THE_OWNER` | The command was run on a computer that is not the project's owner. |
+
 ### Codes of `synesis agents task`
 
 | Code | When |
@@ -708,6 +777,9 @@ finding, `group`, `mark` and `fix`.
 | network | `project_runtime_not_running` | suspected | A shared project whose runtime the installation daemon does not hold. |
 | network | `link_firewall_missing`, `link_firewall_stale` | confirmed | Windows only: no rule, or a rule naming another version's `java.exe`. |
 | work groups | `operator_requests_open` | advice | One or more operator requests wait for a person. |
+| project | `project_file_policy_ignored` | advice | `.synesis/project.json` names a validation or review that differs from the signed policy, which is the one in force. |
+| project | `policy_not_received` | confirmed | A member computer has not received the owner's signed policy, so it runs no gate. |
+| project | `policy_adoption_needs_confirmation` | confirmed | The policy in `project.json` differs from the committed one, or is not committed, so nothing is signed until a person picks one. |
 | work groups | `stale_session_lease`, `ambiguous_session_liveness`, `cleanup_recommended` | as before | Findings that existed before the groups. |
 
 `synesis doctor --fix` makes exactly three repairs and then reports again, with

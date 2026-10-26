@@ -30,9 +30,32 @@ import org.synesis.workspace.application.project.execution.ProjectCommandSpec;
  * @param validationAlsoInLane whether the validation command also runs in a lane alone before its finish is
  *                         published; it always runs on the combined tree before integration. A lane whose tests need
  *                         a sibling's code cannot pass the command alone, so a project opts in
+ * @param policyReceived   whether this computer has the project's signed policy (ADR-0104). {@code false} only on a
+ *                         member of a shared project that has not applied the owner's baseline; every accessor of
+ *                         policy then refuses with {@link PolicyNotReceivedException}, so a gate cannot run on a
+ *                         default and nothing needs to remember to ask
  */
 public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId, Instant createdAt, ProjectCommandSpec validation,
-                              ReviewPolicy review, boolean validationAlsoInLane) {
+                              ReviewPolicy review, boolean validationAlsoInLane, boolean policyReceived) {
+
+    /**
+     * Constructs a project location whose policy is known: read from the project file before a baseline, or from the
+     * signed log after it.
+     *
+     * @param root             project root
+     * @param synesisDirectory Synesis directory
+     * @param metadataFile     project metadata file
+     * @param profile          local profile directory
+     * @param projectId        project identifier
+     * @param createdAt        creation timestamp
+     * @param validation       optional project-owned validation command
+     * @param review           review policy of the project
+     * @param validationAlsoInLane whether the command also runs in each lane alone
+     */
+    public ProjectLocation(Path root, Path synesisDirectory, Path metadataFile, Path profile, UUID projectId, Instant createdAt, ProjectCommandSpec validation,
+                           ReviewPolicy review, boolean validationAlsoInLane) {
+        this(root, synesisDirectory, metadataFile, profile, projectId, createdAt, validation, review, validationAlsoInLane, true);
+    }
 
     /**
      * Constructs a project location without a project-owned validation command.
@@ -78,6 +101,48 @@ public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFil
     }
 
     /**
+     * Returns the validation command the project's policy declares.
+     *
+     * @return the command, or {@code null} when the project declares none
+     * @throws PolicyNotReceivedException when this computer has not received the owner's signed policy
+     */
+    @Override
+    public ProjectCommandSpec validation() {
+        requirePolicy();
+        return validation;
+    }
+
+    /**
+     * Returns the review policy of the project.
+     *
+     * @return the review policy
+     * @throws PolicyNotReceivedException when this computer has not received the owner's signed policy
+     */
+    @Override
+    public ReviewPolicy review() {
+        requirePolicy();
+        return review;
+    }
+
+    /**
+     * Returns whether the validation command also runs in each lane alone.
+     *
+     * @return whether it does
+     * @throws PolicyNotReceivedException when this computer has not received the owner's signed policy
+     */
+    @Override
+    public boolean validationAlsoInLane() {
+        requirePolicy();
+        return validationAlsoInLane;
+    }
+
+    private void requirePolicy() {
+        if (!policyReceived) {
+            throw new PolicyNotReceivedException();
+        }
+    }
+
+    /**
      * Returns the portable identity represented by this location.
      *
      * @return immutable project identity
@@ -114,6 +179,16 @@ public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFil
      */
     public Path linkDirectory() {
         return profile.resolve("link");
+    }
+
+    /**
+     * Returns the file that holds this computer's operator key, encrypted under a passphrase (ADR-0104). It sits in the
+     * profile beside the node key and is read only by commands a person runs.
+     *
+     * @return operator key file under the profile
+     */
+    public Path operatorKeyFile() {
+        return profile.resolve("operator/operator.key");
     }
 
     /**

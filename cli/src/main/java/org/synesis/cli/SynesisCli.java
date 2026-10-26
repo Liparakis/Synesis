@@ -77,6 +77,12 @@ import org.synesis.cli.command.project.ProjectCreateCommand;
 import org.synesis.cli.command.project.ProjectValidationClearCommand;
 import org.synesis.cli.command.project.ProjectValidationCommand;
 import org.synesis.cli.command.project.ProjectValidationSetCommand;
+import org.synesis.cli.command.project.ProjectPolicyAdoptCommand;
+import org.synesis.cli.command.project.ProjectPolicyCommand;
+import org.synesis.cli.command.project.ProjectPolicyShowCommand;
+import org.synesis.cli.command.project.ProjectReviewCommand;
+import org.synesis.cli.command.project.ProjectReviewSetCommand;
+import org.synesis.cli.command.project.ProjectReviewShowCommand;
 import org.synesis.cli.command.project.ProjectValidationShowCommand;
 import org.synesis.cli.command.provider.ProviderCommand;
 import org.synesis.cli.command.provider.ProviderInstallCommand;
@@ -188,6 +194,10 @@ public final class SynesisCli {
         command.getSubcommands().get("project").addSubcommand("follow", new ProjectFollowCommand(runtime));
         command.getSubcommands().get("project").addSubcommand("validation", new CommandLine(new ProjectValidationCommand()).addSubcommand("set", new ProjectValidationSetCommand(runtime))
                 .addSubcommand("show", new ProjectValidationShowCommand(runtime)).addSubcommand("clear", new ProjectValidationClearCommand(runtime)));
+        command.getSubcommands().get("project").addSubcommand("review", new CommandLine(new ProjectReviewCommand())
+                .addSubcommand("set", new ProjectReviewSetCommand(runtime)).addSubcommand("show", new ProjectReviewShowCommand(runtime)));
+        command.getSubcommands().get("project").addSubcommand("policy", new CommandLine(new ProjectPolicyCommand())
+                .addSubcommand("show", new ProjectPolicyShowCommand(runtime)).addSubcommand("adopt", new ProjectPolicyAdoptCommand(runtime)));
         command.addSubcommand("link", new LinkCommand());
         command.getSubcommands().get("link").addSubcommand("invite", new LinkInviteCommand(runtime));
         command.getSubcommands().get("link").addSubcommand("join", new LinkJoinCommand(runtime));

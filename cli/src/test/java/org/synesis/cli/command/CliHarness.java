@@ -63,6 +63,42 @@ final class CliHarness {
         return new Result(exit, lines(out), lines(err));
     }
 
+    /**
+     * Runs one invocation at a terminal where a person types the given secrets, one per prompt, in order; once they are
+     * spent no one is there, as for a script. A real terminal is the only thing that answers a passphrase prompt.
+     */
+    static Result runTyping(Path profile, List<String> typed, String... arguments) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ByteArrayOutputStream err = new ByteArrayOutputStream();
+        ConsoleTerminal console = new ConsoleTerminal(new PrintStream(out, true, StandardCharsets.UTF_8), new PrintStream(err, true, StandardCharsets.UTF_8));
+        java.util.ArrayDeque<String> queue = new java.util.ArrayDeque<>(typed);
+        org.synesis.cli.terminal.Terminal terminal = new org.synesis.cli.terminal.Terminal() {
+            @Override
+            public java.io.PrintWriter out() {
+                return console.out();
+            }
+
+            @Override
+            public java.io.PrintWriter err() {
+                return console.err();
+            }
+
+            @Override
+            public String readLine() throws java.io.IOException {
+                return console.readLine();
+            }
+
+            @Override
+            public char[] readSecret(String prompt) {
+                String next = queue.poll();
+                return next == null ? null : next.toCharArray();
+            }
+        };
+        CliRuntime runtime = new CliRuntime(new Onboarding(profile, new StatusRenderer(terminal)), terminal);
+        int exit = SynesisCli.execute(arguments, runtime);
+        return new Result(exit, lines(out), lines(err));
+    }
+
     private static List<String> lines(ByteArrayOutputStream stream) {
         return stream.toString(StandardCharsets.UTF_8).lines().toList();
     }

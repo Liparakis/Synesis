@@ -3,7 +3,6 @@ package org.synesis.cli.command.project;
 import org.synesis.cli.bootstrap.CliRuntime;
 import org.synesis.workspace.application.ProjectApplicationService.ProjectApplicationException;
 import org.synesis.workspace.application.project.ProjectLocation;
-import org.synesis.workspace.application.project.ProjectValidationChange;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
 
 import picocli.CommandLine.Command;
@@ -13,13 +12,11 @@ import picocli.CommandLine.Spec;
 /**
  * Parent for the command a project declares that must pass before its work is integrated.
  *
- * <p>The command is project policy. It is set by whoever has authority over the project, from
- * here, and never by an agent: an agent cannot write under {@code .synesis}.</p>
+ * <p>The command is project policy, an owner decision signed with the operator key and kept in the project's log (ADR-0104).
+ * Editing {@code .synesis/project.json}, or committing to it, changes nothing once the project has a signed baseline.</p>
  */
 @Command(name = "validation", description = "Set, show or clear the command that must pass before work is integrated.", mixinStandardHelpOptions = true)
 public final class ProjectValidationCommand implements Runnable {
-
-    private static final String METADATA_PATH = ".synesis/project.json";
 
     @Spec
     private CommandSpec spec;
@@ -57,22 +54,6 @@ public final class ProjectValidationCommand implements Runnable {
         runtime.terminal().stdout("VALIDATION_DIRECTORY=" + printable(location.validation().workingDirectory()));
         runtime.terminal().stdout("VALIDATION_TIMEOUT_SECONDS=" + location.validation().timeoutSeconds());
         runtime.terminal().stdout("VALIDATION_ALSO_IN_LANE=" + location.validationAlsoInLane());
-    }
-
-    /**
-     * Says what was done to the project file: nothing when the project already declared what was
-     * asked, a rewrite, and a commit where Git tracks the file.
-     *
-     * @param runtime CLI runtime
-     * @param change  what setting or clearing the command did
-     */
-    static void printChanged(CliRuntime runtime, ProjectValidationChange change) {
-        if (change.changed()) {
-            runtime.terminal().stdout("PROJECT_FILE_CHANGED=" + METADATA_PATH);
-        }
-        if (!change.commit().isEmpty()) {
-            runtime.terminal().stdout("PROJECT_FILE_COMMITTED=" + change.commit());
-        }
     }
 
     private static String printable(String text) {

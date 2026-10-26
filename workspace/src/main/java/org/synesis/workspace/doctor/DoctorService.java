@@ -20,6 +20,7 @@ import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationSettings;
 
 import org.synesis.workspace.application.project.ProjectLocation;
+import org.synesis.workspace.application.project.ProjectPolicyService;
 import org.synesis.workspace.application.ProjectApplicationService;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.infrastructure.digest.Sha256;
@@ -107,6 +108,15 @@ public final class DoctorService {
                     "run the Synesis installer again with 'Let other computers connect to this one' ticked; 'synesis link invite' prints the exact netsh command"),
             facts(DoctorGroup.WORK_GROUPS, DoctorFindingCode.OPERATOR_REQUESTS_OPEN, DoctorSeverity.INFO, DoctorConfidence.ADVICE, "The project is waiting for a person",
                     "One or more operator requests are open: work that stopped until a person answers.", "operator_request", DoctorRecommendation.NO_ACTION, "run 'synesis operator list'"),
+            facts(DoctorGroup.PROJECT, DoctorFindingCode.PROJECT_FILE_POLICY_IGNORED, DoctorSeverity.INFO, DoctorConfidence.ADVICE, "The project file disagrees with the signed policy",
+                    "The validation or review in .synesis/project.json differs from the policy the owner signed; the signed policy is used and the file is ignored.", "project_file", DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                    "run 'synesis project policy show' to see the policy in force, and restore the file from Git if you did not change it"),
+            facts(DoctorGroup.PROJECT, DoctorFindingCode.POLICY_NOT_RECEIVED, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED, "The owner's signed policy has not arrived",
+                    "This computer has not applied the owner's signed policy, so it will not integrate or run a gate until it does.", "policy", DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                    "connect this computer to the owner's computer and wait for the log to sync"),
+            facts(DoctorGroup.PROJECT, DoctorFindingCode.POLICY_ADOPTION_NEEDS_CONFIRMATION, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED, "The policy in the project file is not signed yet",
+                    "The policy in .synesis/project.json differs from the committed one, or is not committed, so nothing was signed.", "policy", DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
+                    "run 'synesis project policy adopt --from head' to sign the committed policy, or '--from file' for the working file"),
             facts(DoctorFindingCode.HEALTHY, DoctorSeverity.INFO, DoctorConfidence.CONFIRMED, "System and repository healthy", "All checked components operate within expected parameters.", "project", false,
                     DoctorRecommendation.NO_ACTION),
             facts(DoctorFindingCode.MISSING_INSTALLED_LAUNCHER, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED, "Missing installed launcher",
@@ -464,8 +474,15 @@ public final class DoctorService {
                 findings.add(finding(DoctorFindingCode.PROJECT_SCHEMA_UNSUPPORTED, "project_schema_unsupported"));
                 return migration.projectId().isBlank() ? null : migration.projectId();
             }
-            ProjectLocation location = projectService.locate(root);
-            return location.projectId().toString();
+            try {
+                return projectService.locate(root).projectId().toString();
+            } catch (ProjectApplicationService.ProjectApplicationException unreadablePolicy) {
+                if (!"POLICY_UNAVAILABLE".equals(unreadablePolicy.code())) {
+                    throw unreadablePolicy;
+                }
+                // The identity is the file's; the log that makes the policy unreadable is reported as the durable-state finding.
+                return migration.projectId().isBlank() ? null : migration.projectId();
+            }
         } catch (Exception ex) {
             findings.add(finding(DoctorFindingCode.PROJECT_IDENTITY_INVALID, "proj_invalid"));
             return null;
@@ -483,6 +500,7 @@ public final class DoctorService {
                 PredictionEventStore store = new PredictionEventStore(coordDir, pId);
                 // If loaded without exception, store signatures & chain are verified
                 checkOperatorRequests(store, findings);
+                checkPolicy(root, findings);
             } catch (Exception ex) {
                 DoctorFindingCode failureCode = DoctorFindingCode.classifyDurableStateFailure(ex);
                 if (failureCode == DoctorFindingCode.EVENT_LOG_VERIFICATION_FAILURE) {
@@ -491,6 +509,26 @@ public final class DoctorService {
                     findings.add(finding(failureCode, "durable_ambiguous"));
                 }
             }
+        }
+    }
+
+    /**
+     * What the signed policy says about the project file and this computer (ADR-0104). Nothing is written: a person signs
+     * a decision, and doctor never does.
+     */
+    private void checkPolicy(Path root, List<DoctorFinding> findings) {
+        try {
+            ProjectLocation location = projectService.locate(root);
+            if (!location.policyReceived()) {
+                findings.add(finding(DoctorFindingCode.POLICY_NOT_RECEIVED, "policy_not_received"));
+                return;
+            }
+            ProjectPolicyService.fileDisagreement(location).ifPresent(detail -> findings.add(finding(DoctorFindingCode.PROJECT_FILE_POLICY_IGNORED, "project_file_policy_ignored", Map.of("detail", detail))));
+            if (ProjectPolicyService.read(location).snapshot().isEmpty() && ProjectPolicyService.adoption(location).needsConfirmation()) {
+                findings.add(finding(DoctorFindingCode.POLICY_ADOPTION_NEEDS_CONFIRMATION, "policy_adoption_needs_confirmation"));
+            }
+        } catch (Exception unreadable) {
+            // A policy that cannot be read is reported by the durable-state findings.
         }
     }
 

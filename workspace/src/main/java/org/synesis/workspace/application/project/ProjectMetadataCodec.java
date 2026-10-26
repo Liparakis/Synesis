@@ -76,6 +76,59 @@ public final class ProjectMetadataCodec {
     }
 
     /**
+     * Reads the file as it is, whatever the signed log says (ADR-0104): the migration's input and what doctor compares
+     * with the signed policy. Every other reader asks {@code ProjectApplicationService.locate}.
+     *
+     * @param location any location of the project
+     * @return the project as the file reads
+     * @throws IOException if the file cannot be read or is malformed
+     */
+    public static ProjectLocation readFile(ProjectLocation location) throws IOException {
+        return read(location.root(), location.synesisDirectory(), location.metadataFile());
+    }
+
+    /**
+     * Reads a copy of the project file's text, such as the one committed on the control branch's head.
+     *
+     * @param location any location of the project
+     * @param document the file's text
+     * @return the project as that text reads
+     * @throws IOException if the text is unsupported or malformed
+     */
+    public static ProjectLocation readDocument(ProjectLocation location, String document) throws IOException {
+        return decode(location.root(), location.synesisDirectory(), location.metadataFile(), document);
+    }
+
+    /**
+     * The validation command as the text a signed decision carries: JSON with the argv, directory and timeout, or the
+     * empty string for none. The same command always gives the same text, so repeating a decision changes nothing.
+     *
+     * @param validation the command, or {@code null} for none
+     * @return the decision's value
+     */
+    public static String validationValue(ProjectCommandSpec validation) {
+        if (validation == null) {
+            return "";
+        }
+        Map<String, Object> command = new LinkedHashMap<>();
+        command.put("argv", validation.argv());
+        command.put("workingDirectory", validation.workingDirectory());
+        command.put("timeoutSeconds", validation.timeoutSeconds());
+        return ProviderJson.write(command);
+    }
+
+    /**
+     * Reads a decision's validation value back.
+     *
+     * @param value the text {@link #validationValue} gave
+     * @return the command, or {@code null} for the empty text
+     * @throws IOException if the text is not a validation command
+     */
+    public static ProjectCommandSpec parseValidationValue(String value) throws IOException {
+        return value.isEmpty() ? null : parseValidation(ProviderJson.parse(value));
+    }
+
+    /**
      * Returns the document text written for a project identity.
      *
      * @param identity portable project identity

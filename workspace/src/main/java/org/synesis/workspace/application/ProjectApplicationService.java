@@ -27,6 +27,7 @@ import org.synesis.workspace.application.project.ProjectInitResult;
 import org.synesis.workspace.application.project.ProjectInitStatus;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.project.ProjectMetadataCodec;
+import org.synesis.workspace.application.project.ProjectPolicyService;
 import org.synesis.workspace.application.project.ProjectValidationChange;
 import org.synesis.workspace.application.project.execution.ProjectCommandSpec;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
@@ -93,7 +94,7 @@ public final class ProjectApplicationService {
         ensureMetadataStorage(root);
         ProjectLocation location = readLocation(root, synesis, metadata);
         RepositoryPrivateStateService.ensure(location.root());
-        return location;
+        return ProjectPolicyService.overlay(location);
     }
 
     private static NodeIdentity identity(Path profile) throws Exception {
@@ -488,7 +489,9 @@ public final class ProjectApplicationService {
     }
 
     /**
-     * Declares the validation command of an initialized project, replacing any it declared.
+     * Declares the validation command of an initialized project in {@code project.json}, replacing any it declared.
+     * This is the unsigned file path that exists before a project has a signed baseline (ADR-0104); once it has one,
+     * it is refused with {@code POLICY_IS_SIGNED} and {@code synesis project validation set} signs the decision instead.
      *
      * <p>Only the metadata file is rewritten; the project's identity and review policy are kept.
      * Declaring what the project already declares changes nothing. The whole operation holds the
@@ -539,6 +542,11 @@ public final class ProjectApplicationService {
             // Read under the lock: what is declared is compared, not the text of the file, which
             // another writer or a hand may have laid out differently.
             ProjectLocation current = require(projectRoot);
+            if (ProjectPolicyService.read(current).snapshot().isPresent()) {
+                // The file is no longer policy (ADR-0104): rewriting it would change nothing and say otherwise.
+                throw new ProjectApplicationException("POLICY_IS_SIGNED",
+                        "The project's validation is a signed decision; change it with 'synesis project validation set' or 'clear', which sign it");
+            }
             if (Objects.equals(current.validation(), validation) && current.validationAlsoInLane() == alsoInLane) {
                 return new ProjectValidationChange(current, false, "");
             }

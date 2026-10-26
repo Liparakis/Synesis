@@ -1,21 +1,24 @@
 package org.synesis.cli.command.project;
 
 import java.io.IOException;
-import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 
 import org.synesis.cli.bootstrap.CliRuntime;
+import org.synesis.cli.command.ProjectOptions;
 import org.synesis.cli.exit.ExitCodes;
 
+import org.synesis.coordination.domain.policy.PolicyEntries.PolicyName;
 import org.synesis.workspace.application.ProjectApplicationService;
-import org.synesis.workspace.application.project.ProjectValidationChange;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 /**
- * Removes the command a project declares that must pass before its work is integrated. From then
- * on nothing gates integration but review, where the project requires it.
+ * Removes the command a project declares that must pass before its work is integrated, as a decision signed with the
+ * operator key (ADR-0104). From then on nothing gates integration but review, where the project requires it.
  */
 @Command(name = "clear", description = "Remove the command that must pass before work is integrated.", mixinStandardHelpOptions = true)
 public final class ProjectValidationClearCommand implements Callable<Integer> {
@@ -35,18 +38,20 @@ public final class ProjectValidationClearCommand implements Callable<Integer> {
     }
 
     /**
-     * Rewrites the project file without a command. @return stable exit code
+     * Signs the decision with the operator key. @return stable exit code
      */
     @Override
     public Integer call() {
         try {
-            ProjectValidationChange change = runtime.projectService().clearValidation(Path.of(project));
-            ProjectValidationCommand.print(runtime, change.location());
-            ProjectValidationCommand.printChanged(runtime, change);
+            Map<PolicyName, String> decisions = new LinkedHashMap<>();
+            decisions.put(PolicyName.VALIDATION, "");
+            decisions.put(PolicyName.VALIDATION_ALSO_IN_LANE, "false");
+            var decided = OperatorDecisions.sign(runtime, ProjectOptions.locate(runtime, project), decisions, Optional.empty());
+            ProjectValidationCommand.print(runtime, ProjectOptions.locate(runtime, project));
+            OperatorDecisions.printDecided(runtime, decided);
             return ExitCodes.OK;
         } catch (ProjectApplicationService.ProjectApplicationException failure) {
-            ProjectValidationCommand.printFailure(runtime, failure);
-            return ExitCodes.LOCAL_CONFIGURATION;
+            return OperatorDecisions.refuse(runtime, failure);
         } catch (RuntimeException failure) {
             runtime.terminal().stderr("ERROR=PROJECT_INVALID");
             return ExitCodes.LOCAL_CONFIGURATION;

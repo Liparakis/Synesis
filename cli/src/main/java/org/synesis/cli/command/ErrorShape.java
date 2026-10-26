@@ -98,7 +98,19 @@ public final class ErrorShape {
             advice("PROVIDER_NOT_INSTALLED", "the provider is not installed in this project", "run 'synesis provider install <provider>'"),
             advice("AGENT_RUN_INVALID", "An option of agents run is not valid.", "check the options with 'synesis agents run --help'"),
             advice("AGENT_RUN_INTERRUPTED","The agent run was interrupted.", "repeat 'synesis agents run'; agents that stopped are resumed"),
-            advice("AGENT_RUN_FAILED", "The agent run failed before it finished.", "see REASON, run 'synesis doctor', then repeat 'synesis agents run'"));
+            advice("OPERATOR_KEY_UNAVAILABLE", "This command needs your operator key's passphrase, typed at a terminal, and no terminal could be asked.", "run the command in your own terminal, outside the agent and any script"),
+            advice("OPERATOR_PASSPHRASE_WRONG", "The passphrase does not open the operator key.", "repeat the command and type the passphrase you chose when the key was created"),
+            advice("OPERATOR_PASSPHRASE_MISMATCH", "The two passphrases differ, so no operator key was created.", "repeat the command and type the same passphrase twice"),
+            advice("OPERATOR_PASSPHRASE_TOO_SHORT", "The passphrase is shorter than 8 characters.", "repeat the command with a longer passphrase"),
+            advice("OPERATOR_KEY_MISSING", "This project's signed policy names an operator key that is not on this computer.", "run the command on the owner's computer, where the key was created"),
+            advice("OPERATOR_KEY_MISMATCH", "The operator key on this computer is not the one the project registered.", "run the command on the owner's computer, or restore the key file it created"),
+            advice("POLICY_ADOPTION_NEEDS_CONFIRMATION", "The policy in .synesis/project.json differs from the committed one, or is not committed, so nothing was signed.", "run 'synesis project policy adopt --from head' to sign the committed one, or '--from file' for the working file"),
+            advice("POLICY_UNAVAILABLE", "The project's signed policy could not be read from its log, so no gate runs and none is skipped.", "run 'synesis doctor' and repeat the command"),
+            advice("POLICY_NOT_RECEIVED", "This computer has not received the owner's signed policy yet, so it will not integrate or run a gate.", "connect to the owner's computer and try again"),
+            advice("POLICY_IS_SIGNED", "The project's validation is a signed decision, so the file cannot change it.", "use 'synesis project validation set' or 'clear', which sign the decision"),
+            advice("POLICY_WRITE_FAILED", "The decision could not be written.", "run 'synesis doctor' and repeat the command"),
+            advice("NOT_THE_OWNER", "Only the owner's computer decides the project's policy.", "run the command on the owner's computer"),
+            advice("AGENT_RUN_FAILED", "The agent run failed before it finished.","see REASON, run 'synesis doctor', then repeat 'synesis agents run'"));
 
     private ErrorShape() {
     }
