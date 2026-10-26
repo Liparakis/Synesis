@@ -636,6 +636,10 @@ Source semantics proven on the Linux gate; no real-run acceptance yet. Each item
    on each of the many calls that never ask for policy. **`POLICY_NOT_RECEIVED` is not raised by `locate` either:** a
    member that has not applied the owner's baseline could then not even start its runtime and receive it. Its accessors
    throw `PolicyNotReceivedException`, so each gate still fails closed through the one door and nothing else is blocked.
+   A computer that joined by dialing an inviter and has received no entry yet counts as a member without the baseline
+   (its empty log means "not synced"); one that only carries the older `project follow` role does not, because that role
+   predates the baseline. A computer that made an operator key but whose log holds no baseline refuses every gate too:
+   a lost log must not turn the file back into the policy.
    The consequence for existing projects is the ADR's own: **a shared project whose owner has not signed a baseline runs
    no gate on its members** until the owner runs `synesis project policy adopt` (the cli scenario lab now signs the
    owner's review decision as a person would).

@@ -22,7 +22,6 @@ import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.persistence.PredictionEventStore;
 import org.synesis.coordination.persistence.ReplicationPeers;
-import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.link.identity.IdentityBootstrap;
 import org.synesis.link.identity.NodeIdentity;
 import org.synesis.link.identity.OperatorKeyException;
@@ -250,17 +249,17 @@ public final class ProjectPolicyService {
     }
 
     /**
-     * Whether this computer has joined another's project and has not received a single entry yet, so that an empty log
-     * means "not synced" and not "a project of my own". Ambiguous settings count as joining: a computer that cannot say
-     * it owns the project does not decide for it.
+     * Whether this computer joined another's project by dialing its inviter and has not received a single entry yet, so
+     * that an empty log means "not synced" and not "a project of my own". Unreadable peers count as joining: a computer
+     * that cannot say it owns the project does not decide for it. A computer that only carries the older follower role
+     * ({@code project follow}) is not counted: its log is a copy of the leader's and that role predates the baseline.
      */
     private static boolean joining(Path coordination) {
         if (!Files.isDirectory(coordination)) {
             return false;
         }
         try {
-            return !ReplicationPeers.read(coordination).dialed().isEmpty()
-                    || ReplicationSettings.read(coordination).map(ReplicationSettings::isMember).orElse(false);
+            return !ReplicationPeers.read(coordination).dialed().isEmpty();
         } catch (IOException | RuntimeException unreadable) {
             return true;
         }
