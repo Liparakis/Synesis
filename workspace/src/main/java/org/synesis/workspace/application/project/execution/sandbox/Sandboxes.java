@@ -43,6 +43,9 @@ public final class Sandboxes {
         if (operatingSystem.contains("linux")) {
             return new LinuxBubblewrapSandbox();
         }
+        if (operatingSystem.contains("windows")) {
+            return new WindowsLowIntegritySandbox();
+        }
         return new Missing(operatingSystem);
     }
 

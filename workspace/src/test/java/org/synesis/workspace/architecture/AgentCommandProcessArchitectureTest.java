@@ -59,6 +59,10 @@ class AgentCommandProcessArchitectureTest {
     Map<String, String> allowed = new TreeMap<>(OTHER_PROCESS_STARTERS);
     allowed.putAll(OTHER_MODULES);
     allowed.put(EXECUTOR, "the one choke point");
+    allowed.put("workspace/application/project/execution/sandbox/WindowsLowIntegrityLauncher.java",
+        "the Windows sandbox's process creation: ProjectProcessExecutor starts every agent command through it, with a Low token");
+    allowed.put("workspace/lifecycle/codex/WindowsJobObjectProcessTreeSupervisor.java",
+        "launches the managed Codex process that the person configured, inside a job object");
 
     Map<String, Boolean> found = new TreeMap<>();
     try (Stream<Path> modules = Files.list(root)) {
@@ -70,7 +74,8 @@ class AgentCommandProcessArchitectureTest {
         try (Stream<Path> files = Files.walk(sources)) {
           for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
             String text = Files.readString(file);
-            if (text.contains("new ProcessBuilder(") || text.contains("Runtime.getRuntime().exec(") || text.contains("ProcessBuilder.startPipeline(")) {
+            if (text.contains("new ProcessBuilder(") || text.contains("Runtime.getRuntime().exec(") || text.contains("ProcessBuilder.startPipeline(")
+                || text.contains("\"CreateProcessW\"") || text.contains("\"CreateProcessAsUserW\"")) {
               found.put(sources.relativize(file).toString().replace('\\', '/'), true);
             }
           }

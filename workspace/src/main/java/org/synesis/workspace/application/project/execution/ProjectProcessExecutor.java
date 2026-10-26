@@ -226,14 +226,19 @@ public final class ProjectProcessExecutor {
         return sanitized;
     }
 
+    /**
+     * Kills the process and everything below it. The descendants come from the operating system by pid rather
+     * than from {@link Process#descendants()}, which a sandbox's own {@code Process} (one that holds the whole job
+     * and ends it in {@code destroyForcibly}) does not implement.
+     */
     private static void killProcessTree(Process process) {
         try {
-            process.descendants().forEach(handle -> {
+            ProcessHandle.of(process.pid()).ifPresent(root -> root.descendants().forEach(handle -> {
                 try {
                     handle.destroyForcibly();
                 } catch (RuntimeException ignored) {
                 }
-            });
+            }));
             process.destroyForcibly();
         } catch (RuntimeException ignored) {
         }
@@ -293,6 +298,7 @@ public final class ProjectProcessExecutor {
         }
 
         Path privateTemp = null;
+        WrappedCommand.Hosting hosting = null;
         Process process = null;
         StreamCollector stdout = new StreamCollector();
         StreamCollector stderr = new StreamCollector();
@@ -311,21 +317,28 @@ public final class ProjectProcessExecutor {
                     WrappedCommand wrapped = sandbox.wrap(policy, argv, environment);
                     startArgv = wrapped.argv();
                     environment = new HashMap<>(wrapped.environment());
+                    hosting = wrapped.hosting();
                 } catch (SandboxSetupException | IOException setupFailure) {
                     // The sandbox probed as available, so a failure here is a refusal, never an unconfined retry.
                     return refused(Outcome.COMMAND_SANDBOX_SETUP_FAILED, "SANDBOX_SETUP_FAILED",
                             "The sandbox could not be set up for this command: " + setupFailure.getMessage() + ".", "run 'synesis doctor'");
                 }
             }
-            ProcessBuilder builder = new ProcessBuilder(startArgv);
-            builder.directory(workingDirectory.toFile());
-            builder.environment().clear();
-            builder.environment().putAll(environment);
-            process = builder.start();
-            ProcessHandle.Info processInfo = process.info();
-            long processStart = processInfo.startInstant().map(java.time.Instant::toEpochMilli).orElse(System.currentTimeMillis());
+            if (hosting != null) {
+                process = hosting.start(startArgv, workingDirectory, environment);
+            } else {
+                ProcessBuilder builder = new ProcessBuilder(startArgv);
+                builder.directory(workingDirectory.toFile());
+                builder.environment().clear();
+                builder.environment().putAll(environment);
+                process = builder.start();
+            }
+            // By pid, not Process.info(): a sandbox's own Process has no ProcessHandle, and a process that already ended has no info.
+            java.util.Optional<ProcessHandle.Info> processInfo = ProcessHandle.of(process.pid()).map(ProcessHandle::info);
+            long processStart = processInfo.flatMap(ProcessHandle.Info::startInstant).map(java.time.Instant::toEpochMilli).orElse(System.currentTimeMillis());
             try {
-                startedObserver.accept(new StartedProcessIdentity(process.pid(), processInfo.command().orElse(argv.getFirst()), processInfo.commandLine().orElse(String.join(" ", argv)), processStart));
+                startedObserver.accept(new StartedProcessIdentity(process.pid(), processInfo.flatMap(ProcessHandle.Info::command).orElse(argv.getFirst()),
+                        processInfo.flatMap(ProcessHandle.Info::commandLine).orElse(String.join(" ", argv)), processStart));
             } catch (RuntimeException observerFailure) {
                 killProcessTree(process);
                 terminalOutcome = Outcome.COMMAND_START_FAILED;
@@ -381,6 +394,9 @@ public final class ProjectProcessExecutor {
             }
             return result(Outcome.COMMAND_TERMINATED, null, stdout, stderr, request, sandboxLabel);
         } finally {
+            if (hosting != null) {
+                hosting.finish();
+            }
             deleteTree(privateTemp);
             if (interrupted) {
                 Thread.currentThread().interrupt();

@@ -704,6 +704,75 @@ Synesis crash (stale profile found and removed by doctor); two lanes at once can
 Completion criteria: adversarial list green on Windows; the Windows gate once; spike result recorded; the owner's
 answer on loopback in hand.
 
+**Built 2026-10-27 (Windows, low integrity as the owner decided; source semantics proven on this Windows 11
+computer; macOS not built).** The AppContainer plan above is not what was built: the owner chose a low-integrity
+process (answer 2), so the spike measured that option and the loopback question does not arise (a Low process keeps
+loopback and the network).
+
+*Windows spike result (measured, no elevation at any point):*
+
+1. A Low copy of the user's own token starts a child with `DuplicateTokenEx`, `SetTokenInformation(TokenIntegrityLevel,
+   S-1-16-4096)` and `CreateProcessAsUserW`, with no privilege and no prompt. The child reports
+   `Mandatory Label\Low Mandatory Level`. Git, Java, `javac`, Node, Python, Windows PowerShell, `pwsh` and `cmd` run
+   at Low; so do network and loopback sockets.
+2. A Medium label (`ML;;NW`) and a no-read-up label (`ML;;NRNW`) can be set by the owner on their own files and
+   folders with `SetNamedSecurityInfoW(LABEL_SECURITY_INFORMATION)`. It needs `WRITE_OWNER`, which a user profile
+   grants through inheritance. A folder outside the profile (for example `C:\work\x`, `D:\repos\x`) grants the owner
+   only Modify: the code then adds `WRITE_OWNER` for the owner to the access list with `SetEntriesInAclW`, keeping every
+   other entry. (Rewriting the list through `java.nio`'s ACL view was tried first and silently corrupts inherited and
+   inherit-only entries; it is not used.) A folder label with inheritance rewrites the labels of everything below it
+   in one call, but skips without an error any child on which the caller lacks `WRITE_OWNER`; the code therefore
+   verifies each node after labelling where it matters. Links are not followed by the propagation (checked with a
+   junction and a symlink).
+3. No-read-up works as written: a Low process cannot read or list the labelled file or folder.
+4. **What a label does not stop:** a Low process may delete or rename a Medium-labelled file that sits in a
+   Low-labelled folder, because the delete is checked against the folder. The trusted files inside the lane
+   (`.git`, `gitdir`, `commondir`, `config.worktree`, provider configuration) are therefore labelled Medium **and held open
+   without delete sharing** for the length of the run, which makes both the delete and the rename fail with a sharing
+   violation. Verified.
+5. **What no-read-up on a parent breaks:** Git and PowerShell fail on a working folder whose parent they cannot read
+   ("failed to stat", `Get-Location` falls back to `C:\`). The folders on the way from a hidden root to the lane are
+   therefore left readable (their entries can be listed, their names are visible) and every other entry inside them is
+   no-read-up. The consequence: the *names* of the entries that sit directly in those folders (for example the file name
+   `daemon.endpoint`, the names of other lanes) are visible to a command; their contents and everything below are not.
+6. **What does not run at Low:** programs built on the MSYS2 or Cygwin runtime, which includes the shell that Git for
+   Windows ships (`sh.exe`, `bash.exe`, `ls.exe`): they fail at start creating an object directory under
+   `\BaseNamedObjects` (`0xC0000022`). Git itself (a native build) runs, but a Git feature that starts `sh` does not
+   (the hooks are neutralised anyway). Agents on Windows must use `cmd`, PowerShell or direct argv.
+
+*Built:*
+
+1. `WindowsLowIntegritySandbox` (`...project.execution.sandbox`), registered in `Sandboxes.platform()` for Windows.
+   The probe starts a real Low child and checks that it runs at Low, writes its own folder, cannot write an
+   unlabelled file and cannot read a no-read-up file, then checks from outside that nothing leaked.
+2. The `SandboxPolicy` maps to labels: `writable` Low (inheritable); `hidden` Medium no-read-up (inheritable, set once
+   per process and verified node by node, with the readable folders of item 5 left out); `readOnly` below a hidden root
+   Medium without no-read-up; `readOnlyWithin` and `emptyReadOnlyFiles` Medium plus a hold (item 4). An empty
+   `config.worktree` is created in the lane's Git administrative directory when absent.
+3. `WrappedCommand` gained an optional `Hosting` (start the process, and finish the run), because a lowered token cannot
+   be expressed as a command-line prefix. `ProjectProcessExecutor` starts through it when present and calls `finish()`
+   before it deletes the private temp. The executor now takes process info and descendants by pid, because the Windows
+   `Process` is its own object. `WindowsLowIntegrityLauncher` creates the process suspended in a kill-on-close job,
+   inherits only the three standard handles (a handle list), and `destroyForcibly()` ends the whole job.
+   `AgentCommandProcessArchitectureTest` now also lists any file that calls `CreateProcessW`/`CreateProcessAsUserW`.
+4. The label of a writable root is kept between two runs on the same root and restored when a run starts on another
+   root or the process ends, because relabelling is proportional to the number of files (3,000 files: 1.1 s the first
+   time, then 0.5 ms; restoring 0.3 s).
+5. `SandboxAdversarialTest` runs on both systems from one script per attack (shell on Linux, Windows PowerShell on
+   Windows). 17 tests on Windows (one is Linux-only and skipped), all attacks of stage 2 except the symlink one, plus a
+   test that every attack fragment succeeds where the lane may write (so an attack that fails fails because of the
+   sandbox) and a test that an idle lane is not writable after its run. `WindowsLowIntegritySandboxTest` (7 tests) covers the
+   token level, the label lifetime and the argument quoting.
+
+*Limits, stated:* all Low objects share one level, so two lanes running at the same moment can write each other (no
+per-lane restricting SID; it would need no elevation, but would make user-profile toolchains unreadable, see the
+fallback above); a Synesis crash during a run leaves that lane Low until its next run; a path that is read-only inside
+the lane but does not exist (for example `.claude` before the provider created it) can be created by the command, as
+on Linux; user-profile folders that the policy does not hide stay readable and are not writable except the redirected
+`HOME`/`TEMP`; MSYS2 programs do not run (item 6); the ADR's stage 3 items not built: `project sandbox paths` (nothing
+needs a grant, because Low reads what the user can read), profile cleanup (there is no profile), and doctor wiring
+beyond the probe's reason text. The Windows gate was run on this computer only.
+
 ### Stage 4 — macOS sandbox (about two to three days; needs a Mac)
 
 Tasks: `MacSandboxExecSandbox` with the generated profile, detection and probe, environment and Git handling as stage 2.
