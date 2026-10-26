@@ -803,7 +803,7 @@ public final class AgentNextActionService {
             // it waits. In s5-run6 the agent resumed for a combine was told to wait for another lane's review, and stopped.
             return claimRequiredResponse(store, lane.participantId(), collaboration, location);
         }
-        AgentResponse integrationOrContinuation = integrationOrContinuationAction(store, collaboration, producerStillToPublish(store, callerIntent) && integrationPump.reason() == AgentReason.VALIDATION_REQUIRED ? NO_PUMP_WAIT : integrationPump, continuation);
+        AgentResponse integrationOrContinuation = integrationOrContinuationAction(store, collaboration, pumpShownTo(store, callerIntent, integrationPump), continuation);
         if (integrationOrContinuation != null) {
             return integrationOrContinuation;
         }
@@ -844,6 +844,19 @@ public final class AgentNextActionService {
     private AgentResponse exactBindingLifecycleResponse(NextActionRequest request, ProjectLocation location) throws Exception {
         Optional<ProviderSessionBindingService.Binding> exactBinding = bindingService.find(location, request.provider(), request.connectionInstanceId());
         return exactBinding.map(binding -> terminalOrCompletedBindingResponse(location, binding)).orElse(null);
+    }
+
+    /**
+     * What of the integration pump's answer the caller is shown. A producer that has published nothing yet is not shown a
+     * wait that is for other lanes: the validation wait for the snapshots in review, and the combine wait, which names the
+     * unlanded snapshot of every combine lane (ADR-0098 step 5 item 35). In s5-run20 the agent of a second combine lane asked
+     * to finish and was told that the first lane's snapshot lands once its reviewer accepts it again and that nothing more
+     * was needed from its lane, so it stopped without publishing, and a re-merge of two combines cannot land before both
+     * have a result.
+     */
+    private static AgentResponse pumpShownTo(PredictionEventStore store, Optional<WorkIntent> callerIntent, AgentResponse pump) {
+        boolean combineWait = pump.reason() == AgentReason.INTEGRATION_PENDING && pump.result() instanceof Map<?, ?> result && result.containsKey("combinePending");
+        return producerStillToPublish(store, callerIntent) && (pump.reason() == AgentReason.VALIDATION_REQUIRED || combineWait) ? NO_PUMP_WAIT : pump;
     }
 
     /** Whether the caller holds a producer lane that has published nothing yet: its own publication is its next step. */

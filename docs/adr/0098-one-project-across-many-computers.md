@@ -1273,6 +1273,41 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     (after the heal the lower computer integrates four more lanes while the combine waits: one `COMBINE_REQUIRED`, mains
     equal, the later files on both). All three fail without the change. Source semantics proven; not proved in a real
     run.
+35. **A combine lane that has published nothing is not shown another combine's wait** (s5-run20, 2026-10-26, build
+    remaster92; the PC re-merges, the VM is the other copy). Result `TIME_BOUND`, `main` apart (PC `b1ecfcd4`, VM
+    `75d3fad4`). *Proven from the log dumps and the PC agent transcripts* (`D:\SynesisAcceptance\evidence\s5-run20`): one
+    re-merge `rm-09be0f9f…` opened two combines, `cb-45df29d6…` for `snap_15bf4812…` (digits, base `5096b431`, the other
+    copy's head) and `cb-6d86a1c6…` for `snap_8af36a6d…` (primes and `NOTES.md`, base `a2647ff0`, the commit the build made
+    from the first combine's result). Both lanes were taken. The first agent published its result `snap_60707315…`
+    (`INTEGRATION_PENDING`, as designed: a combine lane's result is merged by the re-merge). The second agent
+    (`claude#2`, lane `6e34e895…`) resolved its files, ran the suite and asked to finish (`get_next_action` with
+    `completionRequested`), and was answered with the first lane's wait: `combinePending`, `snapshotIds` naming only
+    `snap_60707315…`, "nothing more is needed from this lane; wait". It stopped. No second combine result was ever
+    written (the log has one `TASK_SNAPSHOT_CREATED` after the combines), so the re-merge, which lands only when every
+    combine has a result, could not build, the first result stayed `INTEGRATION_PENDING`, and the two work groups stayed
+    `ACTIVE` until the run's time ran out (the log is flat from 12:31 to 13:19; the last four entries are the end-of-run
+    suspensions). Both agents were told the truth about the first lane; the second was told it about the wrong lane.
+    *The missing invariant:* the integration pump has no caller, and its combine wait lists the unlanded snapshot of every
+    combine lane of this computer (`IntegrationOrchestrationService`), so `AgentNextActionService.stagedAction` handed it
+    to whoever fell through the earlier stages, including a producer that had published nothing. The same stage already
+    withholds the pump's validation wait from such a producer (`NO_PUMP_WAIT`); the combine wait is the same kind of
+    answer and was missed.
+    *Rule:* `pumpShownTo` withholds both waits from a producer lane that has no snapshot yet, so its next action is its own
+    (publish, or keep resolving), not another lane's wait. A lane that has published still sees the combine wait.
+    *Not proved:* why the second lane's completion request offered no `finish_lane`. Every store-level condition
+    (`reviewRequired`, capability obligations, `owedOwnerReply`, `awaitedVerdict`, the group, the claims) was read back from
+    the PC's log dump and allows publication; what remains is the inspection of that lane's Windows worktree
+    (`hasScopedPublishableChanges`), which the log does not hold. The scripted scenario with two combines, both taken and
+    finished, the other computer integrating meanwhile, lands and ends with equal `main` on the unchanged code: the base of
+    the second combine is not unstable (a later build starts from the newest combine that has a result, so it meets that
+    base again). So this item fixes what the agent was told, not the unknown reason it was not offered publication; a
+    rerun will show it (the next transcript of a second combine lane will carry the answer to `completionRequested`).
+    *Wake:* unchanged: the run controller resumed `claude#2` for the second combine, and the lane was shown the right action
+    as soon as `pumpShownTo` stops hiding it.
+    Tests: `OverlapAndCombineScenarioTest.aCombineLaneThatHasPublishedNothingIsNotToldToWaitForAnotherCombinesSnapshot`
+    (fails without the change with the answer the agent got in the run), and
+    `twoCombinesOfOneReMergeAreBothTakenAndFinishedAndTheReMergeLandsAndMainEndsEqual` (passes with and without it; it holds
+    the two-combine landing). Source semantics proven for what the agent is told; not proved in a real run.
 
 ### Step 6: Membership in the owner's log
 

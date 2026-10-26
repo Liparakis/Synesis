@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
@@ -236,5 +237,128 @@ final class OverlapAndCombineScenarioTest {
         assertEquals("ready", scene.combiner1().call("ensure_session", scene.ensureSession()).get("status"));
 
         combineAndMeet(scene);
+    }
+
+    /** The scene of two combines of one re-merge: the first is finished, the second is offered, and the lower computer has moved on. */
+    private record TwoCombines(Computer high, Computer low, ScenarioAgent[] everyone, ScenarioAgent combiner1, ScenarioAgent combiner2) {
+    }
+
+    /**
+     * Two different changes of the higher computer each conflict with the lower computer's while the Link is down (a change
+     * of shared.txt, and a pair.txt both wrote), so after the heal one re-merge opens two combines, the second only once the
+     * first has its result: it combines onto the first's result. The first is taken and finished. The lower computer then
+     * goes on integrating, as it did in the run, so the heads of the re-merge move while the second combine waits.
+     */
+    private TwoCombines toTheSecondCombine() throws Exception {
+        Computer high = lab.higher();
+        Computer low = lab.lower();
+        ScenarioAgent high1 = lab.agent(high, "high-1");
+        ScenarioAgent high2 = lab.agent(high, "high-2");
+        ScenarioAgent low1 = lab.agent(low, "low-1");
+        ScenarioAgent low2 = lab.agent(low, "low-2");
+        lab.split();
+        high1.claim("Change shared.txt on the higher computer", "shared.txt");
+        high2.claim("Write pair.txt on the higher computer", "pair.txt");
+        low1.claim("Change shared.txt on the lower computer", "shared.txt");
+        low2.claim("Write pair.txt on the lower computer", "pair.txt");
+        high1.edit("shared.txt", "two", "two, by the higher computer");
+        high2.create("pair.txt", "pair, by the higher computer\n");
+        low1.edit("shared.txt", "two", "two, by the lower computer");
+        low2.create("pair.txt", "pair, by the lower computer\n");
+        high1.publish();
+        high2.publish();
+        low1.publish();
+        low2.publish();
+        lab.drive("both computers hold their two changes on main",
+                () -> lab.onBranch(high, "shared.txt").contains("by the higher computer") && lab.hasOnBranch(high, "pair.txt") && lab.onBranch(low, "shared.txt").contains("by the lower computer")
+                        && lab.hasOnBranch(low, "pair.txt"),
+                high1, high2, low1, low2);
+        ScenarioAgent combiner1 = lab.agent(high, "high-combiner-1");
+        ScenarioAgent combiner2 = lab.agent(high, "high-combiner-2");
+        combiner1.join();
+        combiner2.join();
+        lab.heal();
+
+        lab.drive("the first combine is offered", () -> !combiner1.combinesOffered().isEmpty(), high1, high2, low1, low2);
+        takeResolveAndFinish(combiner1);
+        lab.drive("the second combine is offered", () -> !combiner2.combinesOffered().isEmpty(), high1, high2, low1, low2, combiner1);
+        ScenarioAgent low3 = lab.agent(low, "low-3");
+        ScenarioAgent low4 = lab.agent(low, "low-4");
+        long seen = lab.entriesWrittenUnchecked(high, low, PredictionEventType.CONTROL_BRANCH_ADVANCED);
+        low3.claim("Write later-0.txt on the lower computer", "later-0.txt");
+        low4.claim("Write later-1.txt on the lower computer", "later-1.txt");
+        low3.create("later-0.txt", "written by the lower computer, later\n");
+        low4.create("later-1.txt", "written by the lower computer, later\n");
+        low3.publish();
+        low4.publish();
+        lab.drive("the lower computer's main moved and the higher computer has its heads",
+                () -> lab.hasOnBranch(low, "later-0.txt") && lab.hasOnBranch(low, "later-1.txt")
+                        && lab.entriesWrittenUnchecked(high, low, PredictionEventType.CONTROL_BRANCH_ADVANCED) >= seen + 2,
+                high1, high2, low1, low2, low3, low4);
+        for (int pass = 0; pass < 6; pass++) {
+            high1.step();
+            Thread.sleep(300);
+        }
+        return new TwoCombines(high, low, new ScenarioAgent[] {high1, high2, low1, low2, low3, low4, combiner1, combiner2}, combiner1, combiner2);
+    }
+
+    /**
+     * s5-run20 (2026-10-26): both combines are taken and finished, the re-merge lands once each has a result, and the copies
+     * of {@code main} end equal. A combine's base is the commit its predecessor's result made, so the build starts from the
+     * newest combine that has a result and meets the base again after the other computer moved.
+     */
+    @Test
+    void twoCombinesOfOneReMergeAreBothTakenAndFinishedAndTheReMergeLandsAndMainEndsEqual() throws Exception {
+        TwoCombines scene = toTheSecondCombine();
+        takeResolveAndFinish(scene.combiner2());
+
+        lab.drive("both computers hold the same main with both combined files", () -> lab.mainsEqual() && lab.onBranch(scene.low(), "pair.txt").contains("by the higher computer")
+                && lab.onBranch(scene.low(), "shared.txt").contains("by the higher computer"), scene.everyone());
+        assertEquals(2, lab.entriesWrittenUnchecked(scene.high(), scene.high(), PredictionEventType.COMBINE_REQUIRED), "one combine for each conflicting change");
+        assertEquals(lab.onBranch(scene.high(), "pair.txt"), lab.onBranch(scene.low(), "pair.txt"));
+        assertFalse(lab.onBranch(scene.high(), "pair.txt").contains("<<<<<<<"));
+        assertTrue(lab.onBranch(scene.high(), "later-1.txt").contains("later"), "the lower computer's later work is on the met main");
+    }
+
+    /**
+     * s5-run20 (2026-10-26): the agent of the second combine lane asked to finish and was answered with the first lane's wait
+     * ("the combined version lands once the original reviewer accepts it again; nothing more is needed from this lane"). The
+     * pump's wait names the unlanded snapshot of every combine lane to every caller, so a lane that had published nothing
+     * was told its work was done, stopped, and the re-merge, which lands only when every combine has a result, never landed.
+     * Here the agent resolves the second conflict by keeping the other computer's file as it is, which leaves its lane with
+     * nothing to publish: it must not be told to wait for another lane.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aCombineLaneThatHasPublishedNothingIsNotToldToWaitForAnotherCombinesSnapshot() throws Exception {
+        TwoCombines scene = toTheSecondCombine();
+        ScenarioAgent combiner = scene.combiner2();
+        Map<String, Object> offered = combiner.combinesOffered().getFirst();
+        assertEquals("ready", combiner.call("ensure_session", (Map<String, Object>) offered.get("ensureSession")).get("status"));
+        // Keeps the lower computer's file: the worktree then equals the combine's base and holds nothing to publish.
+        Map<String, String> lowers = Map.of("shared.txt", "one\ntwo, by the lower computer\nthree\n", "pair.txt", "pair, by the lower computer\n");
+        lowers.forEach((path, content) -> {
+            if (combiner.call("read_file", Map.of("path", path)).toString().contains("<<<<<<<")) {
+                combiner.rewrite(path, content);
+            }
+        });
+
+        Map<String, Object> answer = combiner.call("get_next_action", Map.of("completionRequested", true));
+
+        assertFalse(answer.toString().contains("combinePending"), "told to wait for the first lane's snapshot: " + answer);
+        assertNotEquals("waiting", answer.get("status"), answer.toString());
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void takeResolveAndFinish(ScenarioAgent combiner) {
+        Map<String, Object> offered = combiner.combinesOffered().getFirst();
+        assertEquals("ready", combiner.call("ensure_session", (Map<String, Object>) offered.get("ensureSession")).get("status"));
+        // Which of the two files conflicts depends on which advance Git meets first.
+        Map<String, String> resolutions = Map.of("shared.txt", "one\ntwo, by the higher computer\ntwo, by the lower computer\nthree\n", "pair.txt",
+                "pair, by the higher computer\npair, by the lower computer\n");
+        List<String> conflicted = resolutions.keySet().stream().filter(path -> combiner.call("read_file", Map.of("path", path)).toString().contains("<<<<<<<")).toList();
+        assertEquals(1, conflicted.size(), "its worktree holds the conflict markers of one file: " + conflicted);
+        combiner.rewrite(conflicted.getFirst(), resolutions.get(conflicted.getFirst()));
+        combiner.finish();
     }
 }
