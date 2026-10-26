@@ -2,6 +2,7 @@ package org.synesis.coordination.domain.prediction;
 
 import static java.util.Map.entry;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.synesis.coordination.WireGolden.edges;
 import static org.synesis.coordination.WireGolden.hex;
@@ -112,7 +113,8 @@ class PredictionWireFormatTest {
             entry(PredictionEventType.OWNER_CHANGED, 89),
             entry(PredictionEventType.WORK_TRASHED, 90),
             entry(PredictionEventType.TRASH_RESTORED, 91),
-            entry(PredictionEventType.TRASH_EMPTIED, 92)
+            entry(PredictionEventType.TRASH_EMPTIED, 92),
+            entry(PredictionEventType.PROJECT_POLICY_SET, 93)
     );
 
     @Test
@@ -122,6 +124,18 @@ class PredictionWireFormatTest {
             assertEquals(WIRE_CODES.get(type), type.wireCode(), type.name());
         }
         assertEquals(PredictionEventType.values().length, WIRE_CODES.size());
+    }
+
+    /**
+     * What a build that predates a code does with it (ADR-0104, stage 1 item 9): the code does not resolve, so the log
+     * that holds it is refused as unreadable and the project is not gated by a file the log overrides. This pins the
+     * behaviour a new entry type relies on to fail safe on an old build.
+     */
+    @Test
+    void aCodeNoBuildKnowsDoesNotResolveSoAnOldBuildRefusesTheLogThatHoldsIt() {
+        int unassigned = WIRE_CODES.values().stream().max(Integer::compare).orElseThrow() + 1;
+
+        assertThrows(IllegalArgumentException.class, () -> PredictionEventType.fromWireCode(unassigned));
     }
 
     @Test

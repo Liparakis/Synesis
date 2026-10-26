@@ -162,6 +162,14 @@ final class LogDumpFields {
                 put(fields, "revision", removed.revision());
             }
             case OWNER_CHANGED -> put(fields, "revision", MembershipEntries.OwnerChanged.decode(payload).revision());
+            case PROJECT_POLICY_SET -> {
+                var decision = org.synesis.coordination.domain.policy.PolicyEntries.ProjectPolicySet.decode(payload);
+                put(fields, "revision", decision.revision());
+                put(fields, "decision", decision.name().wireName());
+                if (decision.name() != org.synesis.coordination.domain.policy.PolicyEntries.PolicyName.OPERATOR_KEY) {
+                    put(fields, "value", decision.value());
+                }
+            }
             case WORK_TRASHED -> {
                 var trashed = TrashEntries.WorkTrashed.decode(payload);
                 put(fields, "lane", trashed.laneId());

@@ -17,6 +17,7 @@ import org.synesis.coordination.domain.prediction.PredictionProjection;
 import org.synesis.coordination.domain.task.CoordinationProjection;
 import org.synesis.coordination.domain.task.TaskCompletionProjection;
 import org.synesis.coordination.domain.membership.MembershipProjection;
+import org.synesis.coordination.domain.policy.PolicyProjection;
 import org.synesis.coordination.domain.trash.TrashProjection;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.exception.CoordinationException;
@@ -60,6 +61,7 @@ final class Projections implements ProjectionView {
     private final OperatorRequestProjection operatorRequests = new OperatorRequestProjection();
     private final ConversationProjection conversations = new ConversationProjection();
     private final MembershipProjection membership;
+    private final PolicyProjection policy;
     private final TrashProjection trash = new TrashProjection();
 
     /**
@@ -83,6 +85,8 @@ final class Projections implements ProjectionView {
             new Stage(conversations::validate, conversations::apply),
             new Stage((event, mode, revision) -> membership().validate(event, mode),
                     (event, revision) -> membership().apply(event)),
+            new Stage((event, mode, revision) -> policy().validate(event, mode),
+                    (event, revision) -> policy().apply(event)),
             new Stage((event, mode, revision) -> trash.validate(event, mode),
                     (event, revision) -> trash.apply(event)));
 
@@ -90,6 +94,7 @@ final class Projections implements ProjectionView {
     Projections(ProjectId project) {
         this.project = CoordinationNullException.requireNonNull(project, "project");
         this.membership = new MembershipProjection(project.value());
+        this.policy = new PolicyProjection(project.value(), membership);
     }
 
     /**
@@ -196,6 +201,10 @@ final class Projections implements ProjectionView {
 
     OperatorRequestProjection operatorRequests() {
         return operatorRequests;
+    }
+
+    PolicyProjection policy() {
+        return policy;
     }
 
     MembershipProjection membership() {

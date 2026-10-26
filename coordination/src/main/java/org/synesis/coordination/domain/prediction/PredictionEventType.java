@@ -397,7 +397,14 @@ public enum PredictionEventType {
     /**
      * A person deletes trashed work for good: the one deletion of work there is; every computer deletes its ref.
      */
-    TRASH_EMPTIED(92);
+    TRASH_EMPTIED(92),
+    /**
+     * An owner decision about how the project is gated: the validation command, review, the sandbox allowance
+     * (ADR-0104). The owner's statement of a revision, signed by the node key like every entry and again by the
+     * separate operator key a person unlocks with a passphrase; the first one registers that key. A build that does
+     * not know this code cannot read a log that holds one, so it never gates a project by a file the log overrides.
+     */
+    PROJECT_POLICY_SET(93);
 
 
     private static final Map<Integer, PredictionEventType> BY_WIRE_CODE = Arrays.stream(values())

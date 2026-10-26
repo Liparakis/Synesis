@@ -848,6 +848,15 @@ public final class PredictionEventStore implements ProjectionView {
     }
 
     /**
+     * Returns the owner's gating decisions, as the policy entries say (ADR-0104).
+     *
+     * @return policy projection
+     */
+    public org.synesis.coordination.domain.policy.PolicyProjection policyProjection() {
+        return projections.policy();
+    }
+
+    /**
      * Returns the trash as the log says (ADR-0098 step 7).
      *
      * @return trash projection

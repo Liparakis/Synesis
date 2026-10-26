@@ -18,6 +18,7 @@ import org.synesis.coordination.domain.membership.MembershipEntries.MemberCard;
 import org.synesis.coordination.domain.membership.MembershipEntries.MemberRemoved;
 import org.synesis.coordination.domain.membership.MembershipEntries.OwnerChanged;
 import org.synesis.coordination.domain.membership.MembershipEntries.ProjectShared;
+import org.synesis.coordination.domain.policy.PolicyEntries.ProjectPolicySet;
 import org.synesis.coordination.domain.prediction.ApplyMode;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.exception.CoordinationException;
@@ -118,6 +119,19 @@ public final class MembershipProjection {
             }
             case JOIN_ANSWERED -> validateAnswer(JoinAnswered.decode(event.payload()), signer, writtenAsMember, mode);
             case JOIN_POLICY_SET -> requireOwnerStatement(signer, JoinPolicySet.decode(event.payload()).revision(), mode);
+            case PROJECT_POLICY_SET -> {
+                long stated = ProjectPolicySet.decode(event.payload()).revision();
+                if (shared) {
+                    requireOwnerStatement(signer, stated, mode);
+                } else {
+                    // Before the project is shared the baseline's computer is the only writer, and the same counter
+                    // orders its decisions; the policy projection judges who that is.
+                    if (stated > revision) {
+                        throw missing(mode, "STATEMENT_REVISION_STALE");
+                    }
+                    requireRevision(stated);
+                }
+            }
             case MEMBER_REMOVED -> {
                 MemberRemoved payload = MemberRemoved.decode(event.payload());
                 requireOwnerStatement(signer, payload.revision(), mode);
@@ -230,6 +244,7 @@ public final class MembershipProjection {
                 policy = JoinPolicySet.decode(event.payload()).policy();
                 policies.put(revision, policy);
             }
+            case PROJECT_POLICY_SET -> revision++;
             case MEMBER_REMOVED -> {
                 MemberRemoved payload = MemberRemoved.decode(event.payload());
                 members.remove(payload.nodeId());
