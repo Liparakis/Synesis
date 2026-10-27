@@ -1566,6 +1566,33 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     (the filter only; the race was not forced). Source semantics proven for the filter; the cause of the scenario failure
     is a hypothesis.
 
+47. **An agent that already has the Synesis tools does not install the integration** (s6a-run3, 2026-10-27, build sbx6, real cut).
+    Result `TIME_BOUND`: `main` differs on the VM, both runs `TIMED_OUT`. *Proven from `D:\SynesisAcceptance\evidence\s6a-run3`
+    and the VM's Codex rollouts:* the VM (the higher computer) wrote one `COMBINE_REQUIRED` (`cb-7038601b…`, group
+    `830dd732…`) that no lane took. The harness restarted the VM's two agents at the heal. Their tool lists held
+    `mcp__synesis__*` (a cold `synesis mcp --provider codex` answers in 1 s), but they made no MCP call: they followed the
+    provider manual's "Before the first MCP session in a project, connect the integration … Codex uses
+    `synesis provider install codex`", the install failed in the read-only headless sandbox (`INSTALL_FAILED`), `synesis
+    doctor` there reported `provider_migration_required`, `provider_files_stale`, `sandbox_unavailable`, and they stopped. No
+    session of the second run exists, so nothing could be offered the combine; the controller waited `COPIES_MEETING` 1500 s
+    with 0 resumes, and the PC waited on the VM. The first run's agents ran the same install and carried on, so it is the
+    wording, not the failure, that decides: the manual names no case in which the step is already done.
+    *Rule 1 (`ProviderManualService.workspaceGuidance`, additive):* when the Synesis MCP tools are already available the
+    integration is installed; the agent calls `ensure_session` and never runs `synesis provider install` or `synesis doctor
+    --fix` from inside an agent run. The rendered manual and its content digests change, so installed manuals read as stale
+    until the next `provider install`, as for any manual edit. Test: `ProviderManualServiceTest` (fails on the previous text).
+    *Rule 2 (doctor false positive):* `provider_migration_required` was not lab staleness. `provider install` writes the launcher
+    it finds on the `PATH` first (`ProviderLauncherResolution`: the VM's `~/.local/bin/synesis`, which is what
+    `~/.codex/config.toml` names), while the migration check wanted the stable folder's launcher
+    (`~/.local/share/Synesis/bin/synesis`, absent on the VM), so the entry the install had just written was reported for
+    migration for ever (`synesis doctor` outside any sandbox on the VM shows only this finding; `provider status codex` is
+    `HEALTHY`). `ProviderConfigMigrationService.stableLauncherPath` now falls back to the install's launcher when the stable
+    folder has none. `provider_files_stale`, `sandbox_unavailable` and `agent_not_on_path` appear only in the agent's sandbox
+    (a read-only `/tmp`, no `codex` on its `PATH`); they are that environment's facts and are not changed. Test:
+    `ProviderConfigMigrationServiceTest.aComputerWhoseOnlyLauncherIsOnThePathIsNotToldItsEntryNeedsMigration` (the new seam does not
+    exist on the previous code). Source semantics proven; the next real run shows whether agents now call the tools.
+    *Open:* a restarted agent that never reaches Synesis ends without any record, and the run waits to its deadline.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

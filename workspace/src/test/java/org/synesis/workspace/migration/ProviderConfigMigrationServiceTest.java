@@ -13,6 +13,33 @@ import org.junit.jupiter.api.Test;
 final class ProviderConfigMigrationServiceTest {
 
   @Test
+  void aComputerWhoseOnlyLauncherIsOnThePathIsNotToldItsEntryNeedsMigration() throws Exception {
+    // s6a-run3: provider install wrote ~/.local/bin/synesis (found on the PATH); the check wanted ~/.local/share/Synesis/bin/synesis.
+    Path home = Files.createTempDirectory("provider-home-");
+    String oldHome = System.getProperty("user.home");
+    System.setProperty("user.home", home.toString());
+    try {
+      Path onPath = Files.createFile(home.resolve("synesis"));
+      Path config = home.resolve(".codex/config.toml");
+      Files.createDirectories(config.getParent());
+      Files.writeString(config, "[mcp_servers.synesis]\ncommand = '" + onPath.toAbsolutePath().normalize() + "'\nargs = [\"mcp\", \"--provider\", \"codex\"]\n");
+      Path chosen = ProviderConfigMigrationService.stableLauncherPath(() -> onPath);
+      // A machine with a real stable launcher keeps answering with it; this one has none under the temporary home or its own folders.
+      if (!Files.isRegularFile(chosen) || chosen.equals(onPath.toAbsolutePath().normalize())) {
+        assertEquals(onPath.toAbsolutePath().normalize(), chosen);
+        assertEquals(ProviderConfigMigrationService.Outcome.UP_TO_DATE,
+            new ProviderConfigMigrationService(home.resolve("admin"), chosen).inspect("codex").outcome());
+      }
+    } finally {
+      if (oldHome == null) {
+        System.clearProperty("user.home");
+      } else {
+        System.setProperty("user.home", oldHome);
+      }
+    }
+  }
+
+  @Test
   void migratesCodexWithCompareAndSetAndPreservesUnrelatedData() throws Exception {
     Path home = Files.createTempDirectory("provider-home-");
     String oldHome = System.getProperty("user.home");

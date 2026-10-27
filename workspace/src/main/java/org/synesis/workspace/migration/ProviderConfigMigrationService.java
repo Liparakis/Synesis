@@ -100,6 +100,16 @@ public final class ProviderConfigMigrationService {
     }
 
     private static Path stableLauncherPath() {
+        return stableLauncherPath(() -> new org.synesis.workspace.application.provider.ProviderApplicationService().launcherPath());
+    }
+
+    /**
+     * The launcher the provider entry must name. The stable folder's launcher when there is one; otherwise the one
+     * {@code provider install} wrote, which is found on the {@code PATH} first. Without that, a computer whose launcher
+     * lives on the {@code PATH} only (a lab VM: {@code ~/.local/bin/synesis}) was reported "migration required" for an
+     * entry the install had just written (s6a-run3).
+     */
+    static Path stableLauncherPath(java.util.function.Supplier<Path> installedLauncher) {
         String configured = System.getProperty("synesis.launcher", System.getenv("SYNESIS_LAUNCHER"));
         if (configured != null && !configured.isBlank()) {
             Path candidate = Path.of(configured).toAbsolutePath().normalize();
@@ -115,7 +125,11 @@ public final class ProviderConfigMigrationService {
         }
         Path bin = Path.of(base, "Synesis", "bin");
         Path nativeMcp = bin.resolve(windows ? "synesis-mcp.exe" : "synesis-mcp");
-        return (Files.isRegularFile(nativeMcp) ? nativeMcp : bin.resolve(windows ? "synesis.cmd" : "synesis")).toAbsolutePath().normalize();
+        Path script = bin.resolve(windows ? "synesis.cmd" : "synesis");
+        if (!Files.isRegularFile(nativeMcp) && !Files.isRegularFile(script)) {
+            return installedLauncher.get().toAbsolutePath().normalize();
+        }
+        return (Files.isRegularFile(nativeMcp) ? nativeMcp : script).toAbsolutePath().normalize();
     }
 
     /**

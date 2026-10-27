@@ -73,6 +73,7 @@ class ProviderManualServiceTest {
       assertTrue(content.contains("synesis provider install claude"));
       assertTrue(content.contains("synesis provider install codex"));
       assertTrue(content.contains("do not rerun provider installation from the assigned isolated worktree"));
+      assertTrue(content.contains("the integration is installed: call `ensure_session` and never run `synesis provider install` or `synesis doctor --fix` from inside an agent run"));
       assertTrue(content.contains("Native provider hooks are optional"));
       assertTrue(content.contains("stop native mutations and verify state through `read_file`"));
       assertTrue(content.contains("Reads carry revisions; provide the matching revision when applying a patch."));
