@@ -311,7 +311,8 @@ final class ReviewLaneProjection {
             result.put(NextActionKeys.CLAIM_EPOCH, intent.version());
             List<Map<String, Object>> reviewable = AgentReviewActionProjection.reviewCandidatesFor(store, participantId);
             if (!reviewable.isEmpty()) {
-                return reviewWhileWaitingAction(result, reviewable);
+                return reviewWhileWaitingAction(result, reviewable, "While your snapshot waits for review, ",
+                        " Your own lane stays yours, and its wait for review is unchanged: it is neither integrated nor given up by your reviewing.");
             }
             putNextProtocol(result, NextActionProtocol.ACTION_WAIT, NextActionProtocol.KIND_REVIEW_VALIDATION, reviewPendingPayload(intent, snapshot, participantId));
             return new AgentResponse(AgentStatus.WAITING, AgentReason.VALIDATION_REQUIRED, AgentNextAction.WAIT, result);
@@ -330,9 +331,11 @@ final class ReviewLaneProjection {
      *
      * @param waiting    the wait the producer would otherwise be shown
      * @param reviewable open candidates of any work group of the project it did not author, never empty (ADR-0098 step 6, item 20)
+     * @param lead       what the instruction says before the offer
+     * @param tail       what the instruction says after the offer
      * @return a {@code REQUEST_COORDINATION} response carrying the candidates
      */
-    private static AgentResponse reviewWhileWaitingAction(Map<String, Object> waiting, List<Map<String, Object>> reviewable) {
+    private static AgentResponse reviewWhileWaitingAction(Map<String, Object> waiting, List<Map<String, Object>> reviewable, String lead, String tail) {
         Map<String, Object> result = new LinkedHashMap<>(waiting);
         result.put(NextActionKeys.ACTIONABLE_REVIEW_CANDIDATES, reviewable);
         result.put(NextActionKeys.NEXT_PROTOCOL_ACTION, NextActionProtocol.ACTION_REQUEST_COORDINATION);
@@ -346,9 +349,7 @@ final class ReviewLaneProjection {
             result.put(NextActionKeys.REVIEW_CANDIDATE_SELECTION_REQUIRED, true);
             offer = "review one of the snapshots of other lanes: choose one of actionableReviewCandidates and ask for it with request_coordination and that candidate's requestCoordination";
         }
-        result.put("instruction", "While your snapshot waits for review, " + offer
-                + ". Its owner admits you; then follow get_next_action to inspect it and decide. Your own lane stays yours, and its wait for review is unchanged: "
-                + "it is neither integrated nor given up by your reviewing.");
+        result.put("instruction", lead + offer + ". Its owner admits you; then follow get_next_action to inspect it and decide." + tail);
         return new AgentResponse(AgentStatus.READY, AgentReason.VALIDATION_REQUIRED, AgentNextAction.REQUEST_COORDINATION, result);
     }
 
@@ -542,7 +543,7 @@ final class ReviewLaneProjection {
      *
      * @param location  project location
      * @param sessionId the completed session
-     * @return a review response, a {@code WAIT} while a completed work group is still active, or
+     * @return a review response, an offer of an open review it may take, a {@code WAIT} while a completed work group is still active, or
      *         {@code null} when nothing is owed or the projection is unavailable
      */
     static AgentResponse completedReviewAction(ProjectLocation location, String sessionId) {
@@ -569,7 +570,16 @@ final class ReviewLaneProjection {
             }
             var workGroups = store.workGroupProjection();
             boolean groupActive = completedGroups.stream().anyMatch(groupId -> workGroups.group(groupId).filter(group -> group.status() == WorkGroup.Status.ACTIVE).isPresent());
-            return groupActive ? new AgentResponse(AgentStatus.WAITING, null, AgentNextAction.WAIT, collaboration) : null;
+            if (!groupActive) {
+                return null;
+            }
+            // The candidates a producer waiting for review is offered, by the same rule. Offered none, the last snapshot published
+            // after every other agent had reviewed one and finished stayed unreviewed (ADR-0098 step 5, item 42).
+            List<Map<String, Object>> reviewable = AgentReviewActionProjection.reviewCandidatesFor(store, participant);
+            if (!reviewable.isEmpty()) {
+                return reviewWhileWaitingAction(collaboration, reviewable, "Your lane is complete, but its work group is still active: ", "");
+            }
+            return new AgentResponse(AgentStatus.WAITING, null, AgentNextAction.WAIT, collaboration);
         } catch (Exception failure) {
             logSuppressed("completed-lane review projection", failure);
             return null;

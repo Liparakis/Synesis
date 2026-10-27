@@ -1471,6 +1471,22 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     is not the offer the wait already made; fails on the previous code, which returned the same ID for both). Source
     semantics proven; not proved in a real run.
 
+42. **A completed session in an active work group is offered an open review it may take** (designer decision, 2026-10-27; the
+    flake recorded in ADR-0102, `OwnerDownMembersScenarioTest.membersGoOnTogetherWhileTheOwnerIsDownAndAllThreeMainsAndLogsAreEqualWhenItReturns`,
+    about 1 in 12 under load). *Proven by reading the projection:* when the last of four snapshots is published, every other
+    agent has reviewed one snapshot, been integrated and completed its session. `ReviewLaneProjection.completedReviewAction`
+    answered such a session with a bare `wait` because its work group is still active, and never offered it the open snapshot
+    it did not author, so that snapshot stayed `REVIEW_PENDING`.
+    *Rule:* before the `wait`, a completed session is offered the candidates `AgentReviewActionProjection.reviewCandidatesFor`
+    gives it, shaped by the same `reviewWhileWaitingAction` a producer waiting for review is shown. A snapshot it authored or
+    co-authored is never offered (non-author review stays mandatory), and a session with no such candidate is still told to
+    wait. The run controller already resumes a completed agent for such a review: `EventLogObserver.reviewsOffered` names
+    `openReviewSnapshots` for any agent none of whose sessions holds a lane, and `wakeFor` forgets nothing for an ended lane
+    (`laneEnded` is cleared at the resume), so no controller change is needed. Published contracts: no wire format, tool schema
+    or persisted form changes; only the instruction text of the offer differs for a completed session.
+    Tests: `CompletedSessionReviewOfferTest` (an open snapshot of another author is offered; a session whose only open snapshot
+    is its own is told to wait). Source semantics proven; not proved in a real run.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

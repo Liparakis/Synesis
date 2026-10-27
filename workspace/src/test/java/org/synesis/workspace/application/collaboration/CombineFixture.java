@@ -131,6 +131,25 @@ public final class CombineFixture {
      * @throws Exception when the lane or snapshot cannot be made
      */
     public TaskSnapshotRecord awaitingReview(String connection, String file, String reviewer) throws Exception {
+        TaskSnapshotRecord snapshot = publishedForReview(connection, file);
+        session(reviewer);
+        LaneGrant grant = new LaneGrant(UUID.randomUUID(), snapshot.provenance().workGroupId(), snapshot.provenance().laneId(), participant(reviewer), snapshot.provenance().claimEpoch(), true,
+                snapshot.snapshotId());
+        store().append(grant.grantId(), PredictionEventType.LANE_GRANT_ISSUED, identity.nodeId(), CollaborationCodec.encodeLaneGrant(grant), identity);
+        store().append(UUID.randomUUID(), PredictionEventType.LANE_GRANT_CONSUMED, identity.nodeId(), CollaborationCodec.encodeLaneGrant(grant), identity);
+        return snapshot;
+    }
+
+    /**
+     * Gives a connection a lane of its own on {@code file} whose snapshot is published for review and is offered to
+     * any reviewer: no one has asked for it or holds its review.
+     *
+     * @param connection connection instance
+     * @param file       the file the lane changes
+     * @return the snapshot open for review
+     * @throws Exception when the lane or snapshot cannot be made
+     */
+    public TaskSnapshotRecord publishedForReview(String connection, String file) throws Exception {
         ProviderSessionBindingService.Binding binding = session(connection);
         List<ResourceSelector> selectors = List.of(ResourceSelector.pathExact(file));
         WorkIntent lane = collaboration.announce(root, PROVIDER, connection, "change " + file, file + " changed", selectors).intent();
@@ -144,11 +163,6 @@ public final class CombineFixture {
                         binding.sessionId(), lane.version(), List.of()),
                 false, null, null));
         store().append(snapshot.taskId(), PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(), payload(snapshot, true).encode(), identity);
-        session(reviewer);
-        LaneGrant grant = new LaneGrant(UUID.randomUUID(), lane.workGroupId(), lane.intentId(), participant(reviewer), lane.version(), true,
-                snapshot.snapshotId());
-        store().append(grant.grantId(), PredictionEventType.LANE_GRANT_ISSUED, identity.nodeId(), CollaborationCodec.encodeLaneGrant(grant), identity);
-        store().append(UUID.randomUUID(), PredictionEventType.LANE_GRANT_CONSUMED, identity.nodeId(), CollaborationCodec.encodeLaneGrant(grant), identity);
         return snapshot;
     }
 
