@@ -13,8 +13,12 @@ project's file stays its policy until a person signs a first decision or runs `p
 **Real runs (sbx1–sbx3).** sbx-run2 PASS but every command was refused: the Windows probe ran Git Bash's `whoami` (fixed:
 full paths and the Low SID). sbx-run3 PASS with the PC's agents running the tests inside the Windows sandbox. On the
 Ubuntu 24.04 VM bubblewrap is blocked by `kernel.apparmor_restrict_unprivileged_userns=1`; commands there are refused and
-doctor now names the narrow AppArmor profile as the fix. Step 5 under a real 5-minute cut: s5-run29, 30, 31 all PASS
-(and s5-run26 PARTIAL/27 TIME_BOUND/28 PASS on remaster98 before the fixes below).
+doctor now names the narrow AppArmor profile as the fix. Step 5 under a real 5-minute cut: s5-run29, 30, 31 reported
+PASS (and s5-run26 PARTIAL/27 TIME_BOUND/28 PASS on remaster98 before the fixes below). **Correction (2026-10-27
+morning):** those passes do not show step 5 stable. Since stage 1, the VM member's agents were refused with
+`internal_failure` / `policy_not_received` because no baseline was ever signed: the VM finished 0 lanes in s5-run31 and
+in sbx-run2–4, and few in s5-run29/30, so the PC did the work. `run.sh` now fails a run in which any computer finishes
+no lane; the step 5 runs are to be repeated after the member-policy fix.
 
 **Fixed:** an author of a combined snapshot may take the combine (item 40); a re-merge granted to a session is a new
 offer to the run controller (item 41); a completed session is offered an open review it may take (item 42); the provider
