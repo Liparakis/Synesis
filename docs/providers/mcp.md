@@ -257,3 +257,8 @@ the lane snapshot itself. `git status`, `git diff`, `git log` and `git add` work
 When no sandbox is available the command is not started: the result is `command_sandbox_unavailable` with
 `ERROR=SANDBOX_UNAVAILABLE`, `MESSAGE` and `FIX` lines. A sandbox that probed as available but failed to set up for a
 run gives `command_sandbox_setup_failed` and is never retried unconfined.
+
+Every `run_command` result names how the command was confined in its `sandbox` field: the sandbox's name (for example
+`bubblewrap`), `NONE_ALLOWED_BY_DECISION` when the project's owner signed `synesis project sandbox allow-unsandboxed`
+and the computer has no sandbox, or `NONE` when the command was refused and never started. The field is additive; a
+client that does not know it ignores it.

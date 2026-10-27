@@ -268,26 +268,17 @@ public final class McpToolCatalog {
     }
 
     private static Descriptor runCommand() {
-        Map<String, Object> commandEvidence = objectSchema(Map.of("outcome",
-                property("string"),
-                "exitCode",
-                property("integer"),
-                "stdout",
-                property("string"),
-                "stderr",
-                property("string"),
-                "stdoutTruncated",
-                property("boolean"),
-                "stderrTruncated",
-                property("boolean"),
-                "stdoutBytesRead",
-                property("integer"),
-                "stderrBytesRead",
-                property("integer"),
-                "stdoutBytesRetained",
-                property("integer"),
-                "stderrBytesRetained",
-                property("integer")), List.of());
+        Map<String, Object> commandEvidence = objectSchema(Map.ofEntries(Map.entry("outcome", property("string")),
+                Map.entry("exitCode", property("integer")),
+                Map.entry("stdout", property("string")),
+                Map.entry("stderr", property("string")),
+                Map.entry("stdoutTruncated", property("boolean")),
+                Map.entry("stderrTruncated", property("boolean")),
+                Map.entry("stdoutBytesRead", property("integer")),
+                Map.entry("stderrBytesRead", property("integer")),
+                Map.entry("stdoutBytesRetained", property("integer")),
+                Map.entry("stderrBytesRetained", property("integer")),
+                Map.entry("sandbox", text("How the command was confined: the sandbox's name, NONE_ALLOWED_BY_DECISION when the project's signed decision allowed it to run without one, or NONE when it was refused"))), List.of());
         Map<String, Object> commandResult = objectSchema(Map.of("status", property("string"), "result", commandEvidence), List.of());
         return descriptor(RUN_COMMAND,
                 "Executes direct argv inside the assigned worktree or REVIEW snapshot. During capability validation, provide capabilityRequestHandle and implementationRevision from get_next_action to run tests against that request's exact immutable validation revision.",

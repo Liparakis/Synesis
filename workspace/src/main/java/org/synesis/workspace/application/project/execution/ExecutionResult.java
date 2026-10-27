@@ -79,6 +79,9 @@ public record ExecutionResult(ProjectProcessExecutor.Outcome outcome, Integer ex
         result.put("stderrBytesRead", stderrBytesRead);
         result.put("stdoutBytesRetained", stdoutBytesRetained);
         result.put("stderrBytesRetained", stderrBytesRetained);
+        if (!sandbox.isEmpty()) {
+            result.put("sandbox", sandbox);
+        }
         return result;
     }
 

@@ -71,6 +71,7 @@ class ProjectProcessExecutorSandboxTest {
         assertTrue(result.stderr().contains("MESSAGE=Commands asked for by agents run in a sandbox on this computer, and none is available: no bwrap."), result.stderr());
         assertTrue(result.stderr().contains("FIX=install bubblewrap"), result.stderr());
         assertEquals("NONE", result.sandbox());
+        assertEquals("NONE", result.toMap().get("sandbox"));
         assertFalse(Files.exists(marker));
         assertEquals(org.synesis.workspace.agent.AgentStatus.BLOCKED, result.toAgentResponse(Map.of()).status());
         assertEquals(org.synesis.workspace.agent.AgentReason.SANDBOX_UNAVAILABLE, result.toAgentResponse(Map.of()).reason());
@@ -90,6 +91,7 @@ class ProjectProcessExecutorSandboxTest {
 
         assertEquals(ProjectProcessExecutor.Outcome.COMPLETED, result.outcome(), result.stderr());
         assertEquals("NONE_ALLOWED_BY_DECISION", result.sandbox());
+        assertEquals("NONE_ALLOWED_BY_DECISION", result.toMap().get("sandbox"));
         assertEquals(root, asked.get());
         assertTrue(Files.exists(marker));
 
@@ -101,6 +103,7 @@ class ProjectProcessExecutorSandboxTest {
         }).execute(marker(root, second));
         assertEquals(ProjectProcessExecutor.Outcome.COMPLETED, confined.outcome(), confined.stderr());
         assertEquals("stand-in", confined.sandbox());
+        assertEquals("stand-in", confined.toMap().get("sandbox"));
     }
 
     @Test

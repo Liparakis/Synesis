@@ -81,7 +81,7 @@ class McpToolCatalogTest {
     assertTrue(outputProperties.keySet()
         .containsAll(List.of(
             "stdout", "stderr", "stdoutBytesRead", "stderrBytesRead",
-            "stdoutBytesRetained", "stderrBytesRetained", "stdoutTruncated", "stderrTruncated")));
+            "stdoutBytesRetained", "stderrBytesRetained", "stdoutTruncated", "stderrTruncated", "sandbox")));
   }
 
   @Test
