@@ -550,6 +550,26 @@ release.
 process can read the node key. This is a known, written risk of this release, not a guarantee the sandbox gives, and
 it stays open until the provider processes run inside the sandbox (a separate ADR).
 
+### Lab VM sandbox check (2026-10-27, Ubuntu 24.04, real VM)
+
+With the owner's approval the lab VM got Ubuntu's own `bwrap-userns-restrict` AppArmor profile, unchanged from the
+`apparmor-profiles` package (4.0.1really4.0.1-0ubuntu0.24.04.9; sha256 `11d39094…dd264f9`): `/usr/bin/bwrap` may
+create a user namespace, and everything it starts is stacked into `unpriv_bwrap`, which denies every capability.
+`kernel.apparmor_restrict_unprivileged_userns` stays `1`; no other profile changed. Checked by hand: a command inside
+has `CapEff` 0, a nested `unshare` inside is refused, a plain `unshare` outside is still refused, and a write outside
+the binds fails read-only. `SandboxAdversarialTest`, `LinuxBubblewrapSandboxTest` and
+`ProjectProcessExecutorSandboxTest` ran on the VM with `SYNESIS_REQUIRE_SANDBOX=true`: 27 tests, nothing skipped.
+
+The first VM run failed `keysAndApplicationStateAreNotReadable`: its `find / -xdev -name identity.bin` listed the keys
+of every project in the VM user's home. The cause is the test setup, not production: the build gives test JVMs a fake
+`user.home`, and the sandbox hides `user.home`, so the real home stayed visible (the Linux gate's container has an empty
+home, which is why it passed there). With the real `user.home`, as the daemon runs, the test passed 17 of 17.
+
+**Residual (Linux and macOS):** the sandbox hides the user's home, the application state, its own control checkout and
+the lane's siblings. A project stored outside the home folder (for example `/srv/project`) keeps its `.synesis`
+visible to another project's commands, which can read its node key. Windows is not affected (state is labelled
+no-read-up). The remedy, when wanted, is to hide every project root the computer knows, not only the home.
+
 ### Operator-key recovery (an explicit unresolved requirement)
 
 A lost operator key or passphrase cannot be recovered today, and an owner change leaves the new owner without one.
