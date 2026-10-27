@@ -76,9 +76,14 @@ final class ScenarioAgent {
             answers.add(envelope);
         }
         if (!"get_next_action".equals(tool)) {
-            trace.add(tool + " " + arguments.keySet() + " -> " + envelope.get("status") + " " + envelope.get("reason") + " " + envelope.get("nextAction") + " " + inner(envelope).get("reason"));
+            String refused = "blocked".equals(envelope.get("status")) || "failed".equals(envelope.get("status")) ? " " + abbreviated(String.valueOf(envelope.get("result"))) : "";
+            trace.add(tool + " " + arguments.keySet() + " -> " + envelope.get("status") + " " + envelope.get("reason") + " " + envelope.get("nextAction") + " " + inner(envelope).get("reason") + refused);
         }
         return envelope;
+    }
+
+    private static String abbreviated(String text) {
+        return text.length() > 300 ? text.substring(0, 300) + "..." : text;
     }
 
     /** The inner {@code result} of an envelope. */

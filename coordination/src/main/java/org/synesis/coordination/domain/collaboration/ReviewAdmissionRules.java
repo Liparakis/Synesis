@@ -163,13 +163,19 @@ public final class ReviewAdmissionRules {
         // snapshot from every other reviewer.
         boolean holdsLaneInGroup = current.collaborationProjection().activeIntents().stream()
                 .anyMatch(intent -> intent.participantIdentity().equals(requester) && intent.group().equals(target.group()));
+        // An author whose lanes have all ended (its snapshot was integrated and its session completed) may still review a snapshot of
+        // the work group while the group is active: when the last snapshot is published every other agent has finished, and a lane
+        // is required of nobody who has none left (ADR-0098 step 5, item 42). A grant it holds is released as any reviewer's is when
+        // the reviewer is judged gone.
+        boolean finishedAuthorOfGroup = current.collaborationProjection().activeIntents().stream()
+                .noneMatch(intent -> intent.participantIdentity().equals(requester)) && authoredInGroup(current, requester, target);
         // Two computers that announce at the same moment each open a work group of their own, and the only agent of each
         // then holds the only producer lane of its group (s6-run1, ADR-0098 step 6, item 3). Its published snapshot may
         // be reviewed by the producer of the other group: independence is the lineage rule above, and the group is no
         // part of it. Its review is still the grant for the one snapshot and no lane of its own.
         boolean publishedProducerOfAnotherGroup = holdsProducerLane(current.collaborationProjection().activeIntents().stream()
                 .filter(intent -> intent.participantIdentity().equals(requester)).toList()) && authored(current, requester).findAny().isPresent();
-        if (!matchingReviewer && !(holdsLaneInGroup && authoredInGroup(current, requester, target)) && !publishedProducerOfAnotherGroup) {
+        if (!matchingReviewer && !(holdsLaneInGroup && authoredInGroup(current, requester, target)) && !finishedAuthorOfGroup && !publishedProducerOfAnotherGroup) {
             throw new CoordinationException("REVIEWER_INTENT_REQUIRED");
         }
     }
