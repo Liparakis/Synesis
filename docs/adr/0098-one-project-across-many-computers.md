@@ -1489,9 +1489,10 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     *Follow-up (2026-10-27, main convergence):* the offer was refused. `ReviewAdmissionRules.validateReviewAdmission` admitted an
     author to review only while it held a lane in the group, and a finished session holds none, so every request answered
     `REVIEWER_INTENT_REQUIRED` (`blocked / policy_denied`) and the snapshot stayed `REVIEW_PENDING`; the flake of ADR-0102 kept
-    failing after item 42 (1936 and 2684 refusals in two runs). *Rule:* an author whose lanes have all ended is admitted to
-    review a snapshot of a work group it authored in; a grant it holds is released as any reviewer's is when the reviewer is
-    judged gone. Test: `LastSnapshotReviewedByFinishedAgentsScenarioTest` (fails on the previous code). Also fixed there,
+    failing after item 42 (1936 and 2684 refusals in two runs). *Rule:* an author whose lanes have all ended and one of whose
+    snapshots in the group was integrated is admitted to review a snapshot of that group; a grant it holds is released as any
+    reviewer's is when the reviewer is judged gone. An author that only released its lane is still refused
+    (`WorkIntentServiceTest.anAuthorWhoseLaneHasEndedIsNotAdmittedToReview`, 2026-10-17). Test: `LastSnapshotReviewedByFinishedAgentsScenarioTest` (fails on the previous code). Also fixed there,
     `RemergeService.lanes`: a re-merge of an advance an earlier re-merge made is built on the snapshots those re-merge
     snapshots came from (`RemergeServiceTest.aReMergeOfAnAdvanceThatWasItselfAReMergeIsBuiltOnTheLanesItCarried`).
 

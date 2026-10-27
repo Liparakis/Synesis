@@ -142,8 +142,8 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
    attempt (2684 and 1936 times in the two OwnerDown failures after item 42), because `ReviewAdmissionRules` admitted an
    author to review only while it held a lane, and a finished session holds none. Forced deterministically by
    `LastSnapshotReviewedByFinishedAgentsScenarioTest` (two agents review each other and finish, then the third publishes),
-   which failed on the previous code and passes now: an author whose lanes have all ended is admitted to review a snapshot
-   of a work group it authored in. A grant it holds is released as any reviewer's is when the reviewer is judged gone.
+   which failed on the previous code and passes now: an author whose lanes have all ended and whose snapshot was integrated
+   is admitted to review a snapshot of its work group. A grant it holds is released as any reviewer's is when the reviewer is judged gone.
    (b) Diverged copies in the three-computer test (116 to 125 `The re-merge could not run` per failure, every one
    `REMERGE_SNAPSHOT_INVALID`): a re-merge carries this computer's earlier advances, and the advance an earlier re-merge made
    names re-merge snapshots, which are never `INTEGRATED`, so the projection refused the new re-merge snapshot on every
