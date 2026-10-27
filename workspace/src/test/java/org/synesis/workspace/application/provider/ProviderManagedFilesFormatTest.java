@@ -69,7 +69,7 @@ class ProviderManagedFilesFormatTest {
 
     assertEquals(
         """
-        {"hooks":{"PreToolUse":[{"id":"synesis-claude-code","matcher":"Edit|Write|Bash|PowerShell","hooks":[{"type":"command","command":"\\"<LAUNCHER>\\" hook claude --profile \\"<PROFILE>\\""}]}],"Stop":[{"id":"synesis-claude-code-stop","hooks":[{"type":"command","command":"\\"<LAUNCHER>\\" hook claude --profile \\"<PROFILE>\\"","timeout":660}]}]}}"""
+        {"hooks":{"PreToolUse":[{"id":"synesis-claude-code","matcher":"Edit|Write|Bash|PowerShell|Read|Glob|Grep","hooks":[{"type":"command","command":"\\"<LAUNCHER>\\" hook claude --profile \\"<PROFILE>\\""}]}],"Stop":[{"id":"synesis-claude-code-stop","hooks":[{"type":"command","command":"\\"<LAUNCHER>\\" hook claude --profile \\"<PROFILE>\\"","timeout":660}]}]}}"""
             + System.lineSeparator(),
         masked(root.resolve(".claude/settings.json")));
   }

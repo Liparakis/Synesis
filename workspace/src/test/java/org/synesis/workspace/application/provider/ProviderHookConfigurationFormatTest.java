@@ -311,7 +311,7 @@ class ProviderHookConfigurationFormatTest {
         quoted(launcher)
             + " hook claude --profile "
             + quoted(location.profile());
-    return "{\"id\":\"synesis-claude-code\",\"matcher\":\"Edit|Write|Bash|PowerShell\",\"hooks\":[{\"type\":\"command\",\"command\":"
+    return "{\"id\":\"synesis-claude-code\",\"matcher\":\"Edit|Write|Bash|PowerShell|Read|Glob|Grep\",\"hooks\":[{\"type\":\"command\",\"command\":"
         + json(command)
         + "}]}";
   }

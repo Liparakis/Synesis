@@ -87,7 +87,7 @@ final class LaneSandboxPolicy {
         if (siblings != null) {
             hidden.add(siblings);
         }
-        applicationState().forEach(hidden::add);
+        ApplicationStatePaths.roots().forEach(hidden::add);
         String javaHome = System.getenv("JAVA_HOME");
         if (javaHome != null && !javaHome.isBlank() && Files.isDirectory(Path.of(javaHome))) {
             readOnly.add(real(Path.of(javaHome)));
@@ -95,20 +95,6 @@ final class LaneSandboxPolicy {
         return new SandboxPolicy(writable, readOnly, readOnlyWithin, emptyReadOnlyFiles, hidden, environment);
     }
 
-    /**
-     * Both places Synesis keeps application state: {@code ~/.synesis/Synesis} or {@code %LOCALAPPDATA%\Synesis}, and
-     * the per-user state folder of the host. Lane worktrees, integration worktrees, keys and the daemon endpoint live
-     * there.
-     */
-    private static List<Path> applicationState() {
-        String home = System.getProperty("user.home");
-        String local = System.getenv("LOCALAPPDATA");
-        Path base = local == null || local.isBlank() ? Path.of(home, ".synesis") : Path.of(local);
-        List<Path> roots = new ArrayList<>(List.of(base.resolve("Synesis"), Path.of(home, ".synesis")));
-        String stateHome = System.getenv("XDG_STATE_HOME");
-        roots.add((stateHome == null || stateHome.isBlank() ? Path.of(home, ".local", "state") : Path.of(stateHome)).resolve("Synesis"));
-        return roots.stream().filter(Files::isDirectory).map(LaneSandboxPolicy::real).toList();
-    }
 
     private static Path real(Path path) {
         try {

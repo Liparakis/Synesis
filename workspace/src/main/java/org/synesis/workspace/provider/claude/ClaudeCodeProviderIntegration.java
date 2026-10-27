@@ -237,10 +237,13 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
         return "synesis-claude-code";
     }
 
-    /** The shell tools are matched so a command that only sleeps is refused there too (ADR-0099). */
+    /**
+     * The shell tools are matched so a command that only sleeps is refused there too (ADR-0099), and the file-reading
+     * tools so that Synesis's state and keys stay unreadable to them (ADR-0104).
+     */
     @Override
     public String matcher() {
-        return "Edit|Write|Bash|PowerShell";
+        return "Edit|Write|Bash|PowerShell|Read|Glob|Grep";
     }
 
     /**

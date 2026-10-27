@@ -132,6 +132,13 @@ public final class HookApplicationService {
             LocalDiagnostics.hook(null, "claude", "PreToolUse", "BLOCKED", "sleep refused");
             return new HookExecutionResult("BLOCKED", "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":" + ProviderJson.write(reason) + "}}", reason);
         }
+        if (event != null && event.get("tool_name") instanceof String tool) {
+            java.util.Optional<String> unreadable = SynesisStateReadGuard.denial(tool, object(event.get("tool_input")), event.get("cwd") instanceof String cwd ? cwd : null);
+            if (unreadable.isPresent()) {
+                LocalDiagnostics.hook(null, "claude", "PreToolUse", "BLOCKED", tool + " of Synesis state refused");
+                return new HookExecutionResult("BLOCKED", "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":" + ProviderJson.write(unreadable.get()) + "}}", unreadable.get());
+            }
+        }
         ClaudeCodeHookAdapter.Result result = new ClaudeCodeHookAdapter(profile).processJson(json);
         // The adapter resolves the project from the event it reads; without one the record goes
         // to the diagnostics that belong to no project.
