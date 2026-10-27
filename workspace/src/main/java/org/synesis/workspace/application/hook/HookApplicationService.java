@@ -133,7 +133,13 @@ public final class HookApplicationService {
             return new HookExecutionResult("BLOCKED", "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":" + ProviderJson.write(reason) + "}}", reason);
         }
         if (event != null && event.get("tool_name") instanceof String tool) {
-            java.util.Optional<String> unreadable = SynesisStateReadGuard.denial(tool, object(event.get("tool_input")), event.get("cwd") instanceof String cwd ? cwd : null);
+            java.util.Optional<String> unreadable;
+            try {
+                unreadable = SynesisStateReadGuard.denial(tool, object(event.get("tool_input")), event.get("cwd") instanceof String cwd ? cwd : null);
+            } catch (RuntimeException undecided) {
+                // Fail closed: a call the guard cannot judge is refused.
+                unreadable = java.util.Optional.of(SynesisStateReadGuard.UNDECIDED_REASON);
+            }
             if (unreadable.isPresent()) {
                 LocalDiagnostics.hook(null, "claude", "PreToolUse", "BLOCKED", tool + " of Synesis state refused");
                 return new HookExecutionResult("BLOCKED", "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":" + ProviderJson.write(unreadable.get()) + "}}", unreadable.get());
@@ -144,6 +150,18 @@ public final class HookApplicationService {
         // to the diagnostics that belong to no project.
         LocalDiagnostics.hook(null, "claude", "PreToolUse", result.outcome().name(), result.humanReason());
         return new HookExecutionResult(result.outcome().name(), result.responseJson(), result.humanReason());
+    }
+
+    /**
+     * Whether a Claude Code event the hook could not process at all must still stop the tool call: every event but Stop
+     * (a failed Stop lets the agent stop, see {@link #stop}), and an event that cannot be read.
+     *
+     * @param json the event as received
+     * @return {@code true} to block
+     */
+    public static boolean blocksWhenUndecided(String json) {
+        Map<String, Object> event = parsed(json);
+        return event == null || !"Stop".equals(event.get("hook_event_name"));
     }
 
     private static Map<String, Object> parsed(String json) {

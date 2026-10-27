@@ -122,14 +122,19 @@ public final class ClaudeCodeProviderIntegration implements ProviderIntegration 
                 if (options.effort() != null) {
                     command.addAll(List.of("--effort", options.effort()));
                 }
+                // Project settings only: they carry the hooks Synesis installs. The user's own settings cannot widen the
+                // run, and dontAsk denies whatever is not allowed, whatever default mode the project file names.
+                command.addAll(List.of("--setting-sources", "project", "--permission-mode", "dontAsk"));
                 command.addAll(List.of("--allowedTools", "mcp__synesis", "Read", "Glob", "Grep"));
+                // Last, because both tool lists are variadic. The prompt arrives on standard input, so nothing follows.
+                command.addAll(List.of("--disallowedTools", "Bash", "PowerShell", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "Task", "Agent"));
                 return List.copyOf(command);
             }
 
             @Override
             public List<String> resumeCommand(Path projectRoot, String providerSessionId, HeadlessOptions options) {
                 List<String> command = new java.util.ArrayList<>(startCommand(projectRoot, options));
-                // Inserted ahead of the variadic tool list, which would otherwise swallow it.
+                // Inserted ahead of the variadic tool lists, which would otherwise swallow it.
                 command.addAll(2, List.of("--resume", providerSessionId));
                 return List.copyOf(command);
             }

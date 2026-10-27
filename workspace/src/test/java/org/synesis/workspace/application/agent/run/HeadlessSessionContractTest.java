@@ -32,12 +32,15 @@ final class HeadlessSessionContractTest {
 
         List<String> start = claude.startCommand(PROJECT, new HeadlessOptions("sonnet", "low"));
         assertEquals(List.of("claude", "-p", "--output-format", "stream-json", "--verbose", "--mcp-config", PROJECT.resolve(".mcp.json").toString(), "--strict-mcp-config",
-                "--model", "sonnet", "--effort", "low", "--allowedTools", "mcp__synesis", "Read", "Glob", "Grep"), start);
+                "--model", "sonnet", "--effort", "low",
+                "--setting-sources", "project", "--permission-mode", "dontAsk", "--allowedTools", "mcp__synesis", "Read", "Glob", "Grep",
+                "--disallowedTools", "Bash", "PowerShell", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "Task", "Agent"), start);
         assertFalse(start.contains("--dangerously-skip-permissions"));
 
         List<String> resume = claude.resumeCommand(PROJECT, "29224900-073b-4f18-a846-a12588353dfe", new HeadlessOptions(null, null));
         assertEquals(List.of("claude", "-p", "--resume", "29224900-073b-4f18-a846-a12588353dfe"), resume.subList(0, 4));
-        assertTrue(resume.indexOf("--resume") < resume.indexOf("--allowedTools"), "the tool list is variadic and must come last");
+        assertTrue(resume.indexOf("--resume") < resume.indexOf("--allowedTools"), "the tool lists are variadic and must come last");
+        assertTrue(resume.indexOf("--allowedTools") < resume.indexOf("--disallowedTools"));
         assertFalse(resume.contains("--model"));
 
         assertEquals(Optional.of("29224900-073b-4f18-a846-a12588353dfe"),

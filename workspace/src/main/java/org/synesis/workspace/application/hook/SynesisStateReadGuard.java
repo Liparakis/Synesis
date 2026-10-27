@@ -30,7 +30,11 @@ import org.synesis.workspace.application.project.execution.ApplicationStatePaths
 final class SynesisStateReadGuard {
 
     private static final String PROTECTED_COMPONENT = ".synesis";
+    private static final String LANE_MARKER = ".synesis/local/workspace-binding.json";
     private static final String REASON = "Synesis keeps its state and keys there. Read the project through the files of your own worktree and Synesis's tools, not through its state.";
+    private static final String SEARCH_REASON = "That search would cover Synesis's state and keys. Search your own assigned worktree instead: pass its path as the path of the call. "
+            + "Synesis's status tool reports it as the worktree (the assignedWorktree of a workspace refusal).";
+    static final String UNDECIDED_REASON = "Synesis could not decide whether this read is allowed, so it is refused.";
 
     private SynesisStateReadGuard() {
     }
@@ -49,6 +53,7 @@ final class SynesisStateReadGuard {
         }
         Path working = absolute(cwd == null ? "." : cwd, null);
         Path lane = lane(working);
+        boolean bound = Files.isRegularFile(lane.resolve(LANE_MARKER));
         List<Path> states = ApplicationStatePaths.roots();
         List<Path> targets = new ArrayList<>();
         for (String field : List.of("file_path", "notebook_path", "path")) {
@@ -80,6 +85,10 @@ final class SynesisStateReadGuard {
             if (refused(target, search, lane, states)) {
                 return Optional.of(REASON);
             }
+            // A search rooted in the control checkout, or in a folder above a .synesis directory, reaches the keys.
+            if (search && !(bound && target.startsWith(lane)) && coversProjectState(target, working)) {
+                return Optional.of(SEARCH_REASON);
+            }
         }
         return Optional.empty();
     }
@@ -105,10 +114,26 @@ final class SynesisStateReadGuard {
         return false;
     }
 
+    /**
+     * Whether a search rooted at {@code target} would walk into a {@code .synesis} directory: the target holds one, or
+     * is the working directory's project root or a folder above it.
+     */
+    private static boolean coversProjectState(Path target, Path working) {
+        if (Files.isDirectory(target.resolve(PROTECTED_COMPONENT))) {
+            return true;
+        }
+        for (Path current = working; current != null; current = current.getParent()) {
+            if (current.startsWith(target) && Files.isDirectory(current.resolve(PROTECTED_COMPONENT))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The folder an agent may read inside the application state: its own lane worktree. */
     private static Path lane(Path working) {
         for (Path current = working; current != null; current = current.getParent()) {
-            if (Files.isRegularFile(current.resolve(".synesis/local/workspace-binding.json"))) {
+            if (Files.isRegularFile(current.resolve(LANE_MARKER))) {
                 return current;
             }
         }

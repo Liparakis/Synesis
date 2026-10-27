@@ -94,6 +94,40 @@ class SynesisStateReadGuardTest {
     }
 
     @Test
+    void aSearchRootedInTheControlCheckoutOrAboveItIsRefusedWithAnActionableReason() throws Exception {
+        Path src = Files.createDirectories(control.resolve("src"));
+        String reason = SynesisStateReadGuard.denial("Glob", Map.of("pattern", "**/identity.bin"), control.toString()).orElseThrow();
+        assertTrue(reason.contains("assigned worktree"), reason);
+
+        assertTrue(refuses("Glob", Map.of("pattern", "**/identity.bin"), control), "no path means the working directory");
+        assertTrue(refuses("Grep", Map.of("pattern", "projectId"), control));
+        assertTrue(refuses("Grep", Map.of("pattern", "x", "path", "."), control));
+        assertTrue(refuses("Grep", Map.of("pattern", "x", "path", "src/.."), control), "a relative path that resolves to the root");
+        assertTrue(refuses("Glob", Map.of("pattern", "*", "path", ".."), src), "a folder above the root");
+        assertTrue(refuses("Grep", Map.of("pattern", "x", "path", control.toString()), lane), "an absolute control root from a lane");
+        assertTrue(refuses("Glob", Map.of("pattern", "*", "path", temp.toString()), lane), "above the control root");
+        assertTrue(refuses("Glob", Map.of("pattern", control.toString().replace('\\', '/') + "/**/*.bin"), lane));
+
+        assertEquals(java.util.Optional.empty(), SynesisStateReadGuard.denial("Grep", Map.of("pattern", "x"), src.toString()), "a subfolder holds no .synesis");
+        assertEquals(java.util.Optional.empty(), SynesisStateReadGuard.denial("Glob", Map.of("pattern", "*", "path", src.toString()), lane.toString()));
+        assertEquals(java.util.Optional.empty(), SynesisStateReadGuard.denial("Grep", Map.of("pattern", "x", "path", "."), lane.toString()), "the lane stays searchable");
+        assertEquals(java.util.Optional.empty(), SynesisStateReadGuard.denial("Read", Map.of("file_path", "src/a.txt"), control.toString()), "reading a project file is not a search");
+    }
+
+    @Test
+    void aMalformedPathIsRefusedAndAnUndecidedHookEventBlocksExceptStop() {
+        String event = ProviderJson.write(Map.of("hook_event_name", "PreToolUse", "tool_name", "Read", "cwd", lane.toString(),
+                "tool_input", Map.of("file_path", "bad\u0000path")));
+
+        HookApplicationService.HookExecutionResult result = new HookApplicationService().claudeCode(temp.resolve("profile"), event, null, java.time.Duration.ZERO);
+
+        assertEquals("BLOCKED", result.outcome());
+        assertTrue(HookApplicationService.blocksWhenUndecided(event));
+        assertTrue(HookApplicationService.blocksWhenUndecided("not json"));
+        assertTrue(!HookApplicationService.blocksWhenUndecided("{\"hook_event_name\":\"Stop\"}"), "a failed Stop lets the agent stop");
+    }
+
+    @Test
     void theHookRefusesTheCallWithTheProvidersDenyAnswer() {
         String event = ProviderJson.write(Map.of("hook_event_name", "PreToolUse", "tool_name", "Read", "cwd", lane.toString(),
                 "tool_input", Map.of("file_path", control.resolve(".synesis/local/profile/operator/operator.key").toString())));
