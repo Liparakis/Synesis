@@ -28,8 +28,12 @@ import org.synesis.workspace.infrastructure.diagnostics.LocalDiagnostics;
  */
 final class ValidationFailureGuard {
 
+    /** What the operator can do when the command was not run for want of a sandbox, and when the request closes. */
+    private static final String SANDBOX_LEVERS = "Nothing was refused and nothing is integrated. Install the sandbox named in the evidence, or sign `synesis project sandbox allow-unsandboxed` to let this project's commands run without one, and then run `synesis operator recheck`. "
+            + "This request closes when the command runs on a recheck, when the project declares no command, or when no snapshot is waiting.";
+
     /** What every request of this condition tells the operator after naming the failure. */
-    private static final String LEVERS = "Nothing was refused and nothing is integrated. Change the command with `synesis project validation set`, or change the project or end the lane, and then run `synesis operator recheck`. "
+    private static final String LEVERS ="Nothing was refused and nothing is integrated. Change the command with `synesis project validation set`, or change the project or end the lane, and then run `synesis operator recheck`. "
             + "This request closes when the command passes or refuses a snapshot on a recheck, when the project declares no command, or when no snapshot is waiting.";
 
     private ValidationFailureGuard() {
@@ -83,8 +87,18 @@ final class ValidationFailureGuard {
      * @return the request that stops integration, as it is recorded
      */
     static OperatorRequest raise(Path controlRoot, PredictionEventStore store, NodeIdentity identity, String failure, String evidence, String failed) {
+        return raise(controlRoot, store, identity, failure, LEVERS, evidence, failed);
+    }
+
+    /**
+     * Raises the request as {@link #raise(Path, PredictionEventStore, NodeIdentity, String, String, String)} does, with
+     * the operator's levers named by the caller, for a failure the generic levers do not fit.
+     *
+     * @param levers what the operator can do and when the request closes, appended to {@code failure}
+     */
+    static OperatorRequest raise(Path controlRoot, PredictionEventStore store, NodeIdentity identity, String failure, String levers, String evidence, String failed) {
         Optional<OperatorRequest> open = store.operatorRequestProjection().open(OperatorRequest.INTEGRATION_VALIDATION_FAILING);
-        OperatorRequest request = OperatorRequest.raised("opr_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16), OperatorRequest.INTEGRATION_VALIDATION_FAILING, failure + LEVERS, evidence);
+        OperatorRequest request = OperatorRequest.raised("opr_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16), OperatorRequest.INTEGRATION_VALIDATION_FAILING, failure + levers, evidence);
         if (open.isPresent() && open.get().summary().equals(request.summary()) && open.get().evidence().equals(request.evidence())) {
             return open.get();
         }
@@ -100,6 +114,24 @@ final class ValidationFailureGuard {
             LocalDiagnostics.failurePoint(controlRoot, "integration", "record_operator_request", String.valueOf(notRecorded.getMessage()), notRecorded);
         }
         return request;
+    }
+
+    /**
+     * Raises the request for a validation command that was not started because this computer has no sandbox for it
+     * (ADR-0104). The command runs agent-written code, so it is never run unconfined unless the owner signed that it may.
+     * The caller holds the project append lock.
+     *
+     * @param controlRoot absolute control project root path
+     * @param store       project event store, current under the lock
+     * @param identity    node signing identity
+     * @param candidate   the snapshot and attempt that waited for the gate
+     * @param evidence    the refusal as the executor printed it: ERROR, MESSAGE and FIX lines
+     * @param failed      the attempt, the snapshot added last and the outcome, for the failure point
+     * @return the request that stops integration, as it is recorded
+     */
+    static OperatorRequest raiseSandboxUnavailable(Path controlRoot, PredictionEventStore store, NodeIdentity identity, String candidate, String evidence, String failed) {
+        return raise(controlRoot, store, identity, "The project's validation command was not run on the work waiting to be integrated (" + candidate
+                + "): this computer has no sandbox for it, or the sandbox could not be set up. ", SANDBOX_LEVERS, evidence, failed);
     }
 
     /**

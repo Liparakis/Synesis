@@ -118,11 +118,19 @@ public final class IntegrationOrchestrationService {
      * at the one point where a pass is outside it.
      */
     IntegrationOrchestrationService(Runnable beforeRecording) {
+        this(beforeRecording, org.synesis.workspace.application.project.SignedUnsandboxedAllowance.executor());
+    }
+
+    /**
+     * Creates a service whose validation command runs through the given executor, so a test can give it a computer with
+     * no sandbox.
+     */
+    IntegrationOrchestrationService(Runnable beforeRecording, ProjectProcessExecutor processExecutor) {
         this.beforeRecording = Objects.requireNonNull(beforeRecording, "beforeRecording");
         this.workspaceService = new IntegrationWorkspaceService();
         this.advancementService = new ControlBranchAdvancementService();
         this.projectService = new ProjectApplicationService();
-        this.processExecutor = org.synesis.workspace.application.project.SignedUnsandboxedAllowance.executor();
+        this.processExecutor = Objects.requireNonNull(processExecutor, "processExecutor");
         this.bindingService = new ProviderSessionBindingService();
         this.remerges = new RemergeService(projectService, processExecutor, this::finalizeIntegratedLanes);
     }
@@ -326,6 +334,9 @@ public final class IntegrationOrchestrationService {
             return new AgentResponse(AgentStatus.BLOCKED, AgentReason.INTEGRATION_FAILED, AgentNextAction.RETRY, result);
         }
         String candidate = "snapshot " + last.snapshotId() + " of attempt " + attemptId;
+        if (validation.outcome() == ProjectProcessExecutor.Outcome.COMMAND_SANDBOX_UNAVAILABLE || validation.outcome() == ProjectProcessExecutor.Outcome.COMMAND_SANDBOX_SETUP_FAILED) {
+            return ValidationFailureGuard.blocked(ValidationFailureGuard.raiseSandboxUnavailable(controlRoot, store, identity, candidate, output, candidate + " outcome " + validation.outcome().value()));
+        }
         String failure = verdict
                 ? "The project's validation command still fails on the work waiting to be integrated (attempt " + attemptId + "), and the lane of snapshot " + outOfRepairs.get().snapshotId() + " in it has used its "
                         + TaskCompletionProjection.VALIDATION_REPAIRS + " repairs. "
