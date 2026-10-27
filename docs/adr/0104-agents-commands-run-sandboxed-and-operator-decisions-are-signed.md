@@ -546,6 +546,10 @@ outside it, and reached over a channel opened from outside (the "Not decided" it
 the owner chooses (open question 11): refuse Codex for headless agent runs, or accept the residual in writing for this
 release.
 
+**Owner's answer (USER-STATED, 2026-10-27): accept the residual for now.** Codex keeps running headless as today; its
+process can read the node key. This is a known, written risk of this release, not a guarantee the sandbox gives, and
+it stays open until the provider processes run inside the sandbox (a separate ADR).
+
 ### Operator-key recovery (an explicit unresolved requirement)
 
 A lost operator key or passphrase cannot be recovered today, and an owner change leaves the new owner without one.
@@ -1124,6 +1128,7 @@ order C, F.
     them also covered by the operator key (question 1) when it exists?
 11. **Provider processes read the node key (2026-10-27 finding).** Until the provider processes run inside the sandbox
     (a separate ADR), refuse Codex for headless agent runs, or accept the residual in writing for this release?
+    **Answered 2026-10-27: accept the residual for now** (see the release finding above).
 
 ## Not decided
 
