@@ -927,4 +927,42 @@ class RemergeServiceTest {
         assertNotEquals(ownB, result);
         assertEquals(List.of(), MainMeeting.audit(project.root, project.store(), otherHead, result));
     }
+
+    /**
+     * The three-computer stall of {@code ThreeComputersMainMeetingScenarioTest} (ADR-0098 main convergence): this computer's
+     * earlier re-merge landed, naming its re-merge snapshot, and the other copy then moved on. The next re-merge carries
+     * that advance, whose snapshot is a re-merge snapshot and is never INTEGRATED, so the projection refused the new
+     * re-merge snapshot with {@code REMERGE_SNAPSHOT_INVALID} on every pass and the copies never met.
+     */
+    @Test
+    void aReMergeOfAnAdvanceThatWasItselfAReMergeIsBuiltOnTheLanesItCarried() throws Exception {
+        NodeIdentity other = lowerNode();
+        Lane lane = lane("snap_a", "own.txt", true);
+        String own = ownMain("own.txt", "own");
+        ownAdvance(base, own, lane.snapshotId());
+        String otherHead = commit("other", base, "other.txt", "other");
+        otherAdvance(other, otherHead);
+        run();
+        String first = built(otherHead, own).snapshot().snapshotId();
+        verdict(lane, first, grantFor(first), "ACCEPTED");
+        run();
+        String landed = project.head();
+        assertNotEquals(own, landed, "the first re-merge landed");
+        String otherAgain = commit("other-again", otherHead, "other-again.txt", "other again");
+        otherAdvance(other, otherAgain);
+
+        run();
+
+        List<RemergeSnapshotPayload> second = project.store().taskCompletionProjection().remerge(RemergeService.remergeId(otherAgain, landed));
+        assertEquals(1, second.size(), "one re-merge snapshot for the one lane that needed review");
+        assertEquals("snap_a", second.getFirst().originalSnapshotId(), "built on the lane's own snapshot, not on the re-merge snapshot that carried it");
+        String rms = second.getFirst().snapshot().snapshotId();
+        verdict(lane, rms, grantFor(rms), "ACCEPTED");
+
+        run();
+
+        assertTrue(project.isAncestorOfHead(landed), "main only moves forward");
+        assertTrue(project.isAncestorOfHead(otherAgain), "and holds the other computer's newest head");
+        assertEquals(List.of(), MainMeeting.audit(project.root, project.store(), otherAgain, project.head()));
+    }
 }

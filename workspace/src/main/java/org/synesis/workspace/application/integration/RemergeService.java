@@ -447,22 +447,38 @@ final class RemergeService {
                 mergeOf.put(ids[2], ids);
             }
         }
-        List<Lane> lanes = new ArrayList<>();
+        // One lane per original snapshot; the later merge commit holds the earlier one's work too.
+        Map<String, Lane> lanes = new java.util.LinkedHashMap<>();
         for (MainMeeting.Advance advance : missing) {
             String[] merge = mergeOf.get(advance.to());
             if (merge == null) {
                 continue;
             }
             for (String snapshotId : advance.snapshotIds()) {
-                Optional<TaskSnapshotRecord> original = store.taskCompletionProjection().findSnapshotById(snapshotId);
+                Optional<TaskSnapshotRecord> original = laneSnapshot(store, snapshotId);
                 if (original.isEmpty()) {
                     stop(remergeId, "its advance names snapshot " + snapshotId + ", which this computer has not seen");
                     return null;
                 }
-                lanes.add(new Lane(original.get(), merge[1], merge[0]));
+                lanes.put(original.get().snapshotId(), new Lane(original.get(), merge[1], merge[0]));
             }
         }
-        return lanes;
+        return List.copyOf(lanes.values());
+    }
+
+    /**
+     * The snapshot a lane's work was integrated as. An advance this computer's earlier re-merge made names re-merge
+     * snapshots, which are never integrated themselves; a re-merge snapshot of one of them is refused by the projection
+     * ({@code REMERGE_SNAPSHOT_INVALID}), on every pass, so the copies never met. The lane is the one whose snapshot the
+     * re-merge snapshot was made from.
+     */
+    private static Optional<TaskSnapshotRecord> laneSnapshot(PredictionEventStore store, String snapshotId) {
+        var completion = store.taskCompletionProjection();
+        Optional<TaskSnapshotRecord> snapshot = completion.findSnapshotById(snapshotId);
+        while (snapshot.isPresent() && completion.remergeOf(snapshot.get().snapshotIdentity()).isPresent()) {
+            snapshot = completion.findSnapshotById(completion.remergeOf(snapshot.get().snapshotIdentity()).orElseThrow().originalSnapshotId());
+        }
+        return snapshot;
     }
 
     /** One merge commit; a merge Git cannot make is undone, leaving the worktree at the base. */
