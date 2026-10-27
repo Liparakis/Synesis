@@ -86,6 +86,37 @@ final class NoChangeCompletionTest {
         assertFalse(service.owns(intent.participant(), intent.selectors().getFirst()));
     }
 
+    /**
+     * s7a-run2: another reviewer was admitted first, so this reviewer's lane waits for a producer that is not coming and, open,
+     * keeps its group ACTIVE for ever; each computer's run waited on the other's open lane until the run timed out.
+     */
+    @Test
+    void aReviewerLaneNothingInItsGroupCanUseIsReleasedAndTheGroupCloses(@TempDir Path temp) throws Exception {
+        UUID project = UUID.randomUUID();
+        UUID group = UUID.randomUUID();
+        NodeIdentity identity = NodeIdentity.generate();
+        WorkIntentService service = new WorkIntentService(new PredictionEventStore(temp, project), identity);
+        new WorkGroupService(new PredictionEventStore(temp, project), identity).create(new WorkGroup(group, project, "goal", "acceptance", 1, WorkGroup.Status.ACTIVE));
+        WorkIntent producer = intent(project, "agt-producer", "verification.py", group);
+        UUID reviewerId = UUID.randomUUID();
+        WorkIntent reviewer = new WorkIntent(reviewerId, project, "agt-late-reviewer", "codex", UUID.randomUUID(), "Review", "Reviewed", "base-commit",
+                List.of(ResourceSelector.pathExact("reviews/verification.md")), 1, group, WorkIntent.defaultAuthorityLineage(reviewerId),
+                WorkIntent.Status.ANNOUNCED, WorkIntent.Role.REVIEWER, List.of(ResourceSelector.pathExact("verification.py")));
+        assertTrue(service.announce(producer).acquired());
+        assertTrue(service.announce(reviewer).acquired());
+        assertEquals(0, service.releaseStrandedReviewerLanes(), "the producer is still working: the reviewer may yet be given its snapshot");
+
+        service.completeNoChange(completion(temp, project, producer));
+
+        PredictionEventStore held = new PredictionEventStore(temp, project);
+        assertEquals(WorkGroup.Status.ACTIVE, held.workGroupProjection().group(group).orElseThrow().status(), "the reviewer lane holds the group open");
+        assertEquals(1, service.releaseStrandedReviewerLanes());
+        PredictionEventStore after = new PredictionEventStore(temp, project);
+        assertTrue(after.collaborationProjection().activeIntents().isEmpty());
+        assertEquals(WorkGroup.Status.COMPLETED, after.workGroupProjection().group(group).orElseThrow().status());
+        assertEquals(0, service.releaseStrandedReviewerLanes(), "nothing is released twice");
+    }
+
     @Test
     void providerDetachDoesNotSilentlyCompleteTheGroup(@TempDir Path temp) throws Exception {
         UUID project = UUID.randomUUID();

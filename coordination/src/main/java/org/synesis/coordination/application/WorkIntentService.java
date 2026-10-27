@@ -209,6 +209,18 @@ public final class WorkIntentService {
     }
 
     /**
+     * Ends this computer's reviewer lanes that nothing in their work group can use any more, so they no longer hold the
+     * group open (ADR-0098 step 5 item 48).
+     *
+     * @return how many lanes were released
+     * @throws IOException              when durable I/O fails
+     * @throws GeneralSecurityException signing failure
+     */
+    public int releaseStrandedReviewerLanes() throws IOException, GeneralSecurityException {
+        return laneCompletion.releaseStrandedReviewerLanes();
+    }
+
+    /**
      * Releases the lane of a combine that has published its result, so its agent is free to take another combine.
      *
      * @param lock     already-held project append lock

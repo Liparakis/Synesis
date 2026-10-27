@@ -1615,6 +1615,50 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     exist on the previous code). Source semantics proven; the next real run shows whether agents now call the tools.
     *Open:* a restarted agent that never reaches Synesis ends without any record, and the run waits to its deadline.
 
+48. **A reviewer lane nothing in its group can use is ended, so it no longer holds the group open** (s7a-run2, 2026-10-27, build
+    sbx7, real cut). Result `TIME_BOUND`, the two copies of `main` equal (`92268384…`), PC run `TIMED_OUT` after 1501 s, VM run
+    without a result. *Proven from `D:\SynesisAcceptance\evidence\s7a-run2` (log dumps, both run outputs, the VM's Codex
+    transcripts):* the PC (higher computer, `a521af…`) landed everything, but its work group `a4d4f047…` stayed `ACTIVE`. The only
+    thing open in it was the reviewer lane `fadd88dc…` of the VM's agent `agt_57b1aa6d…` (`codex#1`'s restarted session, announced
+    on the VM after the heal for task `014ca360…`). That agent took the review of `snap_5380171e…`, was refused the report path as
+    overlapping, claimed another and was told `WAIT`: another reviewer (`agt_2b2cf6e7…`) had been admitted first and reviewed it.
+    Resumed once, its answer was `REVIEWER_PENDING`: "No open producer lane claims what this lane reviews: its producer left, or
+    its work was integrated after another review … Keep waiting, or call cancel_lane" with `recommendedTool` `get_next_action`; it
+    waited and stopped. The group had no producer lane, no grant, request or prepared completion left, and every snapshot integrated
+    or superseded, so that lane alone kept `closeSettledWorkGroup` from closing it. The PC run waited `FOREIGN_LANE_OPEN` (a
+    participant it did not start holds an open lane) and the VM run waited `OTHER_COMPUTER_CONNECTED` (its agent has an open lane
+    to come back to): each on the other, until the PC's deadline; the VM run was still waiting when the harness collected, which
+    is why it has no result. The agents used the tools throughout (every transcript is MCP calls); the "provider install" hits are
+    the manual's text. This is the dead end ADR-0098 item 38 names: a `WAIT` that names no event that can end it.
+    *`STALE_CLAIM_EPOCH` (2 hits) is not the cause:* `snap_2d25da69…` (producer `agt_d1c2f900…`, epoch 1) was blocked because its
+    lane's own scope was extended after the snapshot (`WORK_INTENT_SCOPE_EXTENDED`, pos 119) which moved the lane to epoch 2; its
+    later revision `snap_5380171e…` integrated, and `allGroupSnapshotsIntegrated` already counts the earlier one as superseded.
+    *The missing invariant:* a lane that holds no authority and can be given nothing must not outlive the use it was announced for.
+    *Rule:* `LaneCompletionRules.strandedReviewerLane` names such a lane (a reviewer lane in an active group that finished work,
+    where every open lane is a reviewer's and no grant, request or prepared completion is outstanding and every snapshot is
+    integrated or superseded). The integration pass of each computer ends its own such lanes (`WorkIntentService.releaseStrandedReviewerLanes`,
+    called with the trash sweep, one `WORK_INTENT_RELEASED` each) and then closes the group as any release does; only the
+    lane's own computer writes, as the attribution table requires. A lane with a grant is never stranded (its grant is
+    unresolved). Published contracts: none changes; a lane is released without its agent's call, which the agent sees as
+    its lane having ended when it next calls `get_next_action` (the run controller wakes an agent whose lane ended).
+    Test: `NoChangeCompletionTest.aReviewerLaneNothingInItsGroupCanUseIsReleasedAndTheGroupCloses` (no such release exists on the
+    previous code, the group stays `ACTIVE`). Source semantics proven; not proved in a real run.
+
+49. **s7a-run3: not proved, recorded** (2026-10-27, build sbx7, real cut). Result `TIME_BOUND`, `main` differs on the VM (PC
+    `da4476c1…`, VM `d1096110…`), both runs `TIMED_OUT`. *Read from `D:\SynesisAcceptance\evidence\s7a-run3`:* no
+    `INTEGRATION_BLOCKED`, no `STALE_CLAIM_EPOCH`, no `LANE_GRANT_NOT_FOUND`; every agent transcript is MCP calls. The VM's agents
+    went on working after the heal and advanced the VM's `main` three more times (`9bcf529…` to `8be3a9e…` to `d1096110…`, log
+    positions 167 and 176, group `0d64abcb…` completed) while the PC (higher computer, `a060e6…`) re-merged: it wrote
+    `COMBINE_REQUIRED` three times, each for another "other" head (`cb-8b6845a5…` and `cb-d9edf43d…` for `9bcf529…`, `cb-ad88624b…`
+    for `d1096110…`), its agents took all three and published the combine results (`snap_e61b179e…`, `snap_9e401a86…`,
+    `snap_3e8982e4…`, all `INTEGRATION_PENDING`), and no `REMERGE_SNAPSHOT_CREATED` was ever written. The PC's `git log --all` and
+    refs hold none of `8be3a9e…`, `d1096110…`: the PC never had the VM's later commits as objects, although its log names them, so
+    `holdsEveryHead` stayed false (the PC run ended `COPIES_MEETING` after 8 resumes) and a re-merge onto a head it does not hold
+    cannot be built. Neither computer ever held the other's head in 20 minutes of being connected. *Not proved:* why the code
+    did not cross. Item 46 (`CodeOverLink` skipping the other copy's main while its own pass runs, logged only at INFO, which is
+    not in the evidence) fits a computer whose passes run back to back; sbx7 does not contain it. The evidence cannot tell that
+    from a code-exchange fault, and no fix is made for it here. Next real run: build with item 46 and keep the process log.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

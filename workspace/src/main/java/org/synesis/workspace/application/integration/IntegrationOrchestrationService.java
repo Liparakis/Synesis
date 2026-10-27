@@ -623,6 +623,9 @@ public final class IntegrationOrchestrationService {
             org.synesis.workspace.application.collaboration.AwayLanes.releaseUnreachableReviews(current, location.coordinationDirectory(), identity,
                     org.synesis.workspace.application.collaboration.AwayLanes.goneHere(location.root()));
             org.synesis.workspace.application.collaboration.WorkTrash.sweep(location, location.openCoordinationStore(), identity);
+            // A reviewer lane of this computer that nothing in its group can use any more, which would otherwise hold the group
+            // open for ever (ADR-0098 step 5 item 48).
+            new org.synesis.coordination.application.WorkIntentService(location.openCoordinationStore(), identity).releaseStrandedReviewerLanes();
         } catch (Exception unreadable) {
             LOG.log(System.Logger.Level.WARNING, "trash sweep skipped; the next pass tries again", unreadable);
         }

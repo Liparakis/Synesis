@@ -249,4 +249,32 @@ public final class LaneCompletionRules {
                         .orElseGet(() -> current.collaborationProjection().noChangeCompletion(prepared.laneIdentity())
                                 .map(completion -> completion.workGroupIdentity().equals(workGroupId)).orElse(false)));
     }
+
+    /**
+     * Whether a reviewer lane can never be given anything to review, so that it is the only thing keeping its work group
+     * open (s7a-run2): the group finished work, every lane still open in it is a reviewer's, no grant, request or prepared
+     * completion of the group is outstanding, and every snapshot of it is integrated or superseded by an integrated later
+     * revision. Another reviewer was admitted first, and the lane's agent was told to wait for a producer that is not
+     * coming. The lane holds no authority (a lane with a grant has an unresolved grant, which this refuses), so ending it
+     * takes nothing from anyone.
+     *
+     * @param current project projections
+     * @param lane    an open lane
+     * @return {@code true} when the lane is a reviewer's and nothing in its group can use it
+     */
+    public static boolean strandedReviewerLane(ProjectionView current, WorkIntent lane) {
+        if (lane.role() != WorkIntent.Role.REVIEWER || lane.status() != WorkIntent.Status.ANNOUNCED) {
+            return false;
+        }
+        WorkGroupId group = lane.group();
+        var workGroup = current.workGroupProjection().group(group).orElse(null);
+        if (workGroup == null || workGroup.status() != org.synesis.coordination.domain.collaboration.WorkGroup.Status.ACTIVE) {
+            return false;
+        }
+        return hasFinishedWork(current, group)
+                && current.collaborationProjection().activeIntents().stream().filter(open -> open.group().equals(group))
+                .allMatch(open -> open.role() == WorkIntent.Role.REVIEWER)
+                && !hasUnresolvedGroupGrants(current, group) && !hasPendingGroupRequests(current, group)
+                && allGroupSnapshotsIntegrated(current, group) && !hasUnintegratedPreparedCompletion(current, group);
+    }
 }

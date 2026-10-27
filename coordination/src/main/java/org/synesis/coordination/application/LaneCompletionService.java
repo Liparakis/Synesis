@@ -138,6 +138,32 @@ final class LaneCompletionService {
     }
 
     /**
+     * Releases this computer's reviewer lanes that can never be given anything to review, and closes the groups they were
+     * the last thing holding open ({@link LaneCompletionRules#strandedReviewerLane}). Each computer ends only the lanes it
+     * wrote, so the entry is the owner's, as for any release.
+     *
+     * @return how many lanes were released
+     * @throws IOException              when payload validation or durable I/O fails
+     * @throws GeneralSecurityException when signing or signature verification fails
+     */
+    int releaseStrandedReviewerLanes() throws IOException, GeneralSecurityException {
+        return appends.call(current -> {
+            int released = 0;
+            for (WorkIntent lane : List.copyOf(current.collaborationProjection().activeIntents())) {
+                boolean mine = current.collaborationProjection().introducingNode(lane.participantIdentity()).map(signer.nodeId()::equals).orElse(false);
+                if (!mine || !LaneCompletionRules.strandedReviewerLane(current, lane)) {
+                    continue;
+                }
+                current.append(lane.intentId(), PredictionEventType.WORK_INTENT_RELEASED, signer.nodeId(), CollaborationCodec.encodeRelease(lane.intentId()), signer);
+                endOwnedContracts(current, lane.authorityLineageId(), false);
+                closeSettledWorkGroup(current, lane.group());
+                released++;
+            }
+            return released;
+        });
+    }
+
+    /**
      * Ends what a lane held as owner of contracts, under the lock that ends the lane (ADR-0092).
      *
      * <p>Its contracts are frozen, the change requests still waiting for it are declined, and the
