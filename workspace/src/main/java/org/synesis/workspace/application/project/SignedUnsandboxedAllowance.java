@@ -17,6 +17,12 @@ import org.synesis.workspace.application.project.execution.sandbox.Sandboxes;
 public final class SignedUnsandboxedAllowance implements UnsandboxedAllowance {
 
     /**
+     * Creates the allowance.
+     */
+    public SignedUnsandboxedAllowance() {
+    }
+
+    /**
      * Creates the executor every production path uses: this computer's sandbox, and the signed allowance when there is none.
      *
      * @return the executor
