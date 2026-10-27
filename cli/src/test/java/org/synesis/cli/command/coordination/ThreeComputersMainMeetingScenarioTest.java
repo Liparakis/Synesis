@@ -14,17 +14,17 @@ import org.synesis.cli.command.coordination.TestComputers.Computer;
  * Three computers joined by the one-link flow and linked to each other, working together (ADR-0098 steps 5 and 6): the
  * copies of {@code main} meet.
  *
- * <p>Both tests were the same product defect, fixed by ADR-0098 step 6 designer item 21 (the owner kept no session that predated its admission of a member, so it asked nobody for code), found on 2026-10-19 by the scenarios of {@link OwnerDownMembersScenarioTest}
- * and {@link MemberRemovalScenarioTest} when they went on to the copies of {@code main} (the removal scenario's first
- * version, then each shape below: 6 of 6 runs of each failed, and 4 earlier diagnostic runs): with the owner O and the members M1 and M2 all running and all
- * linked, the owner never takes the other computers' newer {@code main}, though its log holds every entry and is
- * byte-identical to theirs. The failure message of the wait carries the evidence: {@code holds the head of friend: false}
- * and {@code holds the head of member2: false} for the owner, whose checkout is clean and behind, and
- * {@code holds the head of owner: true} for both members, whose copies are equal. Restarting the owner's computer
- * (the same node and folders) fixes it at once: in one diagnostic run the restarted owner met the others' main within
- * 60 s, which is what {@link OwnerDownMembersScenarioTest} shows. So what stops it is in-process state of the running
- * owner, not the log, the audit or the membership. {@code CodeOverLink.meet} logs {@code Another computer's main could not
- * be fetched yet; the next pull tries again.} (34 times in one run) and never fetches; the cause was not found.</p>
+ * <p>Both tests were first the same product defect, fixed by ADR-0098 step 6 designer item 21 (the owner kept no session that predated its admission of a member, so it asked nobody for code), found on 2026-10-19 by the scenarios of {@link OwnerDownMembersScenarioTest}
+ * and {@link MemberRemovalScenarioTest} when they went on to the copies of {@code main}: with the owner O and the members
+ * M1 and M2 all running and linked, the owner never took the other computers' newer {@code main}, though its log held every
+ * entry ({@code CodeOverLink.meet} logged {@code Another computer's main could not be fetched yet} and never fetched).</p>
+ *
+ * <p>What stalled them afterwards, at {@code --cpus 2} about 1 run in 12 (ADR-0102, "Cause found, 2026-10-27"), is not a
+ * running computer that fails to take a head it holds; the dump's {@code holds the head of friend: false} of
+ * {@link OwnerDownMembersScenarioTest} is its stopped owner. It was two defects, each now forced by its own test: a
+ * finished agent that was offered the last open snapshot to review was refused {@code REVIEWER_INTENT_REQUIRED} on every
+ * attempt ({@link LastSnapshotReviewedByFinishedAgentsScenarioTest}), and a re-merge of an advance that an earlier re-merge
+ * made was refused {@code REMERGE_SNAPSHOT_INVALID} on every pass ({@code RemergeServiceTest}).</p>
  *
  * <p>With the owner busy and the lower node (the owner or M1) the diverged one, the higher computer re-merges onto the
  * lower one's head, lands it and the third computer takes it, and the lower one does not (the first test). With the owner idle and

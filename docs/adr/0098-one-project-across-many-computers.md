@@ -1486,6 +1486,14 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     or persisted form changes; only the instruction text of the offer differs for a completed session.
     Tests: `CompletedSessionReviewOfferTest` (an open snapshot of another author is offered; a session whose only open snapshot
     is its own is told to wait). Source semantics proven; not proved in a real run.
+    *Follow-up (2026-10-27, main convergence):* the offer was refused. `ReviewAdmissionRules.validateReviewAdmission` admitted an
+    author to review only while it held a lane in the group, and a finished session holds none, so every request answered
+    `REVIEWER_INTENT_REQUIRED` (`blocked / policy_denied`) and the snapshot stayed `REVIEW_PENDING`; the flake of ADR-0102 kept
+    failing after item 42 (1936 and 2684 refusals in two runs). *Rule:* an author whose lanes have all ended is admitted to
+    review a snapshot of a work group it authored in; a grant it holds is released as any reviewer's is when the reviewer is
+    judged gone. Test: `LastSnapshotReviewedByFinishedAgentsScenarioTest` (fails on the previous code). Also fixed there,
+    `RemergeService.lanes`: a re-merge of an advance an earlier re-merge made is built on the snapshots those re-merge
+    snapshots came from (`RemergeServiceTest.aReMergeOfAnAdvanceThatWasItselfAReMergeIsBuiltOnTheLanesItCarried`).
 
 ### Step 6: Membership in the owner's log
 

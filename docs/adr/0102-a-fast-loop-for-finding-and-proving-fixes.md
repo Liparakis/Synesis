@@ -132,6 +132,27 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
    request). It now asks again after each silent 5 s, up to 6 times. The stall itself was not reproduced: 120 joins at
    `--cpus 0.4` with two busy threads took 10 to 30 s and never failed, and the Link race won its first round every time.
    Fix proven at source level only (`ProjectContextExchangeTest`).
+   Cause found, 2026-10-27 (the stall of `ThreeComputersMainMeetingScenarioTest` and `OwnerDownMembersScenarioTest` at
+   `--cpus 2`; evidence `D:\Podman\work\runs`, every failed iteration since 2026-10-26). The "owner never takes the others'
+   `main`" reading was wrong: the dump's `holds the head of friend: false` of the owner in `OwnerDownMembersScenarioTest` is
+   the stopped owner, and no failure after ADR-0098 step 6 item 21 shows a running computer that holds the other's head and
+   does not take it. Two other defects stop the copies meeting, each shown by its own log line:
+   (a) Equal copies of `main` that lack one file, one snapshot left `REVIEW_PENDING` (ADR-0098 step 5 item 42, which offered
+   a finished session an open review): the offer was answered `blocked / policy_denied`, `REVIEWER_INTENT_REQUIRED`, on every
+   attempt (2684 and 1936 times in the two OwnerDown failures after item 42), because `ReviewAdmissionRules` admitted an
+   author to review only while it held a lane, and a finished session holds none. Forced deterministically by
+   `LastSnapshotReviewedByFinishedAgentsScenarioTest` (two agents review each other and finish, then the third publishes),
+   which failed on the previous code and passes now: an author whose lanes have all ended is admitted to review a snapshot
+   of a work group it authored in. A grant it holds is released as any reviewer's is when the reviewer is judged gone.
+   (b) Diverged copies in the three-computer test (116 to 125 `The re-merge could not run` per failure, every one
+   `REMERGE_SNAPSHOT_INVALID`): a re-merge carries this computer's earlier advances, and the advance an earlier re-merge made
+   names re-merge snapshots, which are never `INTEGRATED`, so the projection refused the new re-merge snapshot on every
+   pass. `RemergeService.lanes` now builds the new re-merge on the snapshot each re-merge snapshot was made from, one lane per
+   original. `RemergeServiceTest.aReMergeOfAnAdvanceThatWasItselfAReMergeIsBuiltOnTheLanesItCarried` reproduces the log line
+   and failed on the previous code. A third, rarer line is not fixed: once, a re-merge worktree's folder was removed while
+   its `git config` ran (`Unable to read current working directory`); the next pass built it again.
+   Not reproduced on this change's own baseline: 15 of 15 passes of the two classes at `--cpus 2` (diagnostic build, so
+   the order the failures need did not occur); the fixes rest on the logs above and the two forced tests.
 2. **A decoded log dump and an evidence script.** `synesis log dump` prints every log this computer holds (its own and
    each copy) in local applied order, one entry per line with type, writer, sequence and the fields that matter, and
    with the state each projection derives (lanes, snapshots, grants, combines, membership). One evidence script copies
