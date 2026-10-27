@@ -53,6 +53,16 @@ final class ProviderBindingFile {
         return sessionsDirectory(location).resolve(provider + "-" + fingerprint + ".json");
     }
 
+    /**
+     * Whether a file of the sessions folder is one provider's binding. The temporary file of an atomic replace is named
+     * after its binding with a random suffix, and is partial or gone while a concurrent write is in flight, so a listing
+     * that read it failed with "Could not read provider sessions" (s5-run27).
+     */
+    static boolean isBindingOf(Path file, String provider) {
+        String name = file.getFileName().toString();
+        return name.startsWith(provider + "-") && name.endsWith(".json");
+    }
+
     static String fingerprint(String value) {
         return Sha256.hex(value);
     }

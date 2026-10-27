@@ -327,7 +327,7 @@ public final class ProviderSessionBindingService {
             }
             try (var paths = Files.list(directory)) {
                 java.util.List<Binding> result = new java.util.ArrayList<>();
-                for (Path path : paths.filter(item -> item.getFileName().toString().startsWith(provider + "-")).toList()) {
+                for (Path path : paths.filter(item -> ProviderBindingFile.isBindingOf(item, provider)).toList()) {
                     result.add(read(path));
                 }
                 return result.stream().sorted(java.util.Comparator.comparing(Binding::createdAtEpochMillis)).toList();
@@ -586,7 +586,7 @@ public final class ProviderSessionBindingService {
                 return;
             }
             try (var paths = Files.list(directory)) {
-                for (Path path : paths.filter(item -> item.getFileName().toString().startsWith(provider + "-")).toList()) {
+                for (Path path : paths.filter(item -> ProviderBindingFile.isBindingOf(item, provider)).toList()) {
                     Binding binding = read(path);
                     write(path, binding.revoke());
                 }

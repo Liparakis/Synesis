@@ -1,6 +1,8 @@
 package org.synesis.workspace.application.provider;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -53,5 +55,12 @@ class ProviderBindingFileFormatTest {
             + System.lineSeparator(),
         Files.readString(file, StandardCharsets.UTF_8));
     assertEquals(binding, ProviderBindingFile.read(file));
+  }
+
+  @Test
+  void theTemporaryFileOfAnAtomicReplaceIsNotABinding() {
+    assertTrue(ProviderBindingFile.isBindingOf(Path.of("codex-abc.json"), "codex"));
+    assertFalse(ProviderBindingFile.isBindingOf(Path.of("codex-abc.json.tmp-1f2e"), "codex"));
+    assertFalse(ProviderBindingFile.isBindingOf(Path.of("claude-abc.json"), "codex"));
   }
 }
