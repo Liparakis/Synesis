@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import org.synesis.coordination.application.MembershipService;
+import org.synesis.coordination.application.PolicyService;
 import org.synesis.coordination.domain.membership.MembershipEntries.JoinAnswered;
 import org.synesis.coordination.domain.membership.MembershipEntries.JoinRequested;
 import org.synesis.coordination.domain.membership.MembershipEntries.ProjectShared;
@@ -322,21 +323,33 @@ final class ProjectPolicyServiceTest {
         assertTrue(store.operatorRequestProjection().open(ProjectPolicyService.ADOPTION_CONDITION).isEmpty());
     }
 
+    /** The owner's log as a member copies it: the project shared, a join request for {@code self}, and its answer when {@code answered}. */
+    private PredictionEventStore ownersLog(ProjectLocation start, NodeIdentity owner, NodeIdentity self, boolean answered) throws Exception {
+        PredictionEventStore ownerStore = new PredictionEventStore(tmp.resolve("owner"), start.projectId());
+        ownerStore.append(UUID.randomUUID(), PredictionEventType.PROJECT_SHARED, owner.nodeId(), new ProjectShared(owner.publicKeyEncoded(), new byte[0]).encode(), owner);
+        UUID request = UUID.randomUUID();
+        ownerStore.append(UUID.randomUUID(), PredictionEventType.JOIN_REQUESTED, owner.nodeId(), new JoinRequested(request, self.nodeId()).encode(), owner);
+        if (answered) {
+            ownerStore.append(UUID.randomUUID(), PredictionEventType.JOIN_ANSWERED, owner.nodeId(), new JoinAnswered(request, self.nodeId(), true, 0).encode(), owner);
+        }
+        return ownerStore;
+    }
+
+    private static void copyOwnersLog(ProjectLocation member, NodeIdentity owner, PredictionEventStore ownerStore, long after) throws Exception {
+        member.openCoordinationStore().placeCopies(owner.nodeId(), ownerStore.entriesAfter(PredictionEventStore.OWN_LOG, after, 100, Integer.MAX_VALUE));
+    }
+
+    private static void ownerSigns(PredictionEventStore ownerStore, NodeIdentity owner, ProjectCommandSpec validation) throws Exception {
+        new PolicyService(ownerStore, owner).decide(NodeIdentity.generate(), List.of(new PolicyService.Decision(PolicyName.VALIDATION, ProjectMetadataCodec.validationValue(validation))));
+    }
+
     @Test
-    void aMemberThatHasNotReceivedTheOwnersBaselineRefusesEveryGateAndOnlyThat() throws Exception {
+    void aMemberBeforeTheOwnersAnswerToItsJoinHasNoPolicyAndRefusesEveryGateAndOnlyThat() throws Exception {
         Path root = gitProject();
         ProjectLocation start = service.locate(root);
         NodeIdentity self = start.loadOrCreateIdentity();
         NodeIdentity owner = NodeIdentity.generate();
-        // The owner's log, shared and admitting this computer, arrives as a copy; it holds no baseline.
-        Path ownerDirectory = tmp.resolve("owner");
-        PredictionEventStore ownerStore = new PredictionEventStore(ownerDirectory, start.projectId());
-        ownerStore.append(UUID.randomUUID(), PredictionEventType.PROJECT_SHARED, owner.nodeId(), new ProjectShared(owner.publicKeyEncoded(), new byte[0]).encode(), owner);
-        UUID request = UUID.randomUUID();
-        ownerStore.append(UUID.randomUUID(), PredictionEventType.JOIN_REQUESTED, owner.nodeId(), new JoinRequested(request, self.nodeId()).encode(), owner);
-        ownerStore.append(UUID.randomUUID(), PredictionEventType.JOIN_ANSWERED, owner.nodeId(), new JoinAnswered(request, self.nodeId(), true, 0).encode(), owner);
-        PredictionEventStore memberStore = start.openCoordinationStore();
-        memberStore.placeCopies(owner.nodeId(), ownerStore.entriesAfter(PredictionEventStore.OWN_LOG, 0, 100, Integer.MAX_VALUE));
+        copyOwnersLog(start, owner, ownersLog(start, owner, self, false), 0);
 
         ProjectLocation member = service.locate(root);
 
@@ -347,6 +360,58 @@ final class ProjectPolicyServiceTest {
         assertThrows(PolicyNotReceivedException.class, member::validationAlsoInLane);
         ProjectApplicationException notOwner = assertThrows(ProjectApplicationException.class, () -> ProjectPolicyService.decide(member, TYPES, validation(STATUS), Optional.empty()));
         assertEquals("NOT_THE_OWNER", notOwner.code());
+    }
+
+    @Test
+    void aMemberTheOwnerAdmittedWhoseLogHoldsNoBaselineUsesTheCommittedFileAsTheOwnerDoes() throws Exception {
+        Path root = gitProject();
+        ProjectLocation start = service.locate(root);
+        commitFile(root, withPolicy(start, ",\"validation\":{\"argv\":[\"git\",\"status\",\"--short\"],\"workingDirectory\":\".\",\"timeoutSeconds\":30}"));
+        NodeIdentity self = start.loadOrCreateIdentity();
+        NodeIdentity owner = NodeIdentity.generate();
+        copyOwnersLog(start, owner, ownersLog(start, owner, self, true), 0);
+
+        ProjectLocation member = service.locate(root);
+
+        assertTrue(member.policyReceived());
+        assertEquals(STATUS, member.validation());
+        assertFalse(member.policy().unsandboxedAllowed(), "a file never allows commands outside the sandbox");
+        assertTrue(ProjectPolicyService.read(member).snapshot().isEmpty());
+        assertEquals("NOT_THE_OWNER", assertThrows(ProjectApplicationException.class,
+                () -> ProjectPolicyService.decide(member, TYPES, validation(LOG), Optional.empty())).code(), "a member still signs nothing");
+    }
+
+    @Test
+    void aMemberWhoseLogHoldsTheBaselineUsesTheLogAndIgnoresTheFile() throws Exception {
+        Path root = gitProject();
+        ProjectLocation start = service.locate(root);
+        commitFile(root, withPolicy(start, ",\"validation\":{\"argv\":[\"true\"],\"workingDirectory\":\".\",\"timeoutSeconds\":30}"));
+        NodeIdentity self = start.loadOrCreateIdentity();
+        NodeIdentity owner = NodeIdentity.generate();
+        PredictionEventStore ownerStore = ownersLog(start, owner, self, true);
+        ownerSigns(ownerStore, owner, STATUS);
+        copyOwnersLog(start, owner, ownerStore, 0);
+
+        assertEquals(STATUS, service.locate(root).validation(), "the signed log is the policy, not the file");
+    }
+
+    @Test
+    void aBaselineSignedAfterTheMemberJoinedReplacesTheFilePolicyWhenItArrives() throws Exception {
+        Path root = gitProject();
+        ProjectLocation start = service.locate(root);
+        commitFile(root, withPolicy(start, ",\"validation\":{\"argv\":[\"true\"],\"workingDirectory\":\".\",\"timeoutSeconds\":30}"));
+        NodeIdentity self = start.loadOrCreateIdentity();
+        NodeIdentity owner = NodeIdentity.generate();
+        PredictionEventStore ownerStore = ownersLog(start, owner, self, true);
+        copyOwnersLog(start, owner, ownerStore, 0);
+        ProjectLocation member = service.locate(root);
+        assertEquals(List.of("true"), member.validation().argv());
+
+        long copied = ownerStore.entriesAfter(PredictionEventStore.OWN_LOG, 0, 100, Integer.MAX_VALUE).size();
+        ownerSigns(ownerStore, owner, LOG);
+        copyOwnersLog(start, owner, ownerStore, copied);
+
+        assertEquals(LOG, member.validation(), "a location kept by the member follows the log once the baseline is in it");
     }
 
     @Test

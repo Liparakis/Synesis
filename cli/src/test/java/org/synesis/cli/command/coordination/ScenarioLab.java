@@ -77,6 +77,14 @@ final class ScenarioLab implements AutoCloseable {
      * that review each other.
      */
     static ScenarioLab open(Path temp) throws Exception {
+        return open(temp, true);
+    }
+
+    /**
+     * {@link #open(Path)}; with {@code signedPolicy} false the owner signs nothing, as {@code init} leaves a project, so the
+     * policy of every computer is the committed {@code project.json}.
+     */
+    static ScenarioLab open(Path temp, boolean signedPolicy) throws Exception {
         TestComputers farm = new TestComputers().mergeEvery(300, 1_000);
         ProjectApplicationService service = farm.service();
         Path ownerRoot = Files.createDirectories(temp.resolve("alpha"));
@@ -89,8 +97,10 @@ final class ScenarioLab implements AutoCloseable {
         ProjectLocation ownerProject = service.initForRegistration(ownerRoot, false).location();
         // The owner signs the decision as a person would (ADR-0104): the baseline and review, in the owner's log, which the
         // friend receives. A member that has not received a baseline runs no gate.
-        ProjectPolicyService.decide(ownerProject, newKey -> "a passphrase for the lab".toCharArray(),
-                Map.of(PolicyName.REVIEW, "MANDATORY"), Optional.empty());
+        if (signedPolicy) {
+            ProjectPolicyService.decide(ownerProject, newKey -> "a passphrase for the lab".toCharArray(),
+                    Map.of(PolicyName.REVIEW, "MANDATORY"), Optional.empty());
+        }
         String branch = GitProcessRunner.run(ownerRoot, "symbolic-ref", "--short", "HEAD").strip();
 
         Path friendRoot = temp.resolve("beta");

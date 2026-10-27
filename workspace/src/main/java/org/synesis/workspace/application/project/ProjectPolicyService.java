@@ -37,9 +37,11 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
  *
  * <p>Once the baseline entry is applied, {@code project.json} is ignored for policy; before it, the file is the
  * policy, as it always was, because nothing else exists to read. If the log cannot be read the policy is unavailable
- * and nothing gates or ungates: reading never falls back to the file. A member computer that has not applied the
- * owner's baseline has no policy: its location refuses every policy accessor ({@link PolicyNotReceivedException})
- * instead of integrating with the gate off, while everything else on it works so the baseline can arrive.</p>
+ * and nothing gates or ungates: reading never falls back to the file. A member computer applies the same rule as the
+ * owner once its log holds the owner's accepting answer to its join ({@link Reading#admitted()}): no baseline in the
+ * log means the committed file, and a baseline that arrives later replaces it. Before that answer it has no policy: its
+ * location refuses every policy accessor ({@link PolicyNotReceivedException}) instead of integrating with the gate off,
+ * while everything else on it works so the log can arrive.</p>
  *
  * <p>Writing needs the operator key, which a person unlocks with a passphrase at a terminal. This class is used by
  * commands a person runs; the MCP server and the daemon read policy and never write it.</p>
@@ -71,8 +73,10 @@ public final class ProjectPolicyService {
      * @param snapshot       the policy in force, or empty before a baseline is applied
      * @param shared         whether the project is shared
      * @param ownsTheProject whether this computer may write decisions: it is the owner, or the project is not shared
+     * @param admitted       whether this computer's log holds the owner's accepting answer to its own join request, so it has
+     *                       every entry the owner had when it admitted this computer; a baseline signed before then is in the log
      */
-    public record Reading(Optional<Snapshot> snapshot, boolean shared, boolean ownsTheProject) {
+    public record Reading(Optional<Snapshot> snapshot, boolean shared, boolean ownsTheProject, boolean admitted) {
     }
 
     /**
@@ -200,9 +204,9 @@ public final class ProjectPolicyService {
             if (reading.snapshot().isPresent()) {
                 Snapshot signed = reading.snapshot().get();
                 policy = new ProjectLocation.Policy(signed.validation(), signed.review(), signed.validationAlsoInLane(), true, signed.unsandboxedAllowed());
-            } else if (!reading.ownsTheProject()) {
+            } else if (!reading.ownsTheProject() && !reading.admitted()) {
                 policy = new ProjectLocation.Policy(null, ReviewPolicy.none(), false, false, false);
-            } else if (Files.exists(file.operatorKeyFile())) {
+            } else if (reading.ownsTheProject() && Files.exists(file.operatorKeyFile())) {
                 // This computer made the project's operator key, so a baseline was meant to exist. A log without it has
                 // lost it, and the file an agent could have written is not the policy.
                 throw new PolicyUnavailableException(new IOException("an operator key exists on this computer but the log holds no baseline"));
@@ -226,7 +230,7 @@ public final class ProjectPolicyService {
     public static Reading read(ProjectLocation location) throws ProjectApplicationException {
         Path coordination = location.coordinationDirectory();
         if (!Files.isDirectory(coordination) || PredictionEventStore.recordedEvents(coordination) == 0) {
-            return new Reading(Optional.empty(), false, !joining(coordination));
+            return new Reading(Optional.empty(), false, !joining(coordination), false);
         }
         try {
             return read(location, PredictionEventStore.openReadOnly(coordination, location.projectId()));
@@ -238,14 +242,19 @@ public final class ProjectPolicyService {
     private static Reading read(ProjectLocation location, PredictionEventStore store) throws IOException {
         PolicyProjection policy = store.policyProjection();
         MembershipProjection membership = store.membershipProjection();
-        boolean owns = !membership.shared() || membership.owner().map(owner -> owner.equals(localNode(location))).orElse(false);
+        String self = localNode(location);
+        boolean owns = !membership.shared() || membership.owner().map(owner -> owner.equals(self)).orElse(false);
+        // The owner's own answer, not a member's acceptance: the owner's log is replicated in order, so the answer is
+        // behind every owner entry written before it, a baseline included.
+        boolean admitted = membership.isMember(self) && membership.requests().stream()
+                .anyMatch(request -> request.joinerNodeId().equals(self) && request.answeredByOwner() && request.accepted().orElse(false));
         if (!policy.baselineApplied()) {
-            return new Reading(Optional.empty(), membership.shared(), owns);
+            return new Reading(Optional.empty(), membership.shared(), owns, admitted);
         }
         Snapshot snapshot = new Snapshot(ProjectMetadataCodec.parseValidationValue(policy.validation()), policy.validationAlsoInLane(),
                 policy.reviewMandatory() ? ReviewPolicy.mandatoryIndependent() : ReviewPolicy.none(), policy.unsandboxedAllowed(),
                 policy.sandboxPaths(), membership.revision(), policy.statements(), NodeIdentity.deriveNodeId(policy.operatorKey().orElseThrow()));
-        return new Reading(Optional.of(snapshot), membership.shared(), owns);
+        return new Reading(Optional.of(snapshot), membership.shared(), owns, admitted);
     }
 
     /**

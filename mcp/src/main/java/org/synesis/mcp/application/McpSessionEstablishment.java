@@ -391,6 +391,14 @@ final class McpSessionEstablishment {
                 // same announcement is safe to repeat.
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.TASK_NOT_READY, AgentNextAction.RETRY, Map.of("reason", "EVENT_APPEND_LOCK_UNAVAILABLE"));
             }
+            if (failure instanceof org.synesis.workspace.application.project.PolicyNotReceivedException) {
+                // This computer is a member whose log does not yet hold the owner's join answer; nothing was announced
+                // and the same call succeeds once the log has synced, so it is a wait and not a failure.
+                return new AgentResponse(AgentStatus.WAITING, AgentReason.TASK_NOT_READY, AgentNextAction.WAIT,
+                        object("reason", "POLICY_NOT_RECEIVED", "instruction",
+                                "This computer has not yet received the project's log from the owner's computer, so it cannot tell the project's policy. Nothing was claimed. "
+                                        + "No person is needed: wait a moment, then call ensure_session again with the same task."));
+            }
             if ("REVIEWER_REQUIRES_PRODUCER".equals(failure.getMessage())) {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.ENSURE_SESSION,
                         object("reason", "REVIEWER_REQUIRES_PRODUCER", "instruction",

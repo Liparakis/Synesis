@@ -569,7 +569,9 @@ public final class DoctorService {
                         Map.of("revision", Long.toString(ProjectPolicyService.read(location).snapshot().orElseThrow().revision()))));
             }
             ProjectPolicyService.fileDisagreement(location).ifPresent(detail -> findings.add(finding(DoctorFindingCode.PROJECT_FILE_POLICY_IGNORED, "project_file_policy_ignored", Map.of("detail", detail))));
-            if (ProjectPolicyService.read(location).snapshot().isEmpty() && ProjectPolicyService.adoption(location).needsConfirmation()) {
+            ProjectPolicyService.Reading reading = ProjectPolicyService.read(location);
+            // Only the owner's computer can sign a baseline, so only it is asked to.
+            if (reading.snapshot().isEmpty() && reading.ownsTheProject() && ProjectPolicyService.adoption(location).needsConfirmation()) {
                 findings.add(finding(DoctorFindingCode.POLICY_ADOPTION_NEEDS_CONFIRMATION, "policy_adoption_needs_confirmation"));
             }
         } catch (Exception unreadable) {
