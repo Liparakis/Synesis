@@ -292,6 +292,49 @@ final class DisputedReviewIntegrationTest {
         assertEquals(TaskCompletionState.REVIEW_DISPUTED, dispute.state());
     }
 
+    private static AgentResponse verdictNaming(Dispute dispute, String connection, UUID grantId) {
+        return new ReviewValidationService().validate(new ReviewValidationService.ValidateRequest(dispute.project.root, PROVIDER, connection, grantId,
+                SNAPSHOT, dispute.lane.id(), 1, "ACCEPTED", ""));
+    }
+
+    @Test
+    void aGrantIdThatNamesNoGrantIsTheGrantTheSessionHoldsOnTheSnapshot(@TempDir Path temp) throws Exception {
+        Dispute dispute = new Dispute(temp.resolve("author"), temp.resolve("remote"));
+
+        // s5-run32: a Codex reviewer copied the grant ID wrong in three tries, and the review stayed pending for ever.
+        AgentResponse response = verdictNaming(dispute, dispute.localConnection, UUID.randomUUID());
+
+        assertEquals(AgentStatus.COMPLETED, response.status(), response.toString());
+        assertEquals(dispute.localGrant.grantId().toString(), ((Map<?, ?>) response.result()).get("grantId"));
+        assertEquals(1, dispute.localVerdictEntries().size(), "the verdict is recorded against the grant the session holds");
+        assertEquals(TaskCompletionState.REVIEW_ACCEPTED, dispute.state());
+    }
+
+    @Test
+    void aGrantIdThatNamesNoGrantIsRefusedForASessionHoldingNoGrantOnTheSnapshot(@TempDir Path temp) throws Exception {
+        Dispute dispute = new Dispute(temp.resolve("author"), temp.resolve("remote"));
+        new AgentSessionService().ensureSession(new SessionResolutionRequest(dispute.project.root, PROVIDER, "other-session", null, false));
+        ProviderSessionBindingService bindings = new ProviderSessionBindingService();
+        var other = bindings.find(dispute.project.location, PROVIDER, "other-session").orElseThrow();
+        bindings.verifyWorkspaceTrust(dispute.project.location, PROVIDER, other.sessionId(), Path.of(other.worktreePath()));
+        long before = dispute.project.store().headSequence();
+
+        assertEquals("LANE_GRANT_NOT_FOUND", blockedError(verdictNaming(dispute, "other-session", UUID.randomUUID())));
+
+        assertEquals(before, dispute.project.store().headSequence(), "nothing was appended");
+        assertEquals(TaskCompletionState.REVIEW_PENDING, dispute.state());
+    }
+
+    @Test
+    void aGrantIdThatNamesAnotherReviewersGrantIsStillRefused(@TempDir Path temp) throws Exception {
+        Dispute dispute = new Dispute(temp.resolve("author"), temp.resolve("remote"));
+        long before = dispute.project.store().headSequence();
+
+        assertEquals("REVIEW_GRANT_TARGET_MISMATCH", blockedError(verdictNaming(dispute, dispute.localConnection, dispute.remoteGrant.grantId())));
+
+        assertEquals(before, dispute.project.store().headSequence());
+    }
+
     @Test
     void aSnapshotThatNeverHadADisputeIsStillStaleOnceItsLaneMovedOn(@TempDir Path temp) throws Exception {
         Dispute dispute = new Dispute(temp.resolve("author"), temp.resolve("remote"));

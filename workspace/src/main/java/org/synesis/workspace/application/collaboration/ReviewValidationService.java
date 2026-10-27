@@ -12,6 +12,7 @@ import java.util.UUID;
 import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.ReviewValidationPayload;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
+import org.synesis.coordination.domain.identity.LaneGrantId;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.TaskSnapshotRecord;
 import org.synesis.coordination.persistence.PredictionEventStore;
@@ -78,7 +79,7 @@ public final class ReviewValidationService {
                     throw new IOException("event append lock unavailable");
                 }
                 PredictionEventStore store = location.openCoordinationStore();
-                LaneGrant grant = store.workGroupProjection().grants().stream().filter(value -> value.grantId().equals(request.grantId())).findFirst().orElseThrow(() -> new IOException("LANE_GRANT_NOT_FOUND"));
+                LaneGrant grant = grantNamedBy(store, request, reviewer);
                 if (store.workGroupProjection().continuationGrant(grant.grantId())) {
                     return blocked("REVIEW_SELF_APPROVAL_FORBIDDEN", AgentNextAction.RETRY);
                 }
@@ -178,6 +179,29 @@ public final class ReviewValidationService {
         } catch (Exception failure) {
             return blocked(failure.getMessage() == null ? "REVIEW_VALIDATION_FAILED" : failure.getMessage(), AgentNextAction.RETRY);
         }
+    }
+
+    /**
+     * The grant a decision is recorded against. The ID adds no authority to what the other fields prove (the reviewer's
+     * session, the snapshot, the intent and the epoch are all checked against the grant), and an agent copies a UUID
+     * wrong: s5-run32's reviewer sent the same wrong ID three times, was refused each time and gave up, so the snapshot
+     * stayed {@code REVIEW_PENDING} and both computers waited on it until their runs timed out. An ID that names no grant therefore stands for the one
+     * consumed grant this session holds on the snapshot; with none or several the request is refused, and an ID that
+     * names a grant of someone else is refused by the checks that follow.
+     */
+    private static LaneGrant grantNamedBy(PredictionEventStore store, ValidateRequest request, String reviewer) throws IOException {
+        var projection = store.workGroupProjection();
+        var named = projection.grants().stream().filter(value -> value.grantId().equals(request.grantId())).findFirst();
+        if (named.isPresent()) {
+            return named.get();
+        }
+        var held = projection.grants().stream().filter(value -> value.targetParticipant().equals(reviewer) && request.snapshotId().equals(value.snapshotId())
+                && projection.grantConsumed(value.grantId()) && !projection.grantRevoked(new LaneGrantId(value.grantId()))
+                && !projection.grantSuperseded(value.grantId()) && !projection.continuationGrant(value.grantId())).toList();
+        if (held.size() != 1) {
+            throw new IOException("LANE_GRANT_NOT_FOUND");
+        }
+        return held.get(0);
     }
 
     /**
