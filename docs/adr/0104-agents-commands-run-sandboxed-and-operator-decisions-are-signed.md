@@ -768,6 +768,34 @@ unchanged for the node-key signature of a policy entry. Membership and owner sta
 operator key (question 10 is open). PBKDF2 was chosen over scrypt because the JDK has it and no dependency was added;
 its cost is time only, not memory, so a stronger KDF is a later change of the file's version field.
 
+#### Stage 1 fix: member policy (2026-10-27)
+
+**Cause.** `init` writes no baseline (it needs a person's passphrase), so most shared projects have none, and
+`ProjectPolicyService.LogPolicy.current` gave every non-owner computer "no policy" until a baseline arrived, which it
+never did. On the lab VM every task-bearing `ensure_session` threw `PolicyNotReceivedException` from
+`WorkIntentAnnouncement.announce` (`location.review()`), which `McpSessionEstablishment.announceClaims` did not
+recognise, so the agent saw `failed internal_failure request_human_help`, and `doctor` showed `policy_not_received` all
+run long. Evidence: `D:\SynesisAcceptance\evidence\sbx-run4\vm` (`local/diagnostics/failure-points.jsonl`, agent logs
+under `agent-runs`) and `s5-run31\vm`; the VM made 44 changes before stage 1 and 0 in most runs after it.
+
+**Rule, the same on every computer.** Until a valid baseline is in the project's log the policy is the committed
+`project.json`; once one is, the signed log is the policy and the file is ignored. A member applies this once its log
+holds the owner's accepting answer to its own join request (`Reading.admitted()`: `JOIN_ANSWERED` by the owner, accepted,
+for this node, and this node a member). The owner's log is replicated in order, so that answer is behind every owner
+entry written before it, a baseline included; a member acceptance under `ANY_MEMBER` does not count. Before that point the
+member fails closed as before. A baseline signed after the join reaches the member by replication, and a location that is
+kept follows it; that is the same window the owner itself has between writing the file and signing, so no trust is added.
+No log entry or wire change; the file policy never sets `unsandboxedAllowed`. The "operator key exists but the log holds
+no baseline" refusal now applies to the owner only.
+
+**Answer in the remaining window.** `announceClaims` answers `PolicyNotReceivedException` as `waiting / task_not_ready /
+wait` with `reason: POLICY_NOT_RECEIVED` and an instruction to call `ensure_session` again, like the neighbouring "not
+yet" states; no new reason or status. `doctor` shows `policy_not_received` only in that window, and asks only the owner
+to adopt a policy.
+
+The sentence above that says a shared project whose owner has not signed runs no gate on its members is superseded:
+members gate on the committed file until a baseline is signed.
+
 ### Stage 2 — Linux sandbox, the choke point, and the adversarial test (about four to five days)
 
 Tasks:
