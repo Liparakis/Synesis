@@ -245,7 +245,9 @@ public final class AgentRunController {
                         waiting = Wait.ANSWER_DEADLINE;
                     } else {
                         Outcome outcome = observation.complete() ? closedOutcome(observation) : stalledOutcome(agents, observation, request.maxResumesPerAgent());
-                        waiting = outcome == Outcome.STALLED ? progressElsewhere(agents, observation, request.maxResumesPerAgent(), now) : justMetAnotherComputer(agents, observation, request.maxResumesPerAgent(), now);
+                        boolean logGrowing = heads.stream().anyMatch(seen -> seen.sequence() != observation.headSequence());
+                        waiting = outcome == Outcome.STALLED ? progressElsewhere(agents, observation, request.maxResumesPerAgent(), now, logGrowing)
+                                : justMetAnotherComputer(agents, observation, request.maxResumesPerAgent(), now);
                         if (waiting == null) {
                             if (outcome == Outcome.NEEDS_OPERATOR) {
                                 observation.operatorRequests().forEach(open -> listener.accept("OPERATOR_REQUEST=" + open));
@@ -440,7 +442,7 @@ public final class AgentRunController {
      * computer's agents had claimed anything; the run ended STALLED although those agents went on
      * to review.</p>
      */
-    private static Wait progressElsewhere(List<Agent> agents, Observation observation, int maxResumes, long now) {
+    private static Wait progressElsewhere(List<Agent> agents, Observation observation, int maxResumes, long now, boolean logGrowing) {
         if (observation.foreignActiveLaneOpen(agents.stream()
                 .flatMap(agent -> agent.connectionIds.stream().map(identity -> new Observation.Connection(agent.spec.provider(), identity))).toList())) {
             return Wait.FOREIGN_LANE_OPEN;
@@ -458,6 +460,13 @@ public final class AgentRunController {
         // connected moments ago and its log may not be here yet. Only agents that can be woken make it worth waiting.
         if (observation.otherComputerKnown() && agents.stream().anyMatch(agent -> agent.resumable(maxResumes))
                 && (observation.mainMissesAnotherComputersHead() || justReconnected(observation, now))) {
+            return Wait.COPIES_MEETING;
+        }
+        // Entries are still arriving from a connected computer: what it writes next, the closing of the work it just
+        // landed, may be all that is left, and no agent here is needed for it (s5-run34: STALLED a moment after this
+        // main took the other computer's re-merge, seconds before that computer's entries closed the work groups).
+        // A log quiet for the window (UNSEEN_BEFORE_EXIT_MILLIS, the span the controller remembers) is a stall.
+        if (observation.otherComputerConnected() && logGrowing) {
             return Wait.COPIES_MEETING;
         }
         return null;

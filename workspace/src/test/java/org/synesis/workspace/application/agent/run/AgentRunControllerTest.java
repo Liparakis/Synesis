@@ -550,6 +550,43 @@ final class AgentRunControllerTest {
         assertTrue(script.tick < 30);
     }
 
+    /**
+     * s5-run34 (PC + VM, 2026-10-27): the VM's agents had nothing left, and its run ended STALLED a moment after its
+     * {@code main} took the PC's re-merge, while the PC was still writing the entries that close the work groups; the PC
+     * run ended COMPLETED seconds later. Entries were still arriving, so nothing had stalled.
+     */
+    @Test
+    void aRunDoesNotStallWhileTheLogOfAConnectedComputerIsStillGrowing() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude");
+        script.lifetimes(3);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(5).announced().otherComputer();
+        script.at(2).head(9).otherComputer();
+        script.at(14).head(12).otherComputer().complete();
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(120));
+
+        assertEquals(AgentRunController.Outcome.COMPLETED, result.outcome());
+        assertEquals(0, result.resumes());
+        assertTrue(script.events.contains("AGENT_RUN_WAITING=COPIES_MEETING"), script.events.toString());
+    }
+
+    @Test
+    void aRunStallsOnceTheLogOfAConnectedComputerHasBeenQuietForTheSettleWindow() throws Exception {
+        Script script = new Script();
+        script.providers = List.of("claude");
+        script.lifetimes(3);
+        script.withoutOwnLane.add("claude#1");
+        script.at(0).head(5).announced().otherComputer();
+        script.at(2).head(9).otherComputer();
+
+        AgentRunController.Result result = script.run(8, Duration.ofSeconds(600));
+
+        assertEquals(AgentRunController.Outcome.STALLED, result.outcome());
+        assertTrue(script.tick >= 31 && script.tick <= 33, "waited the window after the last entry and no longer: " + script.tick);
+    }
+
     @Test
     void aRunKeptOpenByAForeignLaneSaysSo() throws Exception {
         Script script = new Script();
