@@ -31,9 +31,28 @@ public final class Sandboxes {
      */
     public static synchronized Sandbox platform() {
         if (platform == null) {
-            platform = create(System.getProperty("os.name", "").toLowerCase(Locale.ROOT), Boolean.getBoolean(UNCONFINED_FOR_TESTS_PROPERTY));
+            platform = create(System.getProperty("os.name", "").toLowerCase(Locale.ROOT), unconfinedForTests(System.getProperty(UNCONFINED_FOR_TESTS_PROPERTY), Sandboxes::onClasspath));
         }
         return platform;
+    }
+
+    /**
+     * Whether the test-only switch is honoured. A property is not enough: the JVM turns {@code JAVA_TOOL_OPTIONS},
+     * {@code JDK_JAVA_OPTIONS} and {@code _JAVA_OPTIONS} into options, so anything that can set an environment variable
+     * of the server could set it. The switch counts only in a JVM that carries the JUnit API, which the tests do and the
+     * distribution does not.
+     */
+    static boolean unconfinedForTests(String property, java.util.function.Predicate<String> classPresent) {
+        return Boolean.parseBoolean(property) && classPresent.test("org.junit.jupiter.api.Test");
+    }
+
+    private static boolean onClasspath(String className) {
+        try {
+            Class.forName(className, false, Sandboxes.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException | LinkageError absent) {
+            return false;
+        }
     }
 
     static Sandbox create(String operatingSystem, boolean unconfinedForTests) {
