@@ -51,9 +51,11 @@ public final class WindowsLowIntegritySandbox implements Sandbox {
     private static final String FIX = "Synesis starts agent commands as a low-integrity process, which needs no administrator rights; run 'synesis doctor' to see "
             + "which step failed";
     private static final long PROBE_SECONDS = 30;
+    // The Windows tools are named by full path and the level by its SID: the daemon inherits the PATH and the language of
+    // whoever started it, and a Git Bash PATH puts an MSYS whoami (no /groups) ahead of System32 (sbx-run2, exit 13).
     private static final String PROBE_SCRIPT = String.join("\r\n",
             "@echo off",
-            "whoami /groups | findstr /c:\"Low Mandatory Level\" >nul || exit /b 13",
+            "\"%SystemRoot%\\System32\\whoami.exe\" /groups /fo csv | \"%SystemRoot%\\System32\\findstr.exe\" /c:\"S-1-16-4096\" >nul || exit /b 13",
             "echo own> \"%PROBE_LANE%\\own\" || exit /b 10",
             "echo x> \"%PROBE_CONTROL%\\leak\" 2>nul && exit /b 11",
             "type \"%PROBE_HIDDEN%\\secret\" >nul 2>nul && exit /b 12",
@@ -69,12 +71,22 @@ public final class WindowsLowIntegritySandbox implements Sandbox {
      */
     private final Set<Path> lingering = new LinkedHashSet<>();
     private boolean shutdownHookAdded;
+    private final Map<String, String> probeEnvironment;
     private SandboxAvailability availability;
 
     /**
      * Creates the sandbox. Nothing runs until the first {@link #probe()}.
      */
     public WindowsLowIntegritySandbox() {
+        this(System.getenv());
+    }
+
+    /**
+     * Creates a sandbox whose probe child starts from the given environment, so a test can hand it the PATH of a Git
+     * Bash session, where an MSYS {@code whoami} comes before the Windows one.
+     */
+    WindowsLowIntegritySandbox(Map<String, String> probeEnvironment) {
+        this.probeEnvironment = Map.copyOf(probeEnvironment);
     }
 
     @Override
@@ -329,7 +341,7 @@ public final class WindowsLowIntegritySandbox implements Sandbox {
         Path hidden = Files.createDirectories(scratch.resolve("hidden"));
         Files.writeString(hidden.resolve("secret"), "secret");
         Files.writeString(lane.resolve("probe.cmd"), PROBE_SCRIPT, StandardCharsets.US_ASCII);
-        Map<String, String> environment = new HashMap<>(System.getenv());
+        Map<String, String> environment = new HashMap<>(probeEnvironment);
         environment.put("PROBE_LANE", lane.toString());
         environment.put("PROBE_CONTROL", control.toString());
         environment.put("PROBE_HIDDEN", hidden.toString());

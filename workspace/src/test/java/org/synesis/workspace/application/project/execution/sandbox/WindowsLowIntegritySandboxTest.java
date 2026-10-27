@@ -82,6 +82,19 @@ class WindowsLowIntegritySandboxTest {
     }
 
     @Test
+    void theProbeDoesNotDependOnWhatComesFirstOnPath() throws IOException {
+        Path impostors = Files.createDirectories(root.resolve("impostors"));
+        Path system32 = Path.of(System.getenv("SystemRoot"), "System32");
+        for (String tool : List.of("whoami.exe", "findstr.exe")) {
+            Files.copy(system32.resolve("hostname.exe"), impostors.resolve(tool));
+        }
+        Map<String, String> gitBashLike = new HashMap<>(System.getenv());
+        gitBashLike.put("PATH", impostors + ";" + System.getenv("PATH"));
+        SandboxAvailability availability = new WindowsLowIntegritySandbox(gitBashLike).probe();
+        assertTrue(availability.available(), availability.reason());
+    }
+
+    @Test
     void theCommandRunsAtTheLowIntegrityLevelWithTheOwnersIdentity() throws Exception {
         Path lane = Files.createDirectories(root.resolve("lane"));
         String result = runToEnd(wrap(lane, "cmd.exe", "/d", "/c", "whoami /groups | findstr Label"), lane);
