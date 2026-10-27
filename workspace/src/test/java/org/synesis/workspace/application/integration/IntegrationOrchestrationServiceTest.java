@@ -52,6 +52,13 @@ class IntegrationOrchestrationServiceTest {
     }
 
     @Test
+    void aPendingCoordinationRequestIsNotALastingFailureButEveryOtherMetadataFailureIs() {
+        assertEquals(List.of(), IntegrationOrchestrationService.lastingFailures(List.of("UNRESOLVED_COORDINATION_REQUEST")));
+        assertEquals(List.of("STALE_CLAIM_EPOCH:snap_1", "OVERLAPPING_SNAPSHOT:a.txt"),
+                IntegrationOrchestrationService.lastingFailures(List.of("UNRESOLVED_COORDINATION_REQUEST", "STALE_CLAIM_EPOCH:snap_1", "OVERLAPPING_SNAPSHOT:a.txt")));
+    }
+
+    @Test
     void staleCallerCannotReintegrateAnAlreadyIntegratedSnapshot(@TempDir Path root) throws Exception {
         git(root, "init");
         Files.writeString(root.resolve("README.md"), "base\n");

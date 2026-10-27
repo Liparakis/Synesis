@@ -1496,6 +1496,76 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     `RemergeService.lanes`: a re-merge of an advance an earlier re-merge made is built on the snapshots those re-merge
     snapshots came from (`RemergeServiceTest.aReMergeOfAnAdvanceThatWasItselfAReMergeIsBuiltOnTheLanesItCarried`).
 
+43. **A review decision names its grant by the session that holds it** (s5-run32, 2026-10-27, build sbx5, real cut). Result
+    `FAIL`: `main` differs on the VM and both runs `TIMED_OUT` after 25 minutes. *Proven from the log dumps and the Codex
+    transcripts of `D:\SynesisAcceptance\evidence\s5-run32`:* after the heal the VM (the higher computer) wrote one
+    `COMBINE_REQUIRED` (`cb-a4fbb815…`, `snap_8788c518…`), whose work group `56bf1f6c…` never had a lane. Both VM agents were
+    held by one review: `agt_15de43fd…` (`codex#2`, lane-less, author of an integrated snapshot) held the consumed grant
+    `37b58d63-…-302f59c7ca4d` on the fib snapshot `snap_4a7f224e…`, which stayed `REVIEW_PENDING` to the end, and its author
+    `agt_0fbe9420…` waited for it with its lane open, so the combine was offered to neither. `get_next_action` named the
+    grant correctly (`nextProtocolPayload.grantId`, 34 times); `respond_coordination review_validation` carried
+    `37b58d63-…-302f2f1d7f2b`: the agent copied the last group of the UUID wrong and sent the same wrong value in three
+    tries, each refused `LANE_GRANT_NOT_FOUND`, then stopped. Its two resumed sessions (`codex-2-3.log`, `codex-2-4.log`)
+    read the correct payload again and did not try, writing that the call "still fails". The PC (both groups completed)
+    waited on the VM's open lanes and timed out. Not the combine, the re-merge or the controller: the review offer was
+    spent, so nothing woke the agent again.
+    *The missing invariant:* the grant ID carries no authority the other fields of the call do not.
+    `ReviewValidationService` already requires the grant to be targeted at the calling session's participant, bound to the
+    call's intent, epoch and snapshot, and consumed.
+    *Rule:* `ReviewValidationService.grantNamedBy` resolves the grant by the ID; an ID that names no grant stands for the
+    one consumed, unrevoked, unsuperseded, non-continuation grant the calling session holds on `snapshotId`. With none or
+    several the call is refused `LANE_GRANT_NOT_FOUND` as before, and an ID that names an existing grant goes through the
+    unchanged checks (another reviewer's grant is `REVIEW_GRANT_TARGET_MISMATCH`). The decision is recorded against the
+    grant that was held, so the entry and its event ID are what a correct call gives. Published contracts: no wire format,
+    tool schema or persisted form changes; a call refused `LANE_GRANT_NOT_FOUND` for a reviewer holding exactly one grant
+    on the snapshot is now accepted.
+    Tests: `DisputedReviewIntegrationTest.aGrantIdThatNamesNoGrantIsTheGrantTheSessionHoldsOnTheSnapshot` (fails on the
+    previous code), `aGrantIdThatNamesNoGrantIsRefusedForASessionHoldingNoGrantOnTheSnapshot`,
+    `aGrantIdThatNamesAnotherReviewersGrantIsStillRefused`. Source semantics proven; not proved in a real run.
+    *Checked, not the cause:* `d282e9f9`'s finished-author admission concerns the request (`REVIEWER_INTENT_REQUIRED`), which
+    does not appear; the grant was issued and consumed while the author's lane was open.
+
+44. **A run does not stall while a connected computer's log is still growing** (s5-run34, 2026-10-27, build sbx5, real cut).
+    Result `PARTIAL`: `main` equal on both computers (`2d69d7cb…`), the PC run `COMPLETED`, the VM run `STALLED` after 767 s
+    (`AGENT_RUN_WAITING=COPIES_MEETING`, then `AGENT_RUN_RESULT=STALLED`, six resumes, well under `--max-resumes`).
+    *Proven from the log dumps and run output of `D:\SynesisAcceptance\evidence\s5-run34`:* the PC (the higher computer)
+    wrote three `COMBINE_REQUIRED`, took them with its own agents, re-merged all five snapshots in one pass and landed it
+    (`CONTROL_BRANCH_ADVANCED` pos 230), then closed the three combine groups (pos 233 to 239). The VM link had been
+    connected since the heal (`replication.members`), so no reconnection settle applied. The VM's agents had nothing left to
+    take; while its `main` missed the PC's head the run waited `COPIES_MEETING`, and the first observation after its `main`
+    took that head, before the closing entries arrived, found no foreign lane, no agent that could come back and nothing
+    that misses a head: `STALLED`. The PC finished seconds later. (The stop is inferred from the order of the entries and the
+    waits; the VM's observations were not recorded.)
+    *The missing invariant:* STALLED claims nothing can move. With a connected computer whose log is still growing that is
+    not known; the closing of the work that computer just landed arrives as entries.
+    *Rule:* `AgentRunController.progressElsewhere` waits (`COPIES_MEETING`) while another computer is connected and the
+    log head changed within the span the controller remembers (30 s); a log quiet for that span is a stall as before. A
+    single-computer run, and a connected computer whose log is quiet, are unchanged. Published contracts: no new output
+    value, no option changed.
+    Tests: `AgentRunControllerTest.aRunDoesNotStallWhileTheLogOfAConnectedComputerIsStillGrowing` (fails on the previous
+    code, STALLED at once), `aRunStallsOnceTheLogOfAConnectedComputerHasBeenQuietForTheSettleWindow`. Source semantics
+    proven; not proved in a real run.
+
+45. **A condition that passes by itself is not recorded as a block** (coordinator report, 2026-10-27, `--cpus 2` gate at
+    `d282e9f9`: `ThreeComputersMainMeetingScenarioTest.twoMembersIntegrateTheirOwnWorkAndTheIdleOwnerTakesTheirMain` failed 1 of 5).
+    *Read from the failure XML (`D:\Podman\work\runs\1027-110055-e44738`):* the three computers were linked and held the
+    same `main` and identical logs (67 entries); one snapshot (`snap_e282eed1…`, `m2-a`'s) was `INTEGRATION_BLOCKED`
+    (`INTEGRATION_BLOCKED=1`, no `REMERGE_SNAPSHOT_INVALID`, no `REVIEWER_INTENT_REQUIRED`) and its lane stayed `ANNOUNCED`,
+    so `main` lacked its file for ever. The dump did not carry the block's reason (it does now: `ScenarioLab.dump` prints
+    `blocked: …`), and 10 further `--cpus 2` iterations on this tree did not reproduce it, so the reason is *not proved*.
+    *Read from the code:* the pass (`IntegrationOrchestrationService`) refuses to start while a live coordination request is
+    pending, then runs git for each candidate (`resolveCandidate`), then `validateSnapshotMetadata`, which checks the same
+    condition again (`UNRESOLVED_COORDINATION_REQUEST`) and on any failure appends `INTEGRATION_BLOCKED` with an event ID
+    derived from the snapshot. That entry is written once and ends the snapshot's candidacy. A request raised in the gap
+    (under load the git calls make it long) therefore blocked a snapshot for good for a condition that passes in seconds.
+    The other block seen in the real runs, `STALE_CLAIM_EPOCH` (s5-run34's `snap_d10da89…`, which also ended
+    `INTEGRATION_BLOCKED` on the VM and left its group to be cancelled), is a different, lasting condition and is not changed.
+    *Rule:* `IntegrationOrchestrationService.lastingFailures` drops `UNRESOLVED_COORDINATION_REQUEST`; when it is the only
+    failure the candidate stays pending (`INTEGRATION_PENDING`, tried again by the next pass) and nothing is recorded.
+    Test: `IntegrationOrchestrationServiceTest.aPendingCoordinationRequestIsNotALastingFailureButEveryOtherMetadataFailureIs`
+    (the filter only; the race was not forced). Source semantics proven for the filter; the cause of the scenario failure
+    is a hypothesis.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

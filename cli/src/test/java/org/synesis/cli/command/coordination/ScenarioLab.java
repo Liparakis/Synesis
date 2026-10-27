@@ -412,6 +412,11 @@ final class ScenarioLab implements AutoCloseable {
                 java.util.Map<String, Long> types = new java.util.TreeMap<>();
                 computer.store().events().forEach(event -> types.merge(event.type().name(), 1L, Long::sum));
                 out.append(" entries ").append(computer.store().events().size()).append(' ').append(types);
+                for (var event : computer.store().events()) {
+                    if (event.type() == org.synesis.coordination.domain.prediction.PredictionEventType.INTEGRATION_BLOCKED) {
+                        out.append("\n  blocked: ").append(org.synesis.coordination.domain.integration.IntegrationAttemptPayload.decode(event.payload()).failureReason());
+                    }
+                }
             } catch (Exception unreadable) {
                 out.append(" entries unreadable");
             }

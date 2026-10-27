@@ -344,13 +344,26 @@ public final class IntegrationOrchestrationService {
         return ValidationFailureGuard.blocked(ValidationFailureGuard.raise(controlRoot, store, identity, failure, output, candidate + " outcome " + validation.outcome().value()));
     }
 
+    /**
+     * The failures that make a snapshot unintegrable for good. A block is durable (one {@code INTEGRATION_BLOCKED} per
+     * snapshot, which ends its candidacy and leaves its lane open), so a condition that passes by itself must never be
+     * recorded as one: a coordination request raised after the pass's own check was taken for a block under load, once
+     * the git calls between the two had taken long enough, and the snapshot was never integrated (the
+     * {@code ThreeComputersMainMeetingScenarioTest} stall, ADR-0098 step 5 item 45).
+     */
+    static List<String> lastingFailures(List<String> failures) {
+        return failures.stream().filter(failure -> !failure.equals(UNRESOLVED_COORDINATION_REQUEST)).toList();
+    }
+
+    private static final String UNRESOLVED_COORDINATION_REQUEST = "UNRESOLVED_COORDINATION_REQUEST";
+
     private static List<String> validateSnapshotMetadata(Path controlRoot, List<TaskSnapshotRecord> snapshots, String controlHead, PredictionEventStore store) {
         Set<String> changed = new java.util.HashSet<>();
         List<String> failures = new ArrayList<>();
         boolean exchangesCode = exchangesCode(store);
         if (store.collaborationProjection().requests().stream()
                 .anyMatch(request -> request.status() == org.synesis.coordination.domain.collaboration.CoordinationRequest.Status.PENDING && IntegrationCandidatePolicy.liveCoordinationRequest(store, request))) {
-            failures.add("UNRESOLVED_COORDINATION_REQUEST");
+            failures.add(UNRESOLVED_COORDINATION_REQUEST);
         }
         for (TaskSnapshotRecord snapshot : snapshots) {
             if (snapshot.provenance() == null) {
@@ -806,8 +819,14 @@ public final class IntegrationOrchestrationService {
                 continue;
             }
             List<String> metadataFailures = validateSnapshotMetadata(controlRoot, List.of(candidate), expectedControlHead, store);
-            if (!metadataFailures.isEmpty()) {
-                if (blockedCandidateAppendFailed(store, identity, candidate, expectedControlHead, metadataFailures)) {
+            List<String> lasting = lastingFailures(metadataFailures);
+            if (lasting.isEmpty() && !metadataFailures.isEmpty()) {
+                // A request raised since the check above: it resolves by itself and the pass tries again.
+                sawPendingDependency = true;
+                continue;
+            }
+            if (!lasting.isEmpty()) {
+                if (blockedCandidateAppendFailed(store, identity, candidate, expectedControlHead, lasting)) {
                     return new AgentResponse(AgentStatus.FAILED, AgentReason.INTERNAL_FAILURE, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("failure", "INTEGRATION_BLOCK_APPEND_FAILED"));
                 }
                 continue;
