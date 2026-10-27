@@ -1565,6 +1565,28 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     Test: `IntegrationOrchestrationServiceTest.aPendingCoordinationRequestIsNotALastingFailureButEveryOtherMetadataFailureIs`
     (the filter only; the race was not forced). Source semantics proven for the filter; the cause of the scenario failure
     is a hypothesis.
+46. **A computer waits for its own running pass instead of skipping the other copy's main until the next pull**
+    (`OverlapAndCombineScenarioTest.theAgentThatPublishedTheFirstCombineIsOfferedTheSecondAndTheCopiesMeet`, about 1 in 6 to 8
+    under `--cpus 2`, on `7366a217` and on `d282e9f9`). *Read from the failure XML (`D:\Podman\work\runs\1027-124308-848b8f\iter3`):*
+    both logs identical (130 entries), no `INTEGRATION_BLOCKED`, the owner's re-merge landed, and the friend, whose head is
+    an ancestor of the owner's, never took it. The friend's log carried `Another computer's main is not taken while this
+    computer's own pass runs; the next pull tries again.` at every 15 s pull for 2 minutes (12 times). A reproduction with a
+    thread dump added to that line (a failing run, `--cpus 2`) showed the `synesis-merge-driver` threads of both computers
+    inside a pass (signature verification while opening the log), so the lock was held by passes that were making progress.
+    `CodeOverLink.meet` tried the integration lock once per pull and gave up; the scenario merge driver runs a pass every 1 s
+    after the last (`mergeEvery(300, 1000)`) and after every entry, and a pass is long when two CPUs are shared, so a single
+    try per 15 s found a pass running every time. *Missing invariant:* "every pull runs it again until this copy has met every
+    head" holds only if a try can succeed; with passes back to back it is a lottery. (The real merge driver runs every 30 s, and
+    a pass that runs the project's validation gate holds the lock for minutes, so the same skip applies there, at a lower rate.)
+    The refusal reason of a fast-forward was also not logged: `CodeRemote.followTo` skipped silently when the head was not an
+    ancestor or the checkout held changes Synesis did not make; both are logged now (not the cause here).
+    *Rule:* `CodeOverLink.betweenPasses` takes the integration lock by trying every 50 ms for up to 30 s on the following
+    thread (which nothing else needs); a pass that outlasts the wait is left to the next pull, as before. The lock stays try-only
+    for everything that appends (no writer waits for a merge). Published contracts: none changes.
+    Test: `CodeExchangeMemberTest.theOwnersCopyTakesTheMembersMainOnceTheRunningPassEndsWithNoSecondPull` (holds the
+    integration lock, asks once, releases it, and expects the main to be taken with no second request; it fails on the previous
+    code). Source semantics proven. After the change the whole class passed 10 of 10 at `--cpus 2` (before: 1 of 7 failed, on a
+    different test of the class, and the single test failed 1 of 47); that the lock wait is the whole cause of the flake is not proved.
 
 47. **An agent that already has the Synesis tools does not install the integration** (s6a-run3, 2026-10-27, build sbx6, real cut).
     Result `TIME_BOUND`: `main` differs on the VM, both runs `TIMED_OUT`. *Proven from `D:\SynesisAcceptance\evidence\s6a-run3`

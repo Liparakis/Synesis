@@ -60,6 +60,9 @@ public final class CodeOverLink implements AutoCloseable {
     private static final long RETRY_PAUSE_MILLIS = 1_000;
     // Link takes four streams per session at once; more serving threads would only queue.
     private static final int SERVING_THREADS = 4;
+    /** How long {@link #betweenPasses} waits for a running pass, and how often it looks. */
+    private static final java.time.Duration PASS_WAIT = java.time.Duration.ofSeconds(30);
+    private static final java.time.Duration PASS_POLL = java.time.Duration.ofMillis(50);
     private static final System.Logger LOG = System.getLogger(CodeOverLink.class.getName());
 
     /**
@@ -269,7 +272,7 @@ public final class CodeOverLink implements AutoCloseable {
             return;
         }
         // Not while this computer's own pass moves its branch: the pass holds the integration lock.
-        try (var onePass = org.synesis.coordination.persistence.ProjectIntegrationLock.tryAcquire(coordination)) {
+        try (var onePass = betweenPasses()) {
             if (onePass == null) {
                 LOG.log(System.Logger.Level.INFO, "Another computer's main is not taken while this computer's own pass runs; the next pull tries again.");
                 return;
@@ -278,6 +281,30 @@ public final class CodeOverLink implements AutoCloseable {
                 followBranch(other);
             }
         }
+    }
+
+    /**
+     * Takes the integration lock between two passes. A single try is not enough: passes run back to back (at an
+     * interval and after every entry), so one try per pull found a pass running at every pull for minutes under load,
+     * and a head this copy was behind was never taken (the flake of {@code OverlapAndCombineScenarioTest}, ADR-0098
+     * step 5 item 46). This runs on the following thread, so it may wait; a pass that outlasts the wait is left to the
+     * next pull.
+     *
+     * @return the held lock, or {@code null} when a pass held it for the whole wait or the thread was interrupted
+     * @throws IOException when the lock file cannot be opened
+     */
+    private org.synesis.coordination.persistence.ProjectIntegrationLock betweenPasses() throws IOException {
+        long giveUp = System.nanoTime() + PASS_WAIT.toNanos();
+        org.synesis.coordination.persistence.ProjectIntegrationLock held;
+        while ((held = org.synesis.coordination.persistence.ProjectIntegrationLock.tryAcquire(coordination)) == null && System.nanoTime() < giveUp) {
+            try {
+                Thread.sleep(PASS_POLL.toMillis());
+            } catch (InterruptedException closing) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
+        }
+        return held;
     }
 
     /**

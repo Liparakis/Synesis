@@ -27,6 +27,8 @@ import org.synesis.workspace.lifecycle.process.GitProcessRunner;
  */
 public final class CodeRemote {
 
+    private static final System.Logger LOG = System.getLogger(CodeRemote.class.getName());
+
     /** The remote could not be pushed to or fetched from, or the code could not be had over Link: try again later. */
     public static final String UNAVAILABLE = "CODE_REMOTE_UNAVAILABLE";
 
@@ -141,10 +143,19 @@ public final class CodeRemote {
      */
     static void followTo(Path controlRoot, String leaderHead) throws Exception {
         String head = GitProcessRunner.run(controlRoot, "rev-parse", "HEAD");
-        if (!head.equals(leaderHead) && GitProcessRunner.isAncestor(controlRoot, head, leaderHead)
-                && ControlBranchAdvancementService.foreignChanges(controlRoot).isEmpty()) {
-            GitProcessRunner.run(controlRoot, "merge", "--ff-only", leaderHead);
+        if (head.equals(leaderHead)) {
+            return;
         }
+        if (!GitProcessRunner.isAncestor(controlRoot, head, leaderHead)) {
+            LOG.log(System.Logger.Level.INFO, "The checkout does not fast-forward to {0}: its head {1} is not an ancestor of it.", leaderHead, head);
+            return;
+        }
+        List<String> foreign = ControlBranchAdvancementService.foreignChanges(controlRoot);
+        if (!foreign.isEmpty()) {
+            LOG.log(System.Logger.Level.WARNING, "The checkout does not fast-forward to {0}: it holds changes Synesis did not make: {1}", leaderHead, foreign);
+            return;
+        }
+        GitProcessRunner.run(controlRoot, "merge", "--ff-only", leaderHead);
     }
 
     /**

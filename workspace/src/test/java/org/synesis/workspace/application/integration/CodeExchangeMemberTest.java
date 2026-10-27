@@ -231,6 +231,29 @@ class CodeExchangeMemberTest {
         assertFalse(diverged.isDone(), "a copy that is behind is not diverged");
     }
 
+    /**
+     * ADR-0098 step 5 item 46: a pass running when the pull asks for the other computer's main is waited for, not
+     * skipped until the next pull; passes that run back to back otherwise starve the meeting for ever.
+     */
+    @Test
+    void theOwnersCopyTakesTheMembersMainOnceTheRunningPassEndsWithNoSecondPull() throws Exception {
+        replicate();
+        startLane("m-1", "src/a.txt");
+        finish("m-1");
+        String memberMain = memberHead();
+        exchangeLogs();
+        String before = leader.head();
+
+        try (var runningPass = org.synesis.coordination.persistence.ProjectIntegrationLock.tryAcquire(leader.store().rootDirectory())) {
+            assertNotNull(runningPass);
+            link.leader.mainMayHaveMoved();
+            Thread.sleep(1500);
+            assertEquals(before, leader.head(), "the main is not taken while a pass runs");
+        }
+
+        awaitLeaderHead(memberMain);
+    }
+
     @Test
     void theOwnersCopyKeepsItsOwnCommitWhenTheMembersAdvancedMainDiverged() throws Exception {
         replicate();
