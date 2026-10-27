@@ -120,6 +120,29 @@ class ProjectPolicyCommandTest {
     }
 
     @Test
+    void unsandboxedCommandsAreAllowedAndDeniedBySignedDecisionsOnly() throws Exception {
+        assertTrue(run("project", "sandbox", "show", "--project", project).stdout().contains("UNSANDBOXED_COMMANDS=DENY"));
+
+        Result allowed = run("project", "sandbox", "allow-unsandboxed", "--project", project);
+        assertEquals(0, allowed.exit(), allowed.toString());
+        assertTrue(allowed.stdout().contains("UNSANDBOXED_COMMANDS=ALLOW"), allowed.toString());
+        assertTrue(allowed.stdout().stream().anyMatch(line -> line.startsWith("WARNING=")), allowed.toString());
+        assertTrue(allowed.stdout().stream().anyMatch(line -> line.startsWith("DECISION_ENTRY=")), allowed.toString());
+        assertTrue(run("project", "sandbox", "show", "--project", project).stdout().contains("UNSANDBOXED_COMMANDS=ALLOW"));
+
+        assertEquals(0, run("project", "sandbox", "deny-unsandboxed", "--project", project).exit());
+        assertTrue(run("project", "sandbox", "show", "--project", project).stdout().contains("UNSANDBOXED_COMMANDS=DENY"));
+    }
+
+    @Test
+    void anAllowanceWithNoTerminalToTypeAtIsRefusedAndSignsNothing() throws Exception {
+        Result refused = CliHarness.run(tmp.resolve("cli-profile"), "project", "sandbox", "allow-unsandboxed", "--project", project);
+
+        refused.assertIs(ExitCodes.LOCAL_CONFIGURATION, List.of(), CliHarness.shaped("OPERATOR_KEY_UNAVAILABLE", "~REASON=.+"));
+        assertTrue(run("project", "sandbox", "show", "--project", project).stdout().contains("UNSANDBOXED_COMMANDS=DENY"));
+    }
+
+    @Test
     void anEditedProjectFileChangesNothingAndPolicyShowSaysItIsIgnored() throws Exception {
         assertEquals(0, run("project", "validation", "set", "--project", project, "--also-in-lane", "--", "git", "status").exit());
         assertEquals(0, run("project", "review", "set", "mandatory", "--project", project).exit());

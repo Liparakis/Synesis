@@ -99,7 +99,7 @@ public final class AgentTaskCompletionService {
         this.authorityResolver = new SessionAuthorityResolver(bindingService);
         this.collaborationService = new WorkspaceCollaborationService();
         this.manualService = new ProviderManualService();
-        this.processExecutor = new ProjectProcessExecutor();
+        this.processExecutor = org.synesis.workspace.application.project.SignedUnsandboxedAllowance.executor();
         this.nextActionService = new AgentNextActionService();
         this.readinessService = new WorkspaceReadinessService(bindingService);
         this.terminalizationService = new ProviderSessionTerminalizationService(bindingService, new org.synesis.workspace.lifecycle.lease.SessionLeaseService());

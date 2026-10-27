@@ -199,15 +199,15 @@ public final class ProjectPolicyService {
             ProjectLocation.Policy policy;
             if (reading.snapshot().isPresent()) {
                 Snapshot signed = reading.snapshot().get();
-                policy = new ProjectLocation.Policy(signed.validation(), signed.review(), signed.validationAlsoInLane(), true);
+                policy = new ProjectLocation.Policy(signed.validation(), signed.review(), signed.validationAlsoInLane(), true, signed.unsandboxedAllowed());
             } else if (!reading.ownsTheProject()) {
-                policy = new ProjectLocation.Policy(null, ReviewPolicy.none(), false, false);
+                policy = new ProjectLocation.Policy(null, ReviewPolicy.none(), false, false, false);
             } else if (Files.exists(file.operatorKeyFile())) {
                 // This computer made the project's operator key, so a baseline was meant to exist. A log without it has
                 // lost it, and the file an agent could have written is not the policy.
                 throw new PolicyUnavailableException(new IOException("an operator key exists on this computer but the log holds no baseline"));
             } else {
-                policy = new ProjectLocation.Policy(file.validation(), file.review(), file.validationAlsoInLane(), true);
+                policy = new ProjectLocation.Policy(file.validation(), file.review(), file.validationAlsoInLane(), true, false);
             }
             recorded = now;
             cached = policy;

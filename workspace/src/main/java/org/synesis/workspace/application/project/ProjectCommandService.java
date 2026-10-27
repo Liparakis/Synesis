@@ -40,7 +40,7 @@ public final class ProjectCommandService {
      * Creates a command service using the default project and process services.
      */
     public ProjectCommandService() {
-        this(new ProjectApplicationService(), new WorkspaceReadinessService(), new ProjectProcessExecutor());
+        this(new ProjectApplicationService(), new WorkspaceReadinessService(), SignedUnsandboxedAllowance.executor());
     }
 
     /**

@@ -62,7 +62,7 @@ public final class ReviewSnapshotAccessService {
     public ReviewSnapshotAccessService() {
         this.projectService = new ProjectApplicationService();
         this.authorityResolver = new SessionAuthorityResolver(new ProviderSessionBindingService());
-        this.processExecutor = new ProjectProcessExecutor();
+        this.processExecutor = org.synesis.workspace.application.project.SignedUnsandboxedAllowance.executor();
     }
 
     private static Optional<GrantSnapshot> snapshotFor(PredictionEventStore store, LaneGrant grant) {

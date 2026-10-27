@@ -83,6 +83,7 @@ import org.synesis.cli.command.project.ProjectPolicyShowCommand;
 import org.synesis.cli.command.project.ProjectReviewCommand;
 import org.synesis.cli.command.project.ProjectReviewSetCommand;
 import org.synesis.cli.command.project.ProjectReviewShowCommand;
+import org.synesis.cli.command.project.ProjectSandboxCommand;
 import org.synesis.cli.command.project.ProjectValidationShowCommand;
 import org.synesis.cli.command.provider.ProviderCommand;
 import org.synesis.cli.command.provider.ProviderInstallCommand;
@@ -196,6 +197,7 @@ public final class SynesisCli {
                 .addSubcommand("show", new ProjectValidationShowCommand(runtime)).addSubcommand("clear", new ProjectValidationClearCommand(runtime)));
         command.getSubcommands().get("project").addSubcommand("review", new CommandLine(new ProjectReviewCommand())
                 .addSubcommand("set", new ProjectReviewSetCommand(runtime)).addSubcommand("show", new ProjectReviewShowCommand(runtime)));
+        command.getSubcommands().get("project").addSubcommand("sandbox", new CommandLine(new ProjectSandboxCommand(runtime)));
         command.getSubcommands().get("project").addSubcommand("policy", new CommandLine(new ProjectPolicyCommand())
                 .addSubcommand("show", new ProjectPolicyShowCommand(runtime)).addSubcommand("adopt", new ProjectPolicyAdoptCommand(runtime)));
         command.addSubcommand("link", new LinkCommand());

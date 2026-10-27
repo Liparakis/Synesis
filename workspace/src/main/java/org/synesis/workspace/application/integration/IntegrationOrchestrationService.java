@@ -122,7 +122,7 @@ public final class IntegrationOrchestrationService {
         this.workspaceService = new IntegrationWorkspaceService();
         this.advancementService = new ControlBranchAdvancementService();
         this.projectService = new ProjectApplicationService();
-        this.processExecutor = new ProjectProcessExecutor();
+        this.processExecutor = org.synesis.workspace.application.project.SignedUnsandboxedAllowance.executor();
         this.bindingService = new ProviderSessionBindingService();
         this.remerges = new RemergeService(projectService, processExecutor, this::finalizeIntegratedLanes);
     }

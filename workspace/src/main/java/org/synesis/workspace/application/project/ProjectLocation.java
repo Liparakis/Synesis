@@ -47,8 +47,9 @@ public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFil
      * @param review               the review policy
      * @param validationAlsoInLane whether the command also runs in each lane alone
      * @param received             whether this computer has the policy; {@code false} only on a member that has not applied the owner's baseline
+     * @param unsandboxedAllowed   whether the owner signed that agents' commands may run on a computer with no sandbox; only a signed log says {@code true}
      */
-    public record Policy(ProjectCommandSpec validation, ReviewPolicy review, boolean validationAlsoInLane, boolean received) {
+    public record Policy(ProjectCommandSpec validation, ReviewPolicy review, boolean validationAlsoInLane, boolean received, boolean unsandboxedAllowed) {
     }
 
     /**
@@ -162,6 +163,17 @@ public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFil
     }
 
     /**
+     * Returns whether the owner signed that agents' commands may run on a computer with no sandbox. Only the signed log
+     * can say {@code true}; the project file never does.
+     *
+     * @return whether it is allowed
+     * @throws PolicyNotReceivedException when this computer has not received the owner's signed policy
+     */
+    public boolean unsandboxedAllowed() {
+        return received().unsandboxedAllowed();
+    }
+
+    /**
      * Returns the policy, refusing where this computer does not have it.
      */
     private Policy received() {
@@ -179,7 +191,7 @@ public record ProjectLocation(Path root, Path synesisDirectory, Path metadataFil
      * @throws PolicyUnavailableException when the signed log cannot be read or verified
      */
     public Policy policy() {
-        return policySource == null ? new Policy(validation, review, validationAlsoInLane, true) : policySource.current();
+        return policySource == null ? new Policy(validation, review, validationAlsoInLane, true, false) : policySource.current();
     }
 
     /**

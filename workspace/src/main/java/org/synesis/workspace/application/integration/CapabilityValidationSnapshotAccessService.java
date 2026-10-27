@@ -38,7 +38,7 @@ public final class CapabilityValidationSnapshotAccessService {
         this.projectService = new ProjectApplicationService();
         this.authorityResolver = new SessionAuthorityResolver(bindings);
         this.validationWorkspaces = new ValidationWorkspaceService();
-        this.processExecutor = new ProjectProcessExecutor();
+        this.processExecutor = org.synesis.workspace.application.project.SignedUnsandboxedAllowance.executor();
     }
 
     /**
