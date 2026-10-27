@@ -519,6 +519,41 @@ Stated plainly, because a sandbox is easy to over-claim:
   today.
 - **Side channels** (timing, CPU, ports of other local services reachable over loopback on Linux and macOS).
 
+### Release finding (2026-10-27): the provider processes themselves can read the node key (VERIFIED in real runs)
+
+Checked with headless runs in a disposable lab project on the PC, using exactly the flags Synesis launches with (no
+`run_command` involved):
+
+- **Codex** (`codex exec --config sandbox_mode=read-only`, Windows, codex-cli 0.163.0): its own shell read all 108 bytes
+  of `.synesis/local/profile/link/identity.bin` (`Get-Content -Encoding Byte`). Its read-only mode stops writes, not
+  reads. On the Ubuntu lab VM the same check was inconclusive: Codex's own sandbox also uses bubblewrap, which the
+  AppArmor user-namespace restriction blocks, so Codex could run no shell command at all.
+- **Claude** (`claude -p --allowedTools mcp__synesis Read Glob Grep`, working directory the control checkout, stage 5
+  hook installed): `Read` of a `.synesis` file was refused by the hook, but a pathless `Glob '**/identity.bin'` returned
+  the key's path and a pathless `Grep` searched `.synesis` (it skipped `.synesis/local` only because that is gitignored).
+  The launch also inherits the user's and project's Claude settings, so a user-level permission can widen it. The
+  hardening of the launch flags and the guard is recorded with stage 5; the hook stays supplementary, not enforcement.
+
+What follows (DERIVED): the agent processes run unsandboxed as the daemon's user, so the OS blocks none of these reads.
+A model that reads `identity.bin` can send it to its vendor or put it in a tool argument. The node key signs agent
+actions and the owner statements still on the node key (membership, owner change, join answers), so its theft lets the
+thief act as this computer. The operator-signed decisions (validation, review, `sandbox.unsandboxed`) cannot be forged
+with the node key alone; `operator.key` is encrypted (AES-GCM, PBKDF2 600,000 iterations), but a copied file can be
+guessed offline, so the passphrase's strength matters.
+
+The real fix is OS-level: run the provider process itself inside the sandbox, with the MCP server started first,
+outside it, and reached over a channel opened from outside (the "Not decided" item below; a separate ADR). Until then
+the owner chooses (open question 11): refuse Codex for headless agent runs, or accept the residual in writing for this
+release.
+
+### Operator-key recovery (an explicit unresolved requirement)
+
+A lost operator key or passphrase cannot be recovered today, and an owner change leaves the new owner without one.
+This stays an open requirement, not a gap to paper over: any recovery must be a statement signed by a key a person
+holds (the recovery key of ADR-0098, or the current operator key). No unsigned, file, environment, flag or
+node-key-only path may replace or reset the operator key, because that would let anything that can read the node key
+or write the computer's files take over the signing authority.
+
 ## Alternatives considered
 
 1. **Only sign the decisions; no sandbox.** Rejected by the owner's decision 1: the key is readable by the command.
@@ -1025,9 +1060,8 @@ order C, F.
 - **`project.json`:** `validation` and `review` become read-only inputs of migration; no new field. The file's
   `schemaVersion` does not change. Removing the fields is a separate, explicitly authorised change.
 - **CLI:** `project validation set|show|clear` keep their arguments and `VALIDATION_*` keys; they no longer print
-  `PROJECT_FILE_CHANGED` or `PROJECT_FILE_COMMITTED` (this is a removed output line of a published command: it is
-  listed here for the owner's approval, and the lines can stay as fixed `0` and empty values for one release if the
-  owner prefers). Additive: `POLICY_REVISION`, `DECISION_ENTRY`, `project review`, `project sandbox`,
+  `PROJECT_FILE_CHANGED` or `PROJECT_FILE_COMMITTED` (a removed output line of a published command; the owner
+  confirmed the removal on 2026-10-27, and `ProjectValidationCommandTest` pins that the lines are gone). Additive: `POLICY_REVISION`, `DECISION_ENTRY`, `project review`, `project sandbox`,
   `project policy`.
 - **MCP:** no new tool. `run_command` gains a `BLOCKED` reason `SANDBOX_UNAVAILABLE` and `SANDBOX_SETUP_FAILED` (a new
   enum value; additive) and a `sandbox` field in its result evidence. An old client that does not know the reason
@@ -1088,6 +1122,8 @@ order C, F.
    Gradle/npm caches writable (fast, poisonable)? The design defaults to private and lets you list shared ones.
 10. **Existing signed statements.** Membership and other owner statements keep the node key's trust model. Do you want
     them also covered by the operator key (question 1) when it exists?
+11. **Provider processes read the node key (2026-10-27 finding).** Until the provider processes run inside the sandbox
+    (a separate ADR), refuse Codex for headless agent runs, or accept the residual in writing for this release?
 
 ## Not decided
 
