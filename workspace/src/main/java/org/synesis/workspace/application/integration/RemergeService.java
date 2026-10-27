@@ -251,7 +251,11 @@ final class RemergeService {
         Map<String, CombinePayload> combines = combinesWithResult(controlRoot, store, missing);
         String start = missing.stream().map(advance -> combines.get(advance.to())).filter(Objects::nonNull).reduce((older, newer) -> newer)
                 .map(CombinePayload::base).orElse(other);
-        Path worktree = ExternalWorktrees.root(controlRoot, "remerge").resolve(remergeId).toAbsolutePath().normalize();
+        // Named by the checkout too: the folder is under the user's profile and keyed by project, so two computers of one
+        // project on one profile (the scenario tests) that re-merge the same pair of heads would remove each other's worktree
+        // mid-build, and the merge Git then could not make was taken for a conflict and stopped the re-merge for good.
+        Path worktree = ExternalWorktrees.root(controlRoot, "remerge")
+                .resolve(remergeId + "-" + digest(controlRoot.toAbsolutePath().normalize().toString()).substring(0, 8)).toAbsolutePath().normalize();
         // Left by a pass that died while building: its commits are named by nothing, so it is built again.
         ExternalWorktrees.removeBestEffort(worktree);
         Files.createDirectories(worktree.getParent());
