@@ -659,6 +659,10 @@ and maintainability decide when a stage is done, by its completion criteria belo
   5. *Needs a real machine with elevation.* The UAC prompt after a ticked install, that the rule then names the new
      version's `java.exe` and an upgrade keeps Link reachable, the printed `netsh` command run in an administrator
      terminal, and the one-action-per-side join count on PC + VM with the question answered by a person.
+     **Update path PASS, 2026-10-27 (owner, real PC):** a local bundle 0.1.0-dev.adm1 (master 974a9090) installed over
+     remaster68 through the wizard's Manage → Update path with one admin prompt; the `Synesis Link` rule moved from the
+     remaster68 `java.exe` to `versions\0.1.0-dev.adm1-…\runtime\bin\java.exe` with no manual firewall step. The fresh
+     install's default-ticked box, the decline path and the join count were not run.
 - **Built 2026-10-20 (CLI surface: removal of the four commands, help in depths, exit codes; source semantics proven on
   the Linux gate, `:cli:check` 318 tests and the workspace `*Provider*` and `ProjectContextExchangeTest` classes 110, 0
   failures, plus `repositoryHygieneCheck`; not yet the Windows gate or a real run).** The rest of stage 3 (interactive
