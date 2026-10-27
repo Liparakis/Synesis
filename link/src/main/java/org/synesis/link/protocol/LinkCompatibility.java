@@ -13,7 +13,9 @@ package org.synesis.link.protocol;
  * format byte of the handshake envelope. A build that finds a different number refuses to go on,
  * with an {@link IncompatibleVersionException} before it parses anything else.
  *
- * <p>It stands at 11: logs carry the trash entries ({@code WORK_TRASHED}, {@code TRASH_RESTORED},
+ * <p>It stands at 12: logs carry the owner's signed policy decisions ({@code PROJECT_POLICY_SET}, wire code 93, the
+ * validation gate, review, the unsandboxed-commands allowance), which a build at 11 cannot even resolve and would
+ * refuse the log for (ADR-0104). It was 11 when logs carried the trash entries ({@code WORK_TRASHED}, {@code TRASH_RESTORED},
  * {@code TRASH_EMPTIED}), which a build at 10 would not apply, a takeover's continuation names
  * another computer's lane by its snapshot or base, and trashed commits are served under their
  * trash refs (ADR-0098 step 7). It was 10 when who belongs to a project went into the logs (the
@@ -39,7 +41,7 @@ package org.synesis.link.protocol;
 public final class LinkCompatibility {
 
   /** The compatibility number of this build. */
-  public static final int CURRENT = 11;
+  public static final int CURRENT = 12;
 
   private LinkCompatibility() {
   }
