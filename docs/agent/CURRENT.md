@@ -1,3 +1,29 @@
+# 2026-10-27 — ADR-0104 built (sandboxed commands, signed decisions); step 5 stable under real cuts
+
+**ADR-0104, all stages built.** Stage 1: the owner's gating decisions are `PROJECT_POLICY_SET` entries (wire code 93)
+signed by a separate passphrase-protected operator key; gates read validation, review and the lane gate from the signed
+log and ignore `project.json` once a baseline exists; `project validation|review|policy|sandbox` sign entries.
+Stages 2–4: agent commands run through one `Sandbox` choke point — bubblewrap on Linux, a low-integrity process on
+Windows, sandbox-exec on macOS (written UNVERIFIED, refuses until tested on a Mac); with no sandbox a command is refused
+unless the owner signs `project sandbox allow-unsandboxed`. Stage 5: doctor findings, a `sandbox` field in the
+`run_command` result, an operator request when a gate cannot run, a read guard for Read/Glob/Grep on Synesis state,
+Link compatibility 12, provider manual 14. Deviation: `init` signs no baseline (it needs a person's passphrase), so a
+project's file stays its policy until a person signs a first decision or runs `project policy adopt`.
+
+**Real runs (sbx1–sbx3).** sbx-run2 PASS but every command was refused: the Windows probe ran Git Bash's `whoami` (fixed:
+full paths and the Low SID). sbx-run3 PASS with the PC's agents running the tests inside the Windows sandbox. On the
+Ubuntu 24.04 VM bubblewrap is blocked by `kernel.apparmor_restrict_unprivileged_userns=1`; commands there are refused and
+doctor now names the narrow AppArmor profile as the fix. Step 5 under a real 5-minute cut: s5-run29, 30, 31 all PASS
+(and s5-run26 PARTIAL/27 TIME_BOUND/28 PASS on remaster98 before the fixes below).
+
+**Fixed:** an author of a combined snapshot may take the combine (item 40); a re-merge granted to a session is a new
+offer to the run controller (item 41); a completed session is offered an open review it may take (item 42); the provider
+binding listing read another agent's half-written temporary file.
+
+**Open:** the VM's AppArmor profile (owner's call); signing keys; Codex's own reads are unguarded; recovery of a lost
+operator key; `RemergeService.validates` and the lane `alsoInLane` gate do not raise the sandbox request; a rare
+`retry_required` from `ensure_session` in `OverlapAndCombineScenarioTest` under load.
+
 # 2026-10-26 — ADR-0098 step 5 DONE under a real Link cut; ADR-0103 stage 4 built
 
 **ADR-0098 step 5:** s5-run25 (remaster97 = b45415be) RESULT=PASS under a real 5-minute cut — diverged, re-merged
