@@ -6,12 +6,16 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.Serial;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import org.synesis.link.session.PeerSession;
 import org.synesis.workspace.application.project.ProjectIdentity;
 
@@ -35,7 +39,8 @@ public final class ProjectContextExchange {
     private static final int KIND_REQUEST = 1;
     private static final int KIND_ACKNOWLEDGE = 2;
     private static final int KIND_REJECT = 3;
-    private static final long TIMEOUT_SECONDS = 5;
+    private static final long ATTEMPT_SECONDS = 5;
+    private static final int ATTEMPTS = 6;
 
     private ProjectContextExchange() {
     }
@@ -85,13 +90,33 @@ public final class ProjectContextExchange {
      *
      * @param session       authenticated, control-ready Link session
      * @param localIdentity local canonical project identity
-     * @throws ProjectContextException if the remote context is malformed or mismatched
+     * @throws ProjectContextException if the remote context is malformed or mismatched, or no answer comes in time
      */
     public static void require(PeerSession session, ProjectIdentity localIdentity) throws ProjectContextException {
         Objects.requireNonNull(session, "session");
+        require(session::requestApplication, localIdentity, Duration.ofSeconds(ATTEMPT_SECONDS), ATTEMPTS);
+    }
+
+    /**
+     * Asks again after each silent {@code attempt}, up to {@code attempts} times. The request is idempotent, and its
+     * failure cannot be undone for a joiner: the session is closed and the invitation it used is spent, so the owner never
+     * holds the join request (a loaded machine missed one 5 s wait in CI release run 40442201594). A peer that stays silent
+     * for the whole window is still refused.
+     */
+    static void require(Function<byte[], CompletionStage<byte[]>> send, ProjectIdentity localIdentity, Duration attempt, int attempts)
+            throws ProjectContextException {
         Objects.requireNonNull(localIdentity, "local identity");
         try {
-            byte[] response = session.requestApplication(request(localIdentity)).toCompletableFuture().get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            byte[] response = null;
+            for (int tried = 0; response == null; tried++) {
+                try {
+                    response = send.apply(request(localIdentity)).toCompletableFuture().get(attempt.toNanos(), TimeUnit.NANOSECONDS);
+                } catch (TimeoutException silent) {
+                    if (tried + 1 >= attempts) {
+                        throw silent;
+                    }
+                }
+            }
             Context context = decode(response);
             if (context.kind() != Kind.ACKNOWLEDGE || !localIdentity.matches(context.identity())) {
                 throw new ProjectContextException("PROJECT_MISMATCH", "authenticated peer is not bound to the same project identity");

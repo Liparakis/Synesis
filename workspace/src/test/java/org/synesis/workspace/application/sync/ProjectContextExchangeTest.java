@@ -7,9 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.synesis.workspace.application.project.ProjectIdentity;
 
@@ -68,5 +71,31 @@ final class ProjectContextExchangeTest {
         .join();
     handler.handle("sl1-peer", new byte[] {7}).toCompletableFuture().join();
     assertTrue(delegated.get());
+  }
+
+  @Test
+  void aSilentFirstAttemptIsAskedAgainSoOneMissedWaitDoesNotLoseTheJoin() throws Exception {
+    ProjectIdentity identity = new ProjectIdentity(UUID.randomUUID(), Instant.parse("2026-09-18T10:11:12Z"));
+    AtomicInteger asked = new AtomicInteger();
+
+    ProjectContextExchange.require(request -> asked.incrementAndGet() < 3
+        ? new CompletableFuture<byte[]>()
+        : CompletableFuture.completedFuture(ProjectContextExchange.acknowledge(identity)),
+        identity, Duration.ofMillis(50), 3);
+
+    assertEquals(3, asked.get());
+  }
+
+  @Test
+  void aPeerSilentForEveryAttemptIsRefused() {
+    ProjectIdentity identity = new ProjectIdentity(UUID.randomUUID(), Instant.parse("2026-09-18T10:11:12Z"));
+    AtomicInteger asked = new AtomicInteger();
+
+    assertThrows(ProjectContextExchange.ProjectContextException.class, () -> ProjectContextExchange.require(
+        request -> {
+          asked.incrementAndGet();
+          return new CompletableFuture<byte[]>();
+        }, identity, Duration.ofMillis(20), 3));
+    assertEquals(3, asked.get());
   }
 }

@@ -123,6 +123,15 @@ Agents finished the four-package goal in 2 to 4 minutes per side, so most of a 2
    11 of 11, `NettyQuicLoopbackTest` 8 of 8, `ClaimLockTest` 8 of 8, `OwnerDownMembersScenarioTest` 5 of 5, and the two stalling
    classes still failed (`CombineUnderRunControllerScenarioTest` 1 of 5, `ThreeComputersMainMeetingScenarioTest` 1 of 5), now after 60 s
    without progress instead of 4 minutes.
+   Product finding, 2026-10-27 (CI release run 40442201594, `ThreeComputersMainMeetingScenarioTest` failing in its `@BeforeEach`
+   at "the owner holds the join request"; the line the run reports, 47, is `ScenarioLab.open`): the report showed the owner with
+   2 entries and the friend with none, the friend's members record naming the owner DISCONNECTED. That is the signature of a
+   session closed in `LinkRuntimeOwner.acceptSession` before `hold` records the request, and forcing the one fallible step
+   there, `ProjectContextExchange.require`, to time out reproduced it exactly. The step waited 5 s once; its failure cannot
+   be undone for a joiner (the session is closed and the single-use invitation it used is spent, so the owner never holds the
+   request). It now asks again after each silent 5 s, up to 6 times. The stall itself was not reproduced: 120 joins at
+   `--cpus 0.4` with two busy threads took 10 to 30 s and never failed, and the Link race won its first round every time.
+   Fix proven at source level only (`ProjectContextExchangeTest`).
 2. **A decoded log dump and an evidence script.** `synesis log dump` prints every log this computer holds (its own and
    each copy) in local applied order, one entry per line with type, writer, sequence and the fields that matter, and
    with the state each projection derives (lanes, snapshots, grants, combines, membership). One evidence script copies

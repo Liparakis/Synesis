@@ -416,6 +416,7 @@ final class ScenarioLab implements AutoCloseable {
             } catch (Exception unreadable) {
                 out.append("\n  (grants unreadable)");
             }
+            org.synesis.coordination.replication.ReplicationJournal.read(computer.location.coordinationDirectory()).forEach(line -> out.append("\n  journal: ").append(line));
             out.append("\n  members record: ").append(org.synesis.coordination.replication.LeaderReplication.recordedMembers(computer.location.coordinationDirectory()).map(String::valueOf).orElse("none"));
 
             for (Computer other : everyone) {
