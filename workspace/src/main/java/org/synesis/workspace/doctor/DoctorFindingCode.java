@@ -345,7 +345,18 @@ public enum DoctorFindingCode {
      * The policy in {@code .synesis/project.json} differs from the committed one, or is not committed, so nothing can
      * be signed until a person picks which to adopt (ADR-0104).
      */
-    POLICY_ADOPTION_NEEDS_CONFIRMATION("policy_adoption_needs_confirmation");
+    POLICY_ADOPTION_NEEDS_CONFIRMATION("policy_adoption_needs_confirmation"),
+
+    /**
+     * No sandbox can confine agents' commands on this computer, or the one installed failed its check (ADR-0104). The
+     * reason and the fix are the sandbox's own.
+     */
+    SANDBOX_UNAVAILABLE("sandbox_unavailable"),
+
+    /**
+     * The owner signed that agents' commands may run without a sandbox on a computer that has none (ADR-0104).
+     */
+    UNSANDBOXED_COMMANDS_ALLOWED("unsandboxed_commands_allowed");
 
     private final String value;
 

@@ -512,7 +512,8 @@ Agents' commands run in an operating-system sandbox. On a computer that has none
 `synesis project sandbox allow-unsandboxed` signs that the project's commands may
 run there without one (it prints `UNSANDBOXED_COMMANDS=ALLOW` and a `WARNING=`),
 `deny-unsandboxed` signs the default, and `show` prints `UNSANDBOXED_COMMANDS=ALLOW`
-or `DENY`. Like every owner decision it is signed with the operator key and read from
+or `DENY` and the sandbox of this computer: `SANDBOX=<name>`, `SANDBOX_AVAILABLE=` and, when
+it is not available, `SANDBOX_REASON=` and `SANDBOX_FIX=`. Like every owner decision it is signed with the operator key and read from
 the log; no file, flag or environment variable grants it. A computer that has a
 sandbox never skips it, whatever is signed.
 
@@ -798,6 +799,8 @@ finding, `group`, `mark` and `fix`.
 | network | `link_firewall_missing`, `link_firewall_stale` | confirmed | Windows only: no rule, or a rule naming another version's `java.exe`. |
 | work groups | `operator_requests_open` | advice | One or more operator requests wait for a person. |
 | project | `project_file_policy_ignored` | advice | `.synesis/project.json` names a validation or review that differs from the signed policy, which is the one in force. |
+| environment | `sandbox_unavailable` | confirmed | No sandbox can confine agents' commands on this computer, or the installed one failed its check; the finding carries the sandbox's reason and fix. A working sandbox adds no finding: `synesis project sandbox show` names it. |
+| project | `unsandboxed_commands_allowed` | confirmed | The project's owner signed that agents' commands may run without a sandbox on a computer that has none; the finding names the policy revision. |
 | project | `policy_not_received` | confirmed | A member computer has not received the owner's signed policy, so it runs no gate. |
 | project | `policy_adoption_needs_confirmation` | confirmed | The policy in `project.json` differs from the committed one, or is not committed, so nothing is signed until a person picks one. |
 | work groups | `stale_session_lease`, `ambiguous_session_liveness`, `cleanup_recommended` | as before | Findings that existed before the groups. |

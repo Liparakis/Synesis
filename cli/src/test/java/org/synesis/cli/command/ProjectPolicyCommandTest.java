@@ -121,7 +121,10 @@ class ProjectPolicyCommandTest {
 
     @Test
     void unsandboxedCommandsAreAllowedAndDeniedBySignedDecisionsOnly() throws Exception {
-        assertTrue(run("project", "sandbox", "show", "--project", project).stdout().contains("UNSANDBOXED_COMMANDS=DENY"));
+        Result shown = run("project", "sandbox", "show", "--project", project);
+        assertTrue(shown.stdout().contains("UNSANDBOXED_COMMANDS=DENY"), shown.toString());
+        assertTrue(shown.stdout().stream().anyMatch(line -> line.startsWith("SANDBOX=")), shown.toString());
+        assertTrue(shown.stdout().stream().anyMatch(line -> line.startsWith("SANDBOX_AVAILABLE=")), shown.toString());
 
         Result allowed = run("project", "sandbox", "allow-unsandboxed", "--project", project);
         assertEquals(0, allowed.exit(), allowed.toString());

@@ -22,6 +22,9 @@ import org.synesis.coordination.persistence.ReplicationSettings;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.project.ProjectPolicyService;
 import org.synesis.workspace.application.ProjectApplicationService;
+import org.synesis.workspace.application.project.execution.sandbox.Sandbox;
+import org.synesis.workspace.application.project.execution.sandbox.SandboxAvailability;
+import org.synesis.workspace.application.project.execution.sandbox.Sandboxes;
 import org.synesis.workspace.application.provider.ProviderApplicationService;
 import org.synesis.workspace.infrastructure.digest.Sha256;
 import org.synesis.workspace.infrastructure.json.ProviderJson;
@@ -117,7 +120,13 @@ public final class DoctorService {
             facts(DoctorGroup.PROJECT, DoctorFindingCode.POLICY_ADOPTION_NEEDS_CONFIRMATION, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED, "The policy in the project file is not signed yet",
                     "The policy in .synesis/project.json differs from the committed one, or is not committed, so nothing was signed.", "policy", DoctorRecommendation.HUMAN_REVIEW_REQUIRED,
                     "run 'synesis project policy adopt --from head' to sign the committed policy, or '--from file' for the working file"),
-            facts(DoctorFindingCode.HEALTHY, DoctorSeverity.INFO, DoctorConfidence.CONFIRMED, "System and repository healthy", "All checked components operate within expected parameters.", "project", false,
+            facts(DoctorGroup.ENVIRONMENT, DoctorFindingCode.SANDBOX_UNAVAILABLE, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED, "Agents' commands cannot be confined on this computer",
+                    "The sandbox that confines agents' commands is missing or did not pass its check, so run_command and the validation gate refuse to run unless the project's owner allowed commands without a sandbox.",
+                    "sandbox", DoctorRecommendation.HUMAN_REVIEW_REQUIRED, "install the sandbox for this computer, then run 'synesis doctor' again"),
+            facts(DoctorGroup.PROJECT, DoctorFindingCode.UNSANDBOXED_COMMANDS_ALLOWED, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED, "Commands may run without a sandbox",
+                    "The project's owner signed that agents' commands may run without a sandbox on a computer that has none; such a command can do what your user can do.", "policy",
+                    DoctorRecommendation.HUMAN_REVIEW_REQUIRED, "run 'synesis project sandbox deny-unsandboxed' to refuse them again"),
+            facts(DoctorFindingCode.HEALTHY,DoctorSeverity.INFO, DoctorConfidence.CONFIRMED, "System and repository healthy", "All checked components operate within expected parameters.", "project", false,
                     DoctorRecommendation.NO_ACTION),
             facts(DoctorFindingCode.MISSING_INSTALLED_LAUNCHER, DoctorSeverity.WARNING, DoctorConfidence.CONFIRMED, "Missing installed launcher",
                     "The installer's Synesis bin directory exists but holds no launcher.", "installation", false, DoctorRecommendation.REINSTALL_SYNESIS),
@@ -187,6 +196,7 @@ public final class DoctorService {
     private final SessionLeaseStore leaseStore;
     private final ProcessInspector processInspector;
     private final Supplier<Path> launcherLocation;
+    private final Supplier<Sandbox> sandbox;
     private final ProviderApplicationService providerService = new ProviderApplicationService();
     private final BooleanSupplier gitAvailable;
     private final Predicate<String> executableOnPath;
@@ -248,6 +258,21 @@ public final class DoctorService {
             BooleanSupplier gitAvailable,
             Predicate<String> executableOnPath,
             NetworkProbe network) {
+        this(projectService, inventoryService, eligibilityService, leaseService, leaseStore, processInspector, launcherLocation, gitAvailable, executableOnPath, network, Sandboxes::platform);
+    }
+
+    DoctorService(ProjectApplicationService projectService,
+            LifecycleInventoryService inventoryService,
+            CleanupEligibilityService eligibilityService,
+            SessionLeaseService leaseService,
+            SessionLeaseStore leaseStore,
+            ProcessInspector processInspector,
+            Supplier<Path> launcherLocation,
+            BooleanSupplier gitAvailable,
+            Predicate<String> executableOnPath,
+            NetworkProbe network,
+            Supplier<Sandbox> sandbox) {
+        this.sandbox = Objects.requireNonNull(sandbox, "sandbox");
         this.gitAvailable = Objects.requireNonNull(gitAvailable, "gitAvailable");
         this.executableOnPath = Objects.requireNonNull(executableOnPath, "executableOnPath");
         this.network = Objects.requireNonNull(network, "network");
@@ -323,6 +348,8 @@ public final class DoctorService {
 
         checkGit(findings);
 
+        checkSandbox(findings);
+
         if (projectIdStr != null) {
             checkConnectedProviders(root, findings);
         }
@@ -357,6 +384,20 @@ public final class DoctorService {
         boolean repairAvail = findings.stream().anyMatch(DoctorFinding::repairSupported);
 
         return new DoctorReport(1, reportId, projectIdStr != null ? projectIdStr : "unbound", now, status, critical, errors, warnings, info, cleanupRec, reconcRec, repairAvail, Collections.unmodifiableList(findings), shared);
+    }
+
+    /**
+     * Whether agents' commands can be confined on this computer (ADR-0104). The probe runs a real confined command, so a
+     * sandbox that is present but leaks is reported as unavailable with the probe's reason. A working sandbox adds no
+     * finding; {@code synesis project sandbox show} names it.
+     */
+    private void checkSandbox(List<DoctorFinding> findings) {
+        Sandbox platform = sandbox.get();
+        SandboxAvailability availability = platform.probe();
+        if (!availability.available()) {
+            findings.add(finding(DoctorFindingCode.SANDBOX_UNAVAILABLE, "sandbox_unavailable_" + platform.name(),
+                    Map.of("sandbox", platform.name(), "reason", availability.reason()), availability.fix()));
+        }
     }
 
     private void checkGit(List<DoctorFinding> findings) {
@@ -522,6 +563,10 @@ public final class DoctorService {
             if (!location.policyReceived()) {
                 findings.add(finding(DoctorFindingCode.POLICY_NOT_RECEIVED, "policy_not_received"));
                 return;
+            }
+            if (location.unsandboxedAllowed()) {
+                findings.add(finding(DoctorFindingCode.UNSANDBOXED_COMMANDS_ALLOWED, "unsandboxed_commands_allowed",
+                        Map.of("revision", Long.toString(ProjectPolicyService.read(location).snapshot().orElseThrow().revision()))));
             }
             ProjectPolicyService.fileDisagreement(location).ifPresent(detail -> findings.add(finding(DoctorFindingCode.PROJECT_FILE_POLICY_IGNORED, "project_file_policy_ignored", Map.of("detail", detail))));
             if (ProjectPolicyService.read(location).snapshot().isEmpty() && ProjectPolicyService.adoption(location).needsConfirmation()) {

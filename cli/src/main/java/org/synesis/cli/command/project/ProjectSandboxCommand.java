@@ -11,6 +11,9 @@ import org.synesis.coordination.domain.policy.PolicyEntries.PolicyName;
 import org.synesis.workspace.application.ProjectApplicationService.ProjectApplicationException;
 import org.synesis.workspace.application.project.PolicyNotReceivedException;
 import org.synesis.workspace.application.project.PolicyUnavailableException;
+import org.synesis.workspace.application.project.execution.sandbox.Sandbox;
+import org.synesis.workspace.application.project.execution.sandbox.SandboxAvailability;
+import org.synesis.workspace.application.project.execution.sandbox.Sandboxes;
 
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -66,6 +69,14 @@ public final class ProjectSandboxCommand {
     public int show(@Option(names = "--project", defaultValue = ".", description = "Project directory (default: .).") String project) {
         try {
             runtime.terminal().stdout("UNSANDBOXED_COMMANDS=" + (ProjectOptions.locate(runtime, project).unsandboxedAllowed() ? "ALLOW" : "DENY"));
+            Sandbox platform = Sandboxes.platform();
+            SandboxAvailability availability = platform.probe();
+            runtime.terminal().stdout("SANDBOX=" + platform.name());
+            runtime.terminal().stdout("SANDBOX_AVAILABLE=" + availability.available());
+            if (!availability.available()) {
+                runtime.terminal().stdout("SANDBOX_REASON=" + availability.reason());
+                runtime.terminal().stdout("SANDBOX_FIX=" + availability.fix());
+            }
             return ExitCodes.OK;
         } catch (ProjectApplicationException failure) {
             return OperatorDecisions.refuse(runtime, failure);
