@@ -1035,6 +1035,37 @@ Residual risks: the real-run acceptance of stage 5 is not done; the macOS refusa
 read-tool guard is a hook, so a provider that does not run hooks (Codex, a person's interactive session without the hook)
 is not covered.
 
+#### Stage 5 hardening (2026-10-27; source semantics proven, one real headless Claude run on this PC)
+
+A real run showed that a pathless `Glob` and `Grep` in the control checkout were not refused and returned
+`.synesis\local\profile\link\identity.bin` and `.synesis\project.json`, while a `Read` of the key was refused.
+
+1. **Launch flags** (`ClaudeCodeProviderIntegration`). Verified with `claude --help`: `--setting-sources project` loads
+   only the project's `.claude/settings.json` (where the hooks live), not the user's or the local file;
+   `--permission-mode dontAsk` denies whatever is not allowed; `--disallowedTools Bash PowerShell Edit Write
+   NotebookEdit WebFetch WebSearch Task Agent` removes the command, write, web and sub-agent tools. `--allowedTools` and
+   `--disallowedTools` are variadic, so both come last (`--resume` is still inserted ahead of them); the prompt goes on
+   standard input. The run's own `init` event listed no Bash, PowerShell, Edit, Write or web tool, and
+   `mcp__synesis` connected. Managed (organisation) settings still apply, as they cannot be turned off.
+2. **Guard** (`SynesisStateReadGuard`). A `Glob` or `Grep` whose effective root (no path means the working directory)
+   holds a `.synesis` directory, or is the working directory's project root or a folder above it, is refused unless it is
+   inside the agent's bound lane worktree (the nearest ancestor with `workspace-binding.json`). The reason tells the agent to
+   pass its assigned worktree as the path; Synesis's status tool reports it as `worktree`.
+   A search in the lane still reaches the lane's own tracked `.synesis` files (no key), as before.
+3. **Fail closed.** A guard that throws blocks the call. `hook claude` exits 2 with the reason on stderr when it cannot
+   process an event other than Stop (it used to print a deny answer and exit 10, which Claude Code treats as a
+   non-blocking error, so the call ran). A failed Stop still lets the agent stop. A project without the hook installed
+   is not protected, and that cannot be fixed in code.
+4. **Codex: unchanged.** Its read-only sandbox can read the node key (proven in a real run); that is a design decision for
+   the owner.
+
+Real check (`harden1`, installed from this build, hook command pointed at the build; `claude -p ... --setting-sources
+project --permission-mode dontAsk --allowedTools mcp__synesis Read Glob Grep --disallowedTools ...`, prompt on stdin):
+in the control checkout the pathless `Glob '**/identity.bin'`, the pathless `Grep 'projectId'` and `Glob 'src/**/*.java'`
+were refused with the new reason, `Read README.md` worked, and there was no shell tool. In the lane worktree the same
+calls were allowed (`src\A.java`, `.synesis\project.json` of the lane, no key). `hook claude` on an uninitialised
+project exited 2 for a PreToolUse event and 10 for Stop.
+
 ### Suggested parallel tasks
 
 After stage 1's entry type exists, the work splits as follows. Owners are suggestions; test subagents follow the
