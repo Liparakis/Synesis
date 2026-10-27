@@ -153,13 +153,36 @@ public final class LinuxBubblewrapSandbox implements Sandbox {
         }
         String detail = new String(output, StandardCharsets.UTF_8).strip();
         if (process.exitValue() != 0) {
-            return SandboxAvailability.unavailable("the bubblewrap probe failed with exit " + process.exitValue() + (detail.isEmpty() ? "" : ": " + detail), FIX);
+            return failedProbe(process.exitValue(), detail, userNamespacesRestricted());
         }
         if (!Files.isRegularFile(lane.resolve("own")) || Files.exists(controlGit.resolve("leak")) || Files.exists(control.resolve("leak"))
                 || !"secret".equals(Files.readString(control.resolve("secret")))) {
             return SandboxAvailability.unavailable("the bubblewrap probe showed a command reaching the host's read-only or hidden state", FIX);
         }
         return SandboxAvailability.ready();
+    }
+
+    /**
+     * Chooses the reason and fix for a probe that ran and failed. Ubuntu 24.04 and later refuse a user namespace to a
+     * program that has no AppArmor profile allowing it; the narrow remedy is a profile for bwrap alone. Turning the
+     * sysctl off is never suggested, because it lifts the restriction for every program on the computer.
+     */
+    static SandboxAvailability failedProbe(int exit, String detail, boolean userNamespacesRestricted) {
+        String reason = "the bubblewrap probe failed with exit " + exit + (detail.isEmpty() ? "" : ": " + detail);
+        if (userNamespacesRestricted && (detail.contains("uid map") || detail.contains("user namespace"))) {
+            return SandboxAvailability.unavailable(reason + " (this kernel sets kernel.apparmor_restrict_unprivileged_userns=1, which refuses bwrap a user namespace)",
+                    "create /etc/apparmor.d/bwrap containing 'abi <abi/4.0>, include <tunables/global> profile bwrap /usr/bin/bwrap flags=(unconfined) { userns, }' "
+                            + "(allows user namespaces for /usr/bin/bwrap only), then run 'sudo systemctl reload apparmor'; do not turn the sysctl off");
+        }
+        return SandboxAvailability.unavailable(reason, FIX);
+    }
+
+    private static boolean userNamespacesRestricted() {
+        try {
+            return "1".equals(Files.readString(Path.of("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")).strip());
+        } catch (IOException absent) {
+            return false;
+        }
     }
 
     private static Path onPath(String program) {
