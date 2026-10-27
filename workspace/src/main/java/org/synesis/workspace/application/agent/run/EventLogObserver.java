@@ -31,7 +31,7 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
     /** Keys a re-merge review granted to one of the agent's sessions apart from the same re-merge waiting for a grant. */
     private static final String GRANTED_OFFER = "granted:";
 
-    private static final AgentRunController.Observation NOTHING_RECORDED =new AgentRunController.Observation() {
+    private static final AgentRunController.Observation NOTHING_RECORDED = new AgentRunController.Observation() {
 
         @Override
         public long headSequence() {
