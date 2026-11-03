@@ -1643,6 +1643,10 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     its lane having ended when it next calls `get_next_action` (the run controller wakes an agent whose lane ended).
     Test: `NoChangeCompletionTest.aReviewerLaneNothingInItsGroupCanUseIsReleasedAndTheGroupCloses` (no such release exists on the
     previous code, the group stays `ACTIVE`). Source semantics proven; not proved in a real run.
+    Correction (2026-11-04, the `--cpus 2` gate on `0b227236`): "a lane with a grant is never stranded" was not enough. A
+    reviewer whose grant was consumed by its recorded verdict still has its notes to write and publish, and the first form
+    released it (`McpSyn039SliceTest` failed twice: the reviewer `COMPLETED` with no claims before its notes). A reviewer
+    that was ever granted a review of the group is now never stranded; only one that never was can be.
 
 49. **s7a-run3: not proved, recorded** (2026-10-27, build sbx7, real cut). Result `TIME_BOUND`, `main` differs on the VM (PC
     `da4476c1…`, VM `d1096110…`), both runs `TIMED_OUT`. *Read from `D:\SynesisAcceptance\evidence\s7a-run3`:* no

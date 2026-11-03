@@ -271,7 +271,10 @@ public final class LaneCompletionRules {
         if (workGroup == null || workGroup.status() != org.synesis.coordination.domain.collaboration.WorkGroup.Status.ACTIVE) {
             return false;
         }
-        return hasFinishedWork(current, group)
+        // A reviewer that was ever granted a review of the group still has its notes to write and publish, so its lane is its own.
+        boolean everGranted = current.workGroupProjection().grants().stream()
+                .anyMatch(grant -> grant.group().equals(group) && grant.targetParticipant().equals(lane.participant()));
+        return !everGranted && hasFinishedWork(current, group)
                 && current.collaborationProjection().activeIntents().stream().filter(open -> open.group().equals(group))
                 .allMatch(open -> open.role() == WorkIntent.Role.REVIEWER)
                 && !hasUnresolvedGroupGrants(current, group) && !hasPendingGroupRequests(current, group)
