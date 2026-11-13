@@ -1876,6 +1876,33 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     (a revision lane, or a second reviewer's verdict) designed with the owner. *Not proved:* that a reviewer given the sentence would have accepted; that no other
     review of a re-merge applies a wider criterion.
 
+61. **A rejected re-merge snapshot goes to one more independent reviewer (owner decision after s18a-run1; amends items 15 and 16).** A re-merge
+    snapshot rejected once is no longer the end of the re-merge. *The second look* is a second re-merge snapshot at the same commit, id
+    `rms-<digest(remergeId, originalSnapshotId, "second-look")>`, written as an ordinary `REMERGE_SNAPSHOT_CREATED` with a grant on it
+    (`RemergeService.offerSecondLook`). It is a separate snapshot because a refused snapshot takes no second verdict
+    (`REVIEW_DECISION_ALREADY_RECORDED`) and a mixed pair would read as `REVIEW_DISPUTED`; the first stays rejected and nobody's verdict
+    changes. *Who:* a live agent of the re-merging computer chosen by `anotherReviewer`: not the author, not a session of the author's agent,
+    not the agent of anyone asked to review the first snapshot (new `notAgain` rule, by handle and `sameAgent`), nobody who authored in the
+    lineage, and the lowest handle. *What the log says:* the first snapshot is `REVIEW_REJECTED` and no open grant on the second exists; so
+    every computer reads the same two re-merge snapshots, and a restart writes nothing twice (the ids and the grant id follow from the re-merge
+    and the reviewer). With no such agent live nothing is written and a later pass tries again. *Outcomes (`land`):* the second accepted: the
+    re-merge lands naming the second snapshot, as an accepted one does; the second rejected or disputed: the re-merge stops, and one blocking
+    operator request, condition `remerge_rejected_twice`, names the re-merge and both rejection reasons (id from the re-merge and the lane, so
+    never twice; blocking as every request without `lane_notes_operator`); never a third look. Only the re-merging computer writes, as before;
+    the verdicts are written by the reviewers' own computers under the existing `ParticipantAttribution` rules, unchanged. *A log written
+    before this change:* a re-merge snapshot with one rejection and no second look is read by the new rule as owed a second look, so a computer
+    running this code offers it on its next pass (before, the stop was kept in the process only and left nothing on the log, so no log holds a
+    decision that the rule would contradict); a disputed first snapshot is unchanged (stop). *Published contracts:* no wire format changes
+    (`REMERGE_SNAPSHOT_CREATED`, `LANE_GRANT_ISSUED`, `OPERATOR_REQUEST_RAISED` are as they were); a re-merge may now have two re-merge snapshots
+    for one lane, which a reader that assumed one per lane would mis-count (none in this repository does: `remerge(id)` readers were checked by
+    the tests), the `CONTROL_BRANCH_ADVANCED` of a landed re-merge may name the second look's id, and a new operator condition string
+    `remerge_rejected_twice` appears (readers treat conditions as text; absence of `lane_notes_operator` means blocking). Pinned by
+    `RemergeServiceTest` (one rejection offers a different live reviewer and its accept lands; two rejections write one blocking request with
+    both reasons and no third review; the author and the first reviewer are never offered it; the first two fail before). *Not proved:* a
+    real run; that a reviewer of another computer than the re-merging one is never needed (only agents live here are chosen, as for released
+    reviews); that the operator's closing of the request lets a later pass look again (the stop is process-local and the second look exists
+    on the log, so it would stop again at once).
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

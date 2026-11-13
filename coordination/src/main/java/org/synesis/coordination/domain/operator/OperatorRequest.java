@@ -64,6 +64,12 @@ public record OperatorRequest(String id, String condition, String raisedBy, Stri
      */
     public static final String INTEGRATION_VALIDATION_FAILING = "integration_validation_failing";
 
+    /**
+     * A re-merge of the two copies of main was rejected by two independent reviewers (ADR-0098 step 5 item 61). The copies
+     * stay apart and nothing retries it; it blocks, as every request without {@link #LANE_NOTES_OPERATOR} does.
+     */
+    public static final String REMERGE_REJECTED_TWICE = "remerge_rejected_twice";
+
     private static final int MAGIC_RAISED = 0x534f5231;
     private static final int MAGIC_CLOSED = 0x534f5232;
     private static final int MAX_TEXT_BYTES = 8 * 1024;

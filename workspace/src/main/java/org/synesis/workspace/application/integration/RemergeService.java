@@ -24,6 +24,8 @@ import org.synesis.coordination.domain.collaboration.LaneGrant;
 import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ReviewAdmissionRules;
 import org.synesis.coordination.domain.collaboration.ReviewPolicy;
+import org.synesis.coordination.domain.collaboration.ReviewValidationPayload;
+import org.synesis.coordination.domain.operator.OperatorRequest;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.identity.ParticipantId;
@@ -555,7 +557,66 @@ final class RemergeService {
                 LOG.log(System.Logger.Level.INFO, "Re-merge {0} onto {1}: snapshot {2} waits for its review.", remergeId, other, snapshotId);
             }
             offerReview(controlRoot, store, identity, remerge, carried);
+            offerSecondLook(controlRoot, store, identity, remerge, carried);
         }
+    }
+
+    /** The ID of the one more review of a re-merge snapshot a rejection gets (ADR-0098 step 5 item 61). */
+    private static String secondLookId(String remergeId, String originalSnapshotId) {
+        return "rms-" + digest(remergeId + "\n" + originalSnapshotId + "\nsecond-look");
+    }
+
+    /**
+     * A re-merge snapshot that was rejected goes to one more independent reviewer, once. The second look is a second
+     * re-merge snapshot at the same commit, so its verdict is its own: the first snapshot stays rejected (a refused
+     * snapshot takes no second verdict) and nobody's verdict is changed. That it exists, and who reviews it, is read from
+     * the log alone: the first snapshot is rejected, no grant on the second is open, and the reviewer is neither the
+     * author, nor a session of the author's agent, nor an agent that was asked to review the first. With no such live
+     * agent here nothing is written and a later pass tries again. The caller holds the append lock.
+     */
+    private static void offerSecondLook(Path controlRoot, PredictionEventStore store, NodeIdentity identity, RemergeSnapshotPayload remerge,
+            Set<String> carried) throws IOException, GeneralSecurityException {
+        String firstId = remerge.snapshot().snapshotId();
+        if (store.taskCompletionProjection().snapshotState(firstId).orElse(null) != TaskCompletionState.REVIEW_REJECTED) {
+            return;
+        }
+        RemergeSnapshotPayload second = secondLook(remerge);
+        String secondId = second.snapshot().snapshotId();
+        var workGroups = store.workGroupProjection();
+        List<LaneGrant> asked = workGroups.grants().stream().filter(grant -> firstId.equals(grant.snapshotId()) || secondId.equals(grant.snapshotId())).toList();
+        if (asked.stream().anyMatch(grant -> secondId.equals(grant.snapshotId()) && !workGroups.grantRevoked(grant.identity()))) {
+            return;
+        }
+        TaskSnapshotRecord original = store.taskCompletionProjection().findSnapshotById(remerge.originalSnapshotId()).orElseThrow();
+        Set<String> firstReviewers = asked.stream().filter(grant -> firstId.equals(grant.snapshotId())).map(LaneGrant::targetParticipant).collect(Collectors.toSet());
+        Optional<String> reviewer = anotherReviewer(controlRoot, store, original, asked, carried, firstReviewers);
+        if (reviewer.isEmpty()) {
+            LOG.log(System.Logger.Level.WARNING, "Re-merge snapshot {0} was rejected and waits for one more reviewer: no live agent of this computer may review {1}.",
+                    firstId, original.snapshotId());
+            return;
+        }
+        if (store.taskCompletionProjection().findSnapshotById(secondId).isEmpty()) {
+            GitProcessRunner.run(controlRoot, "update-ref", SnapshotRefs.snapshotRef(secondId), second.snapshot().commitSha());
+            store.append(nameUuid("remerge:" + secondId), PredictionEventType.REMERGE_SNAPSHOT_CREATED, identity.nodeId(), second.encode(), identity);
+            LOG.log(System.Logger.Level.INFO, "Re-merge snapshot {0} was rejected: {1} is its second look.", firstId, secondId);
+        }
+        SnapshotProvenance provenance = second.snapshot().provenance();
+        LaneGrant grant = new LaneGrant(nameUuid("remerge-grant:" + secondId + "\n" + reviewer.get()), provenance.workGroupId(), provenance.laneId(), reviewer.get(),
+                provenance.claimEpoch(), true, secondId);
+        store.append(grant.grantId(), PredictionEventType.LANE_GRANT_ISSUED, identity.nodeId(), CollaborationCodec.encodeLaneGrant(grant), identity);
+    }
+
+    /** The same commit under the ID of the second look. */
+    private static RemergeSnapshotPayload secondLook(RemergeSnapshotPayload first) {
+        TaskSnapshotPayload was = first.snapshot();
+        String secondId = secondLookId(first.remergeId(), first.originalSnapshotId());
+        SnapshotProvenance old = was.provenance();
+        SnapshotProvenance provenance = new SnapshotProvenance(old.workGroupId(), old.laneId(), old.authorityLineageId(), old.participant(), old.bindingIdentity(),
+                old.claimEpoch(), old.contractRevisions(), old.handoffLineage(), old.claimSelectors(), SnapshotRefs.snapshotRef(secondId), old.integrityEvidence(),
+                old.artifactManifestDigest());
+        TaskSnapshotPayload snapshot = new TaskSnapshotPayload(was.taskId(), secondId, was.nodeId(), was.supervisorId(), was.workerId(), was.providerSessionId(),
+                was.baseCommit(), was.commitSha(), was.changedPaths(), was.capabilityDependencies(), was.summary(), provenance, true);
+        return new RemergeSnapshotPayload(first.remergeId(), first.originalSnapshotId(), first.otherHead(), first.ownHead(), first.result(), snapshot);
     }
 
     private static RemergeSnapshotPayload remergeSnapshot(String remergeId, String own, String other, String result, Lane lane) {
@@ -623,6 +684,15 @@ final class RemergeService {
      */
     private static Optional<String> anotherReviewer(Path controlRoot, PredictionEventStore store, TaskSnapshotRecord original,
             List<LaneGrant> released, Set<String> carried) {
+        return anotherReviewer(controlRoot, store, original, released, carried, Set.of());
+    }
+
+    /**
+     * As above, and never an agent that was asked to review the same change before (the second look of a rejected re-merge,
+     * ADR-0098 step 5 item 61): not its handle and not any later session of the same agent, whatever it was released from.
+     */
+    private static Optional<String> anotherReviewer(Path controlRoot, PredictionEventStore store, TaskSnapshotRecord original,
+            List<LaneGrant> released, Set<String> carried, Set<String> notAgain) {
         Optional<AwayLanes.Agents> known = AwayLanes.Agents.of(controlRoot);
         if (known.isEmpty()) {
             return Optional.empty();
@@ -637,6 +707,7 @@ final class RemergeService {
                 .map(intent -> intent.participant()).collect(Collectors.toSet());
         return agents.live().stream()
                 .filter(handle -> !releasedFrom.contains(handle) && !agents.sameAgent(handle, author))
+                .filter(handle -> notAgain.stream().noneMatch(before -> before.equals(handle) || agents.sameAgent(handle, before)))
                 .filter(handle -> collaboration.participantState(handle).map(state -> state == Participant.State.ACTIVE).orElse(true))
                 .filter(handle -> agents.sessionsUpTo(handle).stream()
                         .noneMatch(session -> ReviewAdmissionRules.authoredInLineage(store, new ParticipantId(session), original.provenance().lineageIdentity())))
@@ -663,7 +734,21 @@ final class RemergeService {
             }
             String snapshotId = "rms-" + digest(remergeId + "\n" + lane.original().snapshotId());
             TaskCompletionState state = completion.snapshotState(snapshotId).orElse(TaskCompletionState.REVIEW_PENDING);
-            if (state == TaskCompletionState.REVIEW_REJECTED || state == TaskCompletionState.REVIEW_DISPUTED) {
+            if (state == TaskCompletionState.REVIEW_REJECTED) {
+                // One more independent reviewer looks once (item 61); two rejections end the re-merge for the operator.
+                String second = secondLookId(remergeId, lane.original().snapshotId());
+                TaskCompletionState again = completion.snapshotState(second).orElse(null);
+                if (again == TaskCompletionState.REVIEW_ACCEPTED) {
+                    named.add(second);
+                    continue;
+                }
+                if (again == TaskCompletionState.REVIEW_REJECTED || again == TaskCompletionState.REVIEW_DISPUTED) {
+                    askOperator(store, identity, remergeId, snapshotId, second);
+                    stop(remergeId, "re-merge snapshot " + snapshotId + " and its second look " + second + " were rejected");
+                }
+                return;
+            }
+            if (state == TaskCompletionState.REVIEW_DISPUTED) {
                 stop(remergeId, "re-merge snapshot " + snapshotId + " was " + state.name());
                 return;
             }
@@ -700,6 +785,35 @@ final class RemergeService {
         GitProcessRunner.run(controlRoot, "merge", "--ff-only", result);
         GitProcessRunner.run(controlRoot, "update-ref", "-d", RESULT_PREFIX + remergeId);
         LOG.log(System.Logger.Level.INFO, "Re-merge {0} landed: main moved to {1}.", remergeId, result);
+    }
+
+    /**
+     * Records the blocking operator request of a re-merge two reviewers rejected: it names the re-merge and both reasons, and its
+     * ID follows from the re-merge and the lane, so a pass after a restart finds it and writes nothing. Only one request of this
+     * condition is open at a time; a second lane's is left to the first's closing. The copies stay apart.
+     */
+    private static void askOperator(PredictionEventStore store, NodeIdentity identity, String remergeId, String first, String second)
+            throws IOException, GeneralSecurityException {
+        String id = "opr_" + digest(remergeId + "\n" + first).substring(0, 16);
+        var requests = store.operatorRequestProjection();
+        if (requests.all().stream().anyMatch(request -> request.id().equals(id)) || requests.open(OperatorRequest.REMERGE_REJECTED_TWICE).isPresent()) {
+            return;
+        }
+        List<String> reasons = new ArrayList<>();
+        for (PredictionEvent event : store.events()) {
+            if (event.type() != PredictionEventType.REVIEW_VALIDATION_RECORDED) {
+                continue;
+            }
+            ReviewValidationPayload verdict = ReviewValidationPayload.decode(event.payload());
+            if ((first.equals(verdict.snapshotId()) || second.equals(verdict.snapshotId())) && "REJECTED".equals(verdict.result())) {
+                reasons.add(verdict.snapshotId() + " rejected by " + verdict.targetParticipant() + ": " + verdict.reason());
+            }
+        }
+        OperatorRequest request = OperatorRequest.raised(id, OperatorRequest.REMERGE_REJECTED_TWICE,
+                "Re-merge " + remergeId + " of the two copies of main was rejected by two independent reviewers, so the copies stay apart and nothing retries it. "
+                        + "Read both reasons, then fix the work or close this request to let the pass look again.",
+                String.join("\n", reasons));
+        store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, identity.nodeId(), request.encodeRaised(), identity);
     }
 
     private static void stop(String remergeId, String why) {

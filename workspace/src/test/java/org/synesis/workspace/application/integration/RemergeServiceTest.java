@@ -875,6 +875,107 @@ class RemergeServiceTest {
         assertFalse(project.isAncestorOfHead(otherHead));
     }
 
+    private static final String SECOND_SESSION = "session-second-reviewer";
+    private static final String SECOND = WorkspaceCollaborationService.participantHandle(SECOND_SESSION);
+
+    /** The re-merge snapshots of the one re-merge on the log, the first one and then the second look when it exists. */
+    private List<String> remergeSnapshots(String otherHead, String own) throws Exception {
+        return project.store().taskCompletionProjection().remerge(RemergeService.remergeId(otherHead, own)).stream().map(remerge -> remerge.snapshot().snapshotId()).toList();
+    }
+
+    /** ADR-0098 step 5 item 61: one rejection goes to one more independent reviewer, whose accepting lands the re-merge. */
+    @Test
+    void aRejectedReMergeSnapshotIsOfferedToOneMoreIndependentReviewerWhoseAcceptLandsIt() throws Exception {
+        NodeIdentity other = lowerNode();
+        Lane lane = lane("snap_a", "own.txt", true);
+        String own = ownMain("own.txt", "own");
+        ownAdvance(base, own, lane.snapshotId());
+        String otherHead = commit("other", base, "other.txt", "other");
+        otherAdvance(other, otherHead);
+        liveSession(AUTHOR_SESSION);
+        liveSession(REVIEWER_SESSION);
+        liveSession(SECOND_SESSION);
+        run();
+        String first = remergeSnapshots(otherHead, own).getFirst();
+        releaseAuthorLane(lane);
+        verdict(lane, first, grantFor(first), "REJECTED");
+
+        run();
+        run();
+
+        List<String> snapshots = remergeSnapshots(otherHead, own);
+        assertEquals(2, snapshots.size(), "the second look is written once: " + snapshots);
+        String second = snapshots.get(1);
+        List<LaneGrant> asked = grants().stream().filter(grant -> second.equals(grant.snapshotId())).toList();
+        assertEquals(1, asked.size(), asked.toString());
+        assertEquals(SECOND, asked.getFirst().targetParticipant(), "neither the author nor the first reviewer");
+        assertEquals(own, project.head(), "nothing lands before the second verdict");
+
+        verdict(lane, second, asked.getFirst(), "ACCEPTED");
+        run();
+
+        assertTrue(project.isAncestorOfHead(otherHead), "the re-merge landed");
+        assertEquals(List.of(second), landedFrom(otherHead).taskSnapshotIds());
+        assertEquals(List.of(), events(PredictionEventType.OPERATOR_REQUEST_RAISED));
+    }
+
+    @Test
+    void aReMergeRejectedTwiceLeavesTheCopiesApartAndRecordsOneBlockingOperatorRequestNamingBothReasons() throws Exception {
+        NodeIdentity other = lowerNode();
+        Lane lane = lane("snap_a", "own.txt", true);
+        String own = ownMain("own.txt", "own");
+        ownAdvance(base, own, lane.snapshotId());
+        String otherHead = commit("other", base, "other.txt", "other");
+        otherAdvance(other, otherHead);
+        liveSession(REVIEWER_SESSION);
+        liveSession(SECOND_SESSION);
+        run();
+        String first = remergeSnapshots(otherHead, own).getFirst();
+        releaseAuthorLane(lane);
+        verdict(lane, first, grantFor(first), "REJECTED");
+        run();
+        String second = remergeSnapshots(otherHead, own).get(1);
+        verdict(lane, second, grantFor(second), "REJECTED");
+        liveSession("session-a-third-agent");
+
+        run();
+        run();
+
+        assertEquals(own, project.head());
+        assertFalse(project.isAncestorOfHead(otherHead));
+        assertEquals(2, remergeSnapshots(otherHead, own).size(), "never a third look");
+        assertEquals(2, grants().stream().filter(grant -> first.equals(grant.snapshotId()) || second.equals(grant.snapshotId())).count(), "and no third review is asked of anyone");
+        var raised = project.store().operatorRequestProjection().open(org.synesis.coordination.domain.operator.OperatorRequest.REMERGE_REJECTED_TWICE).orElseThrow();
+        assertTrue(raised.summary().contains(RemergeService.remergeId(otherHead, own)), raised.summary());
+        assertTrue(raised.evidence().contains(first) && raised.evidence().contains(second), raised.evidence());
+        assertEquals(2, raised.evidence().split("not good enough", -1).length - 1, "both reasons: " + raised.evidence());
+        assertEquals(1, events(PredictionEventType.OPERATOR_REQUEST_RAISED).size(), "once, whatever the passes");
+    }
+
+    @Test
+    void theAuthorAndTheFirstReviewerAreNeverOfferedTheSecondLookWhateverElseIsOrIsNotLive() throws Exception {
+        NodeIdentity other = lowerNode();
+        Lane lane = lane("snap_a", "own.txt", true);
+        String own = ownMain("own.txt", "own");
+        ownAdvance(base, own, lane.snapshotId());
+        String otherHead = commit("other", base, "other.txt", "other");
+        otherAdvance(other, otherHead);
+        liveSession(AUTHOR_SESSION);
+        liveSession(REVIEWER_SESSION);
+        run();
+        String first = remergeSnapshots(otherHead, own).getFirst();
+        releaseAuthorLane(lane);
+        verdict(lane, first, grantFor(first), "REJECTED");
+        int entries = project.store().events().size();
+
+        run();
+        run();
+
+        assertEquals(1, remergeSnapshots(otherHead, own).size(), "no one else is live here: no second look is written");
+        assertEquals(1, grants().stream().filter(grant -> first.equals(grant.snapshotId())).count());
+        assertEquals(entries, project.store().events().size(), "and nothing else either, so a later pass tries again");
+    }
+
     @Test
     void runningTheServiceRepeatedlyBeforeAnyReviewWritesEachSnapshotAndGrantOnce() throws Exception {
         NodeIdentity other = lowerNode();
