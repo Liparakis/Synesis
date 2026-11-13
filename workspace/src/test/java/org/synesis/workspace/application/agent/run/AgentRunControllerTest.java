@@ -805,6 +805,27 @@ final class AgentRunControllerTest {
         assertEquals(2, result.resumes());
     }
 
+    /**
+     * s9a-run3 (ADR-0098 step 5 item 50): the PC's agent held the combine lane of the re-merge and its process ended with a
+     * failure (the provider API refused it, exit code 1) while the lane was open. Nothing was recorded afterwards, so nothing
+     * woke it, and the other computer waited for that open lane until the run's deadline. A process that fails with its lane
+     * open is resumed once, as a crash, without waiting for anything to be recorded.
+     */
+    @Test
+    void anAgentWhoseProcessFailedWithItsLaneOpenIsResumedAlthoughNothingWasRecorded() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3, 3);
+        script.failingLaunches.add(0);
+        script.at(0).head(7).announced().otherComputer();
+        script.at(20).head(9).progressAfter(7).complete();
+
+        AgentRunController.Result result = script.run(8);
+
+        assertEquals(List.of("start claude#1", "start codex#2", "resume claude#1 session-1"), script.launches.subList(0, 3));
+        assertTrue(script.events.contains("AGENT_EXITED=claude#1 exitCode=1"), script.events.toString());
+        assertEquals(1, script.resumedAtTicks.stream().filter(tick -> tick < 20).count(), "resumed for its failure, once, before anything was recorded");
+    }
+
     @Test
     void aMessageForTheLaneHeldUnderTheFirstConnectionWakesTheAgentAfterASecondConnectionThatHeldNothing() throws Exception {
         Script script = new Script();
@@ -1431,6 +1452,8 @@ final class AgentRunControllerTest {
         private final List<String> events = new ArrayList<>();
         private final List<String> stopped = new ArrayList<>();
         private final List<String> withoutSessionId = new ArrayList<>();
+        /** The launches (counted from 0, resumes included) whose process ends with a failure exit code. */
+        private final java.util.Set<Integer> failingLaunches = new java.util.HashSet<>();
         private final List<String> closedLaneProviders = new ArrayList<>();
         private final List<String> withoutOwnLane = new ArrayList<>();
         /** Agents, by label, whose lane is open but only waits for its snapshot's review. */
@@ -1555,6 +1578,7 @@ final class AgentRunControllerTest {
                 assertTrue(command.contains(session), "the agent's own provider session is resumed: " + command);
             }
             int endsAt = tick + (launched < lifetimes.size() ? lifetimes.get(launched) : 1);
+            int exitCode = failingLaunches.contains(launched) ? 1 : 0;
             launched++;
             return new AgentRunController.RunningAgent() {
 
@@ -1567,7 +1591,7 @@ final class AgentRunControllerTest {
 
                 @Override
                 public int exitCode() {
-                    return 0;
+                    return exitCode;
                 }
 
                 @Override

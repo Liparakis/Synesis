@@ -294,6 +294,7 @@ public final class AgentRunController {
         agent.markResumedFor(wake, observation);
         agent.fencedLaneToContinue = false;
         agent.heldLaneAtStop = false;
+        agent.failedWithLane = false;
         agent.resumed = true;
         agent.resumes++;
         agent.startedAtSequence = observation.headSequence();
@@ -343,7 +344,7 @@ public final class AgentRunController {
         boolean deadlinePassed = deadline.isPresent() && now >= deadline.getAsLong() && deadline.getAsLong() != agent.resumedForDeadline;
         // Only once its end is recorded: the close is what lets its lane be held for continuation.
         boolean fencedLaneWaits = agent.fencedLaneToContinue && holdsLane && !unrecordedEnds.contains(agent.connectionId);
-        boolean forItsLane = laneMayMove && (fencedLaneWaits || observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || agent.unreadMessageWaiting(observation));
+        boolean forItsLane = laneMayMove && (fencedLaneWaits || agent.failedWithLane || observation.progressedSince(agent.stoppedAtSequence) || deadlinePassed || agent.unreadMessageWaiting(observation));
         // No entry says that another computer came back, yet what it holds was refused as unreachable while it was
         // away: a reviewer could not read the snapshot it holds the grant for, and stopped (ADR-0098 step 4, item 23).
         boolean computerCameBack = agent.computerCameBackUnseen(observation) && (laneMayMove || observation.holdsRequestOrGrant(agent.spec.provider(), agent.connectionId));
@@ -1167,6 +1168,12 @@ public final class AgentRunController {
         private boolean resumed;
         /** Whether its lane was open when its process last ended. */
         private boolean heldLaneAtStop;
+        /**
+         * Its process ended with a failure exit code while its lane was open, and it has not been resumed since. A provider
+         * that fails (s9a-run3: the API refused the agent of the re-merge's combine lane) records nothing as it goes, so no
+         * progress would ever wake it, and every computer waits for its lane.
+         */
+        private boolean failedWithLane;
         /** Whether its current connection has been reported ended. */
         private boolean connectionEnded;
         /** Whether the session of its current connection has been kept at least once. */
@@ -1227,6 +1234,7 @@ public final class AgentRunController {
                 idleResumes = progressed ? 0 : idleResumes + 1;
             }
             heldLaneAtStop = holdsLane;
+            failedWithLane = holdsLane && exitCode != 0;
             process.providerSessionId().ifPresent(identifier -> providerSessionId = identifier);
             long seen = seenBeforeExit.orElse(startedAtSequence);
             stoppedAtSequence = Math.max(startedAtSequence, lastActivity.isPresent() ? Math.min(lastActivity.getAsLong(), seen) : seen);

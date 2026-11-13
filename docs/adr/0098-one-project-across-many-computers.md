@@ -1662,6 +1662,23 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     did not cross. Item 46 (`CodeOverLink` skipping the other copy's main while its own pass runs, logged only at INFO, which is
     not in the evidence) fits a computer whose passes run back to back; sbx7 does not contain it. The evidence cannot tell that
     from a code-exchange fault, and no fix is made for it here. Next real run: build with item 46 and keep the process log.
+50. **An agent whose process failed with its lane open is resumed** (s9a-run3, 2026-11-13, build sbx9, real cut). Result `TIME_BOUND`, `main`
+    differs on the VM (PC `db91b759…`, VM `7359048f…`), both runs `TIMED_OUT`. *Read from `D:\SynesisAcceptance\evidence\s9a-run3`:* the
+    PC (higher computer, `sl1-c4ed2e…`) wrote `COMBINE_REQUIRED` at position 138 (base and other `d09f784…`, snapshots `snap_e3d0ce0f…` and
+    `snap_73eaa8c6…`) and announced the combine lane at its seq 106 for `agt_b7643ed3…`; that lane was still ACTIVE at the end and no
+    `REMERGE_SNAPSHOT_CREATED` exists. Code did cross in this run (the PC's git holds the VM's `73b30bd`, `20690c3`, `d09f784`, `2970bcf`; only
+    the VM's integration commit `7359048` is missing, and the combine that would have used it was never built), so this run is not item 49's
+    code-exchange pattern. The PC's `claude#2` was that lane's agent: its last transcript line is `Failed to authenticate. API Error: 403` (a
+    Cloudflare page), after it had resolved the conflict markers; the run output says `AGENT_EXITED=claude#2 exitCode=1` and never
+    `AGENT_RESUMED=claude#2` (`AGENT_RESUMES=1`, all for `claude#1`). The PC's log held 169 files from 11:47 to 12:10. The PC controller waited
+    `OTHER_COMPUTER_CONNECTED` and the VM `FOREIGN_LANE_OPEN` (the PC's open combine lane) until the deadline. *Cause:*
+    `AgentRunController.wakeFor` resumes an agent with an open lane only for something recorded since it stopped, a deadline, a message or a
+    fenced session; a failing provider records nothing, and the exit code was only logged. *Fix:* a process that ends with a failure exit code
+    while its lane is open is resumed once for that failure; a resumed agent that fails again with nothing recorded counts against
+    `--max-resumes` like any idle resume. Pinned by
+    `AgentRunControllerTest.anAgentWhoseProcessFailedWithItsLaneOpenIsResumedAlthoughNothingWasRecorded` (fails before: no resume). *Not proved:*
+    that the resume would have let the run pass (no real run repeated), and why the 403 came (a provider outage, not Synesis). A lane whose
+    agent can never be resumed (no provider session) is still not taken over by the other agents of its computer.
 
 ### Step 6: Membership in the owner's log
 
