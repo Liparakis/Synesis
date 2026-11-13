@@ -1824,6 +1824,26 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     while the other lane lives; a lane that never ends would still hold it); that no other path of `joinRepair` leaves a moved worktree
     after a refusal.
 
+58. **A mismatched alias is refused with a retry, not a request for a person (s16a-run1, 2026-11-13, build sbx16, real cut).** Result `FAIL`,
+    `main` differs on the VM, both runs `NEEDS_OPERATOR` (`opr_1e34df2664bf4a3c`). *Read from `D:\SynesisAcceptance\evidence\s16a-run1\vm`
+    (`codex-1-1.log`):* the projected `request_coordination` `work_group_join` payload is correct: `reviewerParticipant` and `targetParticipant` are
+    the same id, `agt_151078ad-2b80-331f-aa1c-6c219b90635f`. The call the agent made differs: its `targetParticipant` is
+    `agt_151078ad-2b80-331a-a10e-7993f01cd41b`, two ids spliced (the agent retyped an id the refusal text tells it to copy), while its
+    `reviewerParticipant` was right. `requireMatchingAlias(targetParticipant, reviewerParticipant)` refused it, correctly, and named the alias,
+    the field that was right. So neither the projection nor a restarted session's participant nor a computer attribution is at fault, and
+    the validation is sound: an alias never stands for another participant. *Cause of the run's end:* the refusal was `policy_denied` with
+    `nextAction: request_human_help` while its instruction said "no human is needed"; the agent followed the action and sent the operator a
+    message, an open operator request, and `stalledOutcome` ends a run on any open request. The next call, with the right id and no alias,
+    was accepted. *Fix:* `COORDINATION_ALIAS_MISMATCH` from `request_coordination` is answered `RETRY` with the instruction to copy the
+    projected arguments exactly; every other malformed-argument refusal keeps `request_human_help` (tests pin it). Published contract: the
+    `nextAction` value of this one refusal changes from `request_human_help` to `retry`; the error code and its text are unchanged. Pinned by
+    `McpToolMalformedArgumentsTest.anAliasThatDiffersFromItsCanonicalFieldIsRefusedWithARetryNotARequestForAPerson` (fails before with
+    `request_human_help`; local Gradle). *Policy, reported and not changed:* an operator request stays open until an operator closes it;
+    `stalledOutcome` ends a stalled run with `NEEDS_OPERATOR` whenever one is open, even when the agent that raised it has since done the
+    work (here the agent reviewed and accepted afterwards) or raised it as a note the tool itself calls non-blocking ("continue, do not wait").
+    Whether such a request should stop a run is a decision for the owner. *Not proved:* that other agents do not retype ids elsewhere
+    (the alias check on `respond_coordination` and `ensure_session` is separate and unchanged); that the run would have ended.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

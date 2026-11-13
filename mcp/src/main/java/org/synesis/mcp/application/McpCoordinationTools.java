@@ -370,7 +370,7 @@ final class McpCoordinationTools {
         } catch (McpCoordinationPayload.RefusedPayloadException failure) {
             return refusedPayload(failure);
         } catch (IllegalArgumentException failure) {
-            return policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "error", failure.getMessage());
+            return refusedArgument(failure);
         }
         try {
             return switch (request) {
@@ -431,6 +431,22 @@ final class McpCoordinationTools {
         } catch (Exception failure) {
             return policyDenied(AgentNextAction.RETRY, "error", String.valueOf(failure.getMessage()));
         }
+    }
+
+    /**
+     * Refuses a malformed request argument. A provider-facing alias that differs from its canonical field is the one
+     * refusal an agent corrects itself, by copying the projected arguments (s16a-run1: a retyped participant id differed
+     * by a character, the refusal named a person, and the agent put an operator request on the project that ended both
+     * runs). The authority check is the same: nothing is accepted, and an alias never stands for another participant.
+     */
+    private static AgentResponse refusedArgument(IllegalArgumentException failure) {
+        String message = String.valueOf(failure.getMessage());
+        if (message.startsWith("COORDINATION_ALIAS_MISMATCH:")) {
+            return new AgentResponse(AgentStatus.BLOCKED, AgentReason.POLICY_DENIED, AgentNextAction.RETRY, object("error", message, "instruction",
+                    "Two fields that name the same value differ, so nothing was done. Copy the projected arguments exactly, character for character, instead of retyping identifiers; "
+                            + "no person is needed."));
+        }
+        return policyDenied(AgentNextAction.REQUEST_HUMAN_HELP, "error", message);
     }
 
     private static AgentResponse completed(Object result) {

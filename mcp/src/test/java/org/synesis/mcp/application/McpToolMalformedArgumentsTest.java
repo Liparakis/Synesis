@@ -314,6 +314,22 @@ class McpToolMalformedArgumentsTest {
                 call(bound, "request_coordination", "{'kind':'continuation','payload':{'intentId':'00000000-0000-0000-0000-000000000001','claimEpoch':'1'}}"));
     }
 
+    /**
+     * ADR-0098 step 5 item 58 (s16a-run1): a join whose {@code targetParticipant} was retyped and differs from its
+     * {@code reviewerParticipant} is refused, as it must be, but the agent is told to copy and retry, not to ask a person.
+     */
+    @Test
+    void anAliasThatDiffersFromItsCanonicalFieldIsRefusedWithARetryNotARequestForAPerson() {
+        Map<String, Object> refused = innerResponse(call(bound, "request_coordination",
+                "{'kind':'work_group_join','payload':{'workGroupId':'00000000-0000-0000-0000-000000000003','claimEpoch':2,'grantId':'00000000-0000-0000-0000-000000000001','intentId':'00000000-0000-0000-0000-000000000002',"
+                        + "'reviewerParticipant':'agt_151078ad-2b80-331f-aa1c-6c219b90635f','targetParticipant':'agt_151078ad-2b80-331a-a10e-7993f01cd41b'}}"));
+
+        assertEquals("blocked", refused.get("status"), refused.toString());
+        assertEquals("COORDINATION_ALIAS_MISMATCH:reviewerParticipant", ((Map<?, ?>) refused.get("result")).get("error"), refused.toString());
+        assertEquals("retry", refused.get("nextAction"), refused.toString());
+        assertTrue(String.valueOf(((Map<?, ?>) refused.get("result")).get("instruction")).contains("Copy the projected arguments"), refused.toString());
+    }
+
     @Test
     void respondCoordinationRejectsAMissingOrNullRequiredKeyAndAWrongTypedField() {
         assertText(denied("error", "COORDINATION_SCHEMA_REQUIRES_KIND_AND_PAYLOAD", "request_human_help"), call(bound, "respond_coordination", "{}"));
