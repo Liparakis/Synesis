@@ -2209,3 +2209,5 @@ The two-homes run with the friend's PC is repeated after step 5 as a check, not 
 - **Log and repository growth** over months, with every computer holding everything. (UNKNOWN.)
 - **Code over Link sizes:** the ratio of disk usage to bundle size, and the time to write a 200 MB bundle on a laptop.
   (REQUIRES-MEASUREMENT, step 3.)
+    When a session is offered both a combine and a repair, the combine keeps the instruction (the copies of `main` cannot
+    meet until it lands) and the repair stays listed in `repairCandidates` (review of `bb21e6e7`, 2026-11-13).

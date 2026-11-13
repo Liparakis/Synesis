@@ -999,6 +999,9 @@ public final class AgentNextActionService {
         List<Map<String, Object>> repairs = repairCandidates(store, participantId, location);
         if (!repairs.isEmpty()) {
             claimRequired.put("repairCandidates", repairs);
+        }
+        // A combine keeps the instruction: the two copies of main cannot meet until it lands, and the repair stays listed.
+        if (!repairs.isEmpty() && !claimRequired.containsKey("combineCandidates")) {
             claimRequired.put("instruction", "This session holds no lane, and a published snapshot could not be merged onto main and waits for a repair: take the repair lane first by calling "
                     + "ensure_session with repairCandidates[0].ensureSession. Your worktree then holds main with the snapshot's change and Git's conflict markers; resolve them, "
                     + "keep both intents, and finish the lane as usual." + validation);
