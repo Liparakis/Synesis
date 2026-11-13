@@ -156,6 +156,9 @@ final class RemergeReviewGrantTest {
         assertEquals(1, owed.size(), owed.toString());
         assertEquals("VALIDATION_REQUIRED", owed.getFirst().get("state"));
         assertEquals(REMERGE, snapshotIdOf(owed.getFirst()));
+        // ADR-0098 step 5 item 60 (s18a-run1): the reviewer is told what a re-merge review judges, not left to the whole goal.
+        String instruction = String.valueOf(((Map<?, ?>) owed.getFirst().get("reviewAccess")).get("instruction"));
+        assertTrue(instruction.contains("Do not reject it for parts of the project goal that no change has delivered yet"), instruction);
 
         append(PredictionEventType.REVIEW_VALIDATION_RECORDED,
                 new ReviewValidationPayload(grant.grantId(), groupId, laneId, REVIEWER, 1, taskId, REMERGE, "ACCEPTED",

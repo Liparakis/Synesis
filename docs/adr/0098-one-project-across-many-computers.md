@@ -1858,6 +1858,24 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     `OperatorRequestBlockingTest`, `ConversationServiceTest.aNonBlockingNoteToTheOperatorIsKeptButDoesNotCountAsABlockingRequest` and
     `AgentRunControllerTest.anOperatorNoteIsPrintedButDoesNotMakeAStalledRunNeedAnOperator`.
 
+60. **A reviewer of a re-merge snapshot is told what to judge (s18a-run1, 2026-11-14, build sbx18, real cut).** `TIME_BOUND`, `main` differs on the
+    VM (PC `e3fd625…`, VM `d5c0113…`), both `TIMED_OUT`, one `COMBINE_REQUIRED`, two `REMERGE_SNAPSHOT_CREATED`, no operator request or note. *Read
+    from `D:\SynesisAcceptance\evidence\s18a-run1`:* the VM is the higher computer (writer `b12f…` over the PC's `8116…`) and re-merged. The two copies each
+    held one package line (VM `NOTES.md`: `- primes`; PC: `- gcd`) and conflicted on it; the combine lane merged them (`snap_743ddd5c…`) and the
+    first re-merge snapshot `rms-b4fae160…` (the combine's base) was accepted. The second, `rms-767b2c85…` (`adeb6e2…`, `NOTES.md` holding `gcd` and
+    `primes`, the union of the two copies), was REJECTED by a VM agent (`codex-2-3.log`): "its `NOTES.md` lists only gcd and primes; the README requires
+    entries for all four packages". `RemergeService.land` then `stop`ped (item 15: a rejected re-merge is left as it is and reported once in the log), and
+    nothing else ran: the log ends at the rejection, the PC agents had two lanes of their own and waited `FOREIGN_LANE_OPEN` then `COPIES_MEETING`, the VM
+    `COPIES_MEETING`, to the deadline. *Cause:* the review instruction of a re-merge snapshot is the one of any snapshot ("Inspect ... before
+    deciding"); a re-merge holds only what the two copies delivered, and the reviewer judged it against the whole goal. Nothing in the re-merge, the combine
+    or the combine's claims is at fault: items 51, 52, 54 and 57 all ran as designed (one combine, taken and finished, its result landed as `rms-b4fae…`).
+    *Fix:* the review access of a re-merge snapshot adds that the snapshot is an accepted change replayed onto the other copy, to be judged on holding that
+    change and the other copy's work and on its tests, not on goal parts nobody has delivered, and that a rejection stops the merge and is not retried.
+    Pinned by `RemergeReviewGrantTest.remergeReviewsGrantedNamesTheSnapshotUntilTheGrantIsConsumed` (fails before: the generic instruction; local Gradle).
+    *Not changed, and the larger gap:* a rejected re-merge still stops the merge of the two copies for good, and no one is told but the log. It needs a way back
+    (a revision lane, or a second reviewer's verdict) designed with the owner. *Not proved:* that a reviewer given the sentence would have accepted; that no other
+    review of a re-merge applies a wider criterion.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

@@ -397,6 +397,23 @@ static AgentResponse pendingReviewRequestResponse(Map<String, Object> collaborat
     }
 
     /**
+     * What a reviewer of a re-merge snapshot is to judge. The snapshot is an already accepted change replayed onto the other
+     * copy of {@code main}; it holds what the two copies delivered so far, and no change has delivered the rest of the goal.
+     * A reviewer that judged it against the whole README rejected a correct merge of two copies for lacking packages nobody
+     * had written, and a rejected re-merge is not tried again, so the two copies never met (s18a-run1).
+     *
+     * @return the sentence to add to the review instruction, empty for an ordinary snapshot
+     */
+    private static String remergeCriterion(PredictionEventStore store, TaskSnapshotRecord snapshot) {
+        if (store.taskCompletionProjection().remergeOf(new org.synesis.coordination.domain.identity.SnapshotId(snapshot.snapshotId())).isEmpty()) {
+            return "";
+        }
+        return " This snapshot is a change you or another reviewer already accepted, replayed onto the other copy of main. Judge only that it still holds that change and the other "
+                + "copy's work and that the tests pass. Do not reject it for parts of the project goal that no change has delivered yet. A rejection stops the merge of the two copies, "
+                + "and nothing tries it again.";
+    }
+
+    /**
      * The grants not yet taken up that ask one of these participants to review a re-merge snapshot again (ADR-0098
      * step 5, designer item 14). A re-merge snapshot is no review candidate: only its grant offers it.
      *
@@ -586,7 +603,7 @@ static List<Map<String, Object>> reviewActions(PredictionEventStore store, Strin
                                 "writeLaneProtected",
                                 true,
                                 "instruction",
-                                "Inspect the immutable snapshot with read_file and run_command before deciding; do not patch it."));
+                                "Inspect the immutable snapshot with read_file and run_command before deciding; do not patch it." + remergeCriterion(store, reviewedSnapshot)));
             }
             action.put(NextActionKeys.NEXT_PROTOCOL_PAYLOAD, payload);
             action.put("grant", CollaborationResponseMapper.laneGrantMap(grant));
