@@ -1742,6 +1742,24 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     agent (no projection in `workflow/` does outside the combine offer, so the author may now wait for a repair nobody takes); that the run
     would have passed; that waiting wakes the author when the repair lane ends.
 
+54. **The repair lane of a snapshot that could not be merged is offered to an idle agent (follow-up to item 53).** Nothing offered it:
+    `joinRepair` existed (`WorkIntentAnnouncement`, `WorkIntentService.createRepairLane`, `RepairLaneTransfer`), but only the combine had an offer,
+    so item 53's author waited for a repair nobody was told to take. New `RepairLaneOffer.offeredTo` (modelled on `CombineLaneJoin.offeredTo`)
+    returns the `REPAIR_REQUIRED` snapshots whose source lane is still open at the epoch that published them, written by an agent of this
+    computer other than the asking agent, to an agent none of whose sessions holds a lane. `get_next_action` shows them as `repairCandidates`
+    (with the `ensure_session` task `repairIntentId`/`repairSnapshotId` that `joinRepair` takes) and `EventLogObserver` offers them to the run
+    controller as a wake, by snapshot ID. ADR-0100's rules are kept by the existing path, unchanged: one source lane with the same lineage and
+    claimed paths, a target other than the author (`REPAIR_TARGET_MUST_BE_DISTINCT`), and `REPAIR_LANE_CREATED` acts only for its new participant
+    (`ParticipantAttribution`), so any computer may write it. Two takers cannot both take it: the first entry ends the source lane under the
+    project append lock and the second finds `REPAIR_SOURCE_NOT_ACTIVE`; the offer is limited to the author's computer so that one computer's
+    agents race for it, not two. Pinned by `RepairOfferTest` (the offer to an idle agent fails before: no `repairCandidates`; the author, a
+    foreign computer and a late taker are not offered or refused). *The author while the repair works:* still the item 53 wait
+    (`repair_required`), because the task stays `REPAIR_REQUIRED` until the repaired snapshot integrates. *Not proved:* what the author is told
+    once the repaired snapshot has integrated (its stale dirty worktree may still be refused by `ensure_session`; no test runs a repair lane to
+    its end); that an agent that took the offer resolves the conflict in a real run; that the controller's wake resumes a stopped agent for it
+    (the offer is added to the same list as combines; no controller test for it). A combine candidate's instruction is replaced when both a
+    combine and a repair are offered to one agent.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

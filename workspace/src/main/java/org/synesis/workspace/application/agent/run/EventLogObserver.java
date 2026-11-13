@@ -260,6 +260,7 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
                         CollaborationResponseMapper.remergeReviewsGranted(store, sessions).stream().map(snapshot -> GRANTED_OFFER + snapshot),
                         CollaborationResponseMapper.remergeReviewsWaiting(store, sessions).stream(),
                         combinesOffered(store, location, sessions).stream(),
+                        repairsOffered(store, location, sessions).stream(),
                         takeoversOffered(store, sessions).stream())
                         .flatMap(java.util.function.Function.identity()).distinct().toList();
             }
@@ -411,6 +412,16 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             return java.util.Optional.of(org.synesis.coordination.domain.operator.OperatorRequest.closedRequestId(event.payload()));
         } catch (IOException malformed) {
             return java.util.Optional.empty();
+        }
+    }
+
+    /** The repair lanes these sessions' agent may take, by snapshot ID; none when this computer is unknown (ADR-0098 step 5 item 54). */
+    private static List<String> repairsOffered(PredictionEventStore store, ProjectLocation location, List<String> sessions) {
+        try {
+            return org.synesis.workspace.application.collaboration.RepairLaneOffer.offeredTo(store, sessions, location.loadOrCreateIdentity().nodeId())
+                    .stream().map(org.synesis.coordination.domain.task.TaskSnapshotRecord::snapshotId).toList();
+        } catch (Exception unreadable) {
+            return List.of();
         }
     }
 

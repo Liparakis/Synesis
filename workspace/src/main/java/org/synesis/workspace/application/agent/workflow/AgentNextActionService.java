@@ -995,7 +995,26 @@ public final class AgentNextActionService {
                     + "with no markers left, and finish the lane as usual. If both cannot be kept, send a message to combineCandidates[0].authors saying why, and keep "
                     + "the lane open until they answer." + validation);
         }
+        // A snapshot that could not be merged waits for another agent to repair it; its author cannot (ADR-0098 step 5 item 54).
+        List<Map<String, Object>> repairs = repairCandidates(store, participantId, location);
+        if (!repairs.isEmpty()) {
+            claimRequired.put("repairCandidates", repairs);
+            claimRequired.put("instruction", "This session holds no lane, and a published snapshot could not be merged onto main and waits for a repair: take the repair lane first by calling "
+                    + "ensure_session with repairCandidates[0].ensureSession. Your worktree then holds main with the snapshot's change and Git's conflict markers; resolve them, "
+                    + "keep both intents, and finish the lane as usual." + validation);
+        }
         return new AgentResponse(AgentStatus.BLOCKED, AgentReason.COORDINATION_INTENT_REQUIRED, AgentNextAction.ENSURE_SESSION, claimRequired);
+    }
+
+    /** The repairs this session may take, as its next action offers them; none when this computer is unknown. */
+    private static List<Map<String, Object>> repairCandidates(PredictionEventStore store, String participantId, ProjectLocation location) {
+        try {
+            return org.synesis.workspace.application.collaboration.RepairLaneOffer.offeredTo(store,
+                    org.synesis.workspace.application.collaboration.CombineLaneJoin.sessionsOfAgent(location.root(), participantId), location.loadOrCreateIdentity().nodeId()).stream()
+                    .map(org.synesis.workspace.application.collaboration.RepairLaneOffer::describe).toList();
+        } catch (Exception unreadable) {
+            return List.of();
+        }
     }
 
     /** The combines this session may take, as its next action offers them; none when this computer is unknown. */
