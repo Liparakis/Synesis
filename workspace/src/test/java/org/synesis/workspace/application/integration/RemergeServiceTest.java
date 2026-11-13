@@ -537,8 +537,12 @@ class RemergeServiceTest {
 
     /** What a combine agent does: takes the combine lane as a participant this computer introduced, who is not the author. */
     private Lane combineLane(CombinePayload combine) throws Exception {
+        return combineLane(combine, "agt-combiner");
+    }
+
+    private Lane combineLane(CombinePayload combine, String participant) throws Exception {
         UUID lane = UUID.randomUUID();
-        WorkIntent intent = new WorkIntent(lane, project.location.projectId(), "agt-combiner", "codex", combine.taskId(), "combine", "both versions",
+        WorkIntent intent = new WorkIntent(lane, project.location.projectId(), participant, "codex", combine.taskId(), "combine", "both versions",
                 combine.base(), List.of(ResourceSelector.pathExact("shared.txt")), 1, combine.workGroupId(), WorkIntent.defaultAuthorityLineage(lane),
                 WorkIntent.Status.ANNOUNCED);
         assertTrue(new WorkIntentService(store, self).announce(intent).acquired(), "the combine lane is granted");
@@ -547,7 +551,12 @@ class RemergeServiceTest {
 
     /** The combine lane's snapshot: a commit on the combine's base that keeps both sides' lines, recorded on the log. */
     private String combineSnapshot(CombinePayload combine, Lane lane, String snapshotId, long epoch, boolean reviewRequired) throws Exception {
-        String commit = commit("combine-" + snapshotId, combine.base(), "shared.txt", "own side\nother side");
+        return combineSnapshot(combine, lane, snapshotId, epoch, reviewRequired, "own side\nother side");
+    }
+
+    private String combineSnapshot(CombinePayload combine, Lane lane, String snapshotId, long epoch, boolean reviewRequired, String content)
+            throws Exception {
+        String commit = commit("combine-" + snapshotId, combine.base(), "shared.txt", content);
         project.git("update-ref", "refs/synesis/snapshots/" + snapshotId, commit);
         SnapshotProvenance provenance = new SnapshotProvenance(lane.group(), lane.lane(), WorkIntent.defaultAuthorityLineage(lane.lane()), "agt-combiner",
                 "session-agt-combiner", epoch, List.of(), List.of(), List.of("PATH:shared.txt"), "refs/synesis/snapshots/" + snapshotId, "integrity",
@@ -652,6 +661,48 @@ class RemergeServiceTest {
         assertTrue(GitProcessRunner.isAncestor(project.root, third, result), "the result holds the other copy's newest head");
         assertEquals(project.git("show", combined + ":shared.txt"), project.git("show", result + ":shared.txt"), "and the combine lane's file");
         assertEquals(1, events(PredictionEventType.COMBINE_REQUIRED).size());
+    }
+
+    /**
+     * s10a-run1, s10a-run3: the other copy integrated work while the combines waited, and its newest head conflicts with the
+     * combined result (both sides added the same file). The re-merge stopped for good with no lane to resolve it, and the
+     * copies never met. The conflict is one more combine, of that head with the result so far, and its result starts the
+     * next build.
+     */
+    @Test
+    void anOtherHeadThatConflictsWithTheCombinedResultOpensOneMoreCombineWhoseResultLands() throws Exception {
+        Conflict conflict = conflict();
+        run();
+        CombinePayload first = combine();
+        Lane combiner = combineLane(first);
+        String firstResult = combineSnapshot(first, combiner, "snap_combine", 1, false);
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(project.root.resolve(".synesis/coordination"))) {
+            assertTrue(new WorkIntentService(project.store(), self).releaseCombineResult(lock,
+                    project.store().taskCompletionProjection().findSnapshotById("snap_combine").orElseThrow()));
+        }
+        String second = commit("other-second", conflict.otherHead(), "shared.txt", "the other copy, again");
+        otherAdvance(conflict.other(), second);
+
+        run();
+        run();
+
+        List<CombinePayload> combines = project.store().taskCompletionProjection().combines();
+        assertEquals(2, combines.size(), "the conflict with the other copy's newest head opens one more combine, once");
+        CombinePayload onOther = combines.getLast();
+        assertEquals(second, onOther.theirs(), "of the other copy's head");
+        assertEquals(List.of(conflict.lane().snapshotId()), onOther.snapshotIds(), "acting for the lanes of the re-merge");
+        assertEquals(project.git("rev-parse", firstResult + "^{tree}"), project.git("rev-parse", onOther.base() + "^{tree}"),
+                "onto the result so far, which has the first combine lane's tree");
+
+        Lane again = combineLane(onOther);
+        String secondResult = combineSnapshot(onOther, again, "snap_combine_2", 1, false, "own side\nother side\nthe other copy, again");
+        run();
+
+        RemergeSnapshotPayload remerge = built(second, conflict.own());
+        assertEquals(project.git("rev-parse", secondResult + "^{tree}"), project.git("rev-parse", remerge.result() + "^{tree}"),
+                "the re-merge has the second combine lane's tree");
+        assertTrue(GitProcessRunner.isAncestor(project.root, second, remerge.result()), "and holds the other copy's newest head");
+        assertEquals(2, events(PredictionEventType.COMBINE_REQUIRED).size(), "no third combine");
     }
 
     /**

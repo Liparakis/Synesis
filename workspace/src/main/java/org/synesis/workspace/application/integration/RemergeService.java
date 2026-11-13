@@ -248,9 +248,12 @@ final class RemergeService {
      */
     private Build build(Path controlRoot, PredictionEventStore store, String remergeId, String own, String other,
             List<MainMeeting.Advance> missing) throws IOException {
-        Map<String, CombinePayload> combines = combinesWithResult(controlRoot, store, missing);
-        String start = missing.stream().map(advance -> combines.get(advance.to())).filter(Objects::nonNull).reduce((older, newer) -> newer)
-                .map(CombinePayload::base).orElse(other);
+        Map<String, CombinePayload> combines = combinesWithResult(controlRoot, store, missing, other);
+        // A combine of the other copy's head was made on the result of every step before it, so it starts the build, and its
+        // own result is that head's merge (its base is a merge commit named by time: it can only be reused by starting at it).
+        CombinePayload onOther = combines.get(other);
+        String start = onOther != null ? onOther.base() : missing.stream().map(advance -> combines.get(advance.to())).filter(Objects::nonNull)
+                .reduce((older, newer) -> newer).map(CombinePayload::base).orElse(other);
         // Named by the checkout too: the folder is under the user's profile and keyed by project, so two computers of one
         // project on one profile (the scenario tests) that re-merge the same pair of heads would remove each other's worktree
         // mid-build, and the merge Git then could not make was taken for a conflict and stopped the re-merge for good.
@@ -263,6 +266,11 @@ final class RemergeService {
         try {
             GitProcessRunner.run(worktree, "config", "user.name", "Synesis Integrator");
             GitProcessRunner.run(worktree, "config", "user.email", "integrator@synesis.org");
+            if (onOther != null) {
+                String tree = GitProcessRunner.run(worktree, "rev-parse", combined(controlRoot, store, onOther).orElseThrow().commitSha() + "^{tree}");
+                String merged = GitProcessRunner.run(worktree, "commit-tree", tree, "-p", start, "-p", other, "-m", "Synesis combine of the other copy of main");
+                GitProcessRunner.run(worktree, "reset", "-q", "--hard", merged);
+            }
             for (MainMeeting.Advance advance : missing) {
                 if (GitProcessRunner.isAncestor(worktree, advance.to(), "HEAD")) {
                     continue;
@@ -285,10 +293,19 @@ final class RemergeService {
                 stop(remergeId, "Git could not merge this copy's old head " + own);
                 return Build.NONE;
             }
-            // A build that started from a combine's base lacks what the other copy took since: its result is merged with it.
-            if (!GitProcessRunner.isAncestor(worktree, other, "HEAD") && !merge(worktree, other, "Synesis re-merge onto the other copy of main")) {
-                stop(remergeId, "Git could not merge the other copy's head " + other + " into the combined result");
-                return Build.NONE;
+            // A build that started from a combine's base lacks what the other copy took since: its result is merged with it. When
+            // Git cannot, that is one more combine, of the other copy's head with the result so far (s10a-run1, s10a-run3: the
+            // other copy added what the combined result also holds, and the re-merge stopped with no lane to resolve it).
+            if (!GitProcessRunner.isAncestor(worktree, other, "HEAD")) {
+                String base = GitProcessRunner.run(worktree, "rev-parse", "HEAD");
+                if (!merge(worktree, other, "Synesis re-merge onto the other copy of main")) {
+                    if (missing.isEmpty()) {
+                        stop(remergeId, "Git could not merge the other copy's head " + other + " into the combined result");
+                        return Build.NONE;
+                    }
+                    MainMeeting.Advance last = missing.getLast();
+                    return new Build(null, new MainMeeting.Advance(last.writer(), last.from(), other, last.snapshotIds()), base);
+                }
             }
             String result = GitProcessRunner.run(worktree, "rev-parse", "HEAD");
             if (!validates(controlRoot, worktree, remergeId)) {
@@ -341,8 +358,10 @@ final class RemergeService {
      * whose combine has no result is merged by Git against the newest heads: if the other copy took an equivalent change
      * meanwhile, the conflict is gone.
      */
-    private static Map<String, CombinePayload> combinesWithResult(Path controlRoot, PredictionEventStore store, List<MainMeeting.Advance> missing) {
-        Set<String> heads = missing.stream().map(MainMeeting.Advance::to).collect(Collectors.toSet());
+    private static Map<String, CombinePayload> combinesWithResult(Path controlRoot, PredictionEventStore store, List<MainMeeting.Advance> missing,
+            String other) {
+        Set<String> heads = missing.stream().map(MainMeeting.Advance::to).collect(Collectors.toCollection(java.util.HashSet::new));
+        heads.add(other);
         Map<String, CombinePayload> chosen = new java.util.HashMap<>();
         for (CombinePayload combine : store.taskCompletionProjection().combines()) {
             if (heads.contains(combine.theirs()) && combined(controlRoot, store, combine).isPresent()) {

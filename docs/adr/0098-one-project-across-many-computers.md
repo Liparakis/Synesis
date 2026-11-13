@@ -1679,6 +1679,24 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     `AgentRunControllerTest.anAgentWhoseProcessFailedWithItsLaneOpenIsResumedAlthoughNothingWasRecorded` (fails before: no resume). *Not proved:*
     that the resume would have let the run pass (no real run repeated), and why the 403 came (a provider outage, not Synesis). A lane whose
     agent can never be resumed (no provider session) is still not taken over by the other agents of its computer.
+51. **A conflict with the other copy's newest head opens a combine (s10a-run1, s10a-run3, 2026-11-13, build sbx10, real cut; this is also
+    item 49's pattern).** Both runs `TIME_BOUND`, `main` differs on the VM, both runs `TIMED_OUT`, both controllers `COPIES_MEETING`. *Read
+    from `D:\SynesisAcceptance\evidence\s10a-run1` and `s10a-run3`:* the PC is the higher computer (`sl1-62bf91…` over `sl1-45b71b…`; run3
+    `aa76a3…` over `2f6a3b…`), so it re-merges. Its Claude agents took every combine lane, merged the conflict markers, published the result
+    and ended (run1: three `COMBINE_REQUIRED` for `other` `bbf3e43…`, three results, no `REMERGE_SNAPSHOT_CREATED`; the PC log stopped at 183
+    files at 12:54 and did not grow for 23 minutes). The VM then advanced again (`398ce13…`, log position 162, after all three combines;
+    run3 `a747a04…` at 233). Code did cross: the PC's repository holds `398ce13…`. *Cause (reproduced on the real commits, not seen in a
+    log, because the process log was not kept):* `RemergeService.build` starts from the base of the last combine that has a result, which
+    predates the other copy's newest head, replays the advances with the combines' trees, and merges the other head last. That merge
+    conflicts (run1: both copies added `digits/`; run3: both edited `NOTES.md`), and the build took it for a stopped re-merge
+    (`stop(...)`, logged at WARNING only) instead of a conflict to combine: no `COMBINE_REQUIRED`, no lane, nothing to wait for, and the
+    same on every later pass. *Fix:* that conflict opens one more combine, of the other head (`theirs`) with the result so far (`base`),
+    acting for the lanes of the re-merge's last advance; a later build starts from that combine's base and merges the other head with the
+    combine lane's tree. Published contracts: none changes (`COMBINE_REQUIRED` carries a head as `theirs`, as before). Pinned by
+    `RemergeServiceTest.anOtherHeadThatConflictsWithTheCombinedResultOpensOneMoreCombineWhoseResultLands` (fails before: one combine, no
+    second; passes after; the Linux gate ran the other 65 tests of the re-merge, combine and review classes green). *Not proved:* that the
+    real run then passes (no real run repeated); that an other copy moving again while the second combine waits does not loop (a combine
+    for a head that is replaced is left open and a new one opens for the newest head, as for advances).
 
 ### Step 6: Membership in the owner's log
 
