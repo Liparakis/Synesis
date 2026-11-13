@@ -131,6 +131,19 @@ public final class CombineLaneJoin {
         // the other copy's own work; unclaimed, finishing the lane refused them as UNCLAIMED_SNAPSHOT_PATH and the
         // combine never got a result (s11b-run3).
         mergedPaths(location.root(), combine).forEach(path -> claims.add(ResourceSelector.pathExact(path)));
+        // A lane another participant holds on one of these paths refuses the announcement, and it must refuse it before the
+        // worktree is moved: the failed join left the session with the combine's markers in a stale, dirty worktree that
+        // ensure_session would neither refresh nor use, and the combine was never taken (s15a-run1, s15a-run3).
+        List<org.synesis.coordination.domain.collaboration.ClaimConflict> busy = new java.util.ArrayList<>();
+        for (WorkIntent held : store.collaborationProjection().activeIntents()) {
+            if (!held.participant().equals(participant)) {
+                claims.stream().filter(claim -> held.selectors().stream().anyMatch(claim::overlaps))
+                        .forEach(claim -> busy.add(new org.synesis.coordination.domain.collaboration.ClaimConflict(held, claim)));
+            }
+        }
+        if (!busy.isEmpty()) {
+            return new ClaimResult(false, null, busy);
+        }
         // The worktree first: a lane is never announced without both versions in place, and a repeated call after a
         // crash finds the worktree already prepared. Then its binding, so the worktree is judged against the combine's
         // base and not against this computer's main (s5-run8).

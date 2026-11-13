@@ -213,6 +213,33 @@ final class CombineLaneJoinTest {
         assertFalse(CombineLaneJoin.waiting(store, fixture.combine), "the combine's group now holds a lane");
     }
 
+    /**
+     * ADR-0098 step 5 item 57 (s15a-run1, s15a-run3): another computer's lane held a path of the combine. The join moved the
+     * worktree to the combine's base and only then found the announcement refused, leaving a stale, dirty session that
+     * could neither take the combine nor refresh; the answer then failed to serialize as "Internal error".
+     */
+    @Test
+    void aCombineWhoseClaimsAnotherLaneHoldsIsRefusedBeforeTheWorktreeMovesAndIsTakenOnceTheyAreFree() throws Exception {
+        fixture.session("combine-busy");
+        fixture.collaboration.announce(fixture.root, CombineFixture.PROVIDER, "combine-busy", "change f", "f changed", List.of(ResourceSelector.pathExact(CombineFixture.FILE)));
+        ProviderSessionBindingService.Binding binding = fixture.session(COMBINER);
+        Path worktree = Path.of(binding.worktreePath());
+        String head = git(worktree, "rev-parse", "HEAD");
+
+        ClaimResult refused = join(COMBINER);
+
+        assertFalse(refused.acquired());
+        assertEquals(CombineFixture.FILE, refused.conflicts().getFirst().selector().value());
+        assertEquals(head, git(worktree, "rev-parse", "HEAD"), "the worktree was not moved");
+        assertFalse(Files.exists(worktree.resolve(".synesis/local/combine-materialization.txt")));
+        assertEquals("", git(worktree, "status", "--porcelain", "--untracked-files=no"), "and holds no markers");
+
+        fixture.collaboration.release(fixture.root, CombineFixture.PROVIDER, "combine-busy");
+
+        assertTrue(join(COMBINER).acquired());
+        assertTrue(Files.readString(worktree.resolve(CombineFixture.FILE)).contains("<<<<<<<"));
+    }
+
     @Test
     void aRepeatedJoinReturnsTheSameLaneAndAnnouncesNothingMore() throws Exception {
         fixture.session(COMBINER);

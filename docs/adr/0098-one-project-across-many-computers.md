@@ -1800,6 +1800,30 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     change (no real run repeated); why the PC's controller waited `OTHER_COMPUTER_CONNECTED` for 1502 s instead of resuming `claude#1`
     (it had stopped by its own choice, exit 0, within the resume budget).
 
+57. **A combine join whose claims another lane holds is refused before the worktree moves, and the refusal is readable (s15a-run1 and
+    s15a-run3, 2026-11-13, build sbx15, real cut).** Both runs `TIME_BOUND`, `main` differs on the VM, both `TIMED_OUT`, one `COMBINE_REQUIRED`,
+    no `REMERGE_SNAPSHOT_CREATED`. *Read from `D:\SynesisAcceptance\evidence\s15a-run1` and `s15a-run3`:* run1: the PC (owner, writer `c269…`)
+    wrote the combine `cb-37328820…` (position 77, two snapshots, claims `primes/`, `NOTES.md`, `fib/`) while the VM's lane `d12147a2…` (claims
+    `gcd/`, `NOTES.md`, announced at 75, released at 98) was active; run3: the VM wrote it (`18e9…`). Nobody took it. In every transcript
+    (PC `claude-1-3`, `claude-2-4`, `claude-1-5`; VM `codex-*`) the `ensure_session` join with `repairIntentId`/`repairSnapshotId` answered
+    `Internal error: unsupported JSON value` once, and every later call answered `WORKSPACE_STALE_DIRTY`, whose `get_next_action` answered
+    `ensure_session`: the agents stopped. *Two defects:* (1) `CombineLaneJoin.join` moved the worktree to the combine's base with the
+    markers first and announced the lane after; the announcement was refused for overlapping a claim of another computer's active lane
+    (`NOTES.md` in run1) and the session was left stale and dirty; (2) `McpSessionEstablishment.repairJoin` put the `ClaimConflict` records
+    straight into the answer, which `ProviderJson` cannot write, so the refusal surfaced as an internal error. *Items:* item 52's wider claims
+    are not shown to be the trigger: `NOTES.md` is a claim of the combined snapshots themselves, so the overlap exists without them, and for
+    a snapshot `theirs` the widened paths are inside the snapshot's changes; whether they added a path in run3 is not in the evidence (the
+    conflicts were never written out). Items 55 and 56 are not involved (the session was dirty by the join itself, not stale from a refresh),
+    but the dirty, no-snapshot state the failed join left is the one item 56's `ensure_session` loop cannot clear. The item 54 rule (the
+    combine keeps its instruction) played no part. *Fix:* the join checks the claims against other participants' active lanes before the
+    worktree is touched and answers a not-acquired result with the conflicts; the answer lists them as the ordinary announcement does and
+    names `retry`, not a person. Pinned by
+    `CombineLaneJoinTest.aCombineWhoseClaimsAnotherLaneHoldsIsRefusedBeforeTheWorktreeMovesAndIsTakenOnceTheyAreFree` (fails before: the worktree
+    holds the markers after the refused join; local Gradle). The serialization change is not pinned by its own test (the method is private
+    and a combine fixture is not available in the mcp tests). *Not proved:* that the runs would have ended (the combine is offered again only
+    while the other lane lives; a lane that never ends would still hold it); that no other path of `joinRepair` leaves a moved worktree
+    after a refusal.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

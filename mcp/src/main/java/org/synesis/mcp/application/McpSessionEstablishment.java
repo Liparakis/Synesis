@@ -254,6 +254,20 @@ final class McpSessionEstablishment {
         return taskCompletionService.unwindPrepared(new CompleteTaskRequest(activeProjectRoot, provider, connectionInstanceId, null));
     }
 
+    /** The lanes a claim collides with, as plain values an answer can carry. */
+    private static List<Object> conflictsShown(List<org.synesis.coordination.domain.collaboration.ClaimConflict> conflicts) {
+        return conflicts.stream().<Object>map(conflict -> object("participant",
+                conflict.participant(),
+                "intent",
+                conflict.intentId(),
+                "ownerAuthorityLineageId",
+                conflict.ownerAuthorityLineageId() == null ? "" : conflict.ownerAuthorityLineageId().toString(),
+                "kind",
+                conflict.selector().kind().name(),
+                "path",
+                conflict.selector().value())).toList();
+    }
+
     /**
      * Joins the caller to a repair of a named intent and snapshot when it supplies them.
      *
@@ -274,7 +288,12 @@ final class McpSessionEstablishment {
             UUID repairIntentId = UUID.fromString(repairIntentText);
             var joined = collaborationService.joinRepair(activeProjectRoot, provider, connectionInstanceId, repairIntentId, repairSnapshotId);
             if (!joined.acquired()) {
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.OVERLAPPING_CLAIM, AgentNextAction.REQUEST_HUMAN_HELP, Map.of("conflicts", joined.conflicts()));
+                // The conflicts are rendered as the ordinary announcement renders them: handed over as records they could not be
+                // written and the agent got "Internal error: unsupported JSON value" (s15a-run1, s15a-run3). Nothing was claimed
+                // and the worktree was not moved, so the answer is to retry, not a person.
+                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.OVERLAPPING_CLAIM, AgentNextAction.RETRY, object("conflicts", conflictsShown(joined.conflicts()), "instruction",
+                        "A lane another participant holds claims paths this join needs. Nothing was claimed and your worktree was not moved. Call get_next_action and take the work it offers; "
+                                + "this join is offered again when those paths are free."));
             }
             return new AgentResponse(AgentStatus.READY,
                     null,
@@ -351,17 +370,7 @@ final class McpSessionEstablishment {
                 return null;
             }
             Map<String, Object> details = new LinkedHashMap<>();
-            details.put("conflicts",
-                    claimResult.conflicts().stream().map(conflict -> object("participant",
-                            conflict.participant(),
-                            "intent",
-                            conflict.intentId(),
-                            "ownerAuthorityLineageId",
-                            conflict.ownerAuthorityLineageId() == null ? "" : conflict.ownerAuthorityLineageId().toString(),
-                            "kind",
-                            conflict.selector().kind().name(),
-                            "path",
-                            conflict.selector().value())).toList());
+            details.put("conflicts", conflictsShown(claimResult.conflicts()));
             details.put("coordinationKind", "contract_bind");
             details.put("requiredCapabilityFields", List.of("capability", "ownerPath", "revision"));
             // The lane a caller collides with is the owner of that path only. Telling it to send
