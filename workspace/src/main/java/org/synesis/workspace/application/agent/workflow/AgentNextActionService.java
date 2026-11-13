@@ -491,8 +491,47 @@ public final class AgentNextActionService {
                 // command changed is the one whose workspace has just become stale.
                 return notingRejection(staleAction, inspection.location(), exactBinding);
             }
+            AgentResponse repairWait = staleRepairWait(inspection.location(), exactBinding);
+            if (repairWait != null) {
+                return repairWait;
+            }
         }
         return readiness.response();
+    }
+
+    /**
+     * The answer for a stale session whose published snapshot needs repair. {@code ensure_session} sends a stale-dirty
+     * session to this projection, and the readiness response sent it back, so the producer looped until the run ended
+     * (ADR-0098 step 5 item 53, s11b-run1). The repair lane is joined by another participant, never by the author
+     * (the repair lane's rule in ADR-0100), and the author's worktree is not touched: the work it holds is in the
+     * snapshot, and a refresh could lose what the snapshot does not hold. So the author is told to wait.
+     *
+     * @return a wait naming the snapshot, or {@code null} when no snapshot of this session needs repair
+     */
+    private AgentResponse staleRepairWait(ProjectLocation location, ProviderSessionBindingService.Binding binding) {
+        try {
+            Optional<PredictionEventStore> openedStore = openEventStore(location);
+            if (openedStore.isEmpty()) {
+                return null;
+            }
+            var completion = openedStore.get().taskCompletionProjection();
+            String participant = WorkspaceCollaborationService.participantHandle(binding.sessionId());
+            return completion.allSnapshots().stream()
+                    .filter(snapshot -> snapshot.provenance().participant().equals(participant)
+                            && completion.taskState(snapshot.taskId()) == TaskCompletionState.REPAIR_REQUIRED)
+                    .findFirst().map(snapshot -> {
+                        Map<String, Object> result = new LinkedHashMap<>();
+                        result.put(NextActionKeys.STATE, "repair_required");
+                        result.put("snapshotId", snapshot.snapshotId());
+                        result.put("instruction", "Your published snapshot " + snapshot.snapshotId() + " could not be merged onto main and needs a repair lane, which another participant joins. "
+                                + "Your worktree is stale and holds work that is already in that snapshot; it is left as it is. Do not call ensure_session and do not edit. Wait for the repair; "
+                                + "get_next_action tells you when your lane has ended.");
+                        return new AgentResponse(AgentStatus.WAITING, AgentReason.INTEGRATION_CONFLICT, AgentNextAction.WAIT, result);
+                    }).orElse(null);
+        } catch (Exception failure) {
+            logSuppressed("stale-workspace repair projection", failure);
+            return null;
+        }
     }
 
     /**

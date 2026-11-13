@@ -1727,6 +1727,21 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     deadlock, not harness timing, but no fix is made here: the evidence has no process log and the projection order for a stale-dirty
     session with a `REPAIR_REQUIRED` task is not tested. A test of that projection would settle it.
 
+53. **A stale session whose published snapshot needs repair is told to wait, not sent back to `ensure_session` (s11b-run1, build sbx11).**
+    *Read from `D:\SynesisAcceptance\evidence\s11b-run1\vm` (`codex-1-3.log`):* the producer's `snap_873ebfed…` conflicted against the re-merged
+    main (`INTEGRATION_CONFLICTED`, `REPAIR_REQUIRED`), and its session answered `workspace_stale` from `get_next_action` (action
+    `ensure_session`) and `WORKSPACE_STALE_DIRTY` from `ensure_session` ("call `get_next_action` and follow it"). *Cause:* of the two answers,
+    `ensure_session`'s is the protocol's (a stale-dirty session is never refreshed, the lane is the agent's to finish, item 5 of s5-run8). The
+    wrong one is `get_next_action`: `notReadyResponse` projected only review and completion actions for a stale session and otherwise
+    returned the readiness response, `ensure_session`. The author cannot take the repair itself (the repair lane is joined by another
+    participant, ADR-0100), and refreshing its worktree could lose what the snapshot does not hold, so the fix is a wait, not a claim or a
+    refresh: `staleRepairWait` answers `WAITING`/`WAIT`, state `repair_required`, naming the snapshot, and touches nothing. Authority is
+    unchanged: no mutation is admitted and the worktree is not refreshed. Pinned by
+    `AgentSessionServiceTest.aStaleDirtyProducerWhoseSnapshotNeedsRepairIsNotSentBackToEnsureSession` (fails before with the readiness
+    answer `ensure_session`, run locally with Gradle; passes after). *Not proved:* that anything then offers the repair lane to another
+    agent (no projection in `workflow/` does outside the combine offer, so the author may now wait for a repair nobody takes); that the run
+    would have passed; that waiting wakes the author when the repair lane ends.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

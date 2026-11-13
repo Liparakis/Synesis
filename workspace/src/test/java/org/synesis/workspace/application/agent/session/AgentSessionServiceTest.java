@@ -274,6 +274,57 @@ class AgentSessionServiceTest {
         assertEquals(original.worktreePath(), new ProviderSessionBindingService().find(location, "codex", connection).orElseThrow().worktreePath());
     }
 
+    /**
+     * ADR-0098 step 5 item 53 (s11b-run1): the producer's published snapshot hit REPAIR_REQUIRED while its worktree
+     * was stale and dirty. {@code ensure_session} sent it to {@code get_next_action}, which sent it back to
+     * {@code ensure_session}, and the lane waited for nothing until the run's deadline.
+     */
+    @Test
+    void aStaleDirtyProducerWhoseSnapshotNeedsRepairIsNotSentBackToEnsureSession() throws Exception {
+        String connection = "stale-repair";
+        var location = new ProjectApplicationService().locate(tempRoot);
+        var original = new ProviderSessionBindingService().ensure(location, "codex", connection).binding();
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        List<ResourceSelector> selectors = List.of(ResourceSelector.pathExact("README.md"));
+        WorkIntent intent = new WorkIntent(UUID.randomUUID(), location.projectId(), WorkspaceCollaborationService.participantHandle(original.sessionId()),
+                "codex", UUID.randomUUID(), "Change the readme", "Readme changed", original.baseCommit(), selectors, 1, WorkIntent.Status.ANNOUNCED);
+        assertTrue(new WorkIntentService(store, identity).announce(intent).acquired());
+        Path worktree = Path.of(original.worktreePath());
+        Files.writeString(worktree.resolve("README.md"), "unpublished work\n");
+        var snapshot = new org.synesis.workspace.application.task.TaskSnapshotService().createSnapshot(new org.synesis.workspace.application.task.SnapshotRequest(intent.taskId(), "node",
+                original.supervisorId(), original.workerId(), original.sessionId(), worktree, tempRoot, "readme", java.util.Optional.empty(), List.of(),
+                org.synesis.workspace.application.task.SnapshotRequest.ClaimScope.unscoped(selectors),
+                org.synesis.workspace.application.task.SnapshotRequest.Lane.of(intent.workGroupId(), intent.intentId(), intent.participant(), original.sessionId(), 1, List.of()),
+                false, null, null));
+        store.append(snapshot.taskId(), org.synesis.coordination.domain.prediction.PredictionEventType.TASK_SNAPSHOT_CREATED, identity.nodeId(),
+                new org.synesis.coordination.domain.task.TaskSnapshotPayload(snapshot.taskId(), snapshot.snapshotId(), snapshot.nodeId(), snapshot.supervisorId(), snapshot.workerId(),
+                        snapshot.providerSessionId(), snapshot.baseCommit(), snapshot.commitSha(), snapshot.changedPaths(), snapshot.capabilityDependencies(), snapshot.summary(),
+                        snapshot.provenance(), false).encode(), identity);
+        // main moves under the claimed file, so the session is stale and its worktree cannot be refreshed.
+        Files.writeString(tempRoot.resolve("README.md"), "integrated elsewhere\n");
+        git(tempRoot, "commit", "-am", "integrated elsewhere");
+        String head = org.synesis.workspace.test.TestGit.output(tempRoot, "rev-parse", "HEAD").trim();
+        String attempt = "repair-attempt-" + UUID.randomUUID();
+        for (var step : List.of(new Object[] {org.synesis.coordination.domain.prediction.PredictionEventType.INTEGRATION_ATTEMPT_STARTED, "started", ""},
+                new Object[] {org.synesis.coordination.domain.prediction.PredictionEventType.INTEGRATION_CONFLICTED, "conflict", "merge conflict"},
+                new Object[] {org.synesis.coordination.domain.prediction.PredictionEventType.REPAIR_REQUIRED, "conflict", "merge conflict"})) {
+            store.append(UUID.randomUUID(), (org.synesis.coordination.domain.prediction.PredictionEventType) step[0], identity.nodeId(),
+                    new org.synesis.coordination.domain.integration.IntegrationAttemptPayload(attempt, location.projectId(), List.of(snapshot.snapshotId()), head, "", (String) step[1],
+                            (String) step[2]).encode(), identity);
+        }
+
+        AgentResponse ensured = sessionService.ensureSession(new SessionResolutionRequest(tempRoot, "codex", connection, null, false));
+        AgentResponse next = new org.synesis.workspace.application.agent.workflow.AgentNextActionService()
+                .getNextAction(new org.synesis.workspace.application.agent.workflow.NextActionRequest(tempRoot, "codex", connection));
+
+        assertEquals(AgentReason.WORKSPACE_STALE, ensured.reason(), ensured.toJson());
+        assertNotEquals(AgentNextAction.ENSURE_SESSION, next.nextAction(), "ensure_session says to follow get_next_action, which said ensure_session: " + next.toJson());
+        assertEquals(AgentNextAction.WAIT, next.nextAction(), next.toJson());
+        assertTrue(next.toJson().contains(snapshot.snapshotId()), next.toJson());
+        assertEquals("unpublished work\n", Files.readString(worktree.resolve("README.md")), "the stale session is not refreshed or mutated");
+    }
+
     @Test
     void testTaskIntentValidation() {
         assertThrows(IllegalArgumentException.class, () -> new AgentTaskIntent("a".repeat(4097), "ok", List.of(), List.of()));
