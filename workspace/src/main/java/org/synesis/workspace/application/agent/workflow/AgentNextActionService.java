@@ -495,8 +495,27 @@ public final class AgentNextActionService {
             if (repairWait != null) {
                 return repairWait;
             }
+            if (!request.completionRequested() && hasActiveIntent(inspection.location(), exactBinding)) {
+                return staleLaneCompletionRequest();
+            }
         }
         return readiness.response();
+    }
+
+    /**
+     * The answer for a stale session that holds a lane with work it has not published. Its worktree cannot be refreshed
+     * ({@code ensure_session} says to follow this projection) and it asked for nothing, so the readiness response sent it
+     * back to {@code ensure_session}: in s12a-run2 an agent was resumed 15 times on that loop. Publishing is the way out
+     * the protocol already has: the completion request projects {@code finish_lane}, the snapshot is merged or, when
+     * main moved under it, repaired by another agent (ADR-0098 step 5 item 54). Nothing is mutated here.
+     */
+    private static AgentResponse staleLaneCompletionRequest() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("completionRequested", true);
+        result.put("instruction", "Your worktree is stale and holds work you have not published, and it cannot be refreshed without risking that work. Do not call ensure_session. "
+                + "Publish your lane: call get_next_action again with completionRequested true and follow the action it projects. If main moved under your files, "
+                + "the merge conflict is repaired by another agent.");
+        return new AgentResponse(AgentStatus.RETRY_REQUIRED, AgentReason.WORKSPACE_STALE, AgentNextAction.RETRY, result);
     }
 
     /**

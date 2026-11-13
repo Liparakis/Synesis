@@ -1760,6 +1760,26 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     (the offer is added to the same list as combines; no controller test for it). A combine candidate's instruction is replaced when both a
     combine and a repair are offered to one agent.
 
+55. **A stale session that holds a lane is told to publish it (s12a-run2, 2026-11-13, build sbx12, real cut).** Result `PARTIAL`, mains
+    equal, PC `TIMED_OUT` (1502 s, `claude#1` resumed 15 times, each exit 0), VM `STALLED`, one `REPAIR_REQUIRED` (`snap_a563b12d…`, PC log 60), no
+    `REPAIR_LANE_CREATED`, no `repairCandidates`. *Read from `D:\SynesisAcceptance\evidence\s12a-run2`:* the snapshot's author
+    `agt_7ebc4b55…` is a PC participant (lane `0fb2be1d…` still ACTIVE) and the PC wrote the conflict, so item 54's offer was this computer's
+    alone: the PC's two agents both held a lane (`claude#2` the author; `claude#1`, `agt_82ec83eb…`, lane `c89ed1be…`, ACTIVE, task `ed46d4fa…`,
+    never published), and the VM's idle agents are not of the author's computer. So no agent could be offered the repair, as item 54 specifies.
+    *Why `claude#1` was resumed 15 times:* its worktree was stale and dirty (`claude-1-4.log`): `get_next_action` answered `workspace_stale`
+    with `ensure_session`, and `ensure_session` answered `WORKSPACE_STALE_DIRTY` with "call `get_next_action` and follow it", the loop of item
+    53 for a lane that has published nothing. It never requested completion (`completionRequested` appears only in `claude-1-1.log`, before the
+    stale state), which is the one call that projects `finish_lane` for a stale session (`staleCoordinationAction`). *Cause:* `notReadyResponse`
+    projected the completion only when the caller asked for it and never told it to ask. *Fix:* a stale session that holds a lane and asked for
+    nothing is answered `RETRY_REQUIRED` with `completionRequested: true` in the result and the instruction to publish, not `ensure_session`;
+    nothing is mutated or refreshed. Pinned by
+    `AgentSessionServiceTest.aStaleDirtyLaneHolderWhoAskedForNothingIsToldToPublishNotSentToEnsureSession` (fails before: `ensure_session`; passes
+    after, including that the completion request is not answered `ensure_session` either; the fail-before run is local Gradle). *Not changed:*
+    item 54's limit to the author's computer (the VM's idle agents were excluded by it): offering a repair to another computer's agents would let
+    two computers write `REPAIR_LANE_CREATED` for one source lane, and an entry that throws on another computer's copy stops that log
+    (ADR-0100), so it needs its own design. *Not proved:* that publishing from the stale worktree then reaches a merge or a repair in a real
+    run, and that the repair is then taken once `claude#1` has no lane.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

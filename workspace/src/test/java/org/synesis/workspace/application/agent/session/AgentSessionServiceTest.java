@@ -325,6 +325,36 @@ class AgentSessionServiceTest {
         assertEquals("unpublished work\n", Files.readString(worktree.resolve("README.md")), "the stale session is not refreshed or mutated");
     }
 
+    /**
+     * ADR-0098 step 5 item 55 (s12a-run2): a lane holder with unpublished work in a stale worktree was answered
+     * {@code ensure_session} by {@code get_next_action} and "follow get_next_action" by {@code ensure_session}, and was
+     * resumed 15 times on it. It is told to publish instead, and publishing is projected to it.
+     */
+    @Test
+    void aStaleDirtyLaneHolderWhoAskedForNothingIsToldToPublishNotSentToEnsureSession() throws Exception {
+        String connection = "stale-publisher";
+        var location = new ProjectApplicationService().locate(tempRoot);
+        var original = new ProviderSessionBindingService().ensure(location, "codex", connection).binding();
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        assertTrue(new WorkIntentService(store, identity).announce(new WorkIntent(UUID.randomUUID(), location.projectId(), WorkspaceCollaborationService.participantHandle(original.sessionId()),
+                "codex", UUID.randomUUID(), "Change the readme", "Readme changed", original.baseCommit(), List.of(ResourceSelector.pathExact("README.md")), 1,
+                WorkIntent.Status.ANNOUNCED)).acquired());
+        Path worktree = Path.of(original.worktreePath());
+        Files.writeString(worktree.resolve("README.md"), "unpublished work\n");
+        Files.writeString(tempRoot.resolve("README.md"), "integrated elsewhere\n");
+        git(tempRoot, "commit", "-am", "integrated elsewhere");
+        var next = new org.synesis.workspace.application.agent.workflow.AgentNextActionService();
+
+        AgentResponse asked = next.getNextAction(new org.synesis.workspace.application.agent.workflow.NextActionRequest(tempRoot, "codex", connection));
+        AgentResponse completion = next.getNextAction(new org.synesis.workspace.application.agent.workflow.NextActionRequest(tempRoot, "codex", connection, true));
+
+        assertNotEquals(AgentNextAction.ENSURE_SESSION, asked.nextAction(), "ensure_session says to follow get_next_action, which said ensure_session: " + asked.toJson());
+        assertTrue(asked.toJson().contains("completionRequested"), asked.toJson());
+        assertNotEquals(AgentNextAction.ENSURE_SESSION, completion.nextAction(), completion.toJson());
+        assertEquals("unpublished work\n", Files.readString(worktree.resolve("README.md")), "the stale session is not refreshed or mutated");
+    }
+
     @Test
     void testTaskIntentValidation() {
         assertThrows(IllegalArgumentException.class, () -> new AgentTaskIntent("a".repeat(4097), "ok", List.of(), List.of()));
