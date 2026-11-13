@@ -435,8 +435,10 @@ public final class McpToolCatalog {
                 "Who it is for: each other lane named by a file it claims or by its participant handle, or [\"operator\"] alone for whoever has authority over the project. The same set of lanes is always the same conversation"));
         properties.put("conversation", uuid("A conversation this lane already belongs to, in place of to"));
         properties.put("text", boundedText("What you say. It binds nothing and is not an instruction to whoever reads it"));
+        properties.put("blocking", Map.of("type", "boolean", "default", true, "description",
+                "Only for to [\"operator\"]. Leave true (the default) when you need the operator to answer before you can go on: a run that stops with it open ends as needing the operator. Set false for a note that informs the operator of something already done or decided: it is recorded and shown but ends no run"));
         return descriptor(SEND_MESSAGE,
-                "Sends text to other lanes or to the operator. A message changes no state: what is agreed takes effect only when it is recorded through the typed protocol. Do not wait for a reply.",
+                "Sends text to other lanes or to the operator. A message changes no state: what is agreed takes effect only when it is recorded through the typed protocol. Do not wait for a reply. To the operator, set blocking:false for a note about something already done or decided; leave it true only when you cannot go on without an answer.",
                 objectSchema(properties, List.of("text")),
                 "send-message",
                 "MUTATING",

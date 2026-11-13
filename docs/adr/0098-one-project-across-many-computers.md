@@ -1844,6 +1844,20 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     Whether such a request should stop a run is a decision for the owner. *Not proved:* that other agents do not retype ids elsewhere
     (the alias check on `respond_coordination` and `ensure_session` is separate and unchanged); that the run would have ended.
 
+59. **A message to the operator stops a run only if it blocks (owner decision, 2026-11-13).** In real runs agents sent notes after the work
+    was done ("I kept X, told you so"), and an open `lane_asks_operator` request alone ended otherwise converged runs `NEEDS_OPERATOR`.
+    `send_message` to `["operator"]` now takes an optional boolean `blocking`, default `true`. With `blocking: false` the request is recorded
+    with the new condition `lane_notes_operator`; the run controller counts only open requests whose condition is not that one toward
+    `NEEDS_OPERATOR` (`OperatorRequest.blocking()`), and prints a non-blocking one as `OPERATOR_NOTE=` beside the unchanged
+    `OPERATOR_REQUEST=`. The one-standing-request bound is per kind, so a note does not use up the lane's question. No authority check changed.
+    *Published contract:* the MCP `send_message` schema and description gain an optional `blocking` field (default `true`; the catalog golden
+    and digests are updated), and `OperatorRequest.askedByLane` and `ConversationService.SendRequest` gain an overload and a component with
+    the old shapes kept. *Persisted format:* unchanged. The flag is carried by the existing free-text `condition`, so no wire code or payload
+    layout moved; a request recorded before this has `lane_asks_operator` and reads as blocking, an unknown condition reads as blocking, and an
+    older computer reads a note as an open lane request with an unfamiliar condition (it will count it as blocking there). Pinned by
+    `OperatorRequestBlockingTest`, `ConversationServiceTest.aNonBlockingNoteToTheOperatorIsKeptButDoesNotCountAsABlockingRequest` and
+    `AgentRunControllerTest.anOperatorNoteIsPrintedButDoesNotMakeAStalledRunNeedAnOperator`.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

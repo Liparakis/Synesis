@@ -143,6 +143,10 @@ class ConversationServiceTest {
         return conversations.send(new ConversationService.SendRequest(projectRoot, PROVIDER, from, to, null, text, ConversationService.Cursor.START));
     }
 
+    private AgentResponse sendNote(String from, String text) {
+        return conversations.send(new ConversationService.SendRequest(projectRoot, PROVIDER, from, List.of("operator"), null, text, ConversationService.Cursor.START, false));
+    }
+
     private AgentResponse sendTo(String from, UUID conversation, String text) {
         return conversations.send(new ConversationService.SendRequest(projectRoot, PROVIDER, from, List.of(), conversation, text, ConversationService.Cursor.START));
     }
@@ -400,6 +404,29 @@ class ConversationServiceTest {
 
         assertFalse(finished.toJson().toLowerCase().contains("evidence_stale"), finished.toJson());
         assertEquals("integrated", ((Map<String, Object>) result(finished).get("completion")).get("task"), finished.toJson());
+    }
+
+    /** An FYI to the operator is kept and shown but is not a request a run stops for; a question still is. */
+    @Test
+    void aNonBlockingNoteToTheOperatorIsKeptButDoesNotCountAsABlockingRequest() throws Exception {
+        EventLogObserver observer = new EventLogObserver(projectService.locate(projectRoot));
+
+        AgentResponse noted = sendNote(A, "I kept X, as told");
+
+        assertEquals(AgentStatus.COMPLETED, noted.status(), noted.toJson());
+        OperatorRequest note = store().operatorRequestProjection().open().getFirst();
+        assertEquals(OperatorRequest.LANE_NOTES_OPERATOR, note.condition());
+        assertFalse(note.blocking());
+        assertEquals(lineage(A).toString(), note.raisedBy());
+        AgentRunController.Observation seen = observer.observe();
+        assertTrue(seen.operatorRequests().isEmpty(), seen.operatorRequests().toString());
+        assertEquals(1, seen.operatorNotes().size());
+
+        AgentResponse asked = send(A, List.of("operator"), "Which license?");
+
+        assertEquals(AgentStatus.COMPLETED, asked.status(), "a note does not use up the lane's one standing question: " + asked.toJson());
+        assertEquals(1, observer.observe().operatorRequests().size());
+        assertEquals("OPERATOR_ALREADY_ASKED", result(sendNote(A, "another")).get("reason"));
     }
 
     @Test

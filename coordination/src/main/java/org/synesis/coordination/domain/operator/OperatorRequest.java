@@ -49,6 +49,13 @@ public record OperatorRequest(String id, String condition, String raisedBy, Stri
     public static final String LANE_ASKS_OPERATOR = "lane_asks_operator";
 
     /**
+     * A lane told the operator something already done or decided and needs no answer. It stays
+     * visible to the operator until closed but never ends a run as needing the operator. Absence
+     * of this condition means blocking: every request recorded before it existed is blocking.
+     */
+    public static final String LANE_NOTES_OPERATOR = "lane_notes_operator";
+
+    /**
      * The project's validation command fails on the work waiting to be integrated and no lane is
      * left to answer for it: the command timed out or could not be started, or the pass that ran
      * it died twice, which says nothing about anybody's work, or a lane with a snapshot in the
@@ -99,8 +106,32 @@ public record OperatorRequest(String id, String condition, String raisedBy, Stri
      * @return the open request
      */
     public static OperatorRequest askedByLane(String id, String lineage, String text, String context) {
+        return askedByLane(id, lineage, text, context, true);
+    }
+
+    /**
+     * Creates an open request a lane put to the operator, blocking or only informing.
+     *
+     * @param id       request identifier
+     * @param lineage  authority lineage of the lane that asks
+     * @param text     what the lane says
+     * @param context  who holds the lane and what it claims, for the operator to place it
+     * @param blocking whether the lane needs an answer before it can go on
+     * @return the open request
+     */
+    public static OperatorRequest askedByLane(String id, String lineage, String text, String context, boolean blocking) {
         requireText(lineage, "lane");
-        return new OperatorRequest(id, LANE_ASKS_OPERATOR, lineage, text, bounded(context), "", State.OPEN, "");
+        return new OperatorRequest(id, blocking ? LANE_ASKS_OPERATOR : LANE_NOTES_OPERATOR, lineage, text, bounded(context), "", State.OPEN, "");
+    }
+
+    /**
+     * Tells whether this request ends a stalled run as needing the operator. Only a note a lane
+     * marked non-blocking does not; every other condition, known or not, blocks.
+     *
+     * @return false for an informing note, true otherwise
+     */
+    public boolean blocking() {
+        return !LANE_NOTES_OPERATOR.equals(condition);
     }
 
     /**

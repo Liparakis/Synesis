@@ -126,7 +126,9 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
         } catch (Exception unreadable) {
             // Who holds which lane could not be read. No owner is resumed for a moment nobody knows.
         }
-        List<String> operatorRequests = store.operatorRequestProjection().open().stream().map(request -> request.id() + " CONDITION=" + request.condition()).toList();
+        List<org.synesis.coordination.domain.operator.OperatorRequest> openRequests = store.operatorRequestProjection().open();
+        List<String> operatorRequests = openRequests.stream().filter(org.synesis.coordination.domain.operator.OperatorRequest::blocking).map(request -> request.id() + " CONDITION=" + request.condition()).toList();
+        List<String> operatorNotes = openRequests.stream().filter(request -> !request.blocking()).map(request -> request.id() + " CONDITION=" + request.condition()).toList();
         // A lane is held when the checkout cannot take integrated work and the lane's work is published
         // and waiting to be integrated. A provider is held when that is true of all its lanes.
         java.util.Set<java.util.UUID> waitingLineages = store.taskCompletionProjection().lineagesAwaitingIntegration();
@@ -183,6 +185,11 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
             @Override
             public List<String> operatorRequests() {
                 return operatorRequests;
+            }
+
+            @Override
+            public List<String> operatorNotes() {
+                return operatorNotes;
             }
 
             @Override

@@ -252,6 +252,7 @@ public final class AgentRunController {
                             if (outcome == Outcome.NEEDS_OPERATOR) {
                                 observation.operatorRequests().forEach(open -> listener.accept("OPERATOR_REQUEST=" + open));
                             }
+                            observation.operatorNotes().forEach(note -> listener.accept("OPERATOR_NOTE=" + note));
                             return new Result(outcome, resumes(agents));
                         }
                     }
@@ -782,12 +783,22 @@ public final class AgentRunController {
         OptionalLong answerDeadline(String provider);
 
         /**
-         * Returns the operator requests that are open, one stable line each: the identifier,
+         * Returns the blocking operator requests that are open, one stable line each: the identifier,
          * then {@code CONDITION=} and the condition.
          *
          * @return open operator requests, oldest first; empty when none is open
          */
         default List<String> operatorRequests() {
+            return List.of();
+        }
+
+        /**
+         * Returns the open operator requests that only inform and block nothing, in the same
+         * line form as {@link #operatorRequests()}. They never end a run as needing the operator.
+         *
+         * @return open informing notes, oldest first; empty when none is open
+         */
+        default List<String> operatorNotes() {
             return List.of();
         }
 

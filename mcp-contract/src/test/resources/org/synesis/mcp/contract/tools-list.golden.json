@@ -1408,9 +1408,14 @@
     "name": "cancel_lane"
   },
   {
-    "description": "Sends text to other lanes or to the operator. A message changes no state: what is agreed takes effect only when it is recorded through the typed protocol. Do not wait for a reply.",
+    "description": "Sends text to other lanes or to the operator. A message changes no state: what is agreed takes effect only when it is recorded through the typed protocol. Do not wait for a reply. To the operator, set blocking:false for a note about something already done or decided; leave it true only when you cannot go on without an answer.",
     "inputSchema": {
       "properties": {
+        "blocking": {
+          "default": true,
+          "description": "Only for to [\"operator\"]. Leave true (the default) when you need the operator to answer before you can go on: a run that stops with it open ends as needing the operator. Set false for a note that informs the operator of something already done or decided: it is recorded and shown but ends no run",
+          "type": "boolean"
+        },
         "conversation": {
           "description": "A conversation this lane already belongs to, in place of to",
           "format": "uuid",

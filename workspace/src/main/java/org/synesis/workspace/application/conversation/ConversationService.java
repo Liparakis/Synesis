@@ -237,7 +237,7 @@ public final class ConversationService {
             return refused("MESSAGE_ADDRESS_REQUIRED", Map.of(), "Name the members in to, or one conversation you belong to in conversation. Not both and not neither.");
         }
         if (request.to().stream().anyMatch(OPERATOR::equalsIgnoreCase)) {
-            return request.to().size() == 1 ? askOperator(store, identity, lane.get(), text)
+            return request.to().size() == 1 ? askOperator(store, identity, lane.get(), text, request.blocking())
                     : refused("OPERATOR_IS_ADDRESSED_ALONE", Map.of(), "The operator is not a member of a conversation. Send to [\"" + OPERATOR + "\"] alone, and to the lanes separately.");
         }
         Set<UUID> members = new LinkedHashSet<>();
@@ -290,20 +290,22 @@ public final class ConversationService {
      * may do; what it changes is how a run that stalls afterwards is reported. One stands per
      * lane at a time, which is this channel's bound.
      */
-    private static AgentResponse askOperator(PredictionEventStore store, NodeIdentity identity, WorkIntent lane, String text) throws IOException, GeneralSecurityException {
+    private static AgentResponse askOperator(PredictionEventStore store, NodeIdentity identity, WorkIntent lane, String text, boolean blocking) throws IOException, GeneralSecurityException {
         String lineage = lane.authorityLineageId().toString();
         Optional<OperatorRequest> standing = store.operatorRequestProjection().open().stream()
-                .filter(open -> open.condition().equals(OperatorRequest.LANE_ASKS_OPERATOR) && open.raisedBy().equals(lineage)).findFirst();
+                .filter(open -> open.raisedBy().equals(lineage)
+                        && open.condition().equals(blocking ? OperatorRequest.LANE_ASKS_OPERATOR : OperatorRequest.LANE_NOTES_OPERATOR)).findFirst();
         if (standing.isPresent()) {
             return refused("OPERATOR_ALREADY_ASKED", Map.of("operatorRequest", standing.get().id()),
                     "This lane's earlier request to the operator is still open and the operator sees it. Continue with the work you can do.");
         }
         OperatorRequest asked = OperatorRequest.askedByLane("opr_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16), lineage, text,
-                "participant " + lane.participant() + "\nclaims " + String.join(", ", lane.selectors().stream().map(ResourceSelector::value).toList()));
+                "participant " + lane.participant() + "\nclaims " + String.join(", ", lane.selectors().stream().map(ResourceSelector::value).toList()), blocking);
         store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, identity.nodeId(), asked.encodeRaised(), identity);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("operatorRequest", asked.id());
-        result.put("note", "Recorded for the operator, who reads it when they look at the project. It changes nothing this lane may do: continue with the work you can do and do not wait for an answer.");
+        result.put("note", blocking ? "Recorded for the operator, who reads it when they look at the project. It changes nothing this lane may do: continue with the work you can do and do not wait for an answer."
+                : "Recorded as a note for the operator. It blocks nothing and ends no run: continue with the work you can do.");
         return new AgentResponse(AgentStatus.COMPLETED, null, null, result);
     }
 
@@ -387,8 +389,24 @@ public final class ConversationService {
      * @param conversation         a conversation the caller's lane belongs to, or {@code null} when members are named
      * @param text                 what is said
      * @param handed               what this connection was handed before; sending shows the answer carrying it arrived
+     * @param blocking             for a message to the operator: whether the lane needs an answer before it can go on; ignored for other messages
      */
-    public record SendRequest(Path projectRoot, String provider, String connectionInstanceId, List<String> to, UUID conversation, String text, Cursor handed) {
+    public record SendRequest(Path projectRoot, String provider, String connectionInstanceId, List<String> to, UUID conversation, String text, Cursor handed, boolean blocking) {
+
+        /**
+         * Creates a request whose message to the operator, if it is one, blocks (the default).
+         *
+         * @param projectRoot          control project root
+         * @param provider             provider of the calling session
+         * @param connectionInstanceId connection of the calling session
+         * @param to                   members named, or the operator alone
+         * @param conversation         a conversation the caller's lane belongs to, or {@code null}
+         * @param text                 what is said
+         * @param handed               what this connection was handed before
+         */
+        public SendRequest(Path projectRoot, String provider, String connectionInstanceId, List<String> to, UUID conversation, String text, Cursor handed) {
+            this(projectRoot, provider, connectionInstanceId, to, conversation, text, handed, true);
+        }
 
         /**
          * Validates the request.

@@ -2,6 +2,7 @@ package org.synesis.workspace.application.agent.run;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -609,6 +610,21 @@ final class AgentRunControllerTest {
 
         assertEquals(AgentRunController.Outcome.NEEDS_OPERATOR, result.outcome());
         assertTrue(script.events.contains("OPERATOR_REQUEST=opr_1 CONDITION=control_checkout_foreign_changes"), script.events.toString());
+    }
+
+    /** An FYI the lane already acted on is printed and kept, but it does not stop a run. */
+    @Test
+    void anOperatorNoteIsPrintedButDoesNotMakeAStalledRunNeedAnOperator() throws Exception {
+        Script script = new Script();
+        script.lifetimes(2, 3);
+        script.at(0).head(7).announced().operatorNote("opr_1 CONDITION=lane_notes_operator");
+        script.at(1).head(7).announced().operatorNote("opr_1 CONDITION=lane_notes_operator");
+
+        AgentRunController.Result result = script.run(8);
+
+        assertNotEquals(AgentRunController.Outcome.NEEDS_OPERATOR, result.outcome());
+        assertTrue(script.events.contains("OPERATOR_NOTE=opr_1 CONDITION=lane_notes_operator"), script.events.toString());
+        assertFalse(script.events.stream().anyMatch(event -> event.startsWith("OPERATOR_REQUEST=")), script.events.toString());
     }
 
     /** Resuming an agent whose published work waits for an operator only repeats the refusal. */
@@ -1629,6 +1645,11 @@ final class AgentRunControllerTest {
                 }
 
                 @Override
+                public List<String> operatorNotes() {
+                    return state.operatorNotes;
+                }
+
+                @Override
                 public boolean heldByOperator(String provider) {
                     return heldByOperator.contains(provider);
                 }
@@ -1770,6 +1791,7 @@ final class AgentRunControllerTest {
         private boolean mainMissesAHead;
         private long cameBackAtTick = -1;
         private final List<String> operatorRequests = new ArrayList<>();
+        private final List<String> operatorNotes = new ArrayList<>();
         private final Map<String, Long> messages = new java.util.HashMap<>();
         private final List<String> endedLanes = new ArrayList<>();
         private final List<String> fenced = new ArrayList<>();
@@ -1831,6 +1853,11 @@ final class AgentRunControllerTest {
         /** A message addressed to the lane of this agent, by its label, at this log position. */
         private State message(String agent, long sequence) {
             messages.put(agent, sequence);
+            return this;
+        }
+
+        private State operatorNote(String line) {
+            operatorNotes.add(line);
             return this;
         }
 

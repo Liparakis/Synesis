@@ -341,16 +341,19 @@ final class McpCoordinationTools {
         List<String> to;
         UUID conversation;
         String text;
+        boolean blocking;
         try {
             Object named = arguments == null ? null : arguments.get("to");
             // One name where a list is expected is a list of one: a model writes either.
             to = named == null ? List.of() : named instanceof String one ? List.of(one) : nullableStringList(named, "to");
             conversation = optionalUuidArgument(arguments, "conversation");
             text = optionalStringArgument(arguments, "text");
+            // Absent or null means blocking, so a caller that never heard of the flag keeps its meaning.
+            blocking = arguments == null || arguments.get("blocking") == null || optionalBooleanArgument(arguments, "blocking");
         } catch (IllegalArgumentException invalid) {
             return McpRefusalGuidance.malformed(AgentNextAction.RETRY, "reason", "INVALID_SEND_MESSAGE_ARGUMENTS", invalid);
         }
-        return conversationService.send(new ConversationService.SendRequest(activeProjectRoot, provider, connectionInstanceId, to, conversation, text, messagesHanded));
+        return conversationService.send(new ConversationService.SendRequest(activeProjectRoot, provider, connectionInstanceId, to, conversation, text, messagesHanded, blocking));
     }
 
     /**
