@@ -20,6 +20,7 @@ import org.synesis.link.identity.NodeIdentity;
 import org.synesis.workspace.application.integration.IntegrationWorkspaceService;
 import org.synesis.workspace.application.project.ProjectLocation;
 import org.synesis.workspace.application.provider.ProviderSessionBindingService;
+import org.synesis.workspace.lifecycle.process.GitProcessRunner;
 
 /**
  * Who may take a combine lane, and taking it (ADR-0098 step 5, designer item 22; ADR-0100 "The combine lane"). A
@@ -125,6 +126,11 @@ public final class CombineLaneJoin {
             TaskSnapshotRecord snapshot = store.taskCompletionProjection().findSnapshotById(snapshotId).orElseThrow();
             snapshot.provenance().claimSelectors().forEach(encoded -> ResourceSelector.parse(encoded).ifPresent(claims::add));
         }
+        // Merging "theirs" into the base brings every change of the other side into the worktree, not only the paths the
+        // combined snapshots claimed. When "theirs" is the other copy's head (ADR-0098 step 5 item 51) those paths are
+        // the other copy's own work; unclaimed, finishing the lane refused them as UNCLAIMED_SNAPSHOT_PATH and the
+        // combine never got a result (s11b-run3).
+        mergedPaths(location.root(), combine).forEach(path -> claims.add(ResourceSelector.pathExact(path)));
         // The worktree first: a lane is never announced without both versions in place, and a repeated call after a
         // crash finds the worktree already prepared. Then its binding, so the worktree is judged against the combine's
         // base and not against this computer's main (s5-run8).
@@ -149,6 +155,15 @@ public final class CombineLaneJoin {
                 List.of(),
                 List.of());
         return new WorkIntentService(store, identity).announce(target);
+    }
+
+    /** The paths the other side of the combine changed since it left the base, as the three-way merge takes them. */
+    private static List<String> mergedPaths(Path controlRoot, CombinePayload combine) throws IOException {
+        String mergeBase = GitProcessRunner.runOptional(controlRoot, "merge-base", combine.base(), combine.theirs()).trim();
+        if (mergeBase.isEmpty()) {
+            return List.of();
+        }
+        return GitProcessRunner.run(controlRoot, "diff", "--name-only", "--no-renames", mergeBase, combine.theirs()).lines().filter(line -> !line.isBlank()).toList();
     }
 
     /**

@@ -1698,6 +1698,35 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     real run then passes (no real run repeated); that an other copy moving again while the second combine waits does not loop (a combine
     for a head that is replaced is left open and a new one opens for the newest head, as for advances).
 
+52. **A combine of the other copy's head claims every path its merge brings in (s11b-run3, 2026-11-13, build sbx11, real cut; item 51's
+    second combine was the one that stuck).** Result `FAIL`, `main` differs (PC `bd68b2d…`, VM `5b8dcc5…`), both runs `NEEDS_OPERATOR`
+    (`opr_8aacbc05396b4641`, `lane_asks_operator`). *Read from `D:\SynesisAcceptance\evidence\s11b-run3`:* the VM (higher computer) wrote
+    four `COMBINE_REQUIRED` and no `REMERGE_SNAPSHOT_CREATED`. Combine 3 (`cb-882ed8d4…`, base `2bc0c3e`, `theirs` the snapshot commit)
+    landed as `snap_75a62622…`; combine 4 (`cb-ce2da2d5…`, base `38f305a`, `theirs` the PC's head `bd68b2d`) is item 51's new combine. Its agent
+    (`codex#2`) resolved the markers, the tests passed, and `finish_lane` answered `task_not_ready` with no reason every time (the lane stayed
+    ACTIVE, `PARTICIPANT_SUSPENDED`, `RECOVERY_SNAPSHOT_HELD`; the VM run ended `NEEDS_OPERATOR` after 1286 s). *Cause (reproduced on the real
+    commits, `merge-base(38f305a, bd68b2d) = afe8d1f`):* the worktree is materialized by merging `theirs` into the base, which brings in the
+    other copy's whole side (`fib/`, `primes/`, `reviews/`, `gcd/`, `NOTES.md`), but `CombineLaneJoin.join` claimed only the combined snapshots'
+    paths (`gcd/`, `NOTES.md`). `materializedPaths` then threw `UNCLAIMED_SNAPSHOT_PATH`, which `AgentTaskCompletionService` turns into a bare
+    `TASK_NOT_READY` (the `IllegalStateException` catch around `createSnapshot`). Combine 3 only passed because its `theirs` was a snapshot
+    inside its claims. *Item 51 is the trigger:* before it no combine had the other head as `theirs`. *Fix:* the lane also claims every path
+    changed between `merge-base(base, theirs)` and `theirs`. Pinned by
+    `CombineLaneJoinTest.aCombineOfTheOtherCopysHeadClaimsEveryPathItsMergeBringsIn` (written to fail before: the lane's selectors are only the
+    snapshot's file; passes after; the Linux gate ran it and `RemergeServiceTest` green; the fail-before run was not made, to save a gate job).
+    *The operator request itself:* the PC's Haiku agent (`claude#2`) found the VM's combine of `snap_b243df29…` in the group list, announced
+    its own lane for it with `ensure_session`, could not read commit `850f209` (it exists only on the VM; the PC never fetched it), and
+    sent the operator a note. That note raised `OPERATOR_REQUEST_RAISED`, and `stalledOutcome` returns `NEEDS_OPERATOR` for any open request
+    when every agent is stopped, ahead of `progressElsewhere`, so the PC ended at 233 s, inside the 300 s split, and the VM ended on the same
+    request after it healed. *Not proved and not changed:* why the PC agent invented a combine lane instead of the VM taking it; why `850f209`
+    never crossed; whether an operator request that a lane raised as a note ("continue, do not wait") should end a run while another
+    computer still has open combines. *s11b-run1 (`TIME_BOUND`, mains equal, tests pass, no controller result):* the re-merge completed
+    (four `REMERGE_SNAPSHOT_CREATED`, reviews accepted). The VM's Codex producer's NOTES.md snapshot `snap_873ebfed…` was accepted by the PC
+    but its integration conflicted against the re-merged main (`REPAIR_REQUIRED`, PC log 182). The producer's session then answered
+    `workspace_stale` (`WORKSPACE_STALE_DIRTY`): `get_next_action` projects `ensure_session`, and `ensure_session` says to follow
+    `get_next_action`, so the repair was never claimed; both controllers waited on `FOREIGN_LANE_OPEN` until the deadline. This is a product
+    deadlock, not harness timing, but no fix is made here: the evidence has no process log and the projection order for a stale-dirty
+    session with a `REPAIR_REQUIRED` task is not tested. A test of that projection would settle it.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

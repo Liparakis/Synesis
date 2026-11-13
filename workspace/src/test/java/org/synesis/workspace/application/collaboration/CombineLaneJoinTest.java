@@ -340,4 +340,33 @@ final class CombineLaneJoinTest {
 
         assertEquals("COMBINE_TAKEN_OR_CLOSED", taken.getMessage());
     }
+
+    /**
+     * ADR-0098 step 5 item 52 (s11b-run3): a combine of the other copy's head brings that copy's own changes into the
+     * worktree, and the lane has to claim them or finishing it is refused as UNCLAIMED_SNAPSHOT_PATH.
+     */
+    @Test
+    void aCombineOfTheOtherCopysHeadClaimsEveryPathItsMergeBringsIn() throws Exception {
+        TestGit.run(fixture.root, "checkout", "-q", "--detach", fixture.base + "~1");
+        Files.writeString(fixture.root.resolve(CombineFixture.FILE), "theirs\n");
+        Files.writeString(fixture.root.resolve("src/extra.txt"), "the other copy's own work\n");
+        TestGit.run(fixture.root, "add", ".");
+        TestGit.run(fixture.root, "commit", "-q", "-m", "the other copy's newest head");
+        String head = git(fixture.root, "rev-parse", "HEAD").trim();
+        TestGit.run(fixture.root, "checkout", "-q", "-");
+        CombinePayload second = new CombinePayload("cb-second", "remerge-test", head, fixture.combine.ownHead(), fixture.base, head, fixture.combine.snapshotIds());
+        var group = new org.synesis.coordination.domain.collaboration.WorkGroup(second.workGroupId(), fixture.store().projectId(), "Combine the other copy's head",
+                "One change that holds both versions", 1, org.synesis.coordination.domain.collaboration.WorkGroup.Status.ACTIVE,
+                org.synesis.coordination.domain.collaboration.ReviewPolicy.none());
+        fixture.store().append(group.workGroupId(), org.synesis.coordination.domain.prediction.PredictionEventType.WORK_GROUP_CREATED, fixture.identity.nodeId(),
+                org.synesis.coordination.domain.collaboration.CollaborationCodec.encodeWorkGroup(group), fixture.identity);
+        fixture.store().append(java.util.UUID.randomUUID(), org.synesis.coordination.domain.prediction.PredictionEventType.COMBINE_REQUIRED, fixture.identity.nodeId(),
+                second.encode(), fixture.identity);
+        ProviderSessionBindingService.Binding binding = fixture.session(COMBINER);
+
+        ClaimResult joined = CombineLaneJoin.join(fixture.store(), fixture.identity, fixture.location, binding, fixture.participant(COMBINER), second);
+
+        assertTrue(joined.intent().selectors().contains(ResourceSelector.pathExact("src/extra.txt")), joined.intent().selectors().toString());
+        assertTrue(joined.intent().selectors().contains(ResourceSelector.pathExact(CombineFixture.FILE)), joined.intent().selectors().toString());
+    }
 }
