@@ -355,6 +355,33 @@ class AgentSessionServiceTest {
         assertEquals("unpublished work\n", Files.readString(worktree.resolve("README.md")), "the stale session is not refreshed or mutated");
     }
 
+    /**
+     * ADR-0098 step 5 item 56 (s14a-run1): a reviewer whose reviews were done held a lane with nothing in its worktree.
+     * It was told its worktree "holds work you have not published" and not to call {@code ensure_session}, which would
+     * have refreshed it; it obeyed and its lane stayed open to the deadline, so neither controller could end.
+     */
+    @Test
+    void aStaleLaneHolderWhoseWorktreeIsCleanIsSentToEnsureSessionWhichRefreshesIt() throws Exception {
+        String connection = "stale-clean";
+        var location = new ProjectApplicationService().locate(tempRoot);
+        var original = new ProviderSessionBindingService().ensure(location, "codex", connection).binding();
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        assertTrue(new WorkIntentService(store, identity).announce(new WorkIntent(UUID.randomUUID(), location.projectId(), WorkspaceCollaborationService.participantHandle(original.sessionId()),
+                "codex", UUID.randomUUID(), "Review the readme", "Review recorded", original.baseCommit(), List.of(ResourceSelector.pathExact("reviews/readme.md")), 1,
+                WorkIntent.Status.ANNOUNCED)).acquired());
+        Files.writeString(tempRoot.resolve("README.md"), "integrated elsewhere\n");
+        git(tempRoot, "commit", "-am", "integrated elsewhere");
+
+        AgentResponse next = new org.synesis.workspace.application.agent.workflow.AgentNextActionService()
+                .getNextAction(new org.synesis.workspace.application.agent.workflow.NextActionRequest(tempRoot, "codex", connection));
+        AgentResponse ensured = sessionService.ensureSession(new SessionResolutionRequest(tempRoot, "codex", connection, null, false));
+
+        assertEquals(AgentNextAction.ENSURE_SESSION, next.nextAction(), "a clean worktree has nothing to publish and is refreshed by ensure_session: " + next.toJson());
+        assertFalse(next.toJson().contains("holds work you have not published"), next.toJson());
+        assertEquals(AgentStatus.READY, ensured.status(), ensured.toJson());
+    }
+
     @Test
     void testTaskIntentValidation() {
         assertThrows(IllegalArgumentException.class, () -> new AgentTaskIntent("a".repeat(4097), "ok", List.of(), List.of()));

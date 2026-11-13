@@ -495,7 +495,9 @@ public final class AgentNextActionService {
             if (repairWait != null) {
                 return repairWait;
             }
-            if (!request.completionRequested() && holdsUnpublishedLane(inspection.location(), exactBinding)) {
+            // Only a worktree that really holds work is kept from ensure_session: a clean stale one is refreshed by it, and a
+            // reviewer that had finished its reviews obeyed the ban and sat on an open lane to the deadline (s14a-run1).
+            if (!request.completionRequested() && bindingService.hasConfirmedUncommittedWork(exactBinding) && holdsUnpublishedLane(inspection.location(), exactBinding)) {
                 return staleLaneCompletionRequest();
             }
         }

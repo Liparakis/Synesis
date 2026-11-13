@@ -1780,6 +1780,26 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     (ADR-0100), so it needs its own design. *Not proved:* that publishing from the stale worktree then reaches a merge or a repair in a real
     run, and that the repair is then taken once `claude#1` has no lane.
 
+56. **Only a worktree that really holds work is kept from `ensure_session` (s14a-run1, 2026-11-13, build sbx14, real cut; item 55's rule
+    misfired).** Result `PARTIAL`, mains equal, PC `TIMED_OUT` (`OTHER_COMPUTER_CONNECTED`), VM `STALLED` (`FOREIGN_LANE_OPEN`, then
+    `COPIES_MEETING`). *Read from `D:\SynesisAcceptance\evidence\s14a-run1`:* the one open lane at the end, on both logs, is
+    `5f4e0dfa…`, a REVIEWER lane of the PC's `claude#1` (`agt_cc4ba8d3…`) in group `f4e71733…` (the PC owns the log, writer `ac1d…`; the VM sees it
+    as a foreign lane). The agent had recorded every review it was granted (fib twice, digits, primes; the group COMPLETED) and had written
+    nothing: it had no snapshot and a clean worktree. Its last answers (`claude-1-10.log`): `get_next_action` said "Your worktree is stale and
+    holds work you have not published ... Do not call ensure_session" (item 55's answer), `get_next_action` with `completionRequested`
+    projected nothing for a reviewer lane (no-change completion needs an acceptance that declares no mutation) and fell back to
+    `ensure_session`, and the agent, having been forbidden it, stopped: "I won't call ensure_session until someone confirms it's safe". A
+    sibling `claude#2` in the same run called `ensure_session` after the same `workspace_stale` and was refreshed (`claude-2-9.log`). *Cause:*
+    item 55's `holdsUnpublishedLane` meant "the lane has no snapshot", which is also true of a lane with nothing to publish; so a clean stale
+    session, which `ensure_session` refreshes, was told its worktree holds unpublished work and was barred from the one call that clears the
+    stale state. This is not item 53's cause (a dirty session, a conflicted snapshot) nor the original loop of item 55 (a dirty lane); it is
+    what item 55 added. *Fix:* the publish instruction is answered only when `hasConfirmedUncommittedWork` also holds, so a clean stale session
+    gets the readiness answer, `ensure_session`. Pinned by `AgentSessionServiceTest.aStaleLaneHolderWhoseWorktreeIsCleanIsSentToEnsureSessionWhichRefreshesIt`
+    (fails before with the item 55 answer; passes after, with the item 53 and 55 stale tests). *Not changed and not proved:* a stale,
+    dirty reviewer lane (a reviewer that wrote notes and went stale) still has no completion to be shown; that run 1 would have ended with this
+    change (no real run repeated); why the PC's controller waited `OTHER_COMPUTER_CONNECTED` for 1502 s instead of resuming `claude#1`
+    (it had stopped by its own choice, exit 0, within the resume budget).
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory
