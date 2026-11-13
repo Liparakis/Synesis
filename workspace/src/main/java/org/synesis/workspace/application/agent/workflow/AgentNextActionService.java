@@ -495,7 +495,7 @@ public final class AgentNextActionService {
             if (repairWait != null) {
                 return repairWait;
             }
-            if (!request.completionRequested() && hasActiveIntent(inspection.location(), exactBinding)) {
+            if (!request.completionRequested() && holdsUnpublishedLane(inspection.location(), exactBinding)) {
                 return staleLaneCompletionRequest();
             }
         }
@@ -614,6 +614,27 @@ public final class AgentNextActionService {
             return store.filter(predictionEventStore -> activeIntentOf(predictionEventStore, WorkspaceCollaborationService.participantHandle(binding.sessionId())).isPresent()).isPresent();
         } catch (Exception failure) {
             logSuppressed("active-intent lookup", failure);
+            return false;
+        }
+    }
+
+    /**
+     * Whether this session holds a lane that has published no snapshot yet. A producer whose snapshot already waits for
+     * review is not told to publish again: it is shown the reviews it can do while it waits.
+     */
+    private static boolean holdsUnpublishedLane(ProjectLocation location, ProviderSessionBindingService.Binding binding) {
+        try {
+            Optional<PredictionEventStore> opened = openEventStore(location);
+            if (opened.isEmpty()) {
+                return false;
+            }
+            PredictionEventStore store = opened.get();
+            return activeIntentOf(store, WorkspaceCollaborationService.participantHandle(binding.sessionId()))
+                    .filter(lane -> store.taskCompletionProjection().allSnapshots().stream()
+                            .noneMatch(snapshot -> lane.intentId().equals(snapshot.provenance().laneId())))
+                    .isPresent();
+        } catch (Exception failure) {
+            logSuppressed("unpublished-lane lookup", failure);
             return false;
         }
     }

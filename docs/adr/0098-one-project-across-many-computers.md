@@ -2231,3 +2231,7 @@ The two-homes run with the friend's PC is repeated after step 5 as a check, not 
   (REQUIRES-MEASUREMENT, step 3.)
     When a session is offered both a combine and a repair, the combine keeps the instruction (the copies of `main` cannot
     meet until it lands) and the repair stays listed in `repairCandidates` (review of `bb21e6e7`, 2026-11-13).
+    Correction (review, 2026-11-13, the `--cpus 2` gate on `b72d9e73`): the rule first applied to any stale session holding a
+    lane, and told producers whose snapshot already waits for review to publish again instead of showing them the reviews
+    they can do (`McpProducersReviewEachOtherTest` failed twice). It now applies only to a lane that has published no
+    snapshot.
