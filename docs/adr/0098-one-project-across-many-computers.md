@@ -750,6 +750,48 @@ Decided while building step 4 (designer, 2026-10-18; each open to the owner):
     computer before the request arrived; two takers of one lane on computers apart (both successors stand, but which
     one the old lane's review requests follow depends on the order; step 7). Each applies without throwing; which of the two stands depends on the
     order.
+
+    *Designed on 2026-11-15 (designer; not built, each open to the owner).* One rule per case, each the same in every
+    arrival order. Where two computers' entries tie, the lower node ID stands, as for two answers (item 15) and two
+    creations of a group (item 16). Where a later state already decides more than an earlier one, the decision stands.
+    1. *A participant's lifecycle.* Today the entry that arrives last wins: the agent's own computer writes `DETACHED`
+       (it ended cleanly, its lanes dropped) while a taker apart writes `SUSPENDED`, and each computer shows the state
+       it read last. *Rule:* an ended participant stays ended. `REVOKED`, `CANCELLED`, `COMPLETED` and `DETACHED` are
+       ends, ranked in that order; on arrival, a step to a state that is not an end (`SUSPENDED`, a heartbeat's
+       `ACTIVE`) counts for nothing once the participant has ended, and between two ends the higher rank stands. The
+       lanes are dropped by whichever end arrives first, so nothing else moves. *Example:* `DETACHED` then `SUSPENDED`
+       gives `DETACHED`, as `SUSPENDED` then `DETACHED` already does. *Code:* `CollaborationProjection.suspended`,
+       `detached`, `cancelled` and `heartbeat`, in `ARRIVAL` and `REPLAY` only; a computer's own append keeps today's
+       checks.
+    2. *Two sibling prediction steps, or two terminal steps.* `ACCEPTED_EXACT` and `CONTRACT_REVISED` both follow
+       `RECEIVED`; today the first to arrive stands and the other counts for nothing, so two computers can keep
+       different states for ever. *Rule:* of two steps from the same state, the lower node's stands, and a step built on
+       the other one counts for nothing. The prediction keeps its steps with their writers and its state is computed
+       again from them when a sibling arrives, which `PredictionProjection` can do because a prediction's steps are few.
+       Two terminal steps (`REJECTED`, `INVALIDATED`, `EXPIRED`) end it either way; the label is the lower node's.
+       *Example:* the PC accepts exactly and starts implementing; the VM, apart, revised the contract; the lower of the
+       two nodes' step stands on both, and if it is the VM's, the PC's `IMPLEMENTATION_STARTED` counts for nothing and
+       its agent is told the contract was revised.
+    3. *Two revisions of one contract number.* Two computers each revise a capability request's contract to revision
+       N; today the last applied is the contract. *Rule:* a higher revision number stands; at the same number, the
+       lower node's contract stands, and an acceptance or implementation of the other one counts for nothing, as an
+       acceptance of an older revision already does (ADR-0100 row 10). *Code:* `CapabilityRequestProjection.processRevised`
+       keeps the writer of the current revision.
+    4. *A capability request whose requester was continued elsewhere before the request arrived.* A continuation moves
+       only the requests it finds; a request that arrives after it still names the old requester, who has ended, while
+       the computer that read the request first moved it to the successor. *Rule:* a request follows its requester's
+       continuations whenever it arrives. `CapabilityRequestProjection` remembers each continuation (source actor to
+       successor), and a request created for an actor that was continued is given the last successor of that chain.
+       *Example:* lane L on the VM asks the PC for a capability; the PC took L over as L2 while apart; the request
+       arrives after the takeover and names L2 on both computers.
+    5. *Two takers of one lane.* Both successors stand (ADR-0100 row 8); the old lane's review requests go to the one
+       whose continuation arrived first. *Rule:* they go to the lower node's taker. When a second continuation of an
+       ended lane arrives from a lower node than the one the requests went to, the pending requests move to it; a
+       request already answered stays answered, since the answer is history. *Code:* `CollaborationProjection.continued`
+       keeps, per source lane, the node of the taker its requests follow.
+    *Proof each needs before it lands:* a property test that applies the two computers' entries in every order and
+    checks one state, and the scripted scenario of the case (ADR-0101's constraint, one real run, applies to changes of
+    the agents' rules, which these are not: they change only which of two entries a computer keeps).
 19. **The claim lock, made exact.** Item 4 alone lets two claims both stand: B asks A before A has claimed, A then
     claims and asks B while B's check still runs, and B's node is the higher, so A is not refused, and neither is B.
     So a computer that is asked about an overlapping claim while its own is being checked, by a computer with a lower

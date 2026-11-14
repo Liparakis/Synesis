@@ -82,4 +82,24 @@ final class MergeDriverTest {
             assertTrue(twoPasses.await(10, TimeUnit.SECONDS), "accepted member work is merged although no member entry follows it");
         }
     }
+
+    @Test
+    void closeReturnsOnlyAfterAPassThatIsRunningHasEnded() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        AtomicInteger ended = new AtomicInteger();
+        MergeDriver driver = new MergeDriver(() -> {
+            started.countDown();
+            long until = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(300);
+            while (System.nanoTime() < until) {
+                Thread.onSpinWait(); // a pass that does not stop at an interrupt, as one inside a Git call may not
+            }
+            ended.incrementAndGet();
+        }, 1);
+        driver.onMemberEntry();
+        assertTrue(started.await(10, TimeUnit.SECONDS));
+
+        driver.close();
+
+        assertEquals(1, ended.get(), "a pass still writing to the project after close races whoever removes or reuses the folder");
+    }
 }

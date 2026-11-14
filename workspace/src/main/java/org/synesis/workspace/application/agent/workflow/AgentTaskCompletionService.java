@@ -479,10 +479,7 @@ public final class AgentTaskCompletionService {
             if (location.validation() != null && location.validationAlsoInLane()) {
                 prePublicationValidation = processExecutor.execute(ExecutionRequest.from(location.validation(), workerWorktreePath, location.root()));
                 if (!prePublicationValidation.succeeded()) {
-                    Map<String, Object> result = new LinkedHashMap<>();
-                    result.put(NextActionKeys.PHASE, NextActionProtocol.PHASE_PRE_PUBLICATION);
-                    result.put("validation", prePublicationValidation.toMap());
-                    return new AgentResponse(AgentStatus.BLOCKED, AgentReason.VALIDATION_FAILED, AgentNextAction.RETRY, result);
+                    return laneValidationFailed(prePublicationValidation);
                 }
             }
 
@@ -835,10 +832,7 @@ public final class AgentTaskCompletionService {
                 return new AgentResponse(AgentStatus.BLOCKED, AgentReason.VALIDATION_FAILED, AgentNextAction.RETRY, Map.of(NextActionKeys.PHASE, NextActionProtocol.PHASE_PRE_PUBLICATION, NextActionKeys.REASON, "VALIDATION_EXECUTION_FAILED"));
             }
             if (!validation.succeeded()) {
-                Map<String, Object> result = new LinkedHashMap<>();
-                result.put(NextActionKeys.PHASE, NextActionProtocol.PHASE_PRE_PUBLICATION);
-                result.put("validation", validation.toMap());
-                return new AgentResponse(AgentStatus.BLOCKED, AgentReason.VALIDATION_FAILED, AgentNextAction.RETRY, result);
+                return laneValidationFailed(validation);
             }
         }
 
@@ -1019,5 +1013,18 @@ public final class AgentTaskCompletionService {
         }
     }
 
-
+    /**
+     * The answer to a lane whose validation command did not pass. A command that was not run for want of a sandbox is not
+     * the lane's to fix, so it is answered as {@code run_command} answers it ({@code SANDBOX_UNAVAILABLE} or
+     * {@code SANDBOX_SETUP_FAILED}, ADR-0104 Part C), not as a failure to retry: retried, it fails the same way for ever.
+     */
+    static AgentResponse laneValidationFailed(ExecutionResult validation) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put(NextActionKeys.PHASE, NextActionProtocol.PHASE_PRE_PUBLICATION);
+        result.put("validation", validation.toMap());
+        return switch (validation.outcome()) {
+            case COMMAND_SANDBOX_UNAVAILABLE, COMMAND_SANDBOX_SETUP_FAILED -> validation.toAgentResponse(result);
+            default -> new AgentResponse(AgentStatus.BLOCKED, AgentReason.VALIDATION_FAILED, AgentNextAction.RETRY, result);
+        };
+    }
 }

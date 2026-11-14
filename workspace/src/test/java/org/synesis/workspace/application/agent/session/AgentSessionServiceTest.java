@@ -382,6 +382,35 @@ class AgentSessionServiceTest {
         assertEquals(AgentStatus.READY, ensured.status(), ensured.toJson());
     }
 
+    /**
+     * ADR-0098 step 5 item 56 left this unproved: a reviewer that wrote its notes and went stale holds a lane whose
+     * worktree has work main did not touch. It is told to publish (item 55), and asking to finish projects the publication.
+     */
+    @Test
+    void aStaleReviewerLaneWithUnpublishedNotesIsShownTheCompletionThatPublishesThem() throws Exception {
+        String connection = "stale-dirty-reviewer";
+        var location = new ProjectApplicationService().locate(tempRoot);
+        var original = new ProviderSessionBindingService().ensure(location, "codex", connection).binding();
+        var identity = new IdentityBootstrap(location.profile().resolve("link")).loadOrCreate().identity();
+        var store = new PredictionEventStore(location.root().resolve(".synesis/coordination"), location.projectId());
+        assertTrue(new WorkIntentService(store, identity).announce(new WorkIntent(UUID.randomUUID(), location.projectId(), WorkspaceCollaborationService.participantHandle(original.sessionId()),
+                "codex", UUID.randomUUID(), "Review the readme", "Review recorded", original.baseCommit(), List.of(ResourceSelector.pathExact("reviews/readme.md")), 1,
+                WorkIntent.Status.ANNOUNCED)).acquired());
+        Path worktree = Path.of(original.worktreePath());
+        Files.createDirectories(worktree.resolve("reviews"));
+        Files.writeString(worktree.resolve("reviews/readme.md"), "the readme reads well\n");
+        Files.writeString(tempRoot.resolve("README.md"), "integrated elsewhere\n");
+        git(tempRoot, "commit", "-am", "integrated elsewhere");
+        var next = new org.synesis.workspace.application.agent.workflow.AgentNextActionService();
+
+        AgentResponse asked = next.getNextAction(new org.synesis.workspace.application.agent.workflow.NextActionRequest(tempRoot, "codex", connection));
+        AgentResponse completion = next.getNextAction(new org.synesis.workspace.application.agent.workflow.NextActionRequest(tempRoot, "codex", connection, true));
+
+        assertTrue(asked.toJson().contains("completionRequested"), asked.toJson());
+        assertTrue(completion.toJson().contains("finish_lane"), "the lane it was told to publish has a completion to follow: " + completion.toJson());
+        assertEquals("the readme reads well\n", Files.readString(worktree.resolve("reviews/readme.md")), "the stale session is not refreshed or mutated");
+    }
+
     @Test
     void testTaskIntentValidation() {
         assertThrows(IllegalArgumentException.class, () -> new AgentTaskIntent("a".repeat(4097), "ok", List.of(), List.of()));

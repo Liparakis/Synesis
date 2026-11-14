@@ -61,4 +61,24 @@ class LaneSandboxPolicyTest {
         assertTrue(hides(policy, state.resolve("link/identity.bin")), "the application state is hidden: " + policy.hidden());
         assertTrue(hides(policy, state.resolve("workspaces/p/worktrees/lane2/f.txt")), "other lanes are hidden: " + policy.hidden());
     }
+
+    /**
+     * ADR-0104 "Residual": on Linux and macOS the sandbox hid only the home folder, so another project stored elsewhere
+     * (here beside the home, as {@code /srv/project} would be) kept its {@code .synesis}, node key included, readable.
+     */
+    @Test
+    void anotherProjectThisComputerKnowsIsHiddenWhereverItIsStored() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeFalse(System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("windows"),
+                "Windows labels the state no-read-up instead");
+        Path other = Files.createDirectories(temp.resolve("srv/other"));
+        org.synesis.workspace.test.TestGit.run(other, "init", "-q");
+        new org.synesis.workspace.application.ProjectApplicationService().init(other, false);
+        new org.synesis.workspace.discovery.KnownProjectRegistry().register(other);
+        Path control = Files.createDirectories(temp.resolve("project"));
+        Path lane = Files.createDirectories(temp.resolve("home/.synesis/Synesis/workspaces/p/worktrees/lane1"));
+
+        SandboxPolicy policy = LaneSandboxPolicy.derive(lane, control, Files.createDirectories(temp.resolve("private")));
+
+        assertTrue(hides(policy, other.resolve(".synesis/local/profile/link/identity.bin")), "the other project's node key is hidden: " + policy.hidden());
+    }
 }

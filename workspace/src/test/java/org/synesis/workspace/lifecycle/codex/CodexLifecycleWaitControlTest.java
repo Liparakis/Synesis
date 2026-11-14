@@ -276,8 +276,8 @@ class CodexLifecycleWaitControlTest {
     @Override
     public void providerTurnCompleted(LifecycleControlRequestEnvelope.AuthorityContext authority,
         long attachmentGeneration, String threadId, String turnId) {
+      completedThreadId = threadId; // before the countdown, which publishes it to the awaiting test thread
       persistenceCompleted.countDown();
-      completedThreadId = threadId;
     }
   }
 

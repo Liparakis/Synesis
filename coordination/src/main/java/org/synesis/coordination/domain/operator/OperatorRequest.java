@@ -70,6 +70,13 @@ public record OperatorRequest(String id, String condition, String raisedBy, Stri
      */
     public static final String REMERGE_REJECTED_TWICE = "remerge_rejected_twice";
 
+    /**
+     * A re-merge of the two copies of main was not validated because this computer has no sandbox for the validation
+     * command, or could not set it up (ADR-0104 Part C). Nothing merges until the command runs; the request closes when
+     * the re-merge validates. It blocks.
+     */
+    public static final String REMERGE_SANDBOX_UNAVAILABLE = "remerge_sandbox_unavailable";
+
     private static final int MAGIC_RAISED = 0x534f5231;
     private static final int MAGIC_CLOSED = 0x534f5232;
     private static final int MAX_TEXT_BYTES = 8 * 1024;

@@ -3,7 +3,9 @@
 ## Status
 
 Proposed on 2026-10-26, at the owner's request. Stage 1 (signed decisions, the operator key, gates reading the log) was
-built on 2026-10-26/27, see "Stage 1 as built"; nothing else here is built. The owner decided the three points under
+built on 2026-10-26/27, see "Stage 1 as built"; stages 2, 3 and 5 were built on 2026-10-27 (Linux, Windows, refusal and
+doctor; see their "as built" notes), and stage 4 (macOS) is written but unverified, so `run_command` on macOS refuses
+until it is tested on a Mac (status line corrected 2026-11-14; it said nothing after stage 1 was built). The owner decided the three points under
 "Decisions made by the owner" the same day (USER-STATED); every other choice is the designer's and is marked so, open
 to the owner. It extends ADR-0089 (review policy), ADR-0091 (operator requests), ADR-0094 (validation gates) and
 ADR-0098 (membership entries signed by the owner). It closes the gap the owner parked on 2026-10-18 ("agents can bypass
@@ -569,6 +571,17 @@ home, which is why it passed there). With the real `user.home`, as the daemon ru
 the lane's siblings. A project stored outside the home folder (for example `/srv/project`) keeps its `.synesis`
 visible to another project's commands, which can read its node key. Windows is not affected (state is labelled
 no-read-up). The remedy, when wanted, is to hide every project root the computer knows, not only the home.
+*Closed on 2026-11-15:* `LaneSandboxPolicy` adds the root of every project in the known-project registry to the hidden
+paths on Linux and macOS (not on Windows, where it would relabel each other project's tree on every command). A registry
+that cannot be read hides nothing more and is logged, as before. Pinned by
+`LaneSandboxPolicyTest.anotherProjectThisComputerKnowsIsHiddenWhereverItIsStored`; `SandboxAdversarialTest` 17 of 17 with
+real bubblewrap on the Linux gate. *Also closed that day, the two gate paths Part C names that did not raise the request:*
+re-merge validation with no sandbox raises one blocking `remerge_sandbox_unavailable` request (closed when the command
+runs, the re-merge tried again on each pass) instead of only logging, and a lane's own validation (`alsoInLane`) is
+answered `SANDBOX_UNAVAILABLE` as `run_command` is, not `VALIDATION_FAILED` with retry. Pinned by
+`RemergeServiceTest.aReMergeWithNoSandboxForItsValidationRaisesOneRequestThatClosesWhenTheCommandRuns` and
+`LaneValidationSandboxTest`. *Published contracts:* one new operator-request condition (additive; a reader that does not
+know it treats it as blocking, which it is).
 
 ### Operator-key recovery (an explicit unresolved requirement)
 

@@ -157,9 +157,13 @@ class WorkspacePackageArchitectureTest {
    * counts as part of a cycle group when it can reach every other member through imports and
    * qualified references. Removing a cycle means deleting its entry here; adding a package to a
    * group or creating a new group fails the build.
+   *
+   * <p>{@code discovery} joined on 2026-11-15 (owner's choice): the lane sandbox hides every project root the known-project
+   * registry names (ADR-0104, "Residual"), and the registry validates projects through {@code application}. The
+   * alternative was a second reader of the registry file.</p>
    */
   private static final Set<Set<String>> ALLOWED_CYCLE_GROUPS = Set.of(Set.of(
-      "agent", "application", "application.collaboration", "application.constraint",
+      "agent", "application", "application.collaboration", "application.constraint", "discovery",
       "application.integration", "application.project", "application.project.execution",
       "application.provider", "application.provider.continuity", "application.provider.session",
       "application.workspace", "doctor", "lifecycle.cleanup.inventory", "lifecycle.cleanup.plan",

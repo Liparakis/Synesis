@@ -831,6 +831,42 @@ class RemergeServiceTest {
         assertEquals(entries, project.store().events().size());
     }
 
+    /**
+     * ADR-0104 Part C: a re-merge whose validation command cannot run for want of a sandbox merges nothing and raises one
+     * blocking request a person can find; once the command runs, the request closes. Before, it only logged a warning.
+     */
+    @Test
+    void aReMergeWithNoSandboxForItsValidationRaisesOneRequestThatClosesWhenTheCommandRuns() throws Exception {
+        NodeIdentity other = lowerNode();
+        project.declare(List.of("git", "--version"));
+        base = project.head();
+        Lane lane = lane("snap_a", "own.txt", false);
+        String own = ownMain("own.txt", "own");
+        ownAdvance(base, own, lane.snapshotId());
+        String otherHead = commit("other", base, "other.txt", "other");
+        otherAdvance(other, otherHead);
+        RemergeService sandboxless = new RemergeService(new ProjectApplicationService(),
+                new ProjectProcessExecutor(standIn(false), org.synesis.workspace.application.project.execution.UnsandboxedAllowance.DENY));
+        RemergeService sandboxed = new RemergeService(new ProjectApplicationService(),
+                new ProjectProcessExecutor(standIn(true), org.synesis.workspace.application.project.execution.UnsandboxedAllowance.DENY));
+
+        sandboxless.run(project.root, project.store(), self);
+        sandboxless.run(project.root, project.store(), self);
+
+        assertEquals(own, project.head(), "nothing is merged while the gate cannot run");
+        var raised = project.store().operatorRequestProjection().all().stream()
+                .filter(request -> request.condition().equals(org.synesis.coordination.domain.operator.OperatorRequest.REMERGE_SANDBOX_UNAVAILABLE)).toList();
+        assertEquals(1, raised.size(), "raised once, not on every pass");
+        assertTrue(raised.getFirst().blocking());
+        assertTrue(raised.getFirst().evidence().contains("ERROR=SANDBOX_UNAVAILABLE"), raised.getFirst().evidence());
+
+        sandboxed.run(project.root, project.store(), self);
+
+        assertTrue(project.isAncestorOfHead(otherHead), "with the command run, the re-merge lands");
+        assertEquals(org.synesis.coordination.domain.operator.OperatorRequest.State.CLOSED,
+                project.store().operatorRequestProjection().all().stream().filter(request -> request.id().equals(raised.getFirst().id())).findFirst().orElseThrow().state());
+    }
+
     @Test
     void aLaneThatNeededNoReviewLandsOnTheFirstPassWithNoReMergeEntry() throws Exception {
         NodeIdentity other = lowerNode();
@@ -1156,5 +1192,27 @@ class RemergeServiceTest {
         assertTrue(project.isAncestorOfHead(landed), "main only moves forward");
         assertTrue(project.isAncestorOfHead(otherAgain), "and holds the other computer's newest head");
         assertEquals(List.of(), MainMeeting.audit(project.root, project.store(), otherAgain, project.head()));
+    }
+
+    /** A sandbox that is ready and runs the command as given, or one that is not there. */
+    private static org.synesis.workspace.application.project.execution.sandbox.Sandbox standIn(boolean ready) {
+        return new org.synesis.workspace.application.project.execution.sandbox.Sandbox() {
+            @Override
+            public String name() {
+                return "stand-in";
+            }
+
+            @Override
+            public org.synesis.workspace.application.project.execution.sandbox.SandboxAvailability probe() {
+                return ready ? org.synesis.workspace.application.project.execution.sandbox.SandboxAvailability.ready()
+                        : org.synesis.workspace.application.project.execution.sandbox.SandboxAvailability.unavailable("no bwrap", "install bubblewrap");
+            }
+
+            @Override
+            public org.synesis.workspace.application.project.execution.sandbox.WrappedCommand wrap(
+                    org.synesis.workspace.application.project.execution.sandbox.SandboxPolicy policy, List<String> argv, java.util.Map<String, String> environment) {
+                return new org.synesis.workspace.application.project.execution.sandbox.WrappedCommand(argv, environment);
+            }
+        };
     }
 }

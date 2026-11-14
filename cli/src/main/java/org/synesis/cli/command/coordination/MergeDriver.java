@@ -95,5 +95,13 @@ final class MergeDriver implements AutoCloseable {
     @Override
     public void close() {
         runner.shutdownNow();
+        try {
+            // A pass still running writes to the project; whoever stops this driver may next remove or reuse that folder.
+            if (!runner.awaitTermination(30, TimeUnit.SECONDS)) {
+                LOG.log(System.Logger.Level.WARNING, "a merge pass was still running 30 s after the driver stopped");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

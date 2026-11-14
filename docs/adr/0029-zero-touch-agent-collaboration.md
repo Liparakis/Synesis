@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed for SYN-013.
+Accepted for SYN-013. Its decision was built through ADR-0030 and ADR-0031 (both accepted for SYN-013B); the status
+line still said "Proposed" and was corrected on 2026-11-14.
 
 ## Decision
 

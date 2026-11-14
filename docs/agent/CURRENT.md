@@ -1,3 +1,24 @@
+# 2026-11-15 — CI flakes, sandbox gaps, item 18 designed
+
+**Fixed.** The two tests that failed CI release run 43639210576 on `55735ed2`: `CodexLifecycleWaitControlTest` read the
+thread ID its stand-in wrote after the latch (test race, order swapped); `OverlapAndCombineScenarioTest` could not delete
+its folder because `MergeDriver.close` did not wait for a running pass, which also let a pass write into a project after
+Synesis stopped it (it now waits up to 30 s; `MergeDriverTest.closeReturnsOnlyAfterAPassThatIsRunningHasEnded`, fails
+before). Sandbox (ADR-0104, "Residual" and Part C): every known project root is hidden on Linux and macOS; re-merge
+validation with no sandbox raises one blocking `remerge_sandbox_unavailable` request; a lane's own validation answers
+`SANDBOX_UNAVAILABLE` instead of a retry. macOS stays unverified and refuses `run_command`.
+
+**Found already handled.** A late snapshot of a cancelled lane is trashed by `WorkTrash` (step 7 item 14), which closes
+its review; a stale reviewer lane with notes is told to publish and is shown `finish_lane` (now pinned by
+`AgentSessionServiceTest.aStaleReviewerLaneWithUnpublishedNotesIsShownTheCompletionThatPublishesThem`, passes as is).
+
+**Docs.** ADR-0029 status corrected to accepted (built through ADR-0030/0031); ADR-0104's status line no longer says only
+stage 1 is built. ADR-0101 stays deferred (owner, 2026-11-15). Designer item 18's five order dependences are designed in
+ADR-0098 (not built; for the owner).
+
+**Not done.** A real run that hits items 62–64: a blind run cannot be steered into a second rejection, an away author or
+a late verdict without telling the agents what to do, which the acceptance rules forbid; they stay source-proven.
+
 # 2026-11-14 — ADR-0098 step 5 items 62–64: re-merge review rounds, away-author repair, revoked-grant verdicts
 
 **Fixed** (ADR-0098 items 62–64, each pinned by a test): closing the operator request of a re-merge rejected twice starts a
@@ -9,9 +30,9 @@ reviewer no longer refuses a copy of `main` (64, owner decision).
 runs on sbx20 (`95077b6a`): 3/3 PASS (s20a-run1, s20a-run2b, s20a-run3). The runs did not hit the exact cases of 62–64;
 those are source semantics proven only.
 
-**Open.** A late snapshot of a cancelled lane waits forever; a stale, dirty reviewer lane has no completion; sandbox gaps
-(projects outside home, re-merge validation commands, macOS unverified). Older-build compatibility and the 2-CPU re-measure
-were dropped by the owner (no public release yet).
+**Open.** Sandbox gaps (projects outside home, re-merge validation commands, macOS unverified), closed on 2026-11-15
+except macOS. (This line first also listed a late snapshot of a cancelled lane and a stale, dirty reviewer lane; both
+were already handled, see 2026-11-15.) Older-build compatibility and the 2-CPU re-measure were dropped by the owner.
 
 # 2026-11-14 — ADR-0098 step 5: apart-and-rejoin converges in real runs (items 43–61)
 

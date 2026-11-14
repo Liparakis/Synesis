@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.synesis.workspace.application.project.execution.sandbox.SandboxPolicy;
+import org.synesis.workspace.discovery.KnownProjectRegistry;
 import org.synesis.workspace.lifecycle.process.GitWorktreeBinding;
 
 /**
@@ -33,6 +34,7 @@ final class LaneSandboxPolicy {
      */
     private static final List<String> POINTER_FILES = List.of("gitdir", "commondir");
     private static final String WORKTREE_CONFIG = "config.worktree";
+    private static final System.Logger LOG = System.getLogger(LaneSandboxPolicy.class.getName());
 
     private LaneSandboxPolicy() {
     }
@@ -88,6 +90,12 @@ final class LaneSandboxPolicy {
             hidden.add(siblings);
         }
         ApplicationStatePaths.roots().forEach(hidden::add);
+        // The Linux and macOS sandboxes hide the home folder; a project stored elsewhere (/srv/project) kept its .synesis,
+        // node key included, readable to another project's commands (ADR-0104, "Residual"). Windows labels that state
+        // no-read-up, and labelling every other project's tree on each command would cost a full relabel.
+        if (!System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("windows")) {
+            knownProjectRoots().forEach(hidden::add);
+        }
         String javaHome = System.getenv("JAVA_HOME");
         if (javaHome != null && !javaHome.isBlank() && Files.isDirectory(Path.of(javaHome))) {
             readOnly.add(real(Path.of(javaHome)));
@@ -95,6 +103,17 @@ final class LaneSandboxPolicy {
         return new SandboxPolicy(writable, readOnly, readOnlyWithin, emptyReadOnlyFiles, hidden, environment);
     }
 
+
+    /** The roots of the projects this computer knows; none when the registry cannot be read, which is logged. */
+    static List<Path> knownProjectRoots() {
+        try {
+            return new KnownProjectRegistry().projects().stream().map(KnownProjectRegistry.ProjectView::path).filter(Files::isDirectory)
+                    .map(LaneSandboxPolicy::real).toList();
+        } catch (KnownProjectRegistry.RegistryException | RuntimeException unreadable) {
+            LOG.log(System.Logger.Level.WARNING, "the known projects could not be read, so only the home folder hides them from this command", unreadable);
+            return List.of();
+        }
+    }
 
     private static Path real(Path path) {
         try {

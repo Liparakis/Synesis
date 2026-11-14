@@ -25,6 +25,7 @@ import org.synesis.coordination.domain.collaboration.Participant;
 import org.synesis.coordination.domain.collaboration.ReviewAdmissionRules;
 import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.collaboration.ReviewValidationPayload;
+import org.synesis.coordination.domain.integration.ValidationRefusalPayload;
 import org.synesis.coordination.domain.operator.OperatorRequest;
 import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
@@ -210,7 +211,7 @@ final class RemergeService {
         }
         String result = GitProcessRunner.runOptional(controlRoot, "rev-parse", "--verify", "-q", RESULT_PREFIX + remergeId + "^{commit}");
         if (result.isEmpty()) {
-            Build built = build(controlRoot, store, remergeId, own, other, missing);
+            Build built = build(controlRoot, store, identity, remergeId, own, other, missing);
             if (built.conflicted() != null) {
                 openCombine(controlRoot, store, identity, remergeId, own, other, built.conflicted(), built.base());
                 return;
@@ -248,7 +249,7 @@ final class RemergeService {
      * from the base of the last combine that has a result, which holds every step before it, and ends with the other head if it is not in yet. An advance a combine
      * lane combined is merged with the combine's tree.
      */
-    private Build build(Path controlRoot, PredictionEventStore store, String remergeId, String own, String other,
+    private Build build(Path controlRoot, PredictionEventStore store, NodeIdentity identity, String remergeId, String own, String other,
             List<MainMeeting.Advance> missing) throws IOException {
         Map<String, CombinePayload> combines = combinesWithResult(controlRoot, store, missing, other);
         // A combine of the other copy's head was made on the result of every step before it, so it starts the build, and its
@@ -310,7 +311,7 @@ final class RemergeService {
                 }
             }
             String result = GitProcessRunner.run(worktree, "rev-parse", "HEAD");
-            if (!validates(controlRoot, worktree, remergeId)) {
+            if (!validates(controlRoot, store, identity, worktree, remergeId)) {
                 return Build.NONE;
             }
             GitProcessRunner.run(controlRoot, "update-ref", RESULT_PREFIX + remergeId, result);
@@ -517,7 +518,7 @@ final class RemergeService {
         }
     }
 
-    private boolean validates(Path controlRoot, Path worktree, String remergeId) {
+    private boolean validates(Path controlRoot, PredictionEventStore store, NodeIdentity identity, Path worktree, String remergeId) {
         ProjectCommandSpec command;
         ExecutionResult validation;
         try {
@@ -530,11 +531,56 @@ final class RemergeService {
             stop(remergeId, "the validation command could not run: " + failure.getMessage());
             return false;
         }
+        boolean sandboxless = validation.outcome() == ProjectProcessExecutor.Outcome.COMMAND_SANDBOX_UNAVAILABLE
+                || validation.outcome() == ProjectProcessExecutor.Outcome.COMMAND_SANDBOX_SETUP_FAILED;
+        if (sandboxless || validation.outcome() == ProjectProcessExecutor.Outcome.COMPLETED) {
+            sandboxRequest(store, identity, remergeId, sandboxless ? ValidationRefusalPayload.tail(validation.stdout(), validation.stderr()) : null);
+        }
+        if (sandboxless) {
+            // Not stopped: the operator's fix (a sandbox installed, or the signed allowance) changes neither copy of main,
+            // so a stopped re-merge would wait for a restart. Nothing was started, and the request is raised once.
+            return false;
+        }
         if (validation.outcome() != ProjectProcessExecutor.Outcome.COMPLETED) {
             stop(remergeId, "the validation command ended as " + validation.outcome().value());
             return false;
         }
         return true;
+    }
+
+    /**
+     * Raises, once, the blocking request of a re-merge whose validation was not run for want of a sandbox (ADR-0104 Part C:
+     * the gate is not run and a person is told), or closes it once the command ran. Its ID follows from the re-merge, so a
+     * pass after a restart writes nothing new. Never throws: what cannot be recorded is logged and tried on the next pass.
+     *
+     * @param evidence the refusal as the executor printed it, or {@code null} when the command ran
+     */
+    private static void sandboxRequest(PredictionEventStore store, NodeIdentity identity, String remergeId, String evidence) {
+        String id = "opr_" + digest(remergeId + "\nsandbox").substring(0, 16);
+        try (ProjectAppendLock lock = ProjectAppendLock.acquire(store.rootDirectory())) {
+            if (!lock.isHeld()) {
+                return;
+            }
+            var requests = new PredictionEventStore(store.rootDirectory(), store.projectId()).operatorRequestProjection().all();
+            Optional<OperatorRequest> known = requests.stream().filter(request -> request.id().equals(id)).findFirst();
+            if (evidence == null) {
+                if (known.isPresent() && known.get().state() == OperatorRequest.State.OPEN) {
+                    store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_CLOSED, identity.nodeId(),
+                            OperatorRequest.encodeClosed(id, "The validation command ran on the re-merge."), identity);
+                }
+                return;
+            }
+            if (known.isEmpty()) {
+                OperatorRequest request = OperatorRequest.raised(id, OperatorRequest.REMERGE_SANDBOX_UNAVAILABLE, "Re-merge " + remergeId
+                        + " of the two copies of main was not validated: this computer has no sandbox for the validation command, or the sandbox could not be set up. "
+                        + "Nothing was merged. Install the sandbox named in the evidence, or sign `synesis project sandbox allow-unsandboxed` to let this project's commands run "
+                        + "without one. The re-merge is tried again on each pass, and this request closes when its validation command runs.", evidence);
+                store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, identity.nodeId(), request.encodeRaised(), identity);
+                LOG.log(System.Logger.Level.WARNING, "Re-merge {0} waits for a sandbox ({1}).", remergeId, id);
+            }
+        } catch (IOException | GeneralSecurityException | RuntimeException notRecorded) {
+            LOG.log(System.Logger.Level.WARNING, "the sandbox request of re-merge " + remergeId + " was not recorded", notRecorded);
+        }
     }
 
     /**
