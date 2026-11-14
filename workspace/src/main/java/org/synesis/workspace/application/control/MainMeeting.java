@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import org.synesis.coordination.domain.collaboration.ReviewValidationPayload;
+import org.synesis.coordination.domain.identity.LaneGrantId;
 import org.synesis.coordination.domain.integration.IntegrationAttemptPayload;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
@@ -174,7 +177,10 @@ public final class MainMeeting {
      * Checks the commits another head adds to this copy before they are taken (ADR-0098 step 5, item 3). The head's
      * history is followed back advance by advance, each named by an entry, until a commit this copy holds; every
      * advance on the way must name snapshots this computer has seen, each made on the advancing computer's own lane,
-     * and each accepted by a reviewer who is not its author where review is required. The cherry-picked commits
+     * and each accepted by a reviewer who is not its author where review is required. A verdict given under a grant that was
+     * revoked, a review released to another reviewer while its computer was away (step 7, designer item 17), does not count
+     * whichever arrived first, so a late rejection no longer refuses a copy whose new reviewer accepted; with no verdict
+     * left the review is missing, as before. The cherry-picked commits
      * inside one advance are that advance's; the validation command passed before its entry was written. Every other
      * history a merge commit inside an advance brings in, a re-merge's old head above all, is followed back the same way.
      *
@@ -186,7 +192,9 @@ public final class MainMeeting {
      * @throws IOException when Git cannot be read
      */
     public static List<String> audit(Path repository, PredictionEventStore store, String own, String other) throws IOException {
-        Map<String, Advance> byHead = advances(store.events());
+        List<PredictionEvent> events = store.events();
+        Map<String, Advance> byHead = advances(events);
+        Map<String, Map<String, UUID>> grantOfVerdict = grantsOfVerdicts(events);
         List<String> problems = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         java.util.ArrayDeque<String> heads = new java.util.ArrayDeque<>(List.of(other));
@@ -223,7 +231,10 @@ public final class MainMeeting {
                     problems.add("NOT_THE_LANES_COMPUTER:" + snapshotId);
                 }
                 // Accepted by every reviewer, one of them not its author: a disputed snapshot is not accepted.
-                Map<String, String> verdicts = store.taskCompletionProjection().verdicts(snapshot.get().snapshotIdentity());
+                Map<String, String> verdicts = new HashMap<>(store.taskCompletionProjection().verdicts(snapshot.get().snapshotIdentity()));
+                Map<String, UUID> grants = grantOfVerdict.getOrDefault(snapshotId, Map.of());
+                verdicts.keySet().removeIf(reviewer -> grants.containsKey(reviewer)
+                        && store.workGroupProjection().grantRevoked(new LaneGrantId(grants.get(reviewer))));
                 if (snapshot.get().reviewRequired() && (verdicts.isEmpty() || !verdicts.values().stream().allMatch("ACCEPTED"::equals)
                         || verdicts.keySet().stream().allMatch(producer::equals))) {
                     problems.add("REVIEW_MISSING:" + snapshotId);
@@ -248,5 +259,17 @@ public final class MainMeeting {
             }
         }
         return problems;
+    }
+
+    /** The grant each reviewer's latest verdict on each snapshot was given under, by snapshot ID and reviewer. */
+    private static Map<String, Map<String, UUID>> grantsOfVerdicts(List<PredictionEvent> events) throws IOException {
+        Map<String, Map<String, UUID>> grants = new HashMap<>();
+        for (PredictionEvent event : events) {
+            if (event.type() == PredictionEventType.REVIEW_VALIDATION_RECORDED) {
+                ReviewValidationPayload verdict = ReviewValidationPayload.decode(event.payload());
+                grants.computeIfAbsent(verdict.snapshotId(), id -> new HashMap<>()).put(verdict.targetParticipant(), verdict.grantId());
+            }
+        }
+        return grants;
     }
 }

@@ -1936,6 +1936,19 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     meet at main without a further conflict (they may need one more repair); the s12a-run2 case, a connected author computer whose agents
     are all busy, is not changed by this rule (its agents are offered the repair once one of them is free).
 
+64. **A verdict given under a revoked grant does not count in the audit (owner decision 2026-11-14; answers the step 7 review's question
+    in "Unresolved").** Case: an away reviewer writes a rejection; this computer, stalled, releases that review (designer item 17,
+    `LANE_REVOKED`) and a new reviewer accepts; the snapshot is integrated; then the old rejection arrives by copy. The verdict stands on
+    the log (`AppendAdmission` admits one written before the release), so `verdicts` holds an accept and a reject, and `MainMeeting.audit`
+    answered `REVIEW_MISSING` and refused that copy of `main` for ever. *Rule (owner):* the audit counts a reviewer's latest verdict only
+    when the grant it was given under (`ReviewValidationPayload.grantId`) is not revoked. It is the same in any arrival order once the
+    revocation has arrived; before it, the reject still counts and the head waits for the next pull (fail closed). With every verdict
+    dropped, the review is missing, as before. *Not changed:* the verdict stays on the log and in `verdicts`; the snapshot's own review
+    state on the computers that see the reject before integrating is still `REVIEW_DISPUTED` (designer item 18's order dependence, not the
+    audit's). *Published contracts:* none. Pinned by
+    `MainMeetingTest.aLateRejectionOnAReviewThatWasReleasedToAnotherReviewerDoesNotRefuseTheCopy` (fails before with `REVIEW_MISSING:snap_a`;
+    `aDisputedSnapshotIsMissingItsReview`, where no grant is revoked, still refuses). *Not proved:* a real run of the case.
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory
@@ -2341,7 +2354,7 @@ The two-homes run with the friend's PC is repeated after step 5 as a check, not 
   verdict, written before its review was released (designer item 17), arrives after the new reviewer's acceptance
   was integrated; the audit then finds a verdict that is not an acceptance and refuses that copy of `main`. One rule
   that does not depend on order: each reviewer on a grant not revoked has accepted. Not changed here, since it changes
-  the audit. Also recorded rather than built: the takeover's reference is told apart by its `snapshot:` / `base:`
+  the audit. *Decided by the owner and built on 2026-11-14: step 5 item 64.* Also recorded rather than built: the takeover's reference is told apart by its `snapshot:` / `base:`
   prefix rather than a typed source; three read paths still build the collaboration view without this computer's
   node ID (so they list another computer's recovery-held lanes, which only that computer can continue); the Trash view
   lives in `App.tsx`, which was past 1,000 lines already; `NothingTakenBackArchitectureTest` covers the trash refs,

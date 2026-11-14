@@ -298,4 +298,39 @@ class MainMeetingTest {
 
         assertEquals(List.of("REVIEW_MISSING:snap_a"), MainMeeting.audit(repo, store, base, first));
     }
+
+    /**
+     * ADR-0098 step 7 review (owner decision 2026-11-14): an away reviewer's rejection, written before its review was released
+     * to another reviewer, arrives after the new reviewer's acceptance. A verdict on a revoked grant does not count, so the copy
+     * is taken; had it arrived first the audit would read the same.
+     */
+    @Test
+    void aLateRejectionOnAReviewThatWasReleasedToAnotherReviewerDoesNotRefuseTheCopy() throws Exception {
+        Snapshot a = snapshot("snap_a", "agt-a", "src/a.txt");
+        LaneGrant away = new LaneGrant(UUID.randomUUID(), a.group(), a.lane(), "agt-reviewer-away", 1, true);
+        for (PredictionEventType type : List.of(PredictionEventType.LANE_GRANT_ISSUED, PredictionEventType.LANE_GRANT_CONSUMED)) {
+            store.append(away.grantId(), type, identity.nodeId(), CollaborationCodec.encodeLaneGrant(away), identity);
+        }
+        NodeIdentity awayComputer = NodeIdentity.generate();
+        PredictionEventStore theirs = new PredictionEventStore(temp.resolve("away-reviewer"), project);
+        theirs.placeCopies(identity.nodeId(), store.entriesAfter(0, 10_000, Integer.MAX_VALUE));
+        UUID reviewerLane = UUID.randomUUID();
+        WorkIntent introduced = new WorkIntent(reviewerLane, project, "agt-reviewer-away", "codex", UUID.randomUUID(), "review", "acceptance", base,
+                List.of(ResourceSelector.pathExact("src/other.txt")), 1, UUID.randomUUID(), WorkIntent.defaultAuthorityLineage(reviewerLane),
+                WorkIntent.Status.ANNOUNCED);
+        assertTrue(new WorkIntentService(theirs, awayComputer).announce(introduced).acquired());
+        theirs.append(UUID.randomUUID(), PredictionEventType.REVIEW_VALIDATION_RECORDED, awayComputer.nodeId(),
+                new ReviewValidationPayload(away.grantId(), a.group(), a.lane(), "agt-reviewer-away", 1, a.task(), a.id(), "REJECTED",
+                        "not good enough", a.participant()).encode(), awayComputer);
+        // This computer releases the away reviewer's review and a new reviewer accepts.
+        store.append(UUID.randomUUID(), PredictionEventType.LANE_REVOKED, identity.nodeId(), CollaborationCodec.encodeLaneGrant(away), identity);
+        review(a, "agt-reviewer-new", "ACCEPTED");
+        store.placeCopies(awayComputer.nodeId(), theirs.entriesAfter(0, 10_000, Integer.MAX_VALUE));
+        assertEquals(2, store.taskCompletionProjection().verdicts(store.taskCompletionProjection().findSnapshotById("snap_a").orElseThrow()
+                .snapshotIdentity()).size(), "the late rejection is kept on the log");
+        String first = commitOn(base, "first");
+        advance(base, first, a.id());
+
+        assertEquals(List.of(), MainMeeting.audit(repo, store, base, first));
+    }
 }
