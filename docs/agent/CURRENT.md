@@ -1,3 +1,18 @@
+# 2026-11-14 — ADR-0098 step 5 items 62–64: re-merge review rounds, away-author repair, revoked-grant verdicts
+
+**Fixed** (ADR-0098 items 62–64, each pinned by a test): closing the operator request of a re-merge rejected twice starts a
+new round of review whose accept lands it (62); while the author's computer is away, another computer offers its repair,
+never to the author (63); the main audit ignores a verdict given under a revoked grant, so a late rejection from an away
+reviewer no longer refuses a copy of `main` (64, owner decision).
+
+**Evidence.** Linux gate at `--cpus 2` green after 62–63; Windows gate green on `95077b6a` (0 failures, 24m28s). Real apart
+runs on sbx20 (`95077b6a`): 3/3 PASS (s20a-run1, s20a-run2b, s20a-run3). The runs did not hit the exact cases of 62–64;
+those are source semantics proven only.
+
+**Open.** A late snapshot of a cancelled lane waits forever; a stale, dirty reviewer lane has no completion; sandbox gaps
+(projects outside home, re-merge validation commands, macOS unverified). Older-build compatibility and the 2-CPU re-measure
+were dropped by the owner (no public release yet).
+
 # 2026-11-14 — ADR-0098 step 5: apart-and-rejoin converges in real runs (items 43–61)
 
 **Fixed since 2026-10-27** (each with a fail-before test; ADR-0098 items 43–61): a mistyped grant ID names the session's

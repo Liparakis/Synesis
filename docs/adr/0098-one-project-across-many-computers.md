@@ -1949,6 +1949,11 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     `MainMeetingTest.aLateRejectionOnAReviewThatWasReleasedToAnotherReviewerDoesNotRefuseTheCopy` (fails before with `REVIEW_MISSING:snap_a`;
     `aDisputedSnapshotIsMissingItsReview`, where no grant is revoked, still refuses). *Not proved:* a real run of the case.
 
+    *Real runs of items 62–64 (sbx20 = `95077b6a`, 2026-11-14):* s20a-run1, s20a-run2b, s20a-run3 apart runs (300 s split, agents
+    restarted after the heal) 3/3 PASS, both copies on one `main` each time. s20a-run1 released two re-merge reviews (`LANE_REVOKED`) and
+    their new reviewers accepted; no late verdict under a revoked grant, no second rejection and no away-author repair came up, so items
+    62–64 remain proved at source level only. (The first s20a-run2 was cut off by the operator and is not counted.)
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory
