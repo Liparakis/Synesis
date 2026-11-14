@@ -952,6 +952,46 @@ class RemergeServiceTest {
         assertEquals(1, events(PredictionEventType.OPERATOR_REQUEST_RAISED).size(), "once, whatever the passes");
     }
 
+    /** The operator closing the request of a re-merge rejected twice has it reviewed again, and an accept then lands it. */
+    @Test
+    void closingTheRequestOfAReMergeRejectedTwiceStartsANewRoundOfReviewWhoseAcceptLandsIt() throws Exception {
+        NodeIdentity other = lowerNode();
+        Lane lane = lane("snap_a", "own.txt", true);
+        String own = ownMain("own.txt", "own");
+        ownAdvance(base, own, lane.snapshotId());
+        String otherHead = commit("other", base, "other.txt", "other");
+        otherAdvance(other, otherHead);
+        liveSession(REVIEWER_SESSION);
+        liveSession(SECOND_SESSION);
+        run();
+        String first = remergeSnapshots(otherHead, own).getFirst();
+        releaseAuthorLane(lane);
+        verdict(lane, first, grantFor(first), "REJECTED");
+        run();
+        String second = remergeSnapshots(otherHead, own).get(1);
+        verdict(lane, second, grantFor(second), "REJECTED");
+        run();
+        var raised = project.store().operatorRequestProjection().open(org.synesis.coordination.domain.operator.OperatorRequest.REMERGE_REJECTED_TWICE).orElseThrow();
+
+        store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_CLOSED, self.nodeId(),
+                org.synesis.coordination.domain.operator.OperatorRequest.encodeClosed(raised.id(), "looked at both reasons"), self);
+        run();
+        run();
+
+        List<String> snapshots = remergeSnapshots(otherHead, own);
+        assertEquals(3, snapshots.size(), "the new round's first look is written once: " + snapshots);
+        String third = snapshots.get(2);
+        assertEquals(1, grants().stream().filter(grant -> third.equals(grant.snapshotId())).count());
+        assertEquals(own, project.head(), "nothing lands before the new round's verdict");
+
+        verdict(lane, third, grantFor(third), "ACCEPTED");
+        run();
+
+        assertTrue(project.isAncestorOfHead(otherHead), "the re-merge landed");
+        assertEquals(List.of(third), landedFrom(otherHead).taskSnapshotIds());
+        assertEquals(1, events(PredictionEventType.OPERATOR_REQUEST_RAISED).size(), "the closed request is not raised again");
+    }
+
     @Test
     void theAuthorAndTheFirstReviewerAreNeverOfferedTheSecondLookWhateverElseIsOrIsNotLive() throws Exception {
         NodeIdentity other = lowerNode();

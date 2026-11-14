@@ -425,7 +425,8 @@ public final class EventLogObserver implements AgentRunController.ProjectObserve
     /** The repair lanes these sessions' agent may take, by snapshot ID; none when this computer is unknown (ADR-0098 step 5 item 54). */
     private static List<String> repairsOffered(PredictionEventStore store, ProjectLocation location, List<String> sessions) {
         try {
-            return org.synesis.workspace.application.collaboration.RepairLaneOffer.offeredTo(store, sessions, location.loadOrCreateIdentity().nodeId())
+            return org.synesis.workspace.application.collaboration.RepairLaneOffer.offeredTo(store, sessions, location.loadOrCreateIdentity().nodeId(),
+                    org.synesis.workspace.application.collaboration.AwayLanes.away(location.coordinationDirectory(), location.loadOrCreateIdentity().nodeId()))
                     .stream().map(org.synesis.coordination.domain.task.TaskSnapshotRecord::snapshotId).toList();
         } catch (Exception unreadable) {
             return List.of();

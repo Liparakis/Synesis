@@ -548,7 +548,8 @@ final class RemergeService {
             if (!lane.original().reviewRequired()) {
                 continue;
             }
-            RemergeSnapshotPayload remerge = remergeSnapshot(remergeId, own, other, result, lane);
+            String key = lookKey(store, remergeId, lane.original().snapshotId());
+            RemergeSnapshotPayload remerge = remergeSnapshot(remergeId, own, other, result, lane, firstLookId(key));
             String snapshotId = remerge.snapshot().snapshotId();
             if (store.taskCompletionProjection().findSnapshotById(snapshotId).isEmpty()) {
                 GitProcessRunner.run(controlRoot, "update-ref", SnapshotRefs.snapshotRef(snapshotId), remerge.snapshot().commitSha());
@@ -557,13 +558,40 @@ final class RemergeService {
                 LOG.log(System.Logger.Level.INFO, "Re-merge {0} onto {1}: snapshot {2} waits for its review.", remergeId, other, snapshotId);
             }
             offerReview(controlRoot, store, identity, remerge, carried);
-            offerSecondLook(controlRoot, store, identity, remerge, carried);
+            offerSecondLook(controlRoot, store, identity, remerge, carried, secondLookId(key));
         }
     }
 
+    /**
+     * What a lane's re-merge snapshots are named from in its current round of review (ADR-0098 step 5 item 61): each round
+     * is a first look and, after a rejection, a second look; two rejections raise an operator request, and the operator
+     * closing it starts the next round, with new snapshots and so new verdicts. The round is the number of this lane's
+     * requests that are closed, read from the log alone, so every pass and a restart name the same snapshots. Round 0 keeps
+     * the names item 61 wrote.
+     */
+    private static String lookKey(PredictionEventStore store, String remergeId, String originalSnapshotId) {
+        List<OperatorRequest> requests = store.operatorRequestProjection().all();
+        for (int round = 0;; round++) {
+            String key = remergeId + "\n" + originalSnapshotId + (round == 0 ? "" : "\nround " + round);
+            String request = requestId(remergeId, firstLookId(key));
+            if (requests.stream().noneMatch(known -> known.id().equals(request) && known.state() == OperatorRequest.State.CLOSED)) {
+                return key;
+            }
+        }
+    }
+
+    private static String firstLookId(String key) {
+        return "rms-" + digest(key);
+    }
+
     /** The ID of the one more review of a re-merge snapshot a rejection gets (ADR-0098 step 5 item 61). */
-    private static String secondLookId(String remergeId, String originalSnapshotId) {
-        return "rms-" + digest(remergeId + "\n" + originalSnapshotId + "\nsecond-look");
+    private static String secondLookId(String key) {
+        return "rms-" + digest(key + "\nsecond-look");
+    }
+
+    /** The operator request of the round whose first look is {@code firstId}. */
+    private static String requestId(String remergeId, String firstId) {
+        return "opr_" + digest(remergeId + "\n" + firstId).substring(0, 16);
     }
 
     /**
@@ -575,13 +603,12 @@ final class RemergeService {
      * agent here nothing is written and a later pass tries again. The caller holds the append lock.
      */
     private static void offerSecondLook(Path controlRoot, PredictionEventStore store, NodeIdentity identity, RemergeSnapshotPayload remerge,
-            Set<String> carried) throws IOException, GeneralSecurityException {
+            Set<String> carried, String secondId) throws IOException, GeneralSecurityException {
         String firstId = remerge.snapshot().snapshotId();
         if (store.taskCompletionProjection().snapshotState(firstId).orElse(null) != TaskCompletionState.REVIEW_REJECTED) {
             return;
         }
-        RemergeSnapshotPayload second = secondLook(remerge);
-        String secondId = second.snapshot().snapshotId();
+        RemergeSnapshotPayload second = secondLook(remerge, secondId);
         var workGroups = store.workGroupProjection();
         List<LaneGrant> asked = workGroups.grants().stream().filter(grant -> firstId.equals(grant.snapshotId()) || secondId.equals(grant.snapshotId())).toList();
         if (asked.stream().anyMatch(grant -> secondId.equals(grant.snapshotId()) && !workGroups.grantRevoked(grant.identity()))) {
@@ -607,9 +634,8 @@ final class RemergeService {
     }
 
     /** The same commit under the ID of the second look. */
-    private static RemergeSnapshotPayload secondLook(RemergeSnapshotPayload first) {
+    private static RemergeSnapshotPayload secondLook(RemergeSnapshotPayload first, String secondId) {
         TaskSnapshotPayload was = first.snapshot();
-        String secondId = secondLookId(first.remergeId(), first.originalSnapshotId());
         SnapshotProvenance old = was.provenance();
         SnapshotProvenance provenance = new SnapshotProvenance(old.workGroupId(), old.laneId(), old.authorityLineageId(), old.participant(), old.bindingIdentity(),
                 old.claimEpoch(), old.contractRevisions(), old.handoffLineage(), old.claimSelectors(), SnapshotRefs.snapshotRef(secondId), old.integrityEvidence(),
@@ -619,9 +645,8 @@ final class RemergeService {
         return new RemergeSnapshotPayload(first.remergeId(), first.originalSnapshotId(), first.otherHead(), first.ownHead(), first.result(), snapshot);
     }
 
-    private static RemergeSnapshotPayload remergeSnapshot(String remergeId, String own, String other, String result, Lane lane) {
+    private static RemergeSnapshotPayload remergeSnapshot(String remergeId, String own, String other, String result, Lane lane, String snapshotId) {
         TaskSnapshotRecord original = lane.original();
-        String snapshotId = "rms-" + digest(remergeId + "\n" + original.snapshotId());
         SnapshotProvenance was = original.provenance();
         SnapshotProvenance provenance = new SnapshotProvenance(was.workGroupId(), was.laneId(), was.authorityLineageId(), was.participant(),
                 was.bindingIdentity(), was.claimEpoch(), was.contractRevisions(), was.handoffLineage(), was.claimSelectors(),
@@ -732,11 +757,12 @@ final class RemergeService {
                 named.add(lane.original().snapshotId());
                 continue;
             }
-            String snapshotId = "rms-" + digest(remergeId + "\n" + lane.original().snapshotId());
+            String key = lookKey(store, remergeId, lane.original().snapshotId());
+            String snapshotId = firstLookId(key);
             TaskCompletionState state = completion.snapshotState(snapshotId).orElse(TaskCompletionState.REVIEW_PENDING);
             if (state == TaskCompletionState.REVIEW_REJECTED) {
-                // One more independent reviewer looks once (item 61); two rejections end the re-merge for the operator.
-                String second = secondLookId(remergeId, lane.original().snapshotId());
+                // One more independent reviewer looks once (item 61); two rejections wait for the operator, whose closing starts a new round.
+                String second = secondLookId(key);
                 TaskCompletionState again = completion.snapshotState(second).orElse(null);
                 if (again == TaskCompletionState.REVIEW_ACCEPTED) {
                     named.add(second);
@@ -744,7 +770,6 @@ final class RemergeService {
                 }
                 if (again == TaskCompletionState.REVIEW_REJECTED || again == TaskCompletionState.REVIEW_DISPUTED) {
                     askOperator(store, identity, remergeId, snapshotId, second);
-                    stop(remergeId, "re-merge snapshot " + snapshotId + " and its second look " + second + " were rejected");
                 }
                 return;
             }
@@ -789,12 +814,14 @@ final class RemergeService {
 
     /**
      * Records the blocking operator request of a re-merge two reviewers rejected: it names the re-merge and both reasons, and its
-     * ID follows from the re-merge and the lane, so a pass after a restart finds it and writes nothing. Only one request of this
-     * condition is open at a time; a second lane's is left to the first's closing. The copies stay apart.
+     * ID follows from the round's first look, so a pass after a restart finds it and writes nothing. Only one request of this
+     * condition is open at a time; a second lane's is left to the first's closing. The copies stay apart until the operator
+     * closes it, which starts the lane's next round ({@link #lookKey}). The re-merge is not stopped: each pass reads the
+     * request's state from the log and writes nothing while it is open.
      */
     private static void askOperator(PredictionEventStore store, NodeIdentity identity, String remergeId, String first, String second)
             throws IOException, GeneralSecurityException {
-        String id = "opr_" + digest(remergeId + "\n" + first).substring(0, 16);
+        String id = requestId(remergeId, first);
         var requests = store.operatorRequestProjection();
         if (requests.all().stream().anyMatch(request -> request.id().equals(id)) || requests.open(OperatorRequest.REMERGE_REJECTED_TWICE).isPresent()) {
             return;
@@ -810,10 +837,11 @@ final class RemergeService {
             }
         }
         OperatorRequest request = OperatorRequest.raised(id, OperatorRequest.REMERGE_REJECTED_TWICE,
-                "Re-merge " + remergeId + " of the two copies of main was rejected by two independent reviewers, so the copies stay apart and nothing retries it. "
-                        + "Read both reasons, then fix the work or close this request to let the pass look again.",
+                "Re-merge " + remergeId + " of the two copies of main was rejected by two independent reviewers, so the copies stay apart. "
+                        + "Read both reasons, then fix the work, or close this request to have the re-merge reviewed again.",
                 String.join("\n", reasons));
         store.append(UUID.randomUUID(), PredictionEventType.OPERATOR_REQUEST_RAISED, identity.nodeId(), request.encodeRaised(), identity);
+        LOG.log(System.Logger.Level.WARNING, "Re-merge {0} waits for the operator: {1} and its second look {2} were rejected ({3}).", remergeId, first, second, id);
     }
 
     private static void stop(String remergeId, String why) {

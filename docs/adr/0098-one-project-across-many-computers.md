@@ -1903,6 +1903,39 @@ Decided while building step 5 (designer, 2026-10-18; each open to the owner):
     reviews); that the operator's closing of the request lets a later pass look again (the stop is process-local and the second look exists
     on the log, so it would stop again at once).
 
+62. **Closing the request of a re-merge rejected twice has it reviewed again (owner decision 2026-11-14, closes item 61's last "not
+    proved").** Before, item 61's operator request said "close this request to let the pass look again", but nothing looked again: the
+    stop was kept in the process, the two rejected snapshots stay rejected on the log, and the request's id already existed, so after a
+    restart the pass found the same two verdicts and stopped again. Only a move of either copy of main (a new `remergeId`) retried it.
+    *Rule:* each lane of a re-merge is reviewed in rounds; a round is a first look and, after a rejection, a second look (item 61); two
+    rejections raise the round's request; the operator closing it starts the next round. The round is the number of this lane's
+    `remerge_rejected_twice` requests that are `CLOSED`, read from the log alone (`RemergeService.lookKey`), so every pass and a restart
+    name the same snapshots. Round 0 keeps item 61's ids; round *n* names its first look `rms-<digest(remergeId, originalSnapshotId,
+    "round n")>`, its second look the same with `"second-look"`, and its request id follows from its first look, so a closed request is never
+    raised again. A new round's first look goes to the original reviewer, as any first look does. The re-merge is no longer stopped in the
+    process after two rejections: each pass reads the request's state and writes nothing while it is open, and the warning is logged once,
+    when the request is written. *Authority:* unchanged. Closing a request is the operator's existing act; it adds no verdict, changes no
+    verdict, and the new round still needs an accepting review before main moves. *Published contracts:* no wire format changes; a re-merge may
+    now hold more than two re-merge snapshots for one lane. Pinned by
+    `RemergeServiceTest.closingTheRequestOfAReMergeRejectedTwiceStartsANewRoundOfReviewWhoseAcceptLandsIt` (fails before: no third snapshot;
+    Linux runner). *Not proved:* a real run; an operator answering the request (as opposed to closing it) starts nothing.
+
+63. **While the author's computer is away, another computer offers its repair (owner decision 2026-11-14; amends item 54, answers item 55's
+    "needs its own design").** Before, `RepairLaneOffer.offeredTo` offered a repair only on the author's computer, so a conflicted snapshot
+    whose computer was closed held the copies of main apart until it came back. *Rule:* the repair is also offered on another computer while
+    the author's computer is away, judged by the test the takeover of away lanes already uses (`AwayLanes.away`: this computer's record of its
+    member sessions says that member's session ended; with no readable record nobody is away). The author is still never offered its own
+    repair. *Why item 55's concern does not hold:* a second `REPAIR_LANE_CREATED` for one source lane does not throw on arrival: the
+    projection's `repair` finds the source ended and opens the repair lane anyway (ADR-0100, the comment "the source ended here before its
+    repair arrived"); `REPAIR_SOURCE_NOT_ACTIVE` is a writer check only. So if the away computer's own agent takes the repair too, both
+    repair lanes stand and meet at main, as two takeovers of one lane do (ADR-0100 row 8). The taker's computer fetches the snapshot's commit
+    (`CodeExchange.ensureCommit`, already in `joinRepair`) and integrates the repaired snapshot as its own lane. *Authority:* unchanged; the
+    entry acts only for its new participant (`ParticipantAttribution`). Pinned by
+    `RepairOfferTest.whileTheAuthorsComputerIsAwayAnotherComputerOffersItsRepairButNeverToTheAuthor` (another computer is offered it only while
+    the author's computer is away, never the author). *Not proved:* a real run in which the author's computer is closed; that duplicate repairs
+    meet at main without a further conflict (they may need one more repair); the s12a-run2 case, a connected author computer whose agents
+    are all busy, is not changed by this rule (its agents are offered the repair once one of them is free).
+
 ### Step 6: Membership in the owner's log
 
 Today membership is `replication.properties` on each computer; join requests live in memory

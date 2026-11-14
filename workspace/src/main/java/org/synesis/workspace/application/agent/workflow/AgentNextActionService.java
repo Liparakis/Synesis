@@ -1055,7 +1055,8 @@ public final class AgentNextActionService {
     private static List<Map<String, Object>> repairCandidates(PredictionEventStore store, String participantId, ProjectLocation location) {
         try {
             return org.synesis.workspace.application.collaboration.RepairLaneOffer.offeredTo(store,
-                    org.synesis.workspace.application.collaboration.CombineLaneJoin.sessionsOfAgent(location.root(), participantId), location.loadOrCreateIdentity().nodeId()).stream()
+                    org.synesis.workspace.application.collaboration.CombineLaneJoin.sessionsOfAgent(location.root(), participantId), location.loadOrCreateIdentity().nodeId(),
+                    org.synesis.workspace.application.collaboration.AwayLanes.away(location.coordinationDirectory(), location.loadOrCreateIdentity().nodeId())).stream()
                     .map(org.synesis.workspace.application.collaboration.RepairLaneOffer::describe).toList();
         } catch (Exception unreadable) {
             return List.of();

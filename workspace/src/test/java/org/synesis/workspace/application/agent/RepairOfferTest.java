@@ -40,6 +40,7 @@ final class RepairOfferTest {
     private static final String TAKER = "repair-taker";
     private static final String LATE = "repair-late";
     private static final String FILE = "src/repair.txt";
+    private static final java.util.function.Predicate<String> NONE_AWAY = node -> false;
 
     @TempDir
     Path temp;
@@ -88,14 +89,28 @@ final class RepairOfferTest {
     @Test
     void anIdleAgentOtherThanTheAuthorIsOfferedTheRepairAndTheAuthorIsNot() throws Exception {
         var node = fixture.identity.nodeId();
-        assertEquals(List.of(snapshot.snapshotId()), RepairLaneOffer.offeredTo(fixture.store(), List.of(fixture.participant(TAKER)), node).stream().map(TaskSnapshotRecord::snapshotId).toList());
-        assertEquals(List.of(), RepairLaneOffer.offeredTo(fixture.store(), List.of(fixture.participant(AUTHOR)), node), "the author may not repair its own lane");
-        assertEquals(List.of(), RepairLaneOffer.offeredTo(fixture.store(), List.of(fixture.participant(TAKER)), "another-computer"), "only the author's computer offers it");
+        assertEquals(List.of(snapshot.snapshotId()), RepairLaneOffer.offeredTo(fixture.store(), List.of(fixture.participant(TAKER)), node, NONE_AWAY).stream().map(TaskSnapshotRecord::snapshotId).toList());
+        assertEquals(List.of(), RepairLaneOffer.offeredTo(fixture.store(), List.of(fixture.participant(AUTHOR)), node, NONE_AWAY), "the author may not repair its own lane");
+        assertEquals(List.of(), RepairLaneOffer.offeredTo(fixture.store(), List.of(fixture.participant(TAKER)), "another-computer", NONE_AWAY),
+                "while the author's computer is connected only it offers the repair");
 
         String shown = offered(TAKER);
 
         assertTrue(shown.contains("repairCandidates") && shown.contains(snapshot.snapshotId()) && shown.contains("repairSnapshotId"), shown);
         assertFalse(offered(AUTHOR).contains("repairCandidates"));
+    }
+
+    /** A closed laptop does not hold the copies of main apart: while the author's computer is away another computer offers its repair. */
+    @Test
+    void whileTheAuthorsComputerIsAwayAnotherComputerOffersItsRepairButNeverToTheAuthor() throws Exception {
+        String author = fixture.identity.nodeId();
+        java.util.function.Predicate<String> authorAway = author::equals;
+
+        assertEquals(List.of(snapshot.snapshotId()), RepairLaneOffer.offeredTo(fixture.store(), List.of(fixture.participant(TAKER)), "another-computer", authorAway).stream()
+                .map(TaskSnapshotRecord::snapshotId).toList());
+        assertEquals(List.of(), RepairLaneOffer.offeredTo(fixture.store(), List.of(fixture.participant(AUTHOR)), "another-computer", authorAway), "the author still may not repair its own lane");
+        assertEquals(List.of(), RepairLaneOffer.offeredTo(fixture.store(), List.of(fixture.participant(TAKER)), "another-computer", node -> node.equals("a-third-computer")),
+                "only the author's computer being away counts");
     }
 
     @Test
@@ -117,6 +132,6 @@ final class RepairOfferTest {
         assertEquals(lane.authorityLineageId(), joined.intent().authorityLineageId());
         assertThrows(Exception.class, () -> fixture.collaboration.joinRepair(fixture.root, CombineFixture.PROVIDER, LATE, lane.intentId(), snapshot.snapshotId()));
         assertThrows(Exception.class, () -> fixture.collaboration.joinRepair(fixture.root, CombineFixture.PROVIDER, AUTHOR, lane.intentId(), snapshot.snapshotId()));
-        assertEquals(List.of(), RepairLaneOffer.offeredTo(fixture.store(), List.of(fixture.participant(LATE)), fixture.identity.nodeId()), "once taken it is offered no more");
+        assertEquals(List.of(), RepairLaneOffer.offeredTo(fixture.store(), List.of(fixture.participant(LATE)), fixture.identity.nodeId(), NONE_AWAY), "once taken it is offered no more");
     }
 }
