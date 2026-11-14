@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.synesis.coordination.domain.identity.ParticipantId;
 import org.synesis.coordination.domain.identity.RequestId;
 import org.synesis.coordination.exception.CoordinationException;
 import org.synesis.coordination.exception.MissingReferenceException;
@@ -107,7 +108,19 @@ final class CoordinationRequests {
      * @param continuation participant identities for the transition
      */
     void retargetReviews(WorkIntent source, WorkIntent target, LaneContinuation continuation) {
-        requests.replaceAll((requestId, request) -> retargetReviewRequest(source, target, continuation, request));
+        retargetReviews(source, continuation.sourceOwner(), target, continuation.targetOwner());
+    }
+
+    /**
+     * Moves the review requests of one lane and its owner to another lane and owner, as a continuation does.
+     *
+     * @param source      the lane the requests are about
+     * @param sourceOwner its owner
+     * @param target      the lane they follow
+     * @param targetOwner its owner
+     */
+    void retargetReviews(WorkIntent source, ParticipantId sourceOwner, WorkIntent target, ParticipantId targetOwner) {
+        requests.replaceAll((requestId, request) -> retargetReviewRequest(source, sourceOwner, target, targetOwner, request));
     }
 
     /**
@@ -116,16 +129,17 @@ final class CoordinationRequests {
      * @return updated request, or the original request when unrelated
      */
     private static CoordinationRequest retargetReviewRequest(WorkIntent source,
+            ParticipantId sourceOwner,
             WorkIntent target,
-            LaneContinuation continuation,
+            ParticipantId targetOwner,
             CoordinationRequest request) {
         if (request.status() == CoordinationRequest.Status.PENDING
                 && request.kind() == CoordinationRequest.Kind.REVIEW && request.targetIdentity()
-                .equals(continuation.sourceOwner()) && request.conflictingIntent().equals(source.identity())) {
+                .equals(sourceOwner) && request.conflictingIntent().equals(source.identity())) {
             return new CoordinationRequest(request.requestId(),
                     request.projectId(),
                     request.requester(),
-                    continuation.targetOwner().value(),
+                    targetOwner.value(),
                     target.intentId(),
                     request.kind(),
                     request.proposal(),
@@ -136,10 +150,10 @@ final class CoordinationRequests {
         if ((request.status() == CoordinationRequest.Status.PENDING
                 || request.status() == CoordinationRequest.Status.ACCEPTED)
                 && request.kind() == CoordinationRequest.Kind.REVIEW && request.requesterIdentity()
-                .equals(continuation.sourceOwner())) {
+                .equals(sourceOwner)) {
             return new CoordinationRequest(request.requestId(),
                     request.projectId(),
-                    continuation.targetOwner().value(),
+                    targetOwner.value(),
                     request.target(),
                     request.conflictingIntentId(),
                     request.kind(),

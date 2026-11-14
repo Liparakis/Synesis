@@ -49,6 +49,8 @@ public final class CollaborationProjection {
     /** The node that signed the entry that first put each participant on the log; see {@link #introducingNode}. */
     private final Map<ParticipantId, String> introducedBy = new LinkedHashMap<>();
     private final Map<WorkIntentId, WorkIntentId> successorIntents = new LinkedHashMap<>();
+    /** The node whose taker an ended lane's review requests follow, by the ended lane (designer item 18 case 5). */
+    private final Map<WorkIntentId, String> reviewTakerNodes = new LinkedHashMap<>();
     private final Set<WorkGroupId> groupsWithLanes = new LinkedHashSet<>();
     private boolean activated;
     /**
@@ -79,6 +81,7 @@ public final class CollaborationProjection {
         participantHistory.putAll(source.participantHistory);
         introducedBy.putAll(source.introducedBy);
         successorIntents.putAll(source.successorIntents);
+        reviewTakerNodes.putAll(source.reviewTakerNodes);
         reviewedGrants.addAll(source.reviewedGrants);
         groupsWithLanes.addAll(source.groupsWithLanes);
         activated = source.activated;
@@ -94,6 +97,28 @@ public final class CollaborationProjection {
         if (participant.state() == Participant.State.REVOKED) {
             throw new CoordinationException("SESSION_EPOCH_FENCED");
         }
+    }
+
+    /**
+     * Whether a participant in {@code current} stays as it is rather than move to {@code next}: an ended participant stays
+     * ended, and of two ends the higher rank stands (ADR-0098 step 4, designer item 18 case 1). Its own computer and a taker
+     * apart may both write about one participant, so without this the state was whichever entry arrived last, and a
+     * suspension arriving after a clean detach made an ended participant recoverable again.
+     */
+    private static boolean staysEnded(Participant current, Participant.State next) {
+        int rank = endRank(current.state());
+        return rank > 0 && endRank(next) <= rank;
+    }
+
+    /** The rank of an end, highest first: revoked, cancelled, completed, detached; zero for a state that is not an end. */
+    private static int endRank(Participant.State state) {
+        return switch (state) {
+            case REVOKED -> 4;
+            case CANCELLED -> 3;
+            case COMPLETED -> 2;
+            case DETACHED -> 1;
+            case ACTIVE, SUSPENDED, RECOVERY_HELD -> 0;
+        };
     }
 
     /**
@@ -244,7 +269,7 @@ public final class CollaborationProjection {
                     requests.acknowledge(new RequestId(CollaborationCodec.decodeUuidText(event.payload())));
             case PARTICIPANT_CANCELLED ->
                     cancelled(new ParticipantId(CollaborationCodec.decodeHeartbeat(event.payload())));
-            case LANE_CONTINUATION_ACCEPTED -> continued(CollaborationCodec.decodeContinuation(event.payload()));
+            case LANE_CONTINUATION_ACCEPTED -> continued(CollaborationCodec.decodeContinuation(event.payload()), event.actorNodeId());
             case PARTICIPANT_DETACHED ->
                     detached(new ParticipantId(CollaborationCodec.decodeHeartbeat(event.payload())));
             case REVIEW_VALIDATION_RECORDED -> review(ReviewValidationPayload.decode(event.payload()));
@@ -1047,6 +1072,9 @@ public final class CollaborationProjection {
             throw new MissingReferenceException("PARTICIPANT_NOT_FOUND");
         }
         rejectRevoked(current);
+        if (staysEnded(current, Participant.State.SUSPENDED)) {
+            return;
+        }
         participantHistory.put(participant, current.withState(Participant.State.SUSPENDED));
     }
 
@@ -1079,7 +1107,7 @@ public final class CollaborationProjection {
      * @param continuation proposed successor continuation
      * @throws IOException when payload validation or durable I/O fails
      */
-    private void continued(LaneContinuation continuation) throws IOException {
+    private void continued(LaneContinuation continuation, String takerNode) throws IOException {
         if (isParticipantTerminal(continuation.targetOwner())) {
             throw new CoordinationException("SESSION_TERMINAL");
         }
@@ -1100,11 +1128,22 @@ public final class CollaborationProjection {
             // Two takers of one lane, on computers apart: both successors stand and meet at main (ADR-0100 row 8).
             intents.put(target.identity(), target);
             refreshParticipant(continuation.targetOwner(), Participant.State.ACTIVE, target);
+            // The old lane's review requests went to the taker whose continuation arrived first; they follow the lower
+            // node's taker instead, so every computer sends them to the same one (designer item 18 case 5).
+            WorkIntentId ended = continuation.sourceIntent();
+            String followed = reviewTakerNodes.get(ended);
+            WorkIntent first = followed == null ? null : intents.get(successorIntents.get(ended));
+            if (first != null && takerNode.compareTo(followed) < 0) {
+                requests.retargetReviews(first, first.participantIdentity(), target, continuation.targetOwner());
+                successorIntents.put(ended, target.identity());
+                reviewTakerNodes.put(ended, takerNode);
+            }
             return;
         }
         endLane(source.identity());
         intents.put(target.identity(), target);
         successorIntents.put(source.identity(), target.identity());
+        reviewTakerNodes.put(source.identity(), takerNode);
         requests.retargetReviews(source, target, continuation);
         refreshParticipant(continuation.sourceOwner(), Participant.State.DETACHED, null);
         refreshParticipant(continuation.targetOwner(), Participant.State.ACTIVE, target);
@@ -1183,7 +1222,9 @@ public final class CollaborationProjection {
             throw new MissingReferenceException("PARTICIPANT_NOT_FOUND");
         }
         rejectRevoked(current);
-        participantHistory.put(participant, current.withState(Participant.State.CANCELLED).withClaims(List.of()));
+        if (!staysEnded(current, Participant.State.CANCELLED)) {
+            participantHistory.put(participant, current.withState(Participant.State.CANCELLED).withClaims(List.of()));
+        }
         dropIntentsOf(participant);
     }
 
@@ -1198,7 +1239,9 @@ public final class CollaborationProjection {
             throw new MissingReferenceException("PARTICIPANT_NOT_FOUND");
         }
         rejectRevoked(current);
-        participantHistory.put(participant, current.withState(Participant.State.DETACHED).withClaims(List.of()));
+        if (!staysEnded(current, Participant.State.DETACHED)) {
+            participantHistory.put(participant, current.withState(Participant.State.DETACHED).withClaims(List.of()));
+        }
         dropIntentsOf(participant);
     }
 

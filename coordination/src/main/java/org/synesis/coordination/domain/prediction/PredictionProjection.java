@@ -17,7 +17,13 @@ import org.synesis.coordination.exception.MissingReferenceException;
  */
 public final class PredictionProjection {
 
+    /** The states a prediction can take from {@code RECEIVED}, of which a computer takes one. */
+    private static final java.util.Set<PredictionState> FORK = java.util.EnumSet.of(PredictionState.ACCEPTED_EXACT,
+            PredictionState.ACCEPTED_EQUIVALENT, PredictionState.REVISED);
+
     private final Map<PredictionId, PredictionState> states = new LinkedHashMap<>();
+    /** The node whose step set each prediction's current state; it decides between two sibling steps. */
+    private final Map<PredictionId, String> writers = new LinkedHashMap<>();
 
     /**
      * Creates an empty projection.
@@ -118,8 +124,8 @@ public final class PredictionProjection {
         } catch (MissingReferenceException unreachable) {
             throw new CoordinationStateException(unreachable.code());
         }
-        if (next != null) {
-            states.put(event.predictionIdentity(), next);
+        if (next != null && next != states.put(event.predictionIdentity(), next)) {
+            writers.put(event.predictionIdentity(), event.actorNodeId());
         }
     }
 
@@ -156,8 +162,30 @@ public final class PredictionProjection {
             if (event.type() == PredictionEventType.PREDICTION_CREATED) {
                 throw refused;
             }
+            // Two computers took sibling steps (an exact acceptance and a revision, both after RECEIVED) or two terminal
+            // steps: the lower node's stands, so the state is the same in either order (designer item 18 case 2). A
+            // later step follows any of the siblings, so past the fork nothing is replaced.
+            PredictionState sibling = siblingState(event.type());
+            String writer = writers.get(event.predictionIdentity());
+            if (sibling != null && writer != null && event.actorNodeId().compareTo(writer) < 0
+                    && (terminal(current) ? terminal(sibling) : FORK.contains(current) && FORK.contains(sibling))) {
+                return sibling;
+            }
             return current;
         }
+    }
+
+    /** The state a fork or terminal step leads to, or null for any other step. */
+    private static PredictionState siblingState(PredictionEventType type) {
+        return switch (type) {
+            case ACCEPTED_EXACT -> PredictionState.ACCEPTED_EXACT;
+            case ACCEPTED_EQUIVALENT -> PredictionState.ACCEPTED_EQUIVALENT;
+            case CONTRACT_REVISED -> PredictionState.REVISED;
+            case PREDICTION_INVALIDATED -> PredictionState.INVALIDATED;
+            case REQUEST_REJECTED -> PredictionState.REJECTED;
+            case PREDICTION_EXPIRED -> PredictionState.EXPIRED;
+            default -> null;
+        };
     }
 
     private static boolean terminal(PredictionState state) {

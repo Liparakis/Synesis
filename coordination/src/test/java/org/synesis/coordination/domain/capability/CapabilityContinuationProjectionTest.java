@@ -92,6 +92,43 @@ final class CapabilityContinuationProjectionTest {
         assertEquals(contract, transferred.contract());
     }
 
+    /**
+     * Designer item 18 case 4: the owner was continued on another computer before the request reached this one. The
+     * request named the old, ended owner here while the computer that read it first had moved it; it follows the
+     * continuation whichever arrived first.
+     */
+    @Test
+    void aRequestArrivingAfterItsOwnerWasContinuedFollowsTheSuccessorAsInTheOtherOrder(@TempDir Path temp) throws Exception {
+        UUID projectId = UUID.randomUUID();
+        var signer = new IdentityBootstrap(temp.resolve("link")).loadOrCreate().identity();
+        CapabilityRequestHandle handle = new CapabilityRequestHandle("req_91234567890123456789012345678901");
+        CapabilityContract contract = new CapabilityContract("lookup", "id: UUID", "value: string", List.of("stable"),
+                "not found", "none", "pure", "v1", "local", "serialized", List.of("lookup returns value"));
+        byte[] created = new CapabilityRequestPayload(handle, "catalog.lookup", "requester-node", "requester-supervisor", "requester-worker",
+                "owner-node", "owner-supervisor", "owner-worker", UUID.randomUUID(), contract, CapabilityLifecycleState.AWAITING_OWNER, null, 0).encode();
+        var target = new WorkIntent(UUID.randomUUID(), projectId, "agt_owner_successor", "codex", UUID.randomUUID(), "task", "acceptance", "base",
+                List.of(ResourceSelector.pathExact("task_store.py")), 2, UUID.randomUUID(), UUID.randomUUID(), WorkIntent.Status.ANNOUNCED,
+                WorkIntent.Role.PRODUCER, List.of(), List.of());
+        byte[] continued = CollaborationCodec.encodeContinuation(new LaneContinuation(UUID.randomUUID(), UUID.randomUUID(), target,
+                "agt_owner_predecessor", "agt_owner_successor", 1, "snapshot#hash",
+                new CapabilityActorScope("owner-node", "owner-supervisor", "owner-worker", "old-owner-session"),
+                new CapabilityActorScope("successor-node", "successor-supervisor", "successor-worker", "new-owner-session")));
+
+        CapabilityRequestProjection requestFirst = new CapabilityRequestProjection();
+        apply(requestFirst, projectId, signer, 1, PredictionEventType.CAPABILITY_REQUEST_CREATED, created);
+        apply(requestFirst, projectId, signer, 2, PredictionEventType.LANE_CONTINUATION_ACCEPTED, continued);
+        CapabilityRequestProjection continuationFirst = new CapabilityRequestProjection();
+        apply(continuationFirst, projectId, signer, 1, PredictionEventType.LANE_CONTINUATION_ACCEPTED, continued);
+        apply(continuationFirst, projectId, signer, 2, PredictionEventType.CAPABILITY_REQUEST_CREATED, created);
+
+        for (CapabilityRequestProjection projection : List.of(requestFirst, continuationFirst)) {
+            CapabilityRequestRecord request = projection.findByHandle(handle).orElseThrow();
+            assertEquals("successor-node", request.ownerNodeId());
+            assertEquals("successor-worker", request.ownerWorkerId());
+            assertEquals("requester-node", request.requesterNodeId());
+        }
+    }
+
     @Test
     void validatedRequestFollowsEitherLaneToItsSuccessor(@TempDir Path temp) throws Exception {
         UUID projectId = UUID.randomUUID();

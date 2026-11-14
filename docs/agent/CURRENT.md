@@ -14,7 +14,14 @@ its review; a stale reviewer lane with notes is told to publish and is shown `fi
 
 **Docs.** ADR-0029 status corrected to accepted (built through ADR-0030/0031); ADR-0104's status line no longer says only
 stage 1 is built. ADR-0101 stays deferred (owner, 2026-11-15). Designer item 18's five order dependences are designed in
-ADR-0098 (not built; for the owner).
+ADR-0098; cases 1, 2, 4 and 5 built the same day (each fails before), case 3 waits for the owner: it needs the
+revision entry to name the contract it revises, an additive wire-format field.
+
+**Evidence.** Linux gate after item 18: link 209, coordination 591, project-record 28, relay 12, mcp-contract 21,
+workspace 1281 (11 skipped), cli 362 (1 skipped), all 0 failures, and mcp 215 with 1 failure:
+`McpRecoveryContinuationTest.aReviewerWhoseModuleWasIntegratedElsewhereIsToldItMayCancel` could not delete its
+project's `.git` at teardown (something still wrote there); 3 reruns of the class passed. Recorded as a rare flake, cause
+not found; the test is unchanged since October.
 
 **Not done.** A real run that hits items 62–64: a blind run cannot be steered into a second rejection, an away author or
 a late verdict without telling the agents what to do, which the acceptance rules forbid; they stay source-proven.

@@ -21,6 +21,7 @@ import org.synesis.coordination.domain.collaboration.WorkGroup;
 import org.synesis.coordination.domain.collaboration.WorkIntent;
 import org.synesis.coordination.domain.identity.LaneGrantId;
 import org.synesis.coordination.domain.identity.ProjectId;
+import org.synesis.coordination.domain.collaboration.CoordinationRequest;
 import org.synesis.coordination.domain.prediction.PredictionEvent;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.domain.task.SnapshotProvenance;
@@ -206,6 +207,42 @@ final class TakeoverAdmissionTest {
         arrive(second, PredictionEventType.LANE_CONTINUATION_ACCEPTED, CollaborationCodec.encodeContinuation(again));
 
         assertTrue(view.collaborationProjection().intent(targetId).isPresent(), "both successors stand");
+    }
+
+    /**
+     * Designer item 18 case 5: two computers apart took one lane over; the lane's pending review request went to the
+     * taker whose continuation arrived first. It follows the lower node's taker now, in either order.
+     */
+    @Test
+    void theReviewRequestOfALaneTakenTwiceFollowsTheLowerNodesTakerInEitherOrder() throws Exception {
+        NodeIdentity second = NodeIdentity.generate();
+        byte[] group = CollaborationCodec.encodeWorkGroup(new WorkGroup(GROUP, PROJECT, "goal", "acceptance", 1, WorkGroup.Status.ACTIVE));
+        CoordinationRequest review = new CoordinationRequest(UUID.randomUUID(), PROJECT, "agt-rev", "agt-owner", lane.intentId(),
+                CoordinationRequest.Kind.REVIEW, "please review", CoordinationRequest.Status.PENDING);
+        LaneContinuation byTaker = takeover(LaneContinuation.TAKEOVER_FROM_SNAPSHOT + SNAPSHOT);
+        WorkIntent other = new WorkIntent(UUID.randomUUID(), PROJECT, "agt-second", "codex", lane.taskId(), lane.goal(),
+                lane.acceptance(), "b", lane.selectors(), 2, GROUP, lane.authorityLineageId(), WorkIntent.Status.ANNOUNCED,
+                lane.role(), lane.reviewTargetSelectors(), lane.knownDependencies());
+        LaneContinuation bySecond = new LaneContinuation(UUID.randomUUID(), lane.intentId(), other, "agt-owner", "agt-second", 1,
+                LaneContinuation.TAKEOVER_FROM_BASE + BASE);
+        List<PredictionEvent> before = List.of(entry(away, PredictionEventType.WORK_GROUP_CREATED, group),
+                entry(away, PredictionEventType.WORK_INTENT_ANNOUNCED, CollaborationCodec.encodeIntent(lane)),
+                entry(away, PredictionEventType.TASK_SNAPSHOT_CREATED, snapshot()),
+                entry(away, PredictionEventType.COORDINATION_REQUESTED, CollaborationCodec.encodeRequest(review)));
+        PredictionEvent first = entry(taker, PredictionEventType.LANE_CONTINUATION_ACCEPTED, CollaborationCodec.encodeContinuation(byTaker));
+        PredictionEvent later = entry(second, PredictionEventType.LANE_CONTINUATION_ACCEPTED, CollaborationCodec.encodeContinuation(bySecond));
+        String expected = taker.nodeId().compareTo(second.nodeId()) < 0 ? "agt-taker" : "agt-second";
+
+        for (List<PredictionEvent> takeovers : List.of(List.of(first, later), List.of(later, first))) {
+            Projections computer = new Projections(new ProjectId(PROJECT));
+            long position = 0;
+            for (PredictionEvent event : java.util.stream.Stream.concat(before.stream(), takeovers.stream()).toList()) {
+                assertTrue(computer.arrive(event, ++position).applied(), event.type() + " was not applied");
+            }
+            CoordinationRequest followed = computer.collaborationProjection().requests().stream()
+                    .filter(request -> request.requestId().equals(review.requestId())).findFirst().orElseThrow();
+            assertEquals(expected, followed.target(), "the request follows the lower node's taker: " + takeovers);
+        }
     }
 
     // ---- revoked review grants (designer item 2) ----

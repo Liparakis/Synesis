@@ -220,4 +220,38 @@ final class CollaborationArrivalOrderTest {
         CoordinationException refused = assertThrows(CoordinationException.class, () -> own.validate(fromHigher));
         assertEquals("REQUEST_ALREADY_RESOLVED", refused.getMessage());
     }
+
+    private PredictionEvent lifecycle(NodeIdentity signer, PredictionEventType type, WorkIntent intent) throws Exception {
+        return event(signer, type, CollaborationCodec.encodeHeartbeat(intent.participant()));
+    }
+
+    /**
+     * Designer item 18 case 1: the agent's own computer detached it cleanly while a taker apart suspended it. The state
+     * was whichever arrived last, and the suspension made an ended participant recoverable again; an end stands now.
+     */
+    @Test
+    void aSuspensionArrivingAfterACleanDetachLeavesTheParticipantDetachedInEitherOrder() throws Exception {
+        WorkIntent lane = intent("agt-a", SHARED_PATH);
+        PredictionEvent announce = announced(nodeA, lane);
+        PredictionEvent detach = lifecycle(nodeA, PredictionEventType.PARTICIPANT_DETACHED, lane);
+        PredictionEvent suspend = lifecycle(nodeB, PredictionEventType.PARTICIPANT_SUSPENDED, lane);
+
+        for (CollaborationProjection projection : List.of(with(announce, detach, suspend), with(announce, suspend, detach))) {
+            assertEquals(java.util.Optional.of(Participant.State.DETACHED), projection.participantState(new org.synesis.coordination.domain.identity.ParticipantId("agt-a")));
+            assertTrue(projection.activeIntents().isEmpty());
+        }
+    }
+
+    /** Designer item 18 case 1: of two ends, the higher rank stands (revoked, cancelled, completed, detached). */
+    @Test
+    void ofACancelAndADetachTheCancelStandsInEitherOrder() throws Exception {
+        WorkIntent lane = intent("agt-a", SHARED_PATH);
+        PredictionEvent announce = announced(nodeA, lane);
+        PredictionEvent detach = lifecycle(nodeA, PredictionEventType.PARTICIPANT_DETACHED, lane);
+        PredictionEvent cancel = lifecycle(nodeB, PredictionEventType.PARTICIPANT_CANCELLED, lane);
+
+        for (CollaborationProjection projection : List.of(with(announce, detach, cancel), with(announce, cancel, detach))) {
+            assertEquals(java.util.Optional.of(Participant.State.CANCELLED), projection.participantState(new org.synesis.coordination.domain.identity.ParticipantId("agt-a")));
+        }
+    }
 }

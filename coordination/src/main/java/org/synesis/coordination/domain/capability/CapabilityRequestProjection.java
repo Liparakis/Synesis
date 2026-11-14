@@ -36,6 +36,11 @@ public final class CapabilityRequestProjection {
     private final Map<ImplementationRevisionKey, ImplementationRevisionRecord> implementations = new LinkedHashMap<>();
     private final Map<CapabilityRequestHandle, ImplementationRevision> latestRevision = new LinkedHashMap<>();
     private final Map<CapabilityRequestHandle, ValidationContextRecord> validationContexts = new LinkedHashMap<>();
+    /**
+     * Every lane continuation applied, in order. A request that arrives after its requester or owner was continued
+     * follows them too, as it would have had it arrived first (designer item 18 case 4).
+     */
+    private final List<PredictionEvent> continuations = new ArrayList<>();
     private final ApplyMode mode;
     /** The local revision of the event being applied; a contract revision is named by it. */
     private long revision;
@@ -58,6 +63,7 @@ public final class CapabilityRequestProjection {
         implementations.putAll(source.implementations);
         latestRevision.putAll(source.latestRevision);
         validationContexts.putAll(source.validationContexts);
+        continuations.addAll(source.continuations);
         this.mode = mode;
     }
 
@@ -420,6 +426,9 @@ public final class CapabilityRequestProjection {
                 event.createdAtEpochMillis(),
                 revision);
         records.put(handleKey, rec);
+        for (PredictionEvent continuation : continuations) {
+            continueRequest(handleKey, continuation);
+        }
     }
 
     /**
@@ -707,47 +716,53 @@ public final class CapabilityRequestProjection {
 
     /** Transfers actionable capability actors as part of the signed lane continuation event. */
     private void processLaneContinuation(PredictionEvent event) throws IOException {
+        for (CapabilityRequestHandle handle : List.copyOf(records.keySet())) {
+            continueRequest(handle, event);
+        }
+        continuations.add(event);
+    }
+
+    /** Moves one request's requester or owner to its successor when the continuation names it. */
+    private void continueRequest(CapabilityRequestHandle handle, PredictionEvent event) throws IOException {
         LaneContinuation continuation = CollaborationCodec.decodeContinuation(event.payload());
         CapabilityActorScope source = continuation.sourceActorScope();
         CapabilityActorScope successor = continuation.targetActorScope();
         if (source == null || successor == null) {
             return;
         }
-        for (Map.Entry<CapabilityRequestHandle, CapabilityRequestRecord> entry : List.copyOf(records.entrySet())) {
-            CapabilityRequestRecord current = entry.getValue();
-            // A request its owner superseded by finishing binds nobody, yet the requester's
-            // successor is the one who has to learn that the owner went ahead and what it last
-            // proposed. Left with the predecessor, the successor would see a dependency it
-            // apparently never requested and no explanation. The owner's side is over.
-            boolean informsRequester = current.ownerFinishedWithoutAnswer() && current.matchesRequester(source);
-            if (!current.state().bindsLanes() && !informsRequester) {
-                continue;
-            }
-            boolean requester = current.matchesRequester(source);
-            boolean owner = !informsRequester && current.matchesOwner(source);
-            if (!requester && !owner) {
-                continue;
-            }
-            if (requester && owner) {
-                throw new CoordinationException("CAPABILITY_CONTINUATION_SELF_OWNERSHIP_FORBIDDEN");
-            }
-            CapabilityRequestRecord updated = requester
-                    ? current.withRequesterActor(successor)
-                    : current.withOwnerActor(successor);
-            if (updated.matchesRequester(successor) && updated.matchesOwner(successor)) {
-                throw new CoordinationException("CAPABILITY_CONTINUATION_SELF_OWNERSHIP_FORBIDDEN");
-            }
-            if (requester && current.state() == CapabilityLifecycleState.VALIDATING) {
-                // A validation workspace belongs to the predecessor session. Keep the exact
-                // implementation revision, but require the successor to inspect it again.
-                updated = updated.withUpdate(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE,
-                        null,
-                        null,
-                        event.createdAtEpochMillis());
-                validationContexts.remove(current.handle());
-            }
-            records.put(entry.getKey(), updated);
+        CapabilityRequestRecord current = records.get(handle);
+        // A request its owner superseded by finishing binds nobody, yet the requester's
+        // successor is the one who has to learn that the owner went ahead and what it last
+        // proposed. Left with the predecessor, the successor would see a dependency it
+        // apparently never requested and no explanation. The owner's side is over.
+        boolean informsRequester = current.ownerFinishedWithoutAnswer() && current.matchesRequester(source);
+        if (!current.state().bindsLanes() && !informsRequester) {
+            return;
         }
+        boolean requester = current.matchesRequester(source);
+        boolean owner = !informsRequester && current.matchesOwner(source);
+        if (!requester && !owner) {
+            return;
+        }
+        if (requester && owner) {
+            throw new CoordinationException("CAPABILITY_CONTINUATION_SELF_OWNERSHIP_FORBIDDEN");
+        }
+        CapabilityRequestRecord updated = requester
+                ? current.withRequesterActor(successor)
+                : current.withOwnerActor(successor);
+        if (updated.matchesRequester(successor) && updated.matchesOwner(successor)) {
+            throw new CoordinationException("CAPABILITY_CONTINUATION_SELF_OWNERSHIP_FORBIDDEN");
+        }
+        if (requester && current.state() == CapabilityLifecycleState.VALIDATING) {
+            // A validation workspace belongs to the predecessor session. Keep the exact
+            // implementation revision, but require the successor to inspect it again.
+            updated = updated.withUpdate(CapabilityLifecycleState.IMPLEMENTATION_AVAILABLE,
+                    null,
+                    null,
+                    event.createdAtEpochMillis());
+            validationContexts.remove(current.handle());
+        }
+        records.put(handle, updated);
     }
 
     /**

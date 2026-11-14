@@ -118,4 +118,39 @@ final class PredictionArrivalOrderTest {
         assertThrows(CoordinationStateException.class, () -> projection.validate(again));
         assertEquals(PredictionState.ROUTED, projection.state(PREDICTION).orElseThrow());
     }
+
+    private NodeIdentity lower() {
+        return nodeA.nodeId().compareTo(nodeB.nodeId()) < 0 ? nodeA : nodeB;
+    }
+
+    private NodeIdentity higher() {
+        return lower() == nodeA ? nodeB : nodeA;
+    }
+
+    /**
+     * Designer item 18 case 2: an exact acceptance and a contract revision both follow RECEIVED. The first to arrive
+     * stood, so two computers could keep different states for ever; the lower node's stands in either order.
+     */
+    @Test
+    void ofTwoSiblingStepsTheLowerNodesStandsInEitherOrder() throws Exception {
+        PredictionEvent created = step(nodeA, PredictionEventType.PREDICTION_CREATED);
+        PredictionEvent routed = step(nodeA, PredictionEventType.PREDICTION_ROUTED);
+        PredictionEvent received = step(nodeA, PredictionEventType.REQUEST_RECEIVED);
+        PredictionEvent revised = step(lower(), PredictionEventType.CONTRACT_REVISED);
+        PredictionEvent accepted = step(higher(), PredictionEventType.ACCEPTED_EXACT);
+
+        assertEquals(PredictionState.REVISED, with(created, routed, received, revised, accepted).state(PREDICTION).orElseThrow());
+        assertEquals(PredictionState.REVISED, with(created, routed, received, accepted, revised).state(PREDICTION).orElseThrow());
+    }
+
+    /** Designer item 18 case 2: two terminal steps end the prediction either way; the label is the lower node's. */
+    @Test
+    void ofTwoTerminalStepsTheLowerNodesLabelStandsInEitherOrder() throws Exception {
+        PredictionEvent created = step(nodeA, PredictionEventType.PREDICTION_CREATED);
+        PredictionEvent rejected = step(lower(), PredictionEventType.REQUEST_REJECTED);
+        PredictionEvent expired = step(higher(), PredictionEventType.PREDICTION_EXPIRED);
+
+        assertEquals(PredictionState.REJECTED, with(created, rejected, expired).state(PREDICTION).orElseThrow());
+        assertEquals(PredictionState.REJECTED, with(created, expired, rejected).state(PREDICTION).orElseThrow());
+    }
 }

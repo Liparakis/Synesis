@@ -792,6 +792,19 @@ Decided while building step 4 (designer, 2026-10-18; each open to the owner):
     *Proof each needs before it lands:* a property test that applies the two computers' entries in every order and
     checks one state, and the scripted scenario of the case (ADR-0101's constraint, one real run, applies to changes of
     the agents' rules, which these are not: they change only which of two entries a computer keeps).
+    *Built on 2026-11-15 (owner's go-ahead): cases 1, 2, 4 and 5,* each pinned by a test that applies the entries in both
+    orders and fails before: `CollaborationArrivalOrderTest.aSuspensionArrivingAfterACleanDetachLeavesTheParticipantDetachedInEitherOrder`
+    and `ofACancelAndADetachTheCancelStandsInEitherOrder` (case 1; the rule holds in every mode, so a computer's own replay
+    agrees with its append); `PredictionArrivalOrderTest.ofTwoSiblingStepsTheLowerNodesStandsInEitherOrder` and
+    `ofTwoTerminalStepsTheLowerNodesLabelStandsInEitherOrder` (case 2; past the fork nothing is replaced, since every later
+    step follows any sibling); `CapabilityContinuationProjectionTest.aRequestArrivingAfterItsOwnerWasContinuedFollowsTheSuccessorAsInTheOtherOrder`
+    (case 4, requester and owner alike); `TakeoverAdmissionTest.theReviewRequestOfALaneTakenTwiceFollowsTheLowerNodesTakerInEitherOrder`
+    (case 5; the successor named for the ended lane follows the same taker). *Case 3 not built:* its design is wrong as
+    written. A contract's revision number is the local position of the entry that revised it, different on each
+    computer, and a revision entry does not name the contract it replaced, so two revisions from one contract cannot be
+    told from one revision after another. An order-independent rule needs the revision entry to carry the digest of the
+    contract it revises (an additive field of `CapabilityRequestPayload`, a published wire format); left for the owner.
+    *Published contracts:* none changed for cases 1, 2, 4 and 5 (only which of two arrived entries a projection keeps).
 19. **The claim lock, made exact.** Item 4 alone lets two claims both stand: B asks A before A has claimed, A then
     claims and asks B while B's check still runs, and B's node is the higher, so A is not refused, and neither is B.
     So a computer that is asked about an overlapping claim while its own is being checked, by a computer with a lower
