@@ -1,3 +1,27 @@
+# 2026-11-14 — ADR-0098 step 5: apart-and-rejoin converges in real runs (items 43–61)
+
+**Fixed since 2026-10-27** (each with a fail-before test; ADR-0098 items 43–61): a mistyped grant ID names the session's
+one grant (43); a run waits while a connected computer's log grows (44); a transient coordination request is not a lasting
+`INTEGRATION_BLOCKED` (45); a computer waits for its own pass before taking the other copy's main (46); the provider manual
+stops a tool-holding agent from running `provider install` (47); stranded reviewer lanes are released, never a reviewer
+that was granted (48); an agent whose process failed with its lane open is resumed (50); a conflict between the combined
+result and the other copy's newest head opens one more combine (51) whose lane claims every path its merge brings in (52);
+stale sessions are led out of the `ensure_session`/`get_next_action` loop (53, 55, 56); an idle agent of the author's
+computer is offered a repair lane (54); a combine join is refused before its worktree moves (57); a mismatched alias is
+answered retry (58); `send_message` takes optional `blocking` (default true) and only blocking operator requests end a run
+(59, owner decision); a re-merge reviewer judges the merge, not the whole goal (60); a rejected re-merge goes to one more
+independent reviewer, and a second rejection is a blocking operator request (61, owner decision).
+
+**Evidence.** Linux gate at `--cpus 2` green on every merged step through `f48af10b` (2,700+ tests, 0 failures).
+Real apart runs (PC Windows + Ubuntu VM, 300 s firewall split, agents restarted after the heal; PC agents Claude Haiku 5.5
+from sbx10, VM agents Codex GPT 6 Luna): sbx12–sbx18 13 PASS, 4 PARTIAL, 4 FAIL across 21 runs, each non-pass a distinct
+cause now fixed; sbx13 3/3 PASS; **sbx19 (`f48af10b`) 3/3 PASS**. Source semantics proven for every item; real-run
+convergence demonstrated on sbx13 and sbx19, not yet over a long series.
+
+**Open.** A repair is offered only on the author's computer; a re-merge stopped after two rejections waits for a person
+and is not retried after the request is closed; a computer on an older build reads an operator note as blocking; the
+2-CPU `OverlapAndCombineScenarioTest` failures (1 in 11 rounds, 2026-10-27) were not re-measured on the new tip.
+
 # 2026-10-27 — ADR-0104 built (sandboxed commands, signed decisions); step 5 stable under real cuts
 
 **ADR-0104, all stages built.** Stage 1: the owner's gating decisions are `PROJECT_POLICY_SET` entries (wire code 93)
