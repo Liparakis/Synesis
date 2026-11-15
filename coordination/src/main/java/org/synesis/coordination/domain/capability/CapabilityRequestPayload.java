@@ -34,16 +34,22 @@ import org.synesis.coordination.exception.CoordinationNullException;
  * @param state                 current request lifecycle state
  * @param reason                optional rejection or revision reason
  * @param expectedContractRevision revision required by a response
+ * @param publishedContractRevision the revision of the owner's published contract this entry carries, or 0 when it
+ *                              names none (every entry but a revision written from a publication, and every entry of
+ *                              format 4); it decides between two revisions written on computers apart (designer item 18
+ *                              case 3)
  * @since 1.0
  */
 public record CapabilityRequestPayload(CapabilityRequestHandle handle, String capability, String requesterNodeId,
                                        String requesterSupervisorId, String requesterWorkerId, String ownerNodeId,
                                        String ownerSupervisorId, String ownerWorkerId, UUID authorityLineageId,
                                        CapabilityContract contract, CapabilityLifecycleState state, String reason,
-                                       long expectedContractRevision) {
+                                       long expectedContractRevision, long publishedContractRevision) {
 
     private static final int MAGIC = 0x53435250; // "SCRP"
-    private static final int VERSION = 4;
+    /** Format 5 adds {@code publishedContractRevision} at the end; format 4 is still read, with it 0. */
+    private static final int VERSION = 5;
+    private static final int VERSION_WITHOUT_PUBLISHED_REVISION = 4;
     private static final int MAX_ENCODED_BYTES = 64 * 1024;
     private static final WireFormat TEXT = WireFormat.bounded(64 * 1024,
             true,
@@ -66,6 +72,7 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
      * @param state                 current request lifecycle state
      * @param reason                optional rejection or revision reason
      * @param expectedContractRevision revision being answered
+     * @param publishedContractRevision published contract revision carried, or 0
      */
     public CapabilityRequestPayload {
         CoordinationNullException.requireNonNull(handle, "handle");
@@ -82,9 +89,36 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
         if (expectedContractRevision < 0) {
             throw new CoordinationArgumentException("expectedContractRevision must not be negative");
         }
+        if (publishedContractRevision < 0) {
+            throw new CoordinationArgumentException("publishedContractRevision must not be negative");
+        }
         if (capability.isBlank() || capability.length() > 128) {
             throw new CoordinationArgumentException("capability must be between 1 and 128 characters");
         }
+    }
+
+    /**
+     * Constructs a payload that carries no published contract revision.
+     *
+     * @param handle                public request handle
+     * @param capability            capability identifier
+     * @param requesterNodeId       requester node identity
+     * @param requesterSupervisorId requester supervisor identity
+     * @param requesterWorkerId     requester worker identity
+     * @param ownerNodeId           assigned owner node identity
+     * @param ownerSupervisorId     assigned owner supervisor identity
+     * @param ownerWorkerId         assigned owner worker identity
+     * @param authorityLineageId    durable authority lineage required by the request
+     * @param contract              capability contract specification
+     * @param state                 current request lifecycle state
+     * @param reason                optional rejection or revision reason
+     * @param expectedContractRevision revision being answered
+     */
+    public CapabilityRequestPayload(CapabilityRequestHandle handle, String capability, String requesterNodeId, String requesterSupervisorId,
+            String requesterWorkerId, String ownerNodeId, String ownerSupervisorId, String ownerWorkerId, UUID authorityLineageId,
+            CapabilityContract contract, CapabilityLifecycleState state, String reason, long expectedContractRevision) {
+        this(handle, capability, requesterNodeId, requesterSupervisorId, requesterWorkerId, ownerNodeId, ownerSupervisorId, ownerWorkerId,
+                authorityLineageId, contract, state, reason, expectedContractRevision, 0);
     }
 
     /**
@@ -140,7 +174,7 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
             DataInputStream in = new DataInputStream(new ByteArrayInputStream(encoded));
             int magic = in.readInt();
             int version = in.readInt();
-            if (magic != MAGIC || version != VERSION) {
+            if (magic != MAGIC || (version != VERSION && version != VERSION_WITHOUT_PUBLISHED_REVISION)) {
                 throw new CoordinationException("Unsupported capability request payload format");
             }
 
@@ -180,6 +214,7 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
             CapabilityLifecycleState state = CapabilityLifecycleState.fromValue(TEXT.readText(in));
             String reasonRaw = TEXT.readText(in);
             String reason = reasonRaw.isBlank() ? null : reasonRaw;
+            long publishedContractRevision = version == VERSION ? in.readLong() : 0;
             if (in.available() != 0) {
                 throw new CoordinationException("Trailing capability request payload bytes");
             }
@@ -196,7 +231,8 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
                     contract,
                     state,
                     reason,
-                    expectedContractRevision);
+                    expectedContractRevision,
+                    publishedContractRevision);
         } catch (RuntimeException | EOFException failure) {
             throw new CoordinationException("Malformed capability request payload", failure);
         }
@@ -280,6 +316,7 @@ public record CapabilityRequestPayload(CapabilityRequestHandle handle, String ca
 
             TEXT.writeText(out, state.value());
             TEXT.writeText(out, reason != null ? reason : "");
+            out.writeLong(publishedContractRevision);
         });
     }
 }

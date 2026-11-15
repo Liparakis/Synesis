@@ -110,16 +110,22 @@ final class ContractArrivalOrderTest {
         assertEquals(with(first, second).contracts(), projection.contracts());
     }
 
+    /**
+     * Two writers of one revision (a lane and its successor, on computers apart). The first applied used to stay, so two
+     * computers could keep different contracts; the lower node's stands in either order (designer item 18 case 3).
+     */
     @Test
-    void twoWritersOfOneRevisionKeepTheFirstAppliedAndDoNotThrow() throws Exception {
+    void twoWritersOfOneRevisionKeepTheLowerNodesInEitherOrderAndDoNotThrow() throws Exception {
+        NodeIdentity lower = nodeA.nodeId().compareTo(nodeB.nodeId()) < 0 ? nodeA : nodeB;
+        NodeIdentity higher = lower == nodeA ? nodeB : nodeA;
         PredictionEvent first = published(nodeA, 1, "first");
-        PredictionEvent byA = published(nodeA, 2, "second by A");
-        PredictionEvent byB = published(nodeB, 2, "second by B");
+        PredictionEvent byLower = published(lower, 2, "second by the lower node");
+        PredictionEvent byHigher = published(higher, 2, "second by the higher node");
 
-        ContractProjection projection = with(first, byA, byB);
-
-        assertEquals(2, projection.contract(CONTRACT).orElseThrow().revision());
-        assertEquals("second by A", projection.contract(CONTRACT).orElseThrow().terms().purpose());
+        for (ContractProjection projection : List.of(with(first, byLower, byHigher), with(first, byHigher, byLower))) {
+            assertEquals(2, projection.contract(CONTRACT).orElseThrow().revision());
+            assertEquals("second by the lower node", projection.contract(CONTRACT).orElseThrow().terms().purpose());
+        }
     }
 
     @Test

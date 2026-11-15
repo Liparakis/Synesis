@@ -41,6 +41,11 @@ public final class CapabilityRequestProjection {
      * follows them too, as it would have had it arrived first (designer item 18 case 4).
      */
     private final List<PredictionEvent> continuations = new ArrayList<>();
+    /**
+     * The published contract revision each request's contract came from, and the node that wrote it: of two revisions
+     * written on computers apart, the higher number stands, and at one number the lower node's (designer item 18 case 3).
+     */
+    private final Map<CapabilityRequestHandle, PublishedRevision> publishedRevisions = new LinkedHashMap<>();
     private final ApplyMode mode;
     /** The local revision of the event being applied; a contract revision is named by it. */
     private long revision;
@@ -64,6 +69,7 @@ public final class CapabilityRequestProjection {
         latestRevision.putAll(source.latestRevision);
         validationContexts.putAll(source.validationContexts);
         continuations.addAll(source.continuations);
+        publishedRevisions.putAll(source.publishedRevisions);
         this.mode = mode;
     }
 
@@ -451,6 +457,14 @@ public final class CapabilityRequestProjection {
         if (!payload.state().isUnderNegotiation()) {
             throw new CoordinationException("INVALID_CAPABILITY_CONTRACT_REVISION_STATE");
         }
+        if (payload.publishedContractRevision() > 0) {
+            PublishedRevision incoming = new PublishedRevision(payload.publishedContractRevision(), event.actorNodeId());
+            PublishedRevision standing = publishedRevisions.get(payload.handle());
+            if (standing != null && !incoming.supersedes(standing)) {
+                return;
+            }
+            publishedRevisions.put(payload.handle(), incoming);
+        }
         validationContexts.remove(payload.handle());
         records.put(payload.handle(),
                 current.withUpdate(payload.state(),
@@ -763,6 +777,14 @@ public final class CapabilityRequestProjection {
             validationContexts.remove(current.handle());
         }
         records.put(handle, updated);
+    }
+
+    /** A published contract revision and the node whose entry carried it to this request. */
+    private record PublishedRevision(long number, String node) {
+
+        boolean supersedes(PublishedRevision standing) {
+            return number > standing.number || number == standing.number && node.compareTo(standing.node) < 0;
+        }
     }
 
     /**

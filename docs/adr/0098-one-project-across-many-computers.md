@@ -804,6 +804,17 @@ Decided while building step 4 (designer, 2026-10-18; each open to the owner):
     computer, and a revision entry does not name the contract it replaced, so two revisions from one contract cannot be
     told from one revision after another. An order-independent rule needs the revision entry to carry the digest of the
     contract it revises (an additive field of `CapabilityRequestPayload`, a published wire format); left for the owner.
+    *Case 3 built later the same day (owner: "Yes, add it").* The root was one layer down: `ContractProjection` kept the
+    first applied of two publications of one revision, and each bound request copied whichever won. Now the lower node's
+    publication of one revision stands in either order (a tie once a later revision is built changes nothing), and the
+    revision entry a publication writes to each bound request carries the contract's revision number
+    (`CapabilityRequestPayload.publishedContractRevision`, format 5, written by `ContractOwnerService`): the higher number
+    stands, at one number the lower node's. Pinned by `ContractArrivalOrderTest.twoWritersOfOneRevisionKeepTheLowerNodesInEitherOrderAndDoNotThrow`
+    (it pinned "the first applied stays" before: a stated semantic change) and `CapabilityRevisionArrivalOrderTest` (both
+    fail before). *Published contracts:* the capability request payload moves from format 4 to 5 with one field at the
+    end; format 4 is still read (with the field 0, today's behaviour; `CapabilityRequestPayloadWireTest` pins the format 5
+    bytes and reads the old format 4 golden). A build before this one refuses a format 5 entry as
+    an unknown format; accepted because there is no public release yet (owner, 2026-11-14).
     *Published contracts:* none changed for cases 1, 2, 4 and 5 (only which of two arrived entries a projection keeps).
 19. **The claim lock, made exact.** Item 4 alone lets two claims both stand: B asks A before A has claimed, A then
     claims and asks B while B's check still runs, and B's node is the higher, so A is not refused, and neither is B.

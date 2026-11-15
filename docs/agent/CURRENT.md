@@ -14,8 +14,9 @@ its review; a stale reviewer lane with notes is told to publish and is shown `fi
 
 **Docs.** ADR-0029 status corrected to accepted (built through ADR-0030/0031); ADR-0104's status line no longer says only
 stage 1 is built. ADR-0101 stays deferred (owner, 2026-11-15). Designer item 18's five order dependences are designed in
-ADR-0098; cases 1, 2, 4 and 5 built the same day (each fails before), case 3 waits for the owner: it needs the
-revision entry to name the contract it revises, an additive wire-format field.
+ADR-0098 and all five built the same day (each fails before). Case 3 adds `publishedContractRevision` to the capability
+request payload (format 5; format 4 still read; an older build cannot read format 5) and makes the lower node's
+publication of one contract revision stand, a stated change of `ContractArrivalOrderTest`.
 
 **Evidence.** Linux gate after item 18: link 209, coordination 591, project-record 28, relay 12, mcp-contract 21,
 workspace 1281 (11 skipped), cli 362 (1 skipped), all 0 failures, and mcp 215 with 1 failure:

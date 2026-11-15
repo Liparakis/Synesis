@@ -133,9 +133,9 @@ public final class ContractOwnerService {
             }
             // One text for every consumer: each binding to the earlier revision waits to be
             // made again, and what was validated under it no longer counts.
-            CapabilityRequestPayload revised = new CapabilityRequestPayload(record.get().handle(), record.get().capability(), record.get().requesterNodeId(), record.get().ownerNodeId(),
-                    record.get().authorityLineageId(), published.terms(), CapabilityLifecycleState.REVISION_REQUESTED,
-                    "The owner published revision " + published.revision() + " of the contract.", record.get().contractRevision());
+            CapabilityRequestPayload revised = new CapabilityRequestPayload(record.get().handle(), record.get().capability(), record.get().requesterNodeId(), "", "",
+                    record.get().ownerNodeId(), "", "", record.get().authorityLineageId(), published.terms(), CapabilityLifecycleState.REVISION_REQUESTED,
+                    "The owner published revision " + published.revision() + " of the contract.", record.get().contractRevision(), published.revision());
             store.append(UUID.randomUUID(), PredictionEventType.CAPABILITY_REQUEST_CONTRACT_REVISED, identity.nodeId(), revised.encode(), identity);
             toldToBindAgain++;
         }

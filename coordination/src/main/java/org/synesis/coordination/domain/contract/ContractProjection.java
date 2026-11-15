@@ -29,6 +29,8 @@ public final class ContractProjection {
     private final Map<UUID, ContractRecord> contracts = new LinkedHashMap<>();
     private final Map<String, ContractBinding> bindings = new LinkedHashMap<>();
     private final Map<UUID, ContractChangeRequest> changeRequests = new LinkedHashMap<>();
+    /** The node that published each contract's current revision; it decides between two publications of one number. */
+    private final Map<UUID, String> publishers = new LinkedHashMap<>();
     private final ApplyMode mode;
 
     /**
@@ -42,6 +44,7 @@ public final class ContractProjection {
         contracts.putAll(source.contracts);
         bindings.putAll(source.bindings);
         changeRequests.putAll(source.changeRequests);
+        publishers.putAll(source.publishers);
         this.mode = mode;
     }
 
@@ -54,7 +57,7 @@ public final class ContractProjection {
     public synchronized void apply(PredictionEvent event) throws IOException {
         CoordinationNullException.requireNonNull(event, "event");
         switch (event.type()) {
-            case CONTRACT_PUBLISHED -> publish(ContractCodec.decodePublished(event.payload()));
+            case CONTRACT_PUBLISHED -> publish(ContractCodec.decodePublished(event.payload()), event.actorNodeId());
             case CONTRACT_DEPENDENCY_BOUND -> bind(ContractCodec.decodeBound(event.payload()));
             case CONTRACT_CHANGE_REQUESTED -> requestChange(ContractCodec.decodeChangeRequested(event.payload()));
             case CONTRACT_CHANGE_ANSWERED -> answerChange(ContractCodec.decodeChangeAnswered(event.payload()));
@@ -197,7 +200,7 @@ public final class ContractProjection {
         return Optional.ofNullable(changeRequests.get(id));
     }
 
-    private void publish(ContractRecord published) throws IOException {
+    private void publish(ContractRecord published, String publisher) throws IOException {
         ContractRecord prior = contracts.get(published.contractId());
         long expected = prior == null ? 1 : prior.revision() + 1;
         if (!mode.checking() && published.revision() > expected) {
@@ -218,8 +221,13 @@ public final class ContractProjection {
             return;
         }
         if (published.revision() < expected) {
-            // Two revisions of one number, from a lane and its successor: the first applied here stays.
-            return;
+            // Two revisions of one number, from a lane and its successor on computers apart: the lower node's stands, in
+            // either order (designer item 18 case 3). An older number, or a tie once a later revision is built, changes
+            // nothing.
+            boolean lowerTie = prior != null && published.revision() == prior.revision() && publisher.compareTo(publishers.getOrDefault(published.contractId(), publisher)) < 0;
+            if (!lowerTie) {
+                return;
+            }
         }
         boolean covered = contracts.values().stream()
                 .anyMatch(other -> !other.contractId().equals(published.contractId()) && other.state() == ContractRecord.State.ACTIVE && published.paths().stream().anyMatch(other::covers));
@@ -227,6 +235,7 @@ public final class ContractProjection {
             throw new CoordinationException("CONTRACT_PATH_ALREADY_COVERED");
         }
         contracts.put(published.contractId(), published);
+        publishers.put(published.contractId(), publisher);
     }
 
     private void bind(ContractBinding binding) throws IOException {
