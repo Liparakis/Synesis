@@ -1,3 +1,11 @@
+# 2026-11-16 — Installer check: fresh install shown, decline path not checked
+
+**Shown.** The owner installed the `0.1.0-dev.installcheck-20261116` wizard build in a new local Windows account that
+never had Synesis: the install completed, with no administrator prompt. **Not checked: the decline path.** This PC has
+UAC off (`EnableLUA=0`), so Windows shows no approval prompt to anyone and "No" cannot be clicked; the `Synesis Link`
+firewall rule still named the owner account's older build afterwards. The owner chose to leave it unchecked (security
+settings are the owner's; nothing was changed). It rests on the wizard tests that replace the elevation.
+
 # 2026-11-16 — The two rare flakes fixed
 
 **`McpRecoveryContinuationTest` could not delete `.git`.** Git 2.29+ starts a detached `git maintenance run --auto
@@ -142,7 +150,7 @@ state folder, never the project). The unused project-record sync protocol was de
 **Lab:** the Linux gate starts its container inside the Podman WSL distro; scenarios run on the Linux gate only;
 the VM loses its network now and then and is reset.
 
-**Open:** the installer's admin-prompt check (needs the owner); adapters for further harnesses (owner's choice);
+**Open:** the installer's admin-prompt check (fresh install shown 2026-11-16; the decline path not checked, UAC is off on the only Windows PC); adapters for further harnesses (owner's choice);
 ADR-0101 open; a late snapshot of a cancelled lane waits for review for ever (ADR-0098 step 5, noted).
 
 # 2026-10-20 — ADR-0098 step 7 proven under a real cut; step 5 PARTIAL; yesterday's cuts did not reach the Link
