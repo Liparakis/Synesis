@@ -7,7 +7,8 @@ parsing YAML. Windows signing: the owner chose SignPath Foundation; the `bundles
 on a release run once `SIGNPATH_API_TOKEN` is set (skipped until then), and `CODE_SIGNING_POLICY.md` is the policy page
 SignPath asks for. Not run; the owner applies and sets the secret and variables (`docs/release/signing.md`). The
 repository's `README.md` is a leftover acceptance-project file and must link the policy before applying. Apple signing
-is not wired.
+is not wired. **Deferred by the owner (2026-11-16):** the SignPath application waits until just before a public
+release; the commercial-license offer was withdrawn the same day so the project qualifies.
 
 # 2026-11-16 — Installer check: fresh install shown, decline path not checked
 
