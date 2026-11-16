@@ -47,9 +47,10 @@ project sandbox                    Allow, deny or show commands that run without
 project sandbox allow-unsandboxed  Sign that agents' commands may run without a sandbox on a computer that has none.
 project sandbox deny-unsandboxed   Sign that agents' commands are refused when no sandbox is available (the default).
 project sandbox show               Show whether commands may run without a sandbox where none is available.
-project policy                     Show the project's signed policy, or sign the one kept in project.json.
+project policy                     Show the project's signed policy, sign the one kept in project.json, or restore the operator key.
 project policy show                Show the policy in force and whether it is signed.
 project policy adopt               Sign the policy kept in project.json as the project's baseline; --from head or file picks one when they differ.
+project policy restore-key         Restore the operator key from its 24 words, under a new passphrase.
 link                               Connect this project to another computer; the connection stays with the project's runtime.
 link invite                        Create a project invitation and wait for the other computer to open it.
 link join                          Join an invitation from the other computer.
@@ -490,7 +491,17 @@ public half, then the policy `.synesis/project.json` held (see `synesis project
 policy adopt`). The command prints `OPERATOR_KEY=<sl1-...>`, the node ID derived
 from the key's public half, which the project trusts from then on: check that it is the one
 you just made, since `synesis project policy show` prints the same line and a
-baseline written by anyone else shows another one. A computer that made the key
+baseline written by anyone else shows another one. The key is made from 24 words,
+printed once as `OPERATOR_WORDS=` and stored nowhere: write them down.
+`synesis project policy restore-key [--project <dir>]` asks for the words and a
+new passphrase at the terminal and puts the same key back on this computer, for a
+lost key file, a forgotten passphrase, or a new owner's computer after
+`project recover`. It prints `OPERATOR_KEY=` and `OPERATOR_KEY_RESTORED=true`.
+The words must give the key the project registered (`ERROR=OPERATOR_WORDS_WRONG`
+otherwise; the project's recovery words are other words), so they never register
+another key; a key file already on the computer is moved aside, not deleted, and
+nothing is written to the log. A key made before 2026-11-15 has no words and
+cannot be restored. A computer that made the key
 but whose log holds no baseline (the log was lost) refuses every gate
 (`POLICY_UNAVAILABLE`) and does not fall back to the file. Only the owner's computer can sign (`ERROR=NOT_THE_OWNER`
 elsewhere); on a project shared with other computers the entries travel in the
@@ -748,6 +759,9 @@ more.
 | `OPERATOR_PASSPHRASE_TOO_SHORT` | A new key's passphrase is shorter than 8 characters. |
 | `OPERATOR_KEY_MISSING` | The project has a signed policy but its operator key is not on this computer. |
 | `OPERATOR_KEY_MISMATCH` | The key on this computer is not the one the project registered. |
+| `OPERATOR_WORDS_WRONG` | The 24 words give another key than the operator key the project registered. |
+| `OPERATOR_KEY_RESTORE_FAILED` | The restored operator key could not be stored on this computer. |
+| `POLICY_BASELINE_REQUIRED` | The project has no signed policy yet, so there is no operator key to restore. |
 | `POLICY_ADOPTION_NEEDS_CONFIRMATION` | The policy in `project.json` differs from the committed one, or is not committed; pick with `project policy adopt --from head\|file`. |
 | `POLICY_UNAVAILABLE` | The signed policy could not be read from the log, so no gate runs and none is skipped. |
 | `POLICY_NOT_RECEIVED` | A member computer has not received the owner's signed policy, so it runs no gate. |

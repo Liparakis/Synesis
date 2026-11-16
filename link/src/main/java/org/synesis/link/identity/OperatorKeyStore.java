@@ -100,8 +100,8 @@ public final class OperatorKeyStore {
     }
 
     /**
-     * Creates the key, encrypted under the passphrase. Never replaces a key: losing the passphrase means a new key,
-     * registered by a decision the old key signs, or a new project baseline, never an overwritten file.
+     * Creates a random key, encrypted under the passphrase. Never replaces a key: a lost passphrase is recovered with
+     * {@link #restore} from the key's recovery words, never by an overwritten file.
      *
      * @param passphrase what the person typed; the caller clears it
      * @return the new identity, unlocked
@@ -109,11 +109,47 @@ public final class OperatorKeyStore {
      * @throws GeneralSecurityException when the key cannot be generated or encrypted
      */
     public NodeIdentity create(char[] passphrase) throws IOException, GeneralSecurityException {
+        return create(passphrase, NodeIdentity.generate());
+    }
+
+    /**
+     * Stores a key made elsewhere, such as from a person's recovery words, encrypted under the passphrase. Never replaces
+     * a key.
+     *
+     * @param passphrase what the person typed; the caller clears it
+     * @param identity   the key to store
+     * @return the identity
+     * @throws IOException              when a key file exists already or cannot be written
+     * @throws GeneralSecurityException when the key cannot be encrypted
+     */
+    public NodeIdentity create(char[] passphrase, NodeIdentity identity) throws IOException, GeneralSecurityException {
         requireNewPassphrase(passphrase);
         if (Files.exists(file)) {
             throw new FileAlreadyExistsException(file.toString());
         }
-        NodeIdentity identity = NodeIdentity.generate();
+        write(seal(passphrase, identity));
+        return identity;
+    }
+
+    /**
+     * Stores a key a person restored from its recovery words, under a new passphrase. A file already here is moved
+     * aside, never deleted: it may hold another key, and a lost key is lost for good.
+     *
+     * @param passphrase the new passphrase; the caller clears it
+     * @param identity   the restored key
+     * @throws IOException              when the file cannot be moved or written
+     * @throws GeneralSecurityException when the key cannot be encrypted
+     */
+    public void restore(char[] passphrase, NodeIdentity identity) throws IOException, GeneralSecurityException {
+        requireNewPassphrase(passphrase);
+        byte[] sealed = seal(passphrase, identity);
+        if (Files.exists(file)) {
+            Files.move(file, file.resolveSibling(file.getFileName() + ".before-restore-" + UUID.randomUUID()));
+        }
+        write(sealed);
+    }
+
+    private byte[] seal(char[] passphrase, NodeIdentity identity) throws IOException, GeneralSecurityException {
         byte[] salt = new byte[SALT_BYTES];
         byte[] nonce = new byte[NONCE_BYTES];
         RANDOM.nextBytes(salt);
@@ -126,8 +162,7 @@ public final class OperatorKeyStore {
             out.writeInt(sealed.length);
             out.write(sealed);
         }
-        write(bytes.toByteArray());
-        return identity;
+        return bytes.toByteArray();
     }
 
     /**

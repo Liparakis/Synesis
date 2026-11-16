@@ -55,6 +55,11 @@ final class OperatorDecisions {
             // The key the project now trusts for good: check it is the one you just made. A baseline written by anyone
             // else shows another ID in 'synesis project policy show'.
             runtime.terminal().stdout("OPERATOR_KEY=" + decided.operatorKeyId());
+            if (!decided.operatorWords().isEmpty()) {
+                runtime.terminal().stdout("OPERATOR_WORDS=" + String.join(" ", decided.operatorWords()));
+                runtime.terminal().stdout("OPERATOR_WORDS_NOTE=Write these 24 words down now; they are shown once and stored nowhere. "
+                        + "'synesis project policy restore-key' puts the operator key back with them if the key file or its passphrase is lost.");
+            }
             if (adopted.validation() != null) {
                 runtime.terminal().stdout("POLICY_ADOPTED=validation");
             }
@@ -104,11 +109,38 @@ final class OperatorDecisions {
         return ExitCodes.LOCAL_CONFIGURATION;
     }
 
+    /**
+     * Restores the operator key from its 24 words, asking the person for the words and a new passphrase at the
+     * terminal; the words are read like a passphrase, never from a pipe, an argument or the environment.
+     *
+     * @param runtime  CLI runtime
+     * @param location the project
+     * @return the restored key's ID
+     * @throws ProjectApplicationException when the restore is refused
+     * @throws IOException                 when the terminal cannot be read
+     */
+    static String restore(CliRuntime runtime, ProjectLocation location) throws ProjectApplicationException, IOException {
+        char[] words = runtime.terminal().readSecret("Type the operator key's 24 words on one line: ");
+        if (words == null) {
+            throw new ProjectApplicationException("OPERATOR_KEY_UNAVAILABLE", "The words must be typed at a terminal, and none could be asked for");
+        }
+        try {
+            return ProjectPolicyService.restoreOperatorKey(location, new String(words),
+                    newKey -> askPassphrase(runtime, "New passphrase for the restored operator key: ", true));
+        } finally {
+            Arrays.fill(words, '\0');
+        }
+    }
+
     private static char[] askPassphrase(CliRuntime runtime, boolean newKey) throws IOException {
-        // The explanation is part of the prompt, so it appears only where a person is there to read it.
-        char[] first = runtime.terminal().readSecret(newKey
+        return askPassphrase(runtime, newKey
                 ? "This project has no operator key yet. It signs your decisions about validation, review and the sandbox, and is kept encrypted under a passphrase you type here.\nNew operator key passphrase: "
-                : "Operator key passphrase: ");
+                : "Operator key passphrase: ", newKey);
+    }
+
+    private static char[] askPassphrase(CliRuntime runtime, String prompt, boolean newKey) throws IOException {
+        // The explanation is part of the prompt, so it appears only where a person is there to read it.
+        char[] first = runtime.terminal().readSecret(prompt);
         if (first == null || !newKey) {
             return first;
         }

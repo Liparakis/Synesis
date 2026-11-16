@@ -100,6 +100,25 @@ class ProjectPolicyCommandTest {
     }
 
     @Test
+    void theWordsPrintedOnceRestoreALostKeyUnderANewPassphrase() throws Exception {
+        Result made = run("project", "review", "set", "mandatory", "--project", project);
+        String words = made.stdout().stream().filter(line -> line.startsWith("OPERATOR_WORDS=")).findFirst().orElseThrow().substring("OPERATOR_WORDS=".length());
+        assertEquals(24, words.split(" ").length);
+        assertTrue(run("project", "review", "set", "none", "--project", project).stdout().stream().noneMatch(line -> line.startsWith("OPERATOR_WORDS=")),
+                "the words are shown only when the key is made");
+        Files.delete(location.operatorKeyFile());
+
+        Result restored = runTyping(List.of(words, "a new passphrase", "a new passphrase"), "project", "policy", "restore-key", "--project", project);
+
+        assertEquals(0, restored.exit(), restored.toString());
+        assertTrue(restored.stdout().contains("OPERATOR_KEY_RESTORED=true"));
+        assertEquals(0, runTyping(List.of("a new passphrase"), "project", "review", "set", "mandatory", "--project", project).exit());
+        Result wrong = runTyping(List.of(String.join(" ", org.synesis.coordination.domain.membership.RecoveryKey.generate().words())),
+                "project", "policy", "restore-key", "--project", project);
+        wrong.assertIs(ExitCodes.LOCAL_CONFIGURATION, List.of(), CliHarness.shaped("OPERATOR_WORDS_WRONG", "~REASON=.+"));
+    }
+
+    @Test
     void theKeyFileHasNoPlaintextOfThePassphrase() throws Exception {
         assertEquals(0, run("project", "review", "set", "mandatory", "--project", project).exit());
 

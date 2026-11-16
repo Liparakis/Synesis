@@ -78,6 +78,7 @@ import org.synesis.cli.command.project.ProjectValidationClearCommand;
 import org.synesis.cli.command.project.ProjectValidationCommand;
 import org.synesis.cli.command.project.ProjectValidationSetCommand;
 import org.synesis.cli.command.project.ProjectPolicyAdoptCommand;
+import org.synesis.cli.command.project.ProjectPolicyRestoreKeyCommand;
 import org.synesis.cli.command.project.ProjectPolicyCommand;
 import org.synesis.cli.command.project.ProjectPolicyShowCommand;
 import org.synesis.cli.command.project.ProjectReviewCommand;
@@ -199,7 +200,8 @@ public final class SynesisCli {
                 .addSubcommand("set", new ProjectReviewSetCommand(runtime)).addSubcommand("show", new ProjectReviewShowCommand(runtime)));
         command.getSubcommands().get("project").addSubcommand("sandbox", new CommandLine(new ProjectSandboxCommand(runtime)));
         command.getSubcommands().get("project").addSubcommand("policy", new CommandLine(new ProjectPolicyCommand())
-                .addSubcommand("show", new ProjectPolicyShowCommand(runtime)).addSubcommand("adopt", new ProjectPolicyAdoptCommand(runtime)));
+                .addSubcommand("show", new ProjectPolicyShowCommand(runtime)).addSubcommand("adopt", new ProjectPolicyAdoptCommand(runtime))
+                .addSubcommand("restore-key", new ProjectPolicyRestoreKeyCommand(runtime)));
         command.addSubcommand("link", new LinkCommand());
         command.getSubcommands().get("link").addSubcommand("invite", new LinkInviteCommand(runtime));
         command.getSubcommands().get("link").addSubcommand("join", new LinkJoinCommand(runtime));

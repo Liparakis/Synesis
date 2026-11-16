@@ -1,3 +1,20 @@
+# 2026-11-15 — Operator-key recovery built
+
+**Built.** ADR-0104's open requirement "Operator-key recovery" is resolved: a new operator key is made from 24 words
+printed once (`OPERATOR_WORDS=`), and `synesis project policy restore-key` puts the registered key back from them under a
+new passphrase (a lost file, a forgotten passphrase, or the new owner after `project recover`). The words must give the
+registered key (`OPERATOR_WORDS_WRONG`); no log entry or wire format changed. Not the ADR-0098 recovery key as first
+proposed: the owner's node key alone can name a new one, which would have been a node-key-only path. A key made before
+today has no words and cannot be restored. A baseline write that fails after the key was made deletes the key unless the
+log registered it (not covered by a test: no failure there could be injected cheaply).
+
+**Evidence.** `ProjectPolicyServiceTest` (restore, wrong words, forgotten passphrase, new owner after `recover`) and
+`ProjectPolicyCommandTest.theWordsPrintedOnceRestoreALostKeyUnderANewPassphrase`. Full Linux gate: link 209,
+coordination 594, project-record 28, relay 12, mcp-contract 21, workspace 1283 (11 skipped), mcp 215, all 0 failures;
+cli 363 (1 skipped) with 1 failure, `OverlapAndCombineScenarioTest.theOtherComputerGoesOnIntegratingWhileTheCombineWaits…`
+("holds the entries … wrote": the two logs not yet equal), which passed 3 reruns of the class. A rare replication-timing
+flake, not caused by this change (the scenario's policy step only signs once); cause not found.
+
 # 2026-11-15 — CI flakes, sandbox gaps, item 18 designed
 
 **Fixed.** The two tests that failed CI release run 43639210576 on `55735ed2`: `CodexLifecycleWaitControlTest` read the

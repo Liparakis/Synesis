@@ -15,6 +15,8 @@ import org.synesis.coordination.application.PolicyService;
 import org.synesis.coordination.application.PolicyService.Decision;
 import org.synesis.coordination.domain.collaboration.ReviewPolicy;
 import org.synesis.coordination.domain.membership.MembershipProjection;
+import org.synesis.coordination.domain.membership.RecoveryKey;
+import org.synesis.coordination.exception.CoordinationArgumentException;
 import org.synesis.coordination.domain.operator.OperatorRequest;
 import org.synesis.coordination.domain.policy.PolicyEntries.PolicyName;
 import org.synesis.coordination.domain.policy.PolicyProjection;
@@ -152,8 +154,10 @@ public final class ProjectPolicyService {
      * @param entry    the sequence of the last entry written in this computer's log, or zero when none
      * @param adopted  what the baseline adopted from the file, or empty when this command wrote no baseline
      * @param operatorKeyId the operator key that signed, as a node ID derived from its public half
+     * @param operatorWords the 24 recovery words of the operator key this command made, to show once; empty when it
+     *                      used a key that existed
      */
-    public record Decided(int written, long revision, long entry, Optional<FilePolicy> adopted, String operatorKeyId) {
+    public record Decided(int written, long revision, long entry, Optional<FilePolicy> adopted, String operatorKeyId, List<String> operatorWords) {
     }
 
     private ProjectPolicyService() {
@@ -429,6 +433,8 @@ public final class ProjectPolicyService {
         wanted.putAll(decisions);
         OperatorKeyStore keys = new OperatorKeyStore(location.operatorKeyFile());
         char[] passphrase = null;
+        RecoveryKey words = null;
+        boolean signed = false;
         try {
             boolean creating = !keys.exists();
             if (creating && baseline) {
@@ -438,16 +444,91 @@ public final class ProjectPolicyService {
             if (passphrase == null || passphrase.length == 0) {
                 throw new ProjectApplicationException("OPERATOR_KEY_UNAVAILABLE", "The operator key needs a passphrase typed at a terminal, and none could be asked for");
             }
-            NodeIdentity operator = creating ? keys.create(passphrase) : keys.unlock(passphrase);
+            // A new key comes from 24 words the person keeps, so a lost file or passphrase is restored by the words alone
+            // and no entry, file or node key can replace the key.
+            NodeIdentity operator;
+            if (creating) {
+                RecoveryKey fresh = RecoveryKey.generate();
+                operator = keys.create(passphrase, fresh.identity());
+                words = fresh; // only once the file is this command's own, so a failure discards nothing else
+            } else {
+                operator = keys.unlock(passphrase);
+            }
             List<Decision> pending = wanted.entrySet().stream().map(entry -> new Decision(entry.getKey(), entry.getValue())).toList();
             PolicyService.Written written = new PolicyService(location.openCoordinationStore(), location.loadOrCreateIdentity()).decide(operator, pending);
-            return new Decided(written.written(), written.revision(), written.entry(), adopted, NodeIdentity.deriveNodeId(operator.publicKeyEncoded()));
+            signed = true;
+            return new Decided(written.written(), written.revision(), written.entry(), adopted, NodeIdentity.deriveNodeId(operator.publicKeyEncoded()),
+                    words == null ? List.of() : words.words());
         } catch (OperatorKeyException wrong) {
             throw new ProjectApplicationException(wrong.code(), "The operator key could not be used");
         } catch (CoordinationException refused) {
             throw new ProjectApplicationException(refused.code(), "The decision was refused: " + refused.code());
         } catch (IOException | GeneralSecurityException | RuntimeException failure) {
             throw new ProjectApplicationException("POLICY_WRITE_FAILED", "The decision could not be written", failure);
+        } finally {
+            if (passphrase != null) {
+                java.util.Arrays.fill(passphrase, '\0');
+            }
+            if (words != null && !signed) {
+                discardUnregistered(location, NodeIdentity.deriveNodeId(words.publicKey()));
+            }
+        }
+    }
+
+    /**
+     * Deletes a key this command made whose words were never shown, unless the log registered it after all: a kept file
+     * would be signed with on the next run, and no one would hold its words. Unsure means kept.
+     */
+    private static void discardUnregistered(ProjectLocation location, String keyId) {
+        try {
+            if (read(location).snapshot().map(Snapshot::operatorKeyId).filter(keyId::equals).isEmpty()) {
+                Files.deleteIfExists(location.operatorKeyFile());
+            }
+        } catch (ProjectApplicationException | IOException unsure) {
+            // The decision's own failure is what the person sees.
+        }
+    }
+
+    /**
+     * Puts the project's operator key back on this computer from its 24 recovery words, under a new passphrase: for a
+     * lost key file or passphrase, or a new owner's computer. The words must give the key the log registered, so they
+     * restore that key and never register another. Nothing is written to the log.
+     *
+     * @param location the project
+     * @param words    the 24 words, as the person typed them
+     * @param prompt   how to ask a person for the new passphrase
+     * @return the restored key as a node ID derived from its public half
+     * @throws ProjectApplicationException {@code POLICY_BASELINE_REQUIRED} (no key is registered yet), a
+     *                                     {@code RECOVERY_WORDS_*} code for words that cannot be read,
+     *                                     {@code OPERATOR_WORDS_WRONG}, {@code OPERATOR_KEY_UNAVAILABLE}, a passphrase
+     *                                     refusal, or {@code OPERATOR_KEY_RESTORE_FAILED}
+     */
+    public static String restoreOperatorKey(ProjectLocation location, String words, OperatorPrompt prompt) throws ProjectApplicationException {
+        Objects.requireNonNull(prompt, "prompt");
+        Snapshot registered = read(location).snapshot().orElseThrow(() -> new ProjectApplicationException("POLICY_BASELINE_REQUIRED",
+                "This project has no signed policy yet, so it has no operator key to restore"));
+        NodeIdentity operator;
+        try {
+            operator = RecoveryKey.fromWords(words == null ? "" : words).identity();
+        } catch (CoordinationArgumentException unreadable) {
+            throw new ProjectApplicationException(unreadable.getMessage().split(":")[0], unreadable.getMessage());
+        }
+        String keyId = NodeIdentity.deriveNodeId(operator.publicKeyEncoded());
+        if (!keyId.equals(registered.operatorKeyId())) {
+            throw new ProjectApplicationException("OPERATOR_WORDS_WRONG", "These words give another key than the operator key this project registered");
+        }
+        char[] passphrase = null;
+        try {
+            passphrase = prompt.passphrase(true);
+            if (passphrase == null || passphrase.length == 0) {
+                throw new ProjectApplicationException("OPERATOR_KEY_UNAVAILABLE", "The operator key needs a passphrase typed at a terminal, and none could be asked for");
+            }
+            new OperatorKeyStore(location.operatorKeyFile()).restore(passphrase, operator);
+            return keyId;
+        } catch (OperatorKeyException refused) {
+            throw new ProjectApplicationException(refused.code(), "The operator key could not be stored");
+        } catch (IOException | GeneralSecurityException | RuntimeException failure) {
+            throw new ProjectApplicationException("OPERATOR_KEY_RESTORE_FAILED", "The operator key could not be stored", failure);
         } finally {
             if (passphrase != null) {
                 java.util.Arrays.fill(passphrase, '\0');

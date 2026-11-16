@@ -591,6 +591,28 @@ holds (the recovery key of ADR-0098, or the current operator key). No unsigned, 
 node-key-only path may replace or reset the operator key, because that would let anything that can read the node key
 or write the computer's files take over the signing authority.
 
+**Resolved 2026-11-15 (built): the operator key is made from 24 words the person keeps.** A new operator key is the
+Ed25519 key of a fresh `RecoveryKey` (256 random bits, 24 BIP-39 words, the same derivation as ADR-0098's); the words
+are printed once (`OPERATOR_WORDS=`) after the baseline is signed and stored nowhere. `synesis project policy
+restore-key` reads the words and a new passphrase at the terminal (`Terminal.readSecret`, never a pipe, argument or
+environment variable), derives the key, refuses unless it is the key the log registered (`OPERATOR_WORDS_WRONG`), and
+stores it with `OperatorKeyStore.restore`, which moves a file already there aside and never deletes it. This covers a
+lost key file, a forgotten passphrase, and the new owner after `project recover` (owner-change gap below). No log entry,
+wire format or verification rule changed: the words re-create the registered key, so they cannot register another,
+and nothing but the words can.
+
+*Why not the ADR-0098 recovery key, as this section first said.* On the owner's computer the node key alone writes
+`OWNER_CHANGED` naming a new recovery key (`project share --new-recovery-key`), so "a replacement signed by the
+recovery key" would let a holder of the node key name its own recovery key and then replace the operator key: the
+node-key-only path this requirement forbids. Binding the recovery key to the operator key would need a new policy name
+and a re-vouch on every recovery-key change; making the key from words needs neither.
+
+*Limits.* A key made before this change has no words and cannot be restored; nothing rotates it to a word-made key
+(the current key could sign a replacement, but no command writes one). If writing the baseline fails after the key file
+was made, the file is deleted unless the log registered it, so a key whose words were never shown is not signed with
+later; a log that cannot be read keeps the file. Anyone holding the words holds the operator key, exactly as anyone
+holding a recovery key that could replace it would.
+
 ## Alternatives considered
 
 1. **Only sign the decisions; no sandbox.** Rejected by the owner's decision 1: the key is readable by the command.
@@ -692,7 +714,8 @@ Source semantics proven on the Linux gate; no real-run acceptance yet. Each item
    counter: in a shared project `requireOwnerStatement` judges the entry, in an unshared one the same counter orders
    it and only the baseline's node may write. `PROJECT_SHARED` from a node other than the baseline signer is refused
    (`OWNER_NOT_THE_POLICY_BASELINE_SIGNER`). Recovery-key replacement of the operator key is **not** built (the
-   operator key is replaced only by a statement the current key signs).
+   operator key is replaced only by a statement the current key signs); a lost key is restored from its own 24 words
+   instead (see "Operator-key recovery", resolved 2026-11-15).
 3. **`init` and `locate`. Partly built, with one deviation.** `synesis init` does **not** write the baseline: the
    baseline needs the operator key, and the key needs a passphrase a person types, which a script, an agent's `init`
    or the acceptance harness cannot give. Until a person signs a first decision (or `project policy adopt`), the file
@@ -752,11 +775,11 @@ unless it says so).**
   the entry directly. Until stage 2 hides the node key and `.synesis` from an agent's commands, an agent can pre-empt a
   project that has no baseline yet. Mitigations built: the command prints `OPERATOR_KEY=<id>` for the person to check
   and `policy show` prints it again; a computer that made a key but whose log has no baseline refuses every gate and
-  does not use the file. **Not built:** a baseline confirmed by a recovery key, and any recovery of a lost operator
-  key (a replacement signed by the recovery key, as this ADR's Decision describes, or a replacement after a new owner).
-- **An owner change leaves the new owner without the key.** `OWNER_CHANGED` moves the node key; the operator key file
-  stays on the old owner's computer, so the new owner gets `OPERATOR_KEY_MISSING` until the file is copied by hand.
-  Moving the operator key with the ownership is not designed.
+  does not use the file. **Not built:** a baseline confirmed by a recovery key. Recovery of a lost operator key was
+  built on 2026-11-15 from the key's own words (see "Operator-key recovery").
+- **An owner change leaves the new owner without the key** (closed 2026-11-15). `OWNER_CHANGED` moves the node key; the
+  operator key file stays on the old owner's computer, so the new owner gets `OPERATOR_KEY_MISSING` until they run
+  `project policy restore-key` with the operator key's words.
 - **Gates and non-gate readers share the accessors.** `AgentNextActionService` and `WorkIntentAnnouncement` read policy
   through the same accessors, so on a member that has no baseline yet `get_next_action` and announcing a lane refuse as
   the gates do. That is the ADR's "no policy, no work" on a member, but it is wider than "refuses to integrate".

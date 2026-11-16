@@ -22,6 +22,7 @@ import org.synesis.coordination.application.PolicyService;
 import org.synesis.coordination.domain.membership.MembershipEntries.JoinAnswered;
 import org.synesis.coordination.domain.membership.MembershipEntries.JoinRequested;
 import org.synesis.coordination.domain.membership.MembershipEntries.ProjectShared;
+import org.synesis.coordination.domain.membership.RecoveryKey;
 import org.synesis.coordination.domain.policy.PolicyEntries.PolicyName;
 import org.synesis.coordination.domain.prediction.PredictionEventType;
 import org.synesis.coordination.persistence.PredictionEventStore;
@@ -222,6 +223,41 @@ final class ProjectPolicyServiceTest {
     }
 
     @Test
+    void aLostKeyOrPassphraseComesBackFromTheWordsShownOnceAndFromNoOtherWords() throws Exception {
+        Path root = gitProject();
+        assertEquals("POLICY_BASELINE_REQUIRED", assertThrows(ProjectApplicationException.class,
+                () -> ProjectPolicyService.restoreOperatorKey(service.locate(root), String.join(" ", RecoveryKey.generate().words()), TYPES)).code());
+        ProjectPolicyService.Decided first = ProjectPolicyService.decide(service.locate(root), TYPES, validation(STATUS), Optional.empty());
+        assertEquals(24, first.operatorWords().size(), "the words of a new key are shown once");
+        assertTrue(ProjectPolicyService.decide(service.locate(root), TYPES, validation(STATUS), Optional.empty()).operatorWords().isEmpty());
+        ProjectLocation location = service.locate(root);
+        Files.delete(location.operatorKeyFile());
+        assertEquals("OPERATOR_KEY_MISSING", assertThrows(ProjectApplicationException.class,
+                () -> ProjectPolicyService.decide(service.locate(root), TYPES, validation(LOG), Optional.empty())).code());
+
+        // Other words, even well-formed ones such as the project's recovery words, give another key and restore nothing.
+        assertEquals("OPERATOR_WORDS_WRONG", assertThrows(ProjectApplicationException.class,
+                () -> ProjectPolicyService.restoreOperatorKey(location, String.join(" ", RecoveryKey.generate().words()), TYPES)).code());
+        assertEquals("RECOVERY_WORDS_COUNT", assertThrows(ProjectApplicationException.class,
+                () -> ProjectPolicyService.restoreOperatorKey(location, "two words", TYPES)).code());
+        assertFalse(Files.exists(location.operatorKeyFile()));
+
+        ProjectPolicyService.OperatorPrompt renewed = newKey -> "a new passphrase".toCharArray();
+        String words = String.join(" ", first.operatorWords()).toUpperCase(java.util.Locale.ROOT);
+        assertEquals(first.operatorKeyId(), ProjectPolicyService.restoreOperatorKey(location, words, renewed));
+        ProjectPolicyService.decide(service.locate(root), renewed, validation(LOG), Optional.empty());
+        assertEquals(LOG, service.locate(root).validation(), "the restored key signs under its new passphrase");
+
+        // A forgotten passphrase: the file here is moved aside, not deleted, and the same key is stored again.
+        ProjectPolicyService.restoreOperatorKey(location, words, TYPES);
+        ProjectPolicyService.decide(service.locate(root), TYPES, validation(STATUS), Optional.empty());
+        assertEquals(STATUS, service.locate(root).validation());
+        try (var siblings = Files.list(location.operatorKeyFile().getParent())) {
+            assertEquals(1, siblings.filter(path -> path.getFileName().toString().contains(".before-restore-")).count());
+        }
+    }
+
+    @Test
     void repeatingADecisionWritesNothingAndDecidingAgainChangesTheNextRevision() throws Exception {
         Path root = gitProject();
         ProjectPolicyService.Decided first = ProjectPolicyService.decide(service.locate(root), TYPES, validation(STATUS), Optional.empty());
@@ -412,6 +448,33 @@ final class ProjectPolicyServiceTest {
         copyOwnersLog(start, owner, ownerStore, copied);
 
         assertEquals(LOG, member.validation(), "a location kept by the member follows the log once the baseline is in it");
+    }
+
+    @Test
+    void aNewOwnerSignsWithTheOperatorKeyOnceItIsRestoredFromItsWords() throws Exception {
+        Path root = gitProject();
+        ProjectLocation start = service.locate(root);
+        NodeIdentity self = start.loadOrCreateIdentity();
+        NodeIdentity owner = NodeIdentity.generate();
+        RecoveryKey recovery = RecoveryKey.generate();
+        RecoveryKey operatorWords = RecoveryKey.generate();
+        PredictionEventStore ownerStore = new PredictionEventStore(tmp.resolve("owner"), start.projectId());
+        ownerStore.append(UUID.randomUUID(), PredictionEventType.PROJECT_SHARED, owner.nodeId(), new ProjectShared(owner.publicKeyEncoded(), recovery.publicKey()).encode(), owner);
+        UUID request = UUID.randomUUID();
+        ownerStore.append(UUID.randomUUID(), PredictionEventType.JOIN_REQUESTED, owner.nodeId(), new JoinRequested(request, self.nodeId()).encode(), owner);
+        ownerStore.append(UUID.randomUUID(), PredictionEventType.JOIN_ANSWERED, owner.nodeId(), new JoinAnswered(request, self.nodeId(), true, 0).encode(), owner);
+        new PolicyService(ownerStore, owner).decide(operatorWords.identity(), List.of(new PolicyService.Decision(PolicyName.VALIDATION, ProjectMetadataCodec.validationValue(STATUS))));
+        copyOwnersLog(start, owner, ownerStore, 0);
+        new MembershipService(service.locate(root).openCoordinationStore(), self).recover(recovery, Optional.empty());
+        assertEquals("OPERATOR_KEY_MISSING", assertThrows(ProjectApplicationException.class,
+                () -> ProjectPolicyService.decide(service.locate(root), TYPES, Map.of(PolicyName.REVIEW, "MANDATORY"), Optional.empty())).code(),
+                "the owner change moved the node key, not the operator key");
+
+        ProjectPolicyService.restoreOperatorKey(service.locate(root), String.join(" ", operatorWords.words()), TYPES);
+        ProjectPolicyService.decide(service.locate(root), TYPES, Map.of(PolicyName.REVIEW, "MANDATORY"), Optional.empty());
+
+        assertTrue(service.locate(root).review().mandatory());
+        assertEquals(STATUS, service.locate(root).validation());
     }
 
     @Test
