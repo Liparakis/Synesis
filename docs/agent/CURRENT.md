@@ -1,3 +1,13 @@
+# 2026-11-16 — Real runs of items 63–64 skipped
+
+To reach items 63 (repair while the author's computer is away) and 64 (a late verdict under a revoked grant) lawfully,
+the lab's `run.sh` (outside the repository) gained `--then-split-when TYPE`: after the first heal it cuts the Link again
+the moment the PC holds an entry of that type copied from the VM (for 63, `INTEGRATION_CONFLICTED`). Not run: the lab
+VM hung early in boot twice (VirtualBox under Hyper-V, about 5.6 GB free on the host), and the owner chose to skip the
+runs. 63 and 64 stay source-proven. Item 64 would still need a reviewer to reject by its own judgement, which no cut
+can arrange. Of the older "Open" items, "a repair is offered only on the author's computer" and "a re-merge stopped
+after two rejections is not retried" were closed by items 63 and 62 the same day (the 2026-11-14 line predates them).
+
 # 2026-11-16 — Keyless build provenance for release files
 
 A release run now attests each raw installer and platform archive (`actions/attest-build-provenance@v2`, with
