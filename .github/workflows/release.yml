@@ -93,8 +93,12 @@ jobs:
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: write
+      actions: read
       id-token: write
       attestations: write
+    env:
+      # A secret cannot be read in `if:`; this says only whether it is set.
+      SIGNPATH_CONFIGURED: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v5
       # A v* tag builds that version, so the archives, the release manifest and the OS packages agree
@@ -121,6 +125,38 @@ jobs:
         if: runner.os != 'Windows'
         env:
           JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
+      # Authenticode through SignPath Foundation (docs/release/signing.md), on a release run once the owner has set the
+      # SIGNPATH_API_TOKEN secret and the SIGNPATH_* variables; until then the installer ships unsigned, as before.
+      # SignPath fetches the file from this run's artifacts and checks it was built here, on a GitHub-hosted runner.
+      - name: Keep the unsigned installer for SignPath
+        id: unsigned-installer
+        if: (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) && runner.os == 'Windows' && env.SIGNPATH_CONFIGURED == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          path: cli/build/distributions/${{ matrix.file }}
+          archive: false
+          if-no-files-found: error
+          retention-days: 1
+      - name: Sign the installer (SignPath)
+        if: steps.unsigned-installer.outcome == 'success'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
+          wait-for-completion: true
+          skip-decompress: true
+          output-artifact-directory: cli/build/signed
+      - name: Use the signed installer
+        if: steps.unsigned-installer.outcome == 'success'
+        shell: pwsh
+        run: |
+          $signed = Get-ChildItem cli/build/signed -Recurse -Filter '${{ matrix.file }}' | Select-Object -First 1
+          if (-not $signed) { throw 'SignPath returned no ${{ matrix.file }}' }
+          if ((Get-AuthenticodeSignature $signed.FullName).Status -ne 'Valid') { throw 'the returned installer has no valid signature' }
+          Copy-Item $signed.FullName 'cli/build/distributions/${{ matrix.file }}' -Force
       # Keyless: GitHub signs a statement of which repository, commit and workflow built each release file, with this
       # run's own identity (Sigstore), so no key exists to keep or lose. Anyone checks a downloaded file with
       # `gh attestation verify <file> --repo <owner>/<repo>`. Not code signing: Windows and macOS still warn.

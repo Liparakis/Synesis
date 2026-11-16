@@ -3,7 +3,11 @@
 A release run now attests each raw installer and platform archive (`actions/attest-build-provenance@v2`, with
 `id-token` and `attestations` write on the `bundles` job); `gh attestation verify <file> --repo Liparakis/Synesis` checks
 one. No key exists. **Not run:** no release run has been made since (owner's rule), so the step is checked only as
-parsing YAML. Authenticode and Apple signing still wait for the owner's choice of provider (`docs/release/signing.md`).
+parsing YAML. Windows signing: the owner chose SignPath Foundation; the `bundles` job signs the raw Windows installer
+on a release run once `SIGNPATH_API_TOKEN` is set (skipped until then), and `CODE_SIGNING_POLICY.md` is the policy page
+SignPath asks for. Not run; the owner applies and sets the secret and variables (`docs/release/signing.md`). The
+repository's `README.md` is a leftover acceptance-project file and must link the policy before applying. Apple signing
+is not wired.
 
 # 2026-11-16 — Installer check: fresh install shown, decline path not checked
 
