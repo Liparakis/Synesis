@@ -1,3 +1,10 @@
+# 2026-11-16 — Keyless build provenance for release files
+
+A release run now attests each raw installer and platform archive (`actions/attest-build-provenance@v2`, with
+`id-token` and `attestations` write on the `bundles` job); `gh attestation verify <file> --repo Liparakis/Synesis` checks
+one. No key exists. **Not run:** no release run has been made since (owner's rule), so the step is checked only as
+parsing YAML. Authenticode and Apple signing still wait for the owner's choice of provider (`docs/release/signing.md`).
+
 # 2026-11-16 — Installer check: fresh install shown, decline path not checked
 
 **Shown.** The owner installed the `0.1.0-dev.installcheck-20261116` wizard build in a new local Windows account that

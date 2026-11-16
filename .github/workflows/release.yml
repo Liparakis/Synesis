@@ -91,6 +91,10 @@ jobs:
           - { platform: macos-x64, runner: macos-15-intel, file: synesis-macos-x64 }
           - { platform: macos-arm64, runner: macos-15, file: synesis-macos-arm64 }
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v5
       # A v* tag builds that version, so the archives, the release manifest and the OS packages agree
@@ -117,6 +121,16 @@ jobs:
         if: runner.os != 'Windows'
         env:
           JAVA_TOOL_OPTIONS: -Djdk.lang.Process.launchMechanism=FORK
+      # Keyless: GitHub signs a statement of which repository, commit and workflow built each release file, with this
+      # run's own identity (Sigstore), so no key exists to keep or lose. Anyone checks a downloaded file with
+      # `gh attestation verify <file> --repo <owner>/<repo>`. Not code signing: Windows and macOS still warn.
+      - name: Attest where the release files were built
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            cli/build/distributions/${{ matrix.file }}
+            cli/build/distributions/synesis-${{ env.BUNDLE_VERSION }}-${{ matrix.platform }}.*
       # Actions wraps an artifact download in a ZIP. A release publishes the raw file instead.
       - name: Keep the installer with this run
         if: ${{ !(github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) }}
