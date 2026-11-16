@@ -219,10 +219,16 @@ public final class GitProcessRunner {
             command.add(12, "user.email=synesis@localhost");
             command.add(13, "-c");
             command.add(14, "protocol.ext.allow=never");
+            // Git 2.29+ starts a detached `git maintenance run --auto` after a commit or merge, which can still be writing
+            // in .git when Synesis moves or deletes a checkout; the person's own git commands keep doing maintenance.
+            command.add(15, "-c");
+            command.add(16, "maintenance.auto=false");
+            command.add(17, "-c");
+            command.add(18, "gc.auto=0");
             if (!systemConfig) {
                 // A remote command keeps the person's ssh setup; a local one has no use for a configured ssh program.
-                command.add(15, "-c");
-                command.add(16, "core.sshCommand=false");
+                command.add(19, "-c");
+                command.add(20, "core.sshCommand=false");
             }
             ProcessCommandRunner.Result result = ProcessCommandRunner.execute(command, workdir, environment, timeout, maxOutputBytes);
             if (required && result.exitCode() != 0) {

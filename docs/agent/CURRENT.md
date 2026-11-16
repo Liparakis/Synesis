@@ -1,3 +1,14 @@
+# 2026-11-16 — The two rare flakes fixed
+
+**`McpRecoveryContinuationTest` could not delete `.git`.** Git 2.29+ starts a detached `git maintenance run --auto
+--detach` after every commit (seen with `GIT_TRACE` in the gate image, git 2.53), which can still be writing in `.git`
+when the test, or Synesis, deletes or moves the checkout. `GitProcessRunner` now passes `maintenance.auto=false` and
+`gc.auto=0` (`GitProcessRunnerMaintenanceTest`); the person's own git commands still do maintenance. The cause is
+inferred, not caught in the act. **`OverlapAndCombineScenarioTest` "holds the entries … wrote".** The test waited until
+both logs matched and then checked again while the computers kept writing; the second check is removed there and in
+`ApartWithoutOverlapScenarioTest` (the wait already proves it). Full Linux gate: link 209, coordination 594,
+project-record 28, relay 12, mcp-contract 21, workspace 1284 (11 skipped), mcp 215, cli 363 (1 skipped), 0 failures.
+
 # 2026-11-15 — Operator-key recovery built
 
 **Built.** ADR-0104's open requirement "Operator-key recovery" is resolved: a new operator key is made from 24 words
