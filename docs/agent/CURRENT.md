@@ -7,6 +7,8 @@ VM hung early in boot twice (VirtualBox under Hyper-V, about 5.6 GB free on the 
 runs. 63 and 64 stay source-proven. Item 64 would still need a reviewer to reject by its own judgement, which no cut
 can arrange. Of the older "Open" items, "a repair is offered only on the author's computer" and "a re-merge stopped
 after two rejections is not retried" were closed by items 63 and 62 the same day (the 2026-11-14 line predates them).
+**Owner, 2026-11-16:** Codex's own reads of the node key stay an accepted residual (ADR-0104; the operator key already
+stops a forged policy decision); the narrow AppArmor profile for `bwrap` goes on the lab VM the next time it is up.
 
 # 2026-11-16 — Keyless build provenance for release files
 
